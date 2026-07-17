@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <base href="/members/module/lesson/">
+    <meta charset="utf-8">
+    <meta name="x-members" content="1">
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+    <meta name="robots" content="noindex,nofollow,noarchive">
+    <meta name="referrer" content="same-origin">
+    <title>Lekcja — ChemDisk</title>
+    <link rel="icon" href="https://cdn.jsdelivr.net/gh/Kuczis-Media/logo/benzene-ring.svg" type="image/svg+xml">
+    <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+    <script src="/assets/js/auth.js"></script>
+    <link rel="stylesheet" href="./style.css">
+  </head>
+  <body>
+    <div class="app-shell" id="app" aria-busy="true">
+      <header class="topbar">
+        <a class="back-link" href="/members/" aria-label="Wróć do panelu kursu">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
+          <span>Panel kursu</span>
+        </a>
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">C</span>
+          <span class="brand-copy">
+            <strong id="lesson-title">Lekcja interaktywna</strong>
+            <small id="lesson-position">Ładowanie…</small>
+          </span>
+        </div>
+        <button class="icon-button" id="theme-toggle" type="button" aria-label="Włącz ciemny motyw" aria-pressed="false">
+          <svg class="sun-icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>
+          <svg class="moon-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M20.2 15.2A8 8 0 1 1 8.8 3.8a6.5 6.5 0 0 0 11.4 11.4Z"/></svg>
+        </button>
+      </header>
+
+      <div class="progress-track" aria-hidden="true">
+        <span id="progress-bar"></span>
+      </div>
+
+      <main class="lesson-layout">
+        <aside class="lesson-outline" aria-label="Plan lekcji">
+          <p class="outline-kicker">Plan lekcji</p>
+          <ol id="outline-list"></ol>
+          <div class="outline-tip">
+            <span aria-hidden="true">✓</span>
+            Zadanie trzeba rozwiązać, aby odblokować kolejny krok.
+          </div>
+        </aside>
+
+        <section class="lesson-workspace" aria-live="polite">
+          <div class="state-card loading-state" id="loading-state" role="status">
+            <span class="loader" aria-hidden="true"></span>
+            <h1>Przygotowujemy lekcję</h1>
+            <p>Wczytywanie slajdów z pliku Markdown…</p>
+          </div>
+
+          <div class="state-card error-state" id="error-state" role="alert" hidden>
+            <span class="state-icon" aria-hidden="true">!</span>
+            <p class="eyebrow">Nie udało się otworzyć materiału</p>
+            <h1 id="error-title">Sprawdź link do lekcji</h1>
+            <p id="error-message"></p>
+            <div class="state-actions">
+              <button class="button primary" id="retry-button" type="button">Spróbuj ponownie</button>
+              <a class="button secondary" href="/members/">Wróć do panelu</a>
+            </div>
+          </div>
+
+          <article class="slide-card" id="slide-card" hidden>
+            <div class="slide-meta">
+              <span class="eyebrow" id="slide-number">Krok 1</span>
+              <span class="slide-status" id="slide-status"></span>
+            </div>
+            <div class="slide-content" id="slide-content"></div>
+            <div class="task-host" id="task-host" hidden></div>
+          </article>
+
+          <section class="state-card completion-state" id="completion-state" hidden>
+            <span class="completion-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="m6.5 12.5 3.5 3.5 7.5-8"/></svg>
+            </span>
+            <p class="eyebrow">Lekcja ukończona</p>
+            <h1>Świetna robota!</h1>
+            <p>Wszystkie kroki zostały przejrzane, a zadania rozwiązane poprawnie.</p>
+            <div class="state-actions">
+              <a class="button primary" href="/members/">Wróć do panelu</a>
+              <button class="button secondary" id="restart-button" type="button">Powtórz lekcję</button>
+            </div>
+          </section>
+
+          <nav class="lesson-navigation" id="lesson-navigation" aria-label="Nawigacja lekcji" hidden>
+            <button class="button secondary" id="previous-button" type="button">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
+              Wstecz
+            </button>
+            <p id="navigation-hint" aria-live="polite"></p>
+            <button class="button primary" id="next-button" type="button">
+              <span>Dalej</span>
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+          </nav>
+        </section>
+      </main>
+    </div>
+
+    <script src="./lesson-parser.js"></script>
+    <script src="./script.js"></script>
+  </body>
+</html>

@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <link rel="icon" href="https://cdn.jsdelivr.net/gh/Kuczis-Media/logo/benzene-ring.svg" type="image/svg+xml">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChemDisk — kursy maturalne online</title>
+    <link rel="stylesheet" href="assets/start_site/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"/>
+    <!-- Netlify Identity -->
+    <script>
+        (function () {
+            var hash = (location.hash || '').replace(/^#/, '');
+            var isIdentityCallback = /(^|&)(invite_token|recovery_token|confirmation_token|email_change_token|token|error|error_description|type)=/i.test(hash);
+            if (isIdentityCallback) {
+                try {
+                    const target = new URL('/login/', location.origin);
+                    const params = new URLSearchParams(location.search || '');
+                    params.forEach((value, key) => target.searchParams.set(key, value));
+                    target.hash = location.hash;
+                    location.replace(target.toString());
+                    return;
+                } catch (e) {
+                    location.replace('/login/');
+                }
+            }
+        })();
+    </script>
+    <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+    <script defer src="/assets/js/auth.js"></script>
+
+</head>
+<body>
+    <button class="scroll-up-btn" type="button" aria-label="Wróć na początek strony">
+        <i class="fas fa-angle-up"></i>
+    </button>
+    <nav class="navbar">
+        <div class="max-width">
+            <div class="logo"><a href="/">Chem<span>Disk</span></a></div>
+            <ul class="menu">
+                <li><a href="#home" class="menu-btn">Start</a></li>
+                <li><a href="#about" class="menu-btn">O nas</a></li>
+                <li><a href="#services" class="menu-btn">Kursy</a></li>
+                <li><a href="#skills" class="menu-btn">Jak zacząć</a></li>
+                <li><a href="#contact" class="menu-btn">Kontakt</a></li>
+                <li><a id="login-btn" href="/members/" class="menu-btn">Zaloguj</a></li>
+                <li><a href="https://atonom.netlify.app" class="menu-btn">Atonom</a></li>
+            </ul>
+            <button class="menu-btn" type="button" aria-label="Otwórz menu" aria-expanded="false">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+    </nav>
+
+    <!-- home section start -->
+    <section class="home" id="home">
+        <div class="max-width">
+            <div class="home-content">
+                <div class="text-1">Witaj w ChemDisk</div>
+                <div class="text-2">Twoja matura, dobrze zaplanowana</div>
+                <div class="text-3">Ucz się <span class="typing"></span></div>
+                <a id="login-cta" href="/members/">Zaloguj się</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- about section start -->
+    <section class="about" id="about">
+        <div class="max-width">
+            <h2 class="title">O nas</h2>
+            <div class="about-content">
+                <div class="column left">
+                    <img src="https://cdn.jsdelivr.net/gh/Kuczis-Media/landing-page-assets/images/banner-chemical.png" alt="Ilustracja związana z nauką chemii">
+                </div>
+                <div class="column right">
+                    <div class="text">Jesteśmy <span class="typing-2"></span></div>
+                    <p>Pomagamy uczniom zdać maturę pewnie i wysoko. Oferujemy kursy z matematyki,
+                        języka polskiego, języka angielskiego, chemii i biologii. Pracujemy na sprawdzonych
+                        metodach, arkuszach CKE i autorskich materiałach. Uczymy skutecznych strategii,
+                        powtarzamy kluczowe zagadnienia i trenujemy rozwiązywanie zadań pod presją czasu.</p>
+                    <a href="#services">Poznaj moduły</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- services section start -->
+    <section class="services" id="services">
+        <div class="max-width">
+            <h2 class="title">Nasze Moduły</h2>
+            <div class="serv-content">
+                <div class="card">
+                    <div class="box">
+                        <i class="fas fa-chalkboard"></i>
+                        <div class="text">Panel kursanta</div>
+                        <p>Materiały są podzielone na działy, dostępne z wyszukiwarki i uporządkowane w jednym czytelnym miejscu.</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="box">
+                        <i class="fas fa-chalkboard-teacher"></i>
+                        <div class="text">Tablice do zadań</div>
+                        <p>Rozpisuj obliczenia, szkicuj reakcje i zapisuj własne plansze podczas lekcji lub samodzielnej pracy.</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="box">
+                        <i class="fas fa-atom"></i>
+                        <div class="text">Atonom</div>
+                        <p>Autorska aplikacja do rysowania związków chemicznych zgodnie z nomenklaturą IUPAC.</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="box">
+                        <i class="fas fa-comments"></i>
+                        <div class="text">Kontakt z prowadzącym</div>
+                        <p>Wyślij pytanie z panelu kursanta, bez przepisywania danych konta i bez opuszczania platformy.</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="box">
+                        <i class="fas fa-photo-video"></i>
+                        <div class="text">PDF-y, slajdy i filmy</div>
+                        <p>Otwieraj dokumenty, prezentacje i nagrania bezpośrednio przy właściwym dziale kursu.</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="box">
+                        <i class="fas fa-calculator"></i>
+                        <div class="text">Kalkulatory</div>
+                        <p>Korzystaj z prostego kalkulatora albo rozbudowanego symulatora naukowego bez opuszczania kursu.</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="box">
+                        <i class="fas fa-robot"></i>
+                        <div class="text">Asystent AI</div>
+                        <p>Zadawaj pytania do przygotowanego promptu, analizuj zdjęcia zadań i proś o wyjaśnienie kolejnego kroku.</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="box">
+                        <i class="fas fa-question-circle"></i>
+                        <div class="text">Testy i powtórki</div>
+                        <p>Rozwiązuj przypisane formularze i wracaj do materiałów wskazanych przez prowadzącego.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- skills section start -->
+    <section class="skills" id="skills">
+        <div class="max-width">
+            <h2 class="title">Jak zacząć</h2>
+            <div class="skills-content">
+                <div class="column left">
+                    <div class="text">Jak się zapisać?</div>
+                    <p>Skontaktuj się z nami w sprawie wybranego kursu. Po utworzeniu konta i aktywowaniu dostępu przez administratora wszystkie przypisane materiały pojawią się w panelu kursanta. Możesz też sprawdzić darmową aplikację Atonom do rysowania związków chemicznych.</p>
+                    <a href="#contact">Zapisz się!</a>
+                    <a href="https://atonom.netlify.app">Atonom</a> 
+                </div>
+                <div class="column right">
+                    <ol class="steps-list">
+                        <li>
+                            <span class="step-number">1</span>
+                            <div><strong>Wybierz kurs</strong><p>Napisz, jaki przedmiot i poziom Cię interesuje.</p></div>
+                        </li>
+                        <li>
+                            <span class="step-number">2</span>
+                            <div><strong>Utwórz konto</strong><p>Podaj imię, nazwisko, e-mail i ustaw bezpieczne hasło.</p></div>
+                        </li>
+                        <li>
+                            <span class="step-number">3</span>
+                            <div><strong>Wejdź do panelu</strong><p>Po aktywacji zobaczysz działy, materiały i narzędzia swojego kursu.</p></div>
+                        </li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- contact section start -->
+    <section class="contact" id="contact">
+        <div class="max-width">
+            <h2 class="title">Kontakt</h2>
+            <div class="contact-content">
+                <div class="column left">
+                    <div class="text">Napisz do nas</div>
+                    <p>Masz pytania o kursy, terminy lub poziomy? Wypełnij formularz — odezwiemy się.</p>
+                    <div class="icons">
+                        <div class="row">
+                            <i class="fas fa-user"></i>
+                            <div class="info">
+                                <div class="head">Firma</div>
+                                <div class="sub-title">Kursy Maturalne</div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <i class="fas fa-map-marker-alt"></i>
+                            <div class="info">
+                                <div class="head">Siedziba</div>
+                                <div class="sub-title">Pomorska 44, Gdańsk Żabianka</div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <i class="fas fa-envelope"></i>
+                            <div class="info">
+                                <div class="head">E-mail</div>
+                                <div class="sub-title">kochamchemie2023@gmail.com</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="column right">
+                    <div class="text">Napisz do nas</div>
+                    <form name="contact" method="POST" data-netlify="true" data-netlify-recaptcha="true">
+                        <div class="fields">
+                            <div class="field name">
+                                <input type="text" name="name" placeholder="Imię i nazwisko" aria-label="Imię i nazwisko" autocomplete="name" required>
+                            </div>
+                            <div class="field email">
+                                <input type="email" name="email" placeholder="E-mail" aria-label="E-mail" autocomplete="email" required>
+                            </div>
+                        </div>
+                        <div class="field">
+                            <input type="text" name="subject" placeholder="Przedmiot / poziom (np. Matematyka podstawowa)" aria-label="Przedmiot i poziom kursu" required>
+                        </div>
+                        <div class="field textarea">
+                            <textarea name="message" cols="30" rows="10" placeholder="Twoja wiadomość..." aria-label="Treść wiadomości" required></textarea>
+                        </div>
+                        <div data-netlify-recaptcha="true"></div>
+                        <div class="button-area">
+                            <button type="submit">Wyślij</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- footer section start -->
+    <footer>
+        <span>© <span id="current-year">2026</span> Kursy Maturalne. Wszelkie prawa zastrzeżone.</span>
+    </footer>
+
+    <script src="assets/start_site/script.js"></script>
+</body>
+</html>

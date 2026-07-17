@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="referrer" content="no-referrer" />
+  <title>Logowanie – kursy maturalne</title>
+  <link rel="icon" href="https://cdn.jsdelivr.net/gh/Kuczis-Media/logo/benzene-ring.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./style.css">
+  <style>
+    /* Wyłączamy domyślny widżet Netlify Identity, bo mamy własny UI */
+    #netlify-identity-widget {
+      display: none !important;
+    }
+  </style>
+
+  <!-- Widget Identity (sesja i zdarzenia) -->
+  <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+  <!-- Ogólna logika sesji (tokeny, nf_jwt, przekierowania) -->
+  <script defer src="/assets/js/auth.js"></script>
+  <!-- Spójna logika sesji/nawigacji dla widoku logowania -->
+  <script defer src="./script.js"></script>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="tabs" role="tablist">
+      <button class="tab-btn active" data-target="login" type="button">Logowanie</button>
+      <button class="tab-btn" data-target="signup" type="button">Rejestracja</button>
+    </div>
+    <div id="flash" class="flash" aria-live="polite"></div>
+
+    <!-- Logowanie -->
+    <form id="login-form" class="form active" autocomplete="on" novalidate>
+      <h2>Logowanie</h2>
+      <div class="input-field">
+        <input type="email" id="login-email" required autocomplete="email" />
+        <label for="login-email">Email</label>
+      </div>
+      <div class="input-field">
+        <input type="password" id="login-password" required autocomplete="current-password" />
+        <label for="login-password">Hasło</label>
+      </div>
+      <button id="login-submit" type="submit">Zaloguj się</button>
+      <p class="helper">Zapomniałeś hasła? <a id="recover-link" href="#">Odzyskaj dostęp</a></p>
+      <p class="helper">Nie masz konta? <a class="to-signup" href="#">Zarejestruj się</a></p>
+    </form>
+
+    <!-- Rejestracja -->
+    <form id="signup-form" class="form" autocomplete="on" novalidate>
+      <h2>Rejestracja</h2>
+      <div class="signup-name-fields">
+        <div class="input-field">
+          <input type="text" id="signup-first-name" required autocomplete="given-name" maxlength="80" />
+          <label for="signup-first-name">Imię</label>
+        </div>
+        <div class="input-field">
+          <input type="text" id="signup-last-name" required autocomplete="family-name" maxlength="80" />
+          <label for="signup-last-name">Nazwisko</label>
+        </div>
+      </div>
+      <div class="input-field">
+        <input type="email" id="signup-email" required autocomplete="email" />
+        <label for="signup-email">Email</label>
+      </div>
+      <div class="input-field">
+        <input type="password" id="signup-password" required autocomplete="new-password" minlength="10" />
+        <label for="signup-password">Hasło</label>
+      </div>
+      <button id="signup-submit" type="submit">Załóż konto</button>
+      <p class="helper">Masz już konto? <a class="to-login" href="#">Przejdź do logowania</a></p>
+    </form>
+
+    <!-- Akcje po kliknięciu w linki z maili Identity -->
+    <form id="token-form" class="form" autocomplete="off" novalidate>
+      <h2 id="token-form-title">Działanie Identity</h2>
+      <p id="token-form-info" class="helper"></p>
+      <div class="input-field" id="token-email-row">
+        <input type="email" id="token-email" readonly />
+        <label for="token-email">Email</label>
+      </div>
+      <div class="input-field" id="token-password-row">
+        <input type="password" id="token-password" autocomplete="new-password" minlength="10" />
+        <label for="token-password" id="token-password-label">Hasło</label>
+      </div>
+      <button id="token-submit" type="submit">Zapisz</button>
+      <p class="helper"><a id="token-cancel" href="/login/">Wróć do logowania</a></p>
+    </form>
+  </div>
+</body>
+</html>

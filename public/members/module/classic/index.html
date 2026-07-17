@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <base href="/members/module/classic/">
+  <meta charset="utf-8">
+  <meta name="x-members" content="1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Kalkulator klasyczny – ChemDisk</title>
+  <link rel="icon" href="https://cdn.jsdelivr.net/gh/Kuczis-Media/logo/benzene-ring.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./style.css">
+  <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script defer src="./script.js"></script>
+</head>
+<body>
+  <main class="calculator" aria-label="Kalkulator klasyczny">
+    <label class="sr-only" for="display">Działanie i wynik</label>
+    <input id="display" class="display" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-live="polite" placeholder="0">
+    <div class="keys" id="keys">
+      <button type="button" class="key key-muted" data-action="clear">AC</button>
+      <button type="button" class="key key-muted" data-action="delete" aria-label="Usuń ostatni znak">DEL</button>
+      <button type="button" class="key key-operator" data-value="%">%</button>
+      <button type="button" class="key key-operator" data-value="/">÷</button>
+
+      <button type="button" class="key" data-value="7">7</button>
+      <button type="button" class="key" data-value="8">8</button>
+      <button type="button" class="key" data-value="9">9</button>
+      <button type="button" class="key key-operator" data-value="*">×</button>
+
+      <button type="button" class="key" data-value="4">4</button>
+      <button type="button" class="key" data-value="5">5</button>
+      <button type="button" class="key" data-value="6">6</button>
+      <button type="button" class="key key-operator" data-value="-">−</button>
+
+      <button type="button" class="key" data-value="1">1</button>
+      <button type="button" class="key" data-value="2">2</button>
+      <button type="button" class="key" data-value="3">3</button>
+      <button type="button" class="key key-operator" data-value="+">+</button>
+
+      <button type="button" class="key key-wide" data-value="0">0</button>
+      <button type="button" class="key" data-value=".">,</button>
+      <button type="button" class="key key-equals" data-action="equals">=</button>
+    </div>
+  </main>
+</body>
+</html>
