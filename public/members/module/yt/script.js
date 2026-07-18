@@ -65,22 +65,20 @@
       let muteSyncTimer = 0;
       let muteCommandVersion = 0;
       let lastAudibleVolume = 80;
+      const CONTROLS_HIDE_DELAY = 3200;
 
-      const resetControlsHideTimer = (forceShow = false) => {
+      const resetControlsHideTimer = (keepVisible = false) => {
         shell.classList.remove('dimmed');
         if (hideControlsTimer) {
           clearTimeout(hideControlsTimer);
           hideControlsTimer = 0;
         }
-        if (!forceShow) {
-          hideControlsTimer = window.setTimeout(() => {
-            if (!playerReady) return;
-            const state = player.getPlayerState();
-            if (state === YT.PlayerState.PLAYING) {
-              shell.classList.add('dimmed');
-            }
-          }, 2600);
-        }
+        if (keepVisible || !playerReady) return;
+        hideControlsTimer = window.setTimeout(() => {
+          hideControlsTimer = 0;
+          if (!playerReady || seeking) return;
+          shell.classList.add('dimmed');
+        }, CONTROLS_HIDE_DELAY);
       };
 
       const showError = (text) => {
@@ -262,7 +260,7 @@
               updatePlayButton(false);
               updateMuteButton(desiredMuted);
               updateProgress();
-              resetControlsHideTimer(true);
+              resetControlsHideTimer();
             },
             onStateChange: (event) => {
               if (event.data === YT.PlayerState.PLAYING) {
@@ -273,21 +271,17 @@
                 updatePlayButton(false);
                 stopSync();
                 updateProgress();
-                shell.classList.remove('dimmed');
-                if (hideControlsTimer) {
-                  clearTimeout(hideControlsTimer);
-                  hideControlsTimer = 0;
-                }
+                resetControlsHideTimer();
               } else if (event.data === YT.PlayerState.ENDED) {
                 updatePlayButton(false);
                 stopSync();
                 progress.value = 1000;
                 timeCurrent.textContent = formatTime(player.getDuration());
-                shell.classList.remove('dimmed');
+                resetControlsHideTimer();
               }
             },
             onError: () => showError('Nie można odtworzyć tego filmu. Sprawdź ID i ustawienia osadzania w YouTube.'),
-            onAutoplayBlocked: () => resetControlsHideTimer(true)
+            onAutoplayBlocked: () => resetControlsHideTimer()
           }
         });
       };
@@ -298,7 +292,7 @@
 
       playBtn.addEventListener('click', () => {
         if (!playerReady) return;
-        resetControlsHideTimer(true);
+        resetControlsHideTimer();
         const state = player.getPlayerState();
         if (state === YT.PlayerState.PLAYING) {
           player.pauseVideo();
@@ -309,20 +303,20 @@
 
       restartBtn.addEventListener('click', () => {
         if (!playerReady) return;
-        resetControlsHideTimer(true);
+        resetControlsHideTimer();
         player.seekTo(0, true);
         player.playVideo();
       });
 
       muteBtn.addEventListener('click', () => {
         if (!playerReady) return;
-        resetControlsHideTimer(true);
+        resetControlsHideTimer();
         requestMuteState(!desiredMuted);
       });
 
       fullscreenBtn.addEventListener('click', async () => {
         try {
-          resetControlsHideTimer(true);
+          resetControlsHideTimer();
           if (fullscreenElement()) {
             const exit = document.exitFullscreen || document.webkitExitFullscreen;
             if (typeof exit === 'function') await exit.call(document);
@@ -362,7 +356,7 @@
 
       volume.addEventListener('input', () => {
         if (!playerReady) return;
-        resetControlsHideTimer(true);
+        resetControlsHideTimer();
         const value = volume.valueAsNumber;
         player.setVolume(value);
         updateRangeFill(volume, value);
@@ -378,7 +372,7 @@
         } else {
           player.playVideo();
         }
-        resetControlsHideTimer(true);
+        resetControlsHideTimer();
       });
 
       const userActivityEvents = ['mousemove', 'mousedown', 'touchstart', 'keydown'];
