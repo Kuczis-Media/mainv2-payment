@@ -79,6 +79,15 @@ test('members dashboard has a persistent accessible light and dark theme', () =>
   assert.match(styles, /color-scheme:\s*dark/);
 });
 
+test('dashboard admin editor starts clean without hiding untouched static resources', () => {
+  const script = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.js'), 'utf8');
+
+  assert.match(script, /const DASHBOARD_OVERRIDE_STARTER\s*=\s*\[/);
+  assert.match(script, /adminDashboardSourceKind === 'static'\s*\?\s*DASHBOARD_OVERRIDE_STARTER\s*:\s*content/);
+  assert.match(script, /domyślne materiały znikną dopiero po opublikowaniu zmian/);
+  assert.match(script, /renderDashboard\(parseMarkdown\(content\)\)/);
+});
+
 test('dashboard exposes user management only through the guarded admin workflow', () => {
   const html = fs.readFileSync(path.join(root, 'public', 'members', 'index.html'), 'utf8');
   const script = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.js'), 'utf8');

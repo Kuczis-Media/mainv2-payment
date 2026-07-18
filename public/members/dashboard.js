@@ -9,6 +9,24 @@
   const PAYMENT_ADMIN_URL = '/.netlify/functions/payment-admin';
   const PAYMENT_CONFIG_URL = '/.netlify/functions/payment-config';
   const THEME_STORAGE_KEY = 'chem.theme';
+  const DASHBOARD_OVERRIDE_STARTER = [
+    '# Twoja przestrzeń do nauki',
+    '',
+    'Materiały dodane przez prowadzącego pojawią się tutaj w osobnych działach.',
+    '',
+    '> Wybierz materiał z dashboardu albo skorzystaj z sekcji pomocy i ustawień konta.',
+    '',
+    '<!-- Dodaj własne działy ## i karty materiałów nad sekcją „Pomoc i konto”. -->',
+    '',
+    '## Pomoc i konto',
+    '',
+    'Zarządzaj dostępem albo skontaktuj się z prowadzącym.',
+    '',
+    '> Imię i nazwisko zmienisz po kliknięciu swojej karty konta w menu.',
+    '',
+    '- [Status dostępu](/time) — Sprawdź rolę i czas pozostały do końca dostępu.',
+    '- [Napisz do nas](/members/module/contact/?internal=Wiadomo%C5%9B%C4%87%20z%20panelu%20kursanta) — Wyślij wiadomość bez opuszczania platformy.'
+  ].join('\n');
   const ACCESS_ROLE_OPTIONS = Object.freeze([
     { value: '', label: 'Brak dostępu' },
     { value: 'active', label: 'Stały dostęp' },
@@ -1928,15 +1946,18 @@
           adminDashboardSourceKind = 'blob';
         }
       }
-      elements.adminDashboardSource.value = content;
-      adminDashboardBaseline = content;
+      const editorContent = adminDashboardSourceKind === 'static'
+        ? DASHBOARD_OVERRIDE_STARTER
+        : content;
+      elements.adminDashboardSource.value = editorContent;
+      adminDashboardBaseline = editorContent;
       adminDashboardLoaded = true;
-      renderAdminDashboardPreview(content);
+      renderAdminDashboardPreview(editorContent);
       setPanelStatus(
         elements.adminDashboardStatus,
         adminDashboardSourceKind === 'blob'
           ? 'Wczytano aktywną wersję zapisaną w Netlify.'
-          : 'Aktywna jest wersja z pliku dashboard.md we wdrożeniu.',
+          : 'Aktywna jest pełna wersja z dashboard.md. Edytor przygotował czysty układ; domyślne materiały znikną dopiero po opublikowaniu zmian.',
         'info'
       );
     } catch (error) {
@@ -2024,11 +2045,15 @@
       const content = await fetchStaticDashboard();
       adminDashboardEtag = null;
       adminDashboardSourceKind = 'static';
-      adminDashboardBaseline = content;
-      elements.adminDashboardSource.value = content;
-      renderAdminDashboardPreview(content);
+      adminDashboardBaseline = DASHBOARD_OVERRIDE_STARTER;
+      elements.adminDashboardSource.value = DASHBOARD_OVERRIDE_STARTER;
+      renderAdminDashboardPreview(DASHBOARD_OVERRIDE_STARTER);
       renderDashboard(parseMarkdown(content));
-      setPanelStatus(elements.adminDashboardStatus, 'Przywrócono dashboard.md z wdrożenia.', 'info');
+      setPanelStatus(
+        elements.adminDashboardStatus,
+        'Przywrócono pełny dashboard.md z wdrożenia. Domyślne materiały są znowu widoczne dla kursantów.',
+        'info'
+      );
     } catch (error) {
       setPanelStatus(elements.adminDashboardStatus, error && error.message ? error.message : 'Nie udało się przywrócić pliku.', 'error');
     } finally {

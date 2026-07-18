@@ -57,7 +57,7 @@ Tekst wewnętrzny.
   assert.deepEqual(model.sections[0].groups[0].groups[0].notices, ['Ważny komunikat.']);
 });
 
-test('default dashboard keeps only Start content and the help/account section', () => {
+test('default dashboard keeps the original resources until an administrator publishes an override', () => {
   const source = fs.readFileSync(
     path.join(__dirname, '..', 'public', 'members', 'dashboard.md'),
     'utf8'
@@ -65,9 +65,15 @@ test('default dashboard keeps only Start content and the help/account section', 
   const model = parse(source);
 
   assert.equal(model.title, 'Twoja przestrzeń do nauki');
-  assert.deepEqual(model.sections.map((section) => section.title), ['Pomoc i konto']);
+  assert.deepEqual(model.sections.map((section) => section.title), [
+    'Materiały kursowe',
+    'Ćwiczenia i powtórki',
+    'Tablice i kalkulatory',
+    'Laboratorium modułów',
+    'Pomoc i konto'
+  ]);
   assert.deepEqual(
-    model.sections[0].items.map((item) => item.title),
+    model.sections.at(-1).items.map((item) => item.title),
     ['Status dostępu', 'Napisz do nas']
   );
 });
