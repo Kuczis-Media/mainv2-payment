@@ -92,6 +92,7 @@ function defaultPriceConfig() {
     version: 1,
     currency: 'pln',
     enabledPlans: PLANS.filter((plan) => plan.defaultEnabled).map((plan) => plan.id),
+    paymentsEnabled: true,
     stackingEnabled: true,
     updatedAt: null,
     updatedBy: null,
@@ -105,6 +106,7 @@ function publicPriceConfig(config, options = {}) {
   return {
     currency: normalized.value.currency,
     enabledPlans: [...normalized.value.enabledPlans],
+    paymentsEnabled: normalized.value.paymentsEnabled,
     stackingEnabled: normalized.value.stackingEnabled,
     updatedAt: normalized.value.updatedAt,
     checkoutAvailable: Boolean(options.checkoutAvailable),
@@ -149,6 +151,7 @@ function normalizePriceConfig(value) {
       version: Number.isSafeInteger(value.version) && value.version > 0 ? value.version : 1,
       currency: value.currency,
       enabledPlans,
+      paymentsEnabled: typeof value.paymentsEnabled === 'boolean' ? value.paymentsEnabled : true,
       stackingEnabled: typeof value.stackingEnabled === 'boolean' ? value.stackingEnabled : true,
       updatedAt: safeDateString(value.updatedAt),
       updatedBy: validUserId(value.updatedBy) ? value.updatedBy : null,
@@ -184,6 +187,7 @@ async function writePriceConfig(store, input, expectedEtag, actorId) {
     currency: input.currency,
     prices: input.prices,
     enabledPlans: input.enabledPlans,
+    paymentsEnabled: input.paymentsEnabled,
     stackingEnabled: input.stackingEnabled,
     updatedAt: new Date().toISOString(),
     updatedBy: actorId

@@ -55,6 +55,9 @@ exports.handler = async (event = {}, context = {}) => {
     const store = getPaymentStore();
     const { config } = await readPriceConfig(store);
     const plan = PLAN_BY_ID.get(planId);
+    if (!config.paymentsEnabled) {
+      return json({ error: 'PAYMENTS_DISABLED' }, 409);
+    }
     if (!config.enabledPlans.includes(plan.id)) {
       return json({ error: 'PLAN_UNAVAILABLE' }, 409);
     }

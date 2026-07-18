@@ -68,10 +68,14 @@ exports.handler = async (event = {}, context = {}) => {
       const current = await readPriceConfig(store);
       return json({
         ...publicPriceConfig(current.config, {
-          checkoutAvailable: environment.configured,
+          checkoutAvailable: environment.configured && current.config.paymentsEnabled,
           testMode: environment.testMode
         }),
-        ...(adminView ? { etag: current.etag, source: current.source } : {})
+        ...(adminView ? {
+          etag: current.etag,
+          source: current.source,
+          stripeConfigured: environment.configured
+        } : {})
       });
     }
 
@@ -87,11 +91,12 @@ exports.handler = async (event = {}, context = {}) => {
     );
     return json({
       ...publicPriceConfig(saved.config, {
-        checkoutAvailable: environment.configured,
+        checkoutAvailable: environment.configured && saved.config.paymentsEnabled,
         testMode: environment.testMode
       }),
       etag: saved.etag,
-      source: saved.source
+      source: saved.source,
+      stripeConfigured: environment.configured
     });
   } catch (error) {
     console.error('payment-config failed', safeErrorName(error));
@@ -108,6 +113,7 @@ function validateUpdate(body) {
     'currency',
     'enabledPlans',
     'expectedEtag',
+    'paymentsEnabled',
     'prices',
     'stackingEnabled'
   ].includes(key))) {
@@ -148,6 +154,9 @@ function validateUpdate(body) {
   if (typeof body.stackingEnabled !== 'boolean') {
     return { ok: false, code: 'INVALID_STACKING_SETTING' };
   }
+  if (typeof body.paymentsEnabled !== 'boolean') {
+    return { ok: false, code: 'INVALID_PAYMENT_ENABLED_SETTING' };
+  }
   const expectedEtag = body.expectedEtag;
   if (expectedEtag !== null && (
     typeof expectedEtag !== 'string' ||
@@ -163,6 +172,7 @@ function validateUpdate(body) {
       currency,
       enabledPlans,
       expectedEtag,
+      paymentsEnabled: body.paymentsEnabled,
       prices,
       stackingEnabled: body.stackingEnabled
     }

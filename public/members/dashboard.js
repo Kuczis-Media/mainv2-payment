@@ -71,6 +71,7 @@
     NETLIFY_FORMS_UNAVAILABLE: 'Nie udało się połączyć z Netlify Forms.',
     NO_CHANGES: 'Nie wskazano żadnych zmian do zapisania.',
     INVALID_PAYMENT_ACTION: 'Wybrano nieprawidłową operację płatności.',
+    INVALID_PAYMENT_ENABLED_SETTING: 'Ustawienie dostępności płatności jest nieprawidłowe.',
     INVALID_CURRENCY: 'Wybierz obsługiwaną walutę.',
     INVALID_ENABLED_PLANS: 'Lista dostępnych pakietów jest nieprawidłowa.',
     INVALID_PRICE: 'Cena musi wynosić od 1,00 do 10 000,00 jednostek wybranej waluty.',
@@ -145,6 +146,7 @@
     adminDashboardPreview: document.getElementById('admin-dashboard-preview'),
     adminPricesForm: document.getElementById('admin-prices-form'),
     adminPaymentCurrency: document.getElementById('admin-payment-currency'),
+    adminPaymentDisabled: document.getElementById('admin-payment-disabled'),
     adminPaymentBlockStacking: document.getElementById('admin-payment-block-stacking'),
     adminPriceHour: document.getElementById('admin-price-hour'),
     adminPriceDay: document.getElementById('admin-price-day'),
@@ -239,88 +241,10 @@
   }
 
   function parseMarkdown(source) {
-    const model = {
-      title: 'Panel kursanta',
-      intro: [],
-      notices: [],
-      sections: []
-    };
-    let currentSection = null;
-    let currentGroup = null;
-    let insideComment = false;
-
-    String(source || '').replace(/\r\n?/g, '\n').split('\n').forEach((rawLine) => {
-      const line = rawLine.trim();
-
-      if (insideComment) {
-        if (line.includes('-->')) insideComment = false;
-        return;
-      }
-      if (line.startsWith('<!--')) {
-        if (!line.includes('-->')) insideComment = true;
-        return;
-      }
-      if (!line) return;
-
-      const sectionMatch = line.match(/^##\s+(.+)$/);
-      if (sectionMatch) {
-        currentSection = {
-          title: sectionMatch[1].trim(),
-          description: [],
-          notices: [],
-          items: [],
-          groups: []
-        };
-        currentGroup = null;
-        model.sections.push(currentSection);
-        return;
-      }
-
-      const groupMatch = line.match(/^###\s+(.+)$/);
-      if (groupMatch && currentSection) {
-        currentGroup = {
-          title: groupMatch[1].trim(),
-          description: [],
-          notices: [],
-          items: []
-        };
-        currentSection.groups.push(currentGroup);
-        return;
-      }
-
-      const titleMatch = line.match(/^#\s+(.+)$/);
-      if (titleMatch) {
-        model.title = titleMatch[1].trim();
-        return;
-      }
-
-      const noticeMatch = line.match(/^>\s*(.+)$/);
-      if (noticeMatch) {
-        const target = currentGroup
-          ? currentGroup.notices
-          : currentSection ? currentSection.notices : model.notices;
-        target.push(noticeMatch[1].trim());
-        return;
-      }
-
-      const linkMatch = line.match(/^[-*]\s+\[([^\]]+)]\(([^)\s]+)(?:\s+["'][^"']*["'])?\)\s*(?:(?:—|–|-|:)\s*(.*))?$/);
-      if (linkMatch && currentSection) {
-        const target = currentGroup ? currentGroup.items : currentSection.items;
-        target.push({
-          title: linkMatch[1].trim(),
-          href: linkMatch[2].trim(),
-          description: (linkMatch[3] || '').trim()
-        });
-        return;
-      }
-
-      const cleanLine = line.replace(/^#{3,6}\s+/, '');
-      if (currentGroup) currentGroup.description.push(cleanLine);
-      else if (currentSection) currentSection.description.push(cleanLine);
-      else model.intro.push(cleanLine);
-    });
-
-    return model;
+    if (!window.ChemDashboardParser || typeof window.ChemDashboardParser.parse !== 'function') {
+      throw new Error('Parser dashboardu nie został załadowany.');
+    }
+    return window.ChemDashboardParser.parse(source);
   }
 
   function safeUrl(rawHref) {
@@ -398,13 +322,19 @@
     return card;
   }
 
-  function createAccordionGroup(group, sectionTitle) {
+  function createAccordionGroup(group, sectionTitle, parentTitles = [], depth = 0) {
+    const groupPath = [...parentTitles, group.title];
     const cards = group.items
-      .map((item) => createResourceCard(item, sectionTitle, group.title))
+      .map((item) => createResourceCard(item, sectionTitle, groupPath.join(' › ')))
       .filter(Boolean);
+    const childGroups = (group.groups || [])
+      .map((child) => createAccordionGroup(child, sectionTitle, groupPath, depth + 1));
+    const totalCardCount = cards.length +
+      childGroups.reduce((sum, child) => sum + child.cardCount, 0);
 
     const details = document.createElement('details');
     details.className = 'resource-accordion';
+    details.dataset.accordionDepth = String(depth);
 
     const summary = document.createElement('summary');
     const copy = document.createElement('span');
@@ -421,8 +351,8 @@
     const meta = document.createElement('span');
     meta.className = 'accordion-meta';
     const total = document.createElement('span');
-    total.dataset.accordionTotal = String(cards.length);
-    total.textContent = resourceLabel(cards.length);
+    total.dataset.accordionTotal = String(totalCardCount);
+    total.textContent = resourceLabel(totalCardCount);
     const chevron = document.createElement('span');
     chevron.className = 'accordion-chevron';
     chevron.setAttribute('aria-hidden', 'true');
@@ -445,14 +375,23 @@
       grid.className = 'card-grid';
       cards.forEach((card) => grid.append(card));
       body.append(grid);
-    } else {
+    }
+
+    if (childGroups.length) {
+      const children = document.createElement('div');
+      children.className = 'accordion-children';
+      childGroups.forEach((child) => children.append(child.element));
+      body.append(children);
+    }
+
+    if (!cards.length && !childGroups.length) {
       const empty = document.createElement('div');
       empty.className = 'empty-section';
       empty.textContent = 'Materiały w tej liście pojawią się wkrótce.';
       body.append(empty);
     }
     details.append(body);
-    return { element: details, cardCount: cards.length };
+    return { element: details, cardCount: totalCardCount };
   }
 
   function createSection(section, index, usedIds) {
@@ -1904,8 +1843,9 @@
       const title = document.createElement('strong');
       title.textContent = section.title;
       const details = document.createElement('span');
-      const groupLabel = section.groups && section.groups.length
-        ? ` · ${polishCountLabel(section.groups.length, 'harmonijka', 'harmonijki', 'harmonijek')}`
+      const groupCount = accordionGroupCount(section.groups);
+      const groupLabel = groupCount
+        ? ` · ${polishCountLabel(groupCount, 'harmonijka', 'harmonijki', 'harmonijek')}`
         : '';
       details.textContent = `${resourceLabel(validCount)}${groupLabel}`;
       card.append(title, details);
@@ -1918,11 +1858,20 @@
 
   function validDashboardItemCount(section) {
     const direct = (section.items || []).filter((item) => safeUrl(item.href)).length;
-    const grouped = (section.groups || []).reduce(
-      (sum, group) => sum + (group.items || []).filter((item) => safeUrl(item.href)).length,
+    const grouped = (section.groups || []).reduce((sum, group) => sum + validGroupItemCount(group), 0);
+    return direct + grouped;
+  }
+
+  function validGroupItemCount(group) {
+    const direct = (group.items || []).filter((item) => safeUrl(item.href)).length;
+    return direct + (group.groups || []).reduce((sum, child) => sum + validGroupItemCount(child), 0);
+  }
+
+  function accordionGroupCount(groups) {
+    return (groups || []).reduce(
+      (sum, group) => sum + 1 + accordionGroupCount(group.groups),
       0
     );
-    return direct + grouped;
   }
 
   function validateDashboardEditorContent(content) {
@@ -2091,6 +2040,7 @@
     if (elements.adminPricesReload) elements.adminPricesReload.disabled = Boolean(busy);
     if (elements.adminPricesSave) elements.adminPricesSave.disabled = Boolean(busy);
     if (elements.adminPaymentCurrency) elements.adminPaymentCurrency.disabled = Boolean(busy);
+    if (elements.adminPaymentDisabled) elements.adminPaymentDisabled.disabled = Boolean(busy);
     if (elements.adminPaymentBlockStacking) elements.adminPaymentBlockStacking.disabled = Boolean(busy);
     adminPaymentPlanEntries().forEach((entry) => {
       if (entry.input) entry.input.disabled = Boolean(busy);
@@ -2120,6 +2070,9 @@
       if (entry.enabled) entry.enabled.checked = Boolean(plan && plan.enabled);
     });
     if (elements.adminPaymentCurrency) elements.adminPaymentCurrency.value = String(payload.currency || 'pln');
+    if (elements.adminPaymentDisabled) {
+      elements.adminPaymentDisabled.checked = payload.paymentsEnabled === false;
+    }
     if (elements.adminPaymentBlockStacking) {
       elements.adminPaymentBlockStacking.checked = payload.stackingEnabled === false;
     }
@@ -2146,10 +2099,12 @@
       adminPricesLoaded = true;
       setPanelStatus(
         elements.adminPricesStatus,
-        payload.checkoutAvailable
+        payload.paymentsEnabled === false
+          ? 'Oferta wczytana. Płatności są obecnie wyłączone przez administratora.'
+          : payload.checkoutAvailable
           ? `Ceny wczytane. Stripe działa w trybie ${payload.testMode ? 'testowym' : 'produkcyjnym'}.`
           : 'Ceny wczytane, ale klucze Stripe lub webhook nie są jeszcze w pełni skonfigurowane.',
-        payload.checkoutAvailable ? 'info' : 'error'
+        payload.paymentsEnabled === false || payload.checkoutAvailable ? 'info' : 'error'
       );
     } catch (error) {
       adminPricesLoaded = false;
@@ -2186,6 +2141,7 @@
       if (entry.enabled && entry.enabled.checked) enabledPlans.push(entry.id);
     }
     const currency = String(elements.adminPaymentCurrency.value || '').toLowerCase();
+    const paymentsEnabled = !elements.adminPaymentDisabled.checked;
     const stackingEnabled = !elements.adminPaymentBlockStacking.checked;
 
     setAdminPricesBusy(true);
@@ -2204,6 +2160,7 @@
           currency,
           enabledPlans,
           expectedEtag: adminPricesEtag,
+          paymentsEnabled,
           prices,
           stackingEnabled
         })

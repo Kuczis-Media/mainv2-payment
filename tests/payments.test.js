@@ -39,6 +39,7 @@ test('default Stripe offer contains every timed role and keeps the original four
     [['hour', 1 / 24], ['day', 1], ['week', 7], ['month', 30], ['halfyear', 182], ['year', 365]]
   );
   assert.deepEqual(config.enabledPlans, ['week', 'month', 'halfyear', 'year']);
+  assert.equal(config.paymentsEnabled, true);
   assert.equal(config.stackingEnabled, true);
 });
 
@@ -52,6 +53,7 @@ test('an existing four-price configuration migrates without changing its public 
   assert.equal(normalized.value.prices.hour, 500);
   assert.equal(normalized.value.prices.day, 1_500);
   assert.deepEqual(normalized.value.enabledPlans, ['week', 'month', 'halfyear', 'year']);
+  assert.equal(normalized.value.paymentsEnabled, true);
   assert.equal(normalized.value.stackingEnabled, true);
 });
 
@@ -216,6 +218,7 @@ test('price and admin action inputs are strictly validated', () => {
     currency: 'eur',
     enabledPlans: ['day', 'month'],
     expectedEtag: null,
+    paymentsEnabled: false,
     prices: validPrices,
     stackingEnabled: false
   }).ok, true);
@@ -223,6 +226,7 @@ test('price and admin action inputs are strictly validated', () => {
     currency: 'pln',
     enabledPlans: ['week'],
     expectedEtag: null,
+    paymentsEnabled: true,
     prices: { ...validPrices, week: 0 },
     stackingEnabled: true
   }).code, 'INVALID_PRICE');
@@ -230,6 +234,7 @@ test('price and admin action inputs are strictly validated', () => {
     currency: 'nzd',
     enabledPlans: [],
     expectedEtag: null,
+    paymentsEnabled: true,
     prices: validPrices,
     stackingEnabled: true
   }).code, 'INVALID_CURRENCY');
@@ -243,6 +248,14 @@ test('price and admin action inputs are strictly validated', () => {
   assert.equal(createCheckout._test.hasTimedOrPermanentAccess({
     app_metadata: { roles: ['month'], timed_access: { role: 'month', expires_at: '2020-01-01T00:00:00.000Z' } }
   }), false);
+  assert.equal(paymentConfig._test.validateUpdate({
+    currency: 'pln',
+    enabledPlans: ['month'],
+    expectedEtag: null,
+    paymentsEnabled: 'yes',
+    prices: validPrices,
+    stackingEnabled: true
+  }).code, 'INVALID_PAYMENT_ENABLED_SETTING');
 });
 
 test('payment offer has a separate purchase page and admin users remain collapsible', () => {
@@ -259,6 +272,7 @@ test('payment offer has a separate purchase page and admin users remain collapsi
   assert.doesNotMatch(members, /data-pricing-mode=["']authenticated["']/);
   assert.match(members, /href=["']\/purchase\/["'][\s\S]*Kup lub przedłuż/);
   assert.match(purchasePage, /data-pricing-mode=["']authenticated["']/);
+  assert.match(members, /id=["']admin-payment-disabled["']/);
   assert.match(members, /data-admin-tab=["']payments["']/);
   assert.match(members, /Kup lub przedłuż[\s\S]*Status dostępu/);
   assert.match(dashboard, /document\.createElement\('details'\)/);

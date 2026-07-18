@@ -63,6 +63,8 @@ test('members home is a local Markdown dashboard rather than a remote iframe', (
   assert.match(markdown, /^###\s+\S/m);
   assert.match(script, /document\.createElement\('details'\)/);
   assert.match(script, /resource-accordion/);
+  assert.match(html, /\/members\/dashboard-parser\.js/);
+  assert.match(script, /createAccordionGroup\(child,\s*sectionTitle/);
 });
 
 test('members dashboard has a persistent accessible light and dark theme', () => {

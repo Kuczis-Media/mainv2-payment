@@ -163,12 +163,22 @@
 }
 
 .chem-test-card,
+.chem-pricing-disabled,
 .chem-pricing-stacking {
   margin: 10px 0 0;
   color: var(--chem-price-muted);
   font-size: 11px;
   line-height: 1.55;
   text-align: center;
+}
+
+.chem-pricing-disabled {
+  padding: 10px 13px;
+  color: #8a3941;
+  background: #fff0f1;
+  border: 1px solid #f0cfd3;
+  border-radius: 11px;
+  font-weight: 700;
 }
 
 .chem-test-card {
@@ -218,6 +228,12 @@ html[data-theme="dark"] .chem-test-card {
   color: #e5ce93;
   background: #302b1d;
   border-color: #50452b;
+}
+
+html[data-theme="dark"] .chem-pricing-disabled {
+  color: #f0b3b9;
+  background: #382126;
+  border-color: #61323a;
 }
 
 @media (max-width: 960px) {

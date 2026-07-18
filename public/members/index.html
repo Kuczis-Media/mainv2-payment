@@ -26,6 +26,7 @@
   <link rel="stylesheet" href="/members/dashboard.css" />
   <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
   <script src="/assets/js/auth.js"></script>
+  <script defer src="/members/dashboard-parser.js"></script>
   <script defer src="/members/dashboard.js"></script>
 </head>
 <body>
@@ -408,6 +409,13 @@
                 <option value="cad">CAD — dolar kanadyjski</option>
                 <option value="aud">AUD — dolar australijski</option>
               </select>
+            </label>
+            <label class="admin-payment-switch admin-payment-master-switch">
+              <input id="admin-payment-disabled" type="checkbox" />
+              <span>
+                <strong>Wyłącz wszystkie płatności</strong>
+                <small>Oferta pozostanie widoczna, ale użytkownicy nie będą mogli rozpocząć żadnej płatności Stripe.</small>
+              </span>
             </label>
             <label class="admin-payment-switch">
               <input id="admin-payment-block-stacking" type="checkbox" />

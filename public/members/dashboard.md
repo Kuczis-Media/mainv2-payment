@@ -3,11 +3,23 @@
   - Nagłówek z jednym # jest tytułem strony.
   - Zwykły tekst pod tytułem jest opisem powitalnym.
   - Każdy nagłówek ## tworzy dział oraz pozycję w menu.
-  - Nagłówek ### wewnątrz działu tworzy rozwijaną listę (harmonijkę).
-    Opis, komunikaty i karty poniżej należą do niej aż do kolejnego ### lub ##.
+  - Nagłówki ###, ####, ##### i ###### tworzą zagnieżdżone harmonijki.
+    Każdy kolejny # oznacza poziom głębiej. Nagłówek z tą samą lub mniejszą
+    liczbą # kończy bieżący poziom.
+  - Zwykła linia bez #, > ani składni linku jest normalnym tekstem-opisem
+    bieżącego panelu, działu albo harmonijki.
   - Każdy link zapisany tak jak poniżej tworzy kartę:
     - [Nazwa materiału](/members/module/nazwa/?parametr=wartosc) — Krótki opis.
   - Wiersz zaczynający się od > tworzy komunikat dla kursantów.
+
+  PRZYKŁAD ZAGNIEŻDŻENIA I ZWYKŁEGO TEKSTU
+  ## Dział
+  Zwykły tekst opisujący dział.
+  ### Harmonijka główna
+  Zwykły tekst opisujący harmonijkę główną.
+  #### Harmonijka wewnętrzna
+  Zwykły tekst wewnątrz zagnieżdżonej harmonijki.
+  - [Materiał](/members/module/pdf/?id=ID&type=1) — Opis karty.
 
   PARAMETRY MODUŁÓW
   - chat:       ?prompt=nazwa.json albo ?plik=nazwa.txt&punkt=1

@@ -172,6 +172,7 @@ Ceny i ofertę edytuje administrator w zakładce **Płatności**. Może tam:
 - ustawić ceny wszystkich sześciu okresów;
 - zaznaczyć, które okresy są aktualnie dostępne;
 - wybrać PLN, EUR, USD, GBP, CHF, CZK, CAD albo AUD;
+- globalnie wyłączyć i ponownie włączyć rozpoczynanie płatności;
 - włączyć blokadę dokupowania przy aktywnym dostępie.
 
 Zmiana waluty nie przelicza automatycznie wpisanych liczb — po wybraniu nowej waluty administrator powinien ustawić odpowiednie ceny i zapisać cały formularz. Aplikacja przekazuje do Stripe `price_data` obliczone wyłącznie na serwerze; kwota, waluta ani dostępność pakietu z przeglądarki nie są przyjmowane jako źródło prawdy. Zmiany dotyczą nowych Checkout Sessions. Poprzednia transakcja nadal zachowuje w Stripe i historii ChemDisk kwotę oraz walutę z chwili zakupu.
@@ -179,6 +180,8 @@ Zmiana waluty nie przelicza automatycznie wpisanych liczb — po wybraniu nowej 
 Stripe Dashboard nie jest źródłem aktualnego cennika tej aplikacji. Zmiana przypadkowego Price w katalogu Stripe nie zmieni kart cenowych ChemDisk. Dzięki temu administrator nie musi kopiować nowych `price_...` po każdej zmianie kwoty.
 
 Księga użytkownika jest zapisywana w site-wide magazynie Netlify Blobs `chemdisk-payments`. Każdy zapis używa warunku ETag. Identyfikator Checkout Session może zostać zrealizowany tylko raz, nawet jeśli Stripe ponowi webhook lub strona sukcesu równocześnie sprawdzi płatność.
+
+Globalne wyłączenie płatności pozostawia ofertę i ceny widoczne, ale dezaktywuje przyciski zakupu, a serwer odrzuca każdą próbę utworzenia Checkout. Ponowne włączenie nie wymaga zmiany kluczy Stripe.
 
 Gdy sumowanie jest włączone, kolejny zakup jest dołączany do późniejszej z dat: bieżący termin wygaśnięcia lub chwila zakupu. Gdy administrator włączy blokadę dokupowania, serwer nie utworzy Checkout użytkownikowi mającemu aktywny dostęp; następny zakup będzie możliwy dopiero po wygaśnięciu obecnego okresu.
 
@@ -245,7 +248,7 @@ Przycisk **Panel administratora** pojawia się w bocznym menu wyłącznie dla ko
 - rozwijać pojedyncze konta zamiast renderować wszystkie formularze naraz;
 - przeglądać historię zakupów Stripe i operacji odebrania dostępu;
 - odebrać płatny dostęp bez automatycznego wykonywania refundu;
-- ustawić ceny i dostępność sześciu pakietów, walutę oraz zasadę sumowania okresów;
+- ustawić ceny i dostępność sześciu pakietów, walutę, globalny stan płatności oraz zasadę sumowania okresów;
 - przeglądać i trwale usuwać zgłoszenia Netlify Forms;
 - edytować, podglądać, publikować i przywracać Markdown dashboardu;
 - obsłużyć całą listę użytkowników dzięki stronicowaniu.
@@ -285,18 +288,29 @@ Opis działu wyświetlany pod jego nazwą.
 
 ### Lekcja 1 — obliczenia molowe
 
-Ta linia opisuje rozwijaną listę.
+To jest zwykły tekst opisujący harmonijkę. Nie wymaga żadnego specjalnego znacznika.
+
+#### Materiały podstawowe
+
+To jest tekst wewnątrz zagnieżdżonej harmonijki.
 
 - [Prezentacja](/members/module/slides/?id=ID_PLIKU&type=2) — Slajdy do lekcji.
 - [Zestaw zadań](/members/module/pdf/?id=ID_PLIKU&type=1) — Zadania do samodzielnej pracy.
+
+##### Zadania dodatkowe
+
+Możesz schodzić niżej aż do nagłówka z sześcioma znakami `#`.
+
+- [Zestaw dodatkowy](/members/module/pdf/?id=ID_PLIKU&type=1) — Materiał dla chętnych.
 ```
 
 Zasady parsera:
 
 - pojedynczy `#` ustawia tytuł panelu;
 - `##` rozpoczyna dział i tworzy pozycję w menu;
-- `###` wewnątrz działu rozpoczyna harmonijkę; kolejne opisy, komunikaty i karty należą do niej aż do następnego `###` albo `##`;
-- zwykły tekst pod tytułem lub działem staje się opisem;
+- `###` wewnątrz działu rozpoczyna harmonijkę główną;
+- `####`, `#####` i `######` tworzą kolejne poziomy harmonijek; nagłówek z taką samą albo mniejszą liczbą `#` wraca do odpowiedniego poziomu;
+- zwykła linia bez specjalnego początku staje się bezpiecznym tekstem-opisem aktualnego panelu, działu albo harmonijki; kilka kolejnych linii jest łączonych w jeden opis;
 - wiersz zaczynający się od `>` tworzy komunikat;
 - karta musi być listą w formacie `- [Nazwa](adres) — Opis` i znajdować się pod działem;
 - HTML nie jest wykonywany, a pozostałe elementy pełnego Markdown nie są interpretowane;

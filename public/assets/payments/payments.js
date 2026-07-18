@@ -11,6 +11,7 @@
     IDENTITY_ADMIN_UNAVAILABLE: 'Usługa kont jest chwilowo niedostępna.',
     INVALID_PLAN: 'Wybrany pakiet jest nieprawidłowy.',
     PAYMENT_CONFIG_INVALID: 'Konfiguracja cen jest nieprawidłowa.',
+    PAYMENTS_DISABLED: 'Administrator tymczasowo wyłączył płatności.',
     PAYMENT_STORAGE_UNAVAILABLE: 'Magazyn płatności jest chwilowo niedostępny.',
     PLAN_UNAVAILABLE: 'Ten pakiet nie jest teraz dostępny. Odśwież ofertę i wybierz inny.',
     SAME_ORIGIN_REQUIRED: 'Odśwież stronę i spróbuj ponownie.',
@@ -133,9 +134,11 @@
       button.className = 'chem-price-button';
       button.type = 'button';
       button.dataset.checkoutPlan = plan.id;
-      button.textContent = config.checkoutAvailable
-        ? (mode === 'public' ? 'Wybieram pakiet' : 'Kup i przedłuż dostęp')
-        : 'Płatności w przygotowaniu';
+      button.textContent = config.paymentsEnabled === false
+        ? 'Płatności wyłączone'
+        : config.checkoutAvailable
+          ? (mode === 'public' ? 'Wybieram pakiet' : 'Kup i przedłuż dostęp')
+          : 'Płatności w przygotowaniu';
       button.disabled = !config.checkoutAvailable || stackingBlocked;
       button.addEventListener('click', () => startCheckout(plan.id, button, container));
 
@@ -164,6 +167,13 @@
       testNote.className = 'chem-test-card';
       testNote.innerHTML = '<strong>Tryb testowy Stripe:</strong> karta <code>4242 4242 4242 4242</code>, dowolna przyszła data i dowolne 3 cyfry CVC.';
       fragment.append(testNote);
+    }
+
+    if (config.paymentsEnabled === false) {
+      const disabledNote = document.createElement('p');
+      disabledNote.className = 'chem-pricing-disabled';
+      disabledNote.textContent = 'Płatności są obecnie wyłączone przez administratora. Wróć później lub skontaktuj się z obsługą kursu.';
+      fragment.append(disabledNote);
     }
 
     const stacking = document.createElement('p');

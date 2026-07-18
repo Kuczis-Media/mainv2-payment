@@ -1132,7 +1132,7 @@ html[data-theme="dark"] .admin-timed-status.is-expired {
   transition: transform 180ms ease;
 }
 
-.resource-accordion[open] .accordion-chevron {
+.resource-accordion[open] > summary .accordion-chevron {
   transform: rotate(180deg);
 }
 
@@ -1148,6 +1148,44 @@ html[data-theme="dark"] .admin-timed-status.is-expired {
 .accordion-body > .card-grid,
 .accordion-body > .empty-section {
   margin-top: 17px;
+}
+
+.accordion-children {
+  display: grid;
+  margin-top: 15px;
+  gap: 11px;
+}
+
+.accordion-children > .resource-accordion {
+  margin-top: 0;
+  border-left: 3px solid #8cc8bc;
+  border-radius: 14px;
+  box-shadow: none;
+}
+
+.accordion-children .resource-accordion > summary {
+  min-height: 66px;
+  padding: 14px 16px;
+}
+
+.accordion-children .accordion-children > .resource-accordion {
+  border-left-color: #8faed0;
+}
+
+.accordion-children .accordion-children .accordion-children > .resource-accordion {
+  border-left-color: #c39acb;
+}
+
+html[data-theme="dark"] .accordion-children > .resource-accordion {
+  border-left-color: #4e9e8e;
+}
+
+html[data-theme="dark"] .accordion-children .accordion-children > .resource-accordion {
+  border-left-color: #567ca7;
+}
+
+html[data-theme="dark"] .accordion-children .accordion-children .accordion-children > .resource-accordion {
+  border-left-color: #895f91;
 }
 
 .resource-card {
@@ -2153,6 +2191,26 @@ html[data-theme="dark"] .admin-timed-status.is-expired {
   border-radius: 11px;
 }
 
+.admin-payment-master-switch {
+  color: #7f3038;
+  background: #fff2f3;
+  border-color: #f0cfd3;
+}
+
+.admin-payment-master-switch strong {
+  color: #7f3038;
+}
+
+html[data-theme="dark"] .admin-payment-master-switch {
+  color: #f0b3b9;
+  background: #382126;
+  border-color: #61323a;
+}
+
+html[data-theme="dark"] .admin-payment-master-switch strong {
+  color: #f0b3b9;
+}
+
 .admin-payment-switch input,
 .admin-plan-enabled input {
   width: 17px;
@@ -2175,6 +2233,14 @@ html[data-theme="dark"] .admin-timed-status.is-expired {
   color: var(--muted);
   font-size: 9px;
   line-height: 1.45;
+}
+
+.admin-payment-switch.admin-payment-master-switch strong {
+  color: #7f3038;
+}
+
+html[data-theme="dark"] .admin-payment-switch.admin-payment-master-switch strong {
+  color: #f0b3b9;
 }
 
 .admin-prices-grid {
