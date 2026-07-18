@@ -415,12 +415,12 @@ Pola bloku zadania:
 | Pole | Wymagane | Znaczenie |
 | --- | --- | --- |
 | `answer` | tak | Poprawna odpowiedź. Kilka wariantów rozdziel znakiem `|`, np. `atom \| ATOM`. |
-| `type` | nie | `text` (domyślnie), `number` albo `choice`. |
+| `type` | nie | `text` (domyślnie), `number`, `choice` albo `abcd`. |
 | `label` | nie | Podpis pola lub polecenie nad odpowiedziami. |
 | `placeholder` | nie | Przykład wyświetlany w pustym polu. |
 | `hint` | nie | Podpowiedź pokazywana po błędnej próbie. |
 | `success` | nie | Komunikat po poprawnej odpowiedzi. |
-| `options` | dla `choice` | Co najmniej dwie opcje rozdzielone `|`. Jedna musi odpowiadać wartości `answer`. |
+| `options` | dla `choice` i `abcd` | Opcje rozdzielone `|`. `choice` wymaga co najmniej dwóch, a `abcd` dokładnie czterech opcji. |
 | `case_sensitive` | nie | `true`/`tak`, jeśli wielkość liter ma mieć znaczenie. Domyślnie tekst jest sprawdzany bez rozróżniania wielkości liter. |
 
 Można również używać polskich nazw pól bez znaków diakrytycznych lub z nimi: `typ`, `odpowiedź`, `etykieta`, `przykład`, `podpowiedź`, `sukces`, `opcje`, `wielkość liter`.
@@ -434,6 +434,19 @@ label: Wybierz liczbę neutronów w węglu-13
 options: 6 | 7 | 13
 answer: 7
 hint: Liczba neutronów to A − Z.
+:::
+```
+
+Quiz z widocznymi oznaczeniami A–D można zapisać krócej jako `type: abcd`. Poprawną odpowiedź podaj literą albo pełną treścią opcji:
+
+```md
+:::task
+type: abcd
+label: Która liczba jest liczbą atomową węgla?
+options: 4 | 6 | 12 | 13
+answer: B
+hint: Liczba atomowa jest równa liczbie protonów.
+success: Dobrze — węgiel ma liczbę atomową 6.
 :::
 ```
 

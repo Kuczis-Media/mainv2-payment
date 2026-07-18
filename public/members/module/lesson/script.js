@@ -278,18 +278,26 @@
       legend.textContent = task.label;
       fieldset.id = fieldId;
       fieldset.className = 'choice-grid';
+      fieldset.classList.toggle('is-abcd', task.choiceStyle === 'abcd');
       fieldset.disabled = solved;
       task.options.forEach((option, optionIndex) => {
         const optionLabel = document.createElement('label');
         const input = document.createElement('input');
+        const marker = document.createElement('span');
         const copy = document.createElement('span');
         input.type = 'radio';
         input.name = fieldId;
-        input.value = option;
+        input.value = task.choiceStyle === 'abcd' ? String.fromCharCode(65 + optionIndex) : option;
         input.id = `${fieldId}-${optionIndex}`;
+        marker.className = 'choice-letter';
+        marker.textContent = String.fromCharCode(65 + optionIndex);
+        marker.setAttribute('aria-hidden', 'true');
+        copy.className = 'choice-copy';
         copy.textContent = option;
         optionLabel.htmlFor = input.id;
-        optionLabel.append(input, copy);
+        optionLabel.append(input);
+        if (task.choiceStyle === 'abcd') optionLabel.append(marker);
+        optionLabel.append(copy);
         fieldset.appendChild(optionLabel);
       });
       controls.appendChild(fieldset);

@@ -277,6 +277,21 @@ a {
   background: var(--primary);
 }
 
+html[data-theme="dark"] .purchase-sidebar-action {
+  color: #d8f3ed;
+  background: #173c36;
+  border-color: #28564e;
+}
+
+html[data-theme="dark"] .purchase-sidebar-action small {
+  color: #9fc9c0;
+}
+
+html[data-theme="dark"] .purchase-sidebar-action .action-icon {
+  color: #102a26;
+  background: #70cfbc;
+}
+
 .action-icon {
   display: grid;
   width: 34px;

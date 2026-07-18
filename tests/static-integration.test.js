@@ -60,7 +60,6 @@ test('members home is a local Markdown dashboard rather than a remote iframe', (
   assert.match(script, /\/members\/dashboard\.md/);
   assert.match(markdown, /^#\s+\S/m);
   assert.match(markdown, /^##\s+\S/m);
-  assert.match(markdown, /^###\s+\S/m);
   assert.match(script, /document\.createElement\('details'\)/);
   assert.match(script, /resource-accordion/);
   assert.match(html, /\/members\/dashboard-parser\.js/);
@@ -152,6 +151,23 @@ test('access-status page has live Identity states and local published assets', (
   assert.match(script, /window\.ChemAuth\.ready/);
   assert.match(script, /SESSION_REFRESH_INTERVAL_MS/);
   assert.doesNotMatch(script, /netlifyIdentity\.init\s*\(/);
+});
+
+test('purchase and access-status pages follow the persistent dashboard theme', () => {
+  const purchaseHtml = fs.readFileSync(path.join(root, 'public', 'purchase', 'index.html'), 'utf8');
+  const purchaseStyles = fs.readFileSync(path.join(root, 'public', 'purchase', 'style.css'), 'utf8');
+  const timeHtml = fs.readFileSync(path.join(root, 'public', 'time.html'), 'utf8');
+  const timeStyles = fs.readFileSync(path.join(root, 'public', 'assets', 'time', 'style.css'), 'utf8');
+  const dashboardStyles = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.css'), 'utf8');
+
+  for (const html of [purchaseHtml, timeHtml]) {
+    assert.match(html, /localStorage\.getItem\(['"]chem\.theme['"]\)/);
+    assert.match(html, /document\.documentElement\.dataset\.theme/);
+    assert.match(html, /prefers-color-scheme:\s*dark/);
+  }
+  assert.match(purchaseStyles, /:root\[data-theme=["']dark["']\]/);
+  assert.match(timeStyles, /:root\[data-theme=["']dark["']\]/);
+  assert.match(dashboardStyles, /html\[data-theme=["']dark["']\]\s+\.purchase-sidebar-action/);
 });
 
 test('login page prevents Identity email tokens from leaking through referrers', () => {

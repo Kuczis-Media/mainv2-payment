@@ -4,8 +4,20 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="robots" content="noindex, nofollow" />
-  <meta name="theme-color" content="#f4f8f7" />
+  <meta name="theme-color" id="theme-color" content="#f4f8f7" />
   <meta http-equiv="Cache-Control" content="no-store" />
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('chem.theme');
+        var dark = saved === 'dark' || (!saved && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        document.getElementById('theme-color').setAttribute('content', dark ? '#0d121a' : '#f4f8f7');
+      } catch (_) {
+        document.documentElement.dataset.theme = 'light';
+      }
+    })();
+  </script>
   <title>Kup lub przedłuż dostęp — ChemDisk</title>
   <link rel="icon" href="https://cdn.jsdelivr.net/gh/Kuczis-Media/logo/benzene-ring.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="/assets/payments/payments.css" />

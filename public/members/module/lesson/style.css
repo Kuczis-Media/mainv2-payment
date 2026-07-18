@@ -529,9 +529,48 @@ fieldset:focus-within {
   accent-color: var(--accent);
 }
 
+.choice-grid.is-abcd label {
+  display: grid;
+  grid-template-columns: auto 36px minmax(0, 1fr);
+  gap: 10px;
+  padding: 11px 13px;
+}
+
+.choice-grid.is-abcd input {
+  margin: 0;
+}
+
+.choice-letter {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--accent-strong);
+  background: var(--surface-soft);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.choice-copy {
+  min-width: 0;
+  line-height: 1.35;
+}
+
 .choice-grid label:has(input:checked) {
   border-color: var(--accent);
   background: var(--accent-soft);
+}
+
+.choice-grid label:has(input:checked) .choice-letter {
+  border-color: var(--accent);
+  color: #fff;
+  background: var(--accent-strong);
+}
+
+:root[data-theme="dark"] .choice-grid label:has(input:checked) .choice-letter {
+  color: #102018;
 }
 
 .lesson-navigation {

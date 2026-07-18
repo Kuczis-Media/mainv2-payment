@@ -44,14 +44,26 @@
 
   function checkAnswer(task, value) {
     if (!task || !Array.isArray(task.answers)) return false;
-    const candidate = normalizeAnswer(value, task.type, task.caseSensitive);
-    if (task.type === 'number' && Number.isNaN(candidate)) return false;
-    return task.answers.some((answer) => {
-      const expected = normalizeAnswer(answer, task.type, task.caseSensitive);
-      return task.type === 'number'
-        ? !Number.isNaN(expected) && candidate === expected
-        : candidate === expected;
-    });
+    const matchesExpected = (answerValue) => {
+      const candidate = normalizeAnswer(answerValue, task.type, task.caseSensitive);
+      if (task.type === 'number' && Number.isNaN(candidate)) return false;
+      return task.answers.some((answer) => {
+        const expected = normalizeAnswer(answer, task.type, task.caseSensitive);
+        return task.type === 'number'
+          ? !Number.isNaN(expected) && candidate === expected
+          : candidate === expected;
+      });
+    };
+    if (matchesExpected(value)) return true;
+
+    if (task.choiceStyle === 'abcd' && Array.isArray(task.options)) {
+      const letter = String(value || '').trim().toUpperCase();
+      const optionIndex = /^[A-D]$/.test(letter) ? letter.charCodeAt(0) - 65 : -1;
+      if (optionIndex >= 0 && optionIndex < task.options.length) {
+        return matchesExpected(task.options[optionIndex]);
+      }
+    }
+    return false;
   }
 
   function parseTask(lines, slideNumber) {
@@ -103,26 +115,18 @@
       tekst: 'text',
       text: 'text',
       wybor: 'choice',
-      choice: 'choice'
+      choice: 'choice',
+      abcd: 'abcd'
     };
-    const type = typeAliases[normalizeKey(values.type || 'text')];
-    if (!type) {
+    const requestedType = typeAliases[normalizeKey(values.type || 'text')];
+    if (!requestedType) {
       throw new LessonFormatError(
         'INVALID_TASK_TYPE',
-        `Slajd ${slideNumber}: typ zadania może mieć wartość text, number albo choice.`
+        `Slajd ${slideNumber}: typ zadania może mieć wartość text, number, choice albo abcd.`
       );
     }
-
-    const answers = String(values.answer || '')
-      .split('|')
-      .map((answer) => answer.trim())
-      .filter(Boolean);
-    if (!answers.length) {
-      throw new LessonFormatError(
-        'MISSING_TASK_ANSWER',
-        `Slajd ${slideNumber}: zadanie nie zawiera pola answer.`
-      );
-    }
+    const type = requestedType === 'abcd' ? 'choice' : requestedType;
+    const choiceStyle = requestedType === 'abcd' ? 'abcd' : 'default';
 
     const options = String(values.options || '')
       .split('|')
@@ -134,10 +138,34 @@
         `Slajd ${slideNumber}: zadanie choice wymaga co najmniej dwóch opcji.`
       );
     }
+    if (choiceStyle === 'abcd' && options.length !== 4) {
+      throw new LessonFormatError(
+        'INVALID_ABCD_OPTIONS',
+        `Slajd ${slideNumber}: quiz abcd wymaga dokładnie czterech opcji.`
+      );
+    }
+
+    const answers = String(values.answer || '')
+      .split('|')
+      .map((answer) => answer.trim())
+      .filter(Boolean)
+      .map((answer) => {
+        if (choiceStyle !== 'abcd') return answer;
+        const letter = answer.toUpperCase();
+        const optionIndex = /^[A-D]$/.test(letter) ? letter.charCodeAt(0) - 65 : -1;
+        return optionIndex >= 0 && optionIndex < options.length ? options[optionIndex] : answer;
+      });
+    if (!answers.length) {
+      throw new LessonFormatError(
+        'MISSING_TASK_ANSWER',
+        `Slajd ${slideNumber}: zadanie nie zawiera pola answer.`
+      );
+    }
 
     const caseSensitive = /^(?:1|true|tak|yes)$/i.test(values.caseSensitive || '');
     const task = {
       type,
+      choiceStyle,
       answers,
       options,
       caseSensitive,
@@ -147,7 +175,10 @@
       success: values.success || 'Dobrze! Możesz przejść dalej.'
     };
 
-    if (type === 'choice' && !options.some((option) => checkAnswer(task, option))) {
+    const answerMatchesOption = answers.some((answer) => options.some((option) => (
+      normalizeAnswer(answer, type, caseSensitive) === normalizeAnswer(option, type, caseSensitive)
+    )));
+    if (type === 'choice' && !answerMatchesOption) {
       throw new LessonFormatError(
         'ANSWER_NOT_IN_OPTIONS',
         `Slajd ${slideNumber}: poprawna odpowiedź nie występuje na liście options.`

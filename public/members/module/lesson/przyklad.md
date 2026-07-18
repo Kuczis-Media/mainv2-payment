@@ -32,6 +32,21 @@ success: Dokładnie — 13 − 6 = 7 neutronów.
 
 ---
 
+## Quiz ABCD
+
+Która liczba jest liczbą atomową węgla?
+
+:::task
+type: abcd
+label: Wybierz jedną odpowiedź
+options: 4 | 6 | 12 | 13
+answer: B
+hint: Liczba atomowa jest równa liczbie protonów w jądrze.
+success: Świetnie — węgiel ma liczbę atomową 6.
+:::
+
+---
+
 ## Podsumowanie
 
 Brawo! Dla dowolnego izotopu możesz użyć tej samej zależności:

@@ -2,6 +2,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const { parse } = require('../public/members/dashboard-parser.js');
 
@@ -53,4 +55,19 @@ Tekst wewnętrzny.
   );
   assert.deepEqual(model.sections[0].groups[0].groups[0].description, ['Tekst wewnętrzny.']);
   assert.deepEqual(model.sections[0].groups[0].groups[0].notices, ['Ważny komunikat.']);
+});
+
+test('default dashboard keeps only Start content and the help/account section', () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, '..', 'public', 'members', 'dashboard.md'),
+    'utf8'
+  );
+  const model = parse(source);
+
+  assert.equal(model.title, 'Twoja przestrzeń do nauki');
+  assert.deepEqual(model.sections.map((section) => section.title), ['Pomoc i konto']);
+  assert.deepEqual(
+    model.sections[0].items.map((item) => item.title),
+    ['Status dostępu', 'Napisz do nas']
+  );
 });
