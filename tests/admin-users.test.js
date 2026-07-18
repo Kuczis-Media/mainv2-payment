@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const adminUsers = require('../netlify/functions/admin-users.js');
+const payments = require('../netlify/payment-common.js');
 
 const ADMIN_ID = '11111111-1111-4111-8111-111111111111';
 const TARGET_ID = '22222222-2222-4222-8222-222222222222';
@@ -351,6 +352,85 @@ test('administrator cannot accidentally remove their own admin role', async (t) 
   assert.equal(response.statusCode, 409);
   assert.equal(JSON.parse(response.body).error, 'CANNOT_REMOVE_OWN_ADMIN');
   assert.equal(putCalls, 0);
+});
+
+test('deleting an Identity user also deletes their payment ledger', async (t) => {
+  const originalFetch = global.fetch;
+  const requests = [];
+  const deletedKeys = [];
+  payments._test.setStoreFactory(() => ({
+    async delete(key) {
+      deletedKeys.push(key);
+    }
+  }));
+  global.fetch = async (url, options = {}) => {
+    requests.push({ url: String(url), options });
+    if (String(url).endsWith('/user')) return responseJson(canonicalAdmin);
+    if (options.method === 'DELETE') return new Response(null, { status: 204 });
+    return responseJson({ id: TARGET_ID, email: 'jan@example.com' });
+  };
+  t.after(() => {
+    global.fetch = originalFetch;
+    payments._test.setStoreFactory(null);
+  });
+
+  const response = await adminUsers.handler(eventFor({
+    httpMethod: 'DELETE',
+    headers: {
+      authorization: `Bearer ${CLIENT_TOKEN}`,
+      'content-type': 'application/json',
+      origin: 'https://example.netlify.app',
+      host: 'example.netlify.app',
+      'x-forwarded-proto': 'https'
+    },
+    body: JSON.stringify({ id: TARGET_ID })
+  }), contextFor());
+  const payload = JSON.parse(response.body);
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(payload.deleted, true);
+  assert.equal(payload.paymentHistoryDeleted, true);
+  assert.deepEqual(deletedKeys, [`users/${TARGET_ID}.json`]);
+  assert.equal(requests.filter((request) => request.options.method === 'DELETE').length, 1);
+});
+
+test('repeating deletion after Identity is already gone still cleans up the payment ledger', async (t) => {
+  const originalFetch = global.fetch;
+  const deletedKeys = [];
+  let identityDeleteCalls = 0;
+  payments._test.setStoreFactory(() => ({
+    async delete(key) {
+      deletedKeys.push(key);
+    }
+  }));
+  global.fetch = async (url, options = {}) => {
+    if (String(url).endsWith('/user')) return responseJson(canonicalAdmin);
+    if (options.method === 'DELETE') identityDeleteCalls += 1;
+    return responseJson({ error: 'not found' }, 404);
+  };
+  t.after(() => {
+    global.fetch = originalFetch;
+    payments._test.setStoreFactory(null);
+  });
+
+  const response = await adminUsers.handler(eventFor({
+    httpMethod: 'DELETE',
+    headers: {
+      authorization: `Bearer ${CLIENT_TOKEN}`,
+      'content-type': 'application/json',
+      origin: 'https://example.netlify.app',
+      host: 'example.netlify.app',
+      'x-forwarded-proto': 'https'
+    },
+    body: JSON.stringify({ id: TARGET_ID })
+  }), contextFor());
+  const payload = JSON.parse(response.body);
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(payload.identityAlreadyDeleted, true);
+  assert.equal(payload.paymentHistoryDeleted, true);
+  assert.deepEqual(deletedKeys, [`users/${TARGET_ID}.json`]);
+  assert.equal(identityDeleteCalls, 0);
 });
 
 test('role validation allows admin plus one grant and rejects ambiguous access roles', () => {

@@ -179,7 +179,7 @@ Zmiana waluty nie przelicza automatycznie wpisanych liczb — po wybraniu nowej 
 
 Stripe Dashboard nie jest źródłem aktualnego cennika tej aplikacji. Zmiana przypadkowego Price w katalogu Stripe nie zmieni kart cenowych ChemDisk. Dzięki temu administrator nie musi kopiować nowych `price_...` po każdej zmianie kwoty.
 
-Księga użytkownika jest zapisywana w site-wide magazynie Netlify Blobs `chemdisk-payments`. Każdy zapis używa warunku ETag. Identyfikator Checkout Session może zostać zrealizowany tylko raz, nawet jeśli Stripe ponowi webhook lub strona sukcesu równocześnie sprawdzi płatność.
+Księga użytkownika jest zapisywana w site-wide magazynie Netlify Blobs `chemdisk-payments`. Każdy zapis używa warunku ETag. Historia przechowuje maksymalnie 100 najnowszych zakupów i operacji administracyjnych; starsze pozycje są automatycznie usuwane, a pojedynczy znacznik czasu nadal chroni przed ponownym naliczeniem starej Checkout Session. Usunięcie konta w panelu administratora usuwa również jego księgę z tego magazynu. Dane transakcji pozostają niezależnie w Stripe.
 
 Globalne wyłączenie płatności pozostawia ofertę i ceny widoczne, ale dezaktywuje przyciski zakupu, a serwer odrzuca każdą próbę utworzenia Checkout. Ponowne włączenie nie wymaga zmiany kluczy Stripe.
 

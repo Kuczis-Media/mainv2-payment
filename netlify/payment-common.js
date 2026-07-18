@@ -16,7 +16,8 @@ const LEDGER_VERSION = 1;
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const IDENTITY_TIMEOUT_MS = 8_000;
-const MAX_LEDGER_EVENTS = 2_000;
+const MAX_LEDGER_EVENTS = 100;
+const MAX_LEGACY_LEDGER_EVENTS = 2_000;
 const MAX_CAS_ATTEMPTS = 8;
 const OPAQUE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -229,6 +230,7 @@ function emptyLedger(targetUserId) {
       assignedAt: null,
       expiresAt: null
     },
+    checkoutSessionsProcessedThrough: null,
     events: [],
     updatedAt: null
   };
@@ -241,7 +243,7 @@ function normalizeLedger(value, expectedUserId) {
   if (!Number.isSafeInteger(value.version) || value.version < 0 || !Array.isArray(value.events)) {
     throw paymentError('PAYMENT_LEDGER_INVALID');
   }
-  if (value.events.length > MAX_LEDGER_EVENTS) throw paymentError('PAYMENT_LEDGER_TOO_LARGE');
+  if (value.events.length > MAX_LEGACY_LEDGER_EVENTS) throw paymentError('PAYMENT_LEDGER_TOO_LARGE');
 
   const access = plainObject(value.access) ? value.access : {};
   const role = PLAN_BY_ID.has(access.role) ? access.role : '';
@@ -249,13 +251,21 @@ function normalizeLedger(value, expectedUserId) {
   const expiresAt = safeDateString(access.expiresAt);
   const events = value.events.map(normalizeLedgerEvent).filter(Boolean);
   if (events.length !== value.events.length) throw paymentError('PAYMENT_LEDGER_INVALID');
+  const storedProcessedThrough = value.checkoutSessionsProcessedThrough == null
+    ? null
+    : safeDateString(value.checkoutSessionsProcessedThrough);
+  if (value.checkoutSessionsProcessedThrough != null && !storedProcessedThrough) {
+    throw paymentError('PAYMENT_LEDGER_INVALID');
+  }
+  const compacted = compactLedgerEvents(events, storedProcessedThrough);
 
   return {
     schema: LEDGER_VERSION,
     userId: expectedUserId,
     version: value.version,
     access: { role, assignedAt, expiresAt },
-    events,
+    checkoutSessionsProcessedThrough: compacted.checkoutSessionsProcessedThrough,
+    events: compacted.events,
     updatedAt: safeDateString(value.updatedAt)
   };
 }
@@ -296,13 +306,22 @@ function normalizeLedgerEvent(event) {
 function applyPurchase(ledgerInput, purchase, now = Date.now()) {
   const targetUserId = purchase && purchase.userId;
   const ledger = normalizeLedger(ledgerInput || emptyLedger(targetUserId), targetUserId);
-  if (!purchase || !CHECKOUT_ID_PATTERN.test(purchase.id || '') || !PLAN_BY_ID.has(purchase.plan)) {
+  const paidAt = safeDateString(purchase && purchase.paidAt);
+  if (
+    !purchase ||
+    !CHECKOUT_ID_PATTERN.test(purchase.id || '') ||
+    !PLAN_BY_ID.has(purchase.plan) ||
+    !paidAt
+  ) {
     throw paymentError('INVALID_CHECKOUT_SESSION');
   }
-  if (ledger.events.some((event) => event.type === 'purchase' && event.id === purchase.id)) {
+  const processedThrough = parseTimestamp(ledger.checkoutSessionsProcessedThrough);
+  if (
+    ledger.events.some((event) => event.type === 'purchase' && event.id === purchase.id) ||
+    (processedThrough > 0 && Date.parse(paidAt) <= processedThrough)
+  ) {
     return { ledger, changed: false, duplicate: true };
   }
-  if (ledger.events.length >= MAX_LEDGER_EVENTS) throw paymentError('PAYMENT_LEDGER_TOO_LARGE');
 
   const plan = PLAN_BY_ID.get(purchase.plan);
   const recordedAt = new Date(now).toISOString();
@@ -318,13 +337,17 @@ function applyPurchase(ledgerInput, purchase, now = Date.now()) {
     plan: plan.id,
     amount: purchase.amount,
     currency: purchase.currency || 'pln',
-    paidAt: safeDateString(purchase.paidAt) || recordedAt,
+    paidAt,
     recordedAt,
     accessBefore: currentExpiresAt > 0 ? new Date(currentExpiresAt).toISOString() : null,
     accessAfter: expiresAt,
     paymentIntent: purchase.paymentIntent
   });
   if (!event) throw paymentError('INVALID_CHECKOUT_SESSION');
+  const compacted = compactLedgerEvents(
+    [...ledger.events, event],
+    ledger.checkoutSessionsProcessedThrough
+  );
 
   return {
     changed: true,
@@ -337,7 +360,8 @@ function applyPurchase(ledgerInput, purchase, now = Date.now()) {
         assignedAt,
         expiresAt
       },
-      events: [...ledger.events, event],
+      checkoutSessionsProcessedThrough: compacted.checkoutSessionsProcessedThrough,
+      events: compacted.events,
       updatedAt: recordedAt
     }
   };
@@ -346,7 +370,6 @@ function applyPurchase(ledgerInput, purchase, now = Date.now()) {
 function applyRevocation(ledgerInput, input, now = Date.now()) {
   const targetUserId = input && input.userId;
   const ledger = normalizeLedger(ledgerInput || emptyLedger(targetUserId), targetUserId);
-  if (ledger.events.length >= MAX_LEDGER_EVENTS) throw paymentError('PAYMENT_LEDGER_TOO_LARGE');
   const recordedAt = new Date(now).toISOString();
   const previousExpiry = safeDateString(ledger.access.expiresAt);
   const event = normalizeLedgerEvent({
@@ -358,6 +381,10 @@ function applyRevocation(ledgerInput, input, now = Date.now()) {
     accessAfter: recordedAt,
     reason: input.reason || 'Dostęp odebrany przez administratora'
   });
+  const compacted = compactLedgerEvents(
+    [...ledger.events, event],
+    ledger.checkoutSessionsProcessedThrough
+  );
   return {
     changed: true,
     duplicate: false,
@@ -369,9 +396,33 @@ function applyRevocation(ledgerInput, input, now = Date.now()) {
         assignedAt: ledger.access.assignedAt,
         expiresAt: recordedAt
       },
-      events: [...ledger.events, event],
+      checkoutSessionsProcessedThrough: compacted.checkoutSessionsProcessedThrough,
+      events: compacted.events,
       updatedAt: recordedAt
     }
+  };
+}
+
+function compactLedgerEvents(events, checkoutSessionsProcessedThrough) {
+  if (events.length <= MAX_LEDGER_EVENTS) {
+    return {
+      events,
+      checkoutSessionsProcessedThrough: safeDateString(checkoutSessionsProcessedThrough)
+    };
+  }
+
+  const removed = events.slice(0, events.length - MAX_LEDGER_EVENTS);
+  let processedThrough = parseTimestamp(checkoutSessionsProcessedThrough);
+  for (const event of removed) {
+    if (event.type !== 'purchase') continue;
+    const checkoutCreatedAt = parseTimestamp(event.paidAt) || parseTimestamp(event.recordedAt);
+    processedThrough = Math.max(processedThrough, checkoutCreatedAt);
+  }
+  return {
+    events: events.slice(-MAX_LEDGER_EVENTS),
+    checkoutSessionsProcessedThrough: processedThrough > 0
+      ? new Date(processedThrough).toISOString()
+      : null
   };
 }
 
@@ -419,6 +470,14 @@ async function mutateUserLedger(store, targetUserId, mutator) {
     }
   }
   throw paymentError('PAYMENT_LEDGER_CONFLICT', 409);
+}
+
+async function deleteUserLedger(store, targetUserId) {
+  if (!validUserId(targetUserId)) throw paymentError('INVALID_USER_ID');
+  if (!store || typeof store.delete !== 'function') {
+    throw paymentError('PAYMENT_STORAGE_UNAVAILABLE', 503);
+  }
+  await store.delete(ledgerKey(targetUserId));
 }
 
 function validateCheckoutSession(session) {
@@ -757,6 +816,7 @@ module.exports = {
   CONFIG_KEY,
   DAY_MS,
   HOUR_MS,
+  MAX_LEDGER_EVENTS,
   PLAN_BY_ID,
   PLANS,
   SUPPORTED_CURRENCIES,
@@ -764,6 +824,7 @@ module.exports = {
   applyPurchase,
   applyRevocation,
   defaultPriceConfig,
+  deleteUserLedger,
   emptyLedger,
   fulfillCheckoutSession,
   getPaymentStore,

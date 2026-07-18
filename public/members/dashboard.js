@@ -100,6 +100,7 @@
     INVALID_STACKING_SETTING: 'Ustawienie przedłużania jest nieprawidłowe.',
     PAYMENT_CONFIG_CONFLICT: 'Ceny zostały w międzyczasie zmienione. Wczytaj je ponownie.',
     PAYMENT_CONFIG_INVALID: 'Zapisana konfiguracja cen jest nieprawidłowa.',
+    PAYMENT_HISTORY_DELETE_FAILED: 'Konto usunięto z Identity, ale nie udało się usunąć historii płatności. Kliknij „Usuń konto” ponownie, aby dokończyć czyszczenie.',
     PAYMENT_LEDGER_CONFLICT: 'Historia płatności zmieniła się w tym samym czasie. Spróbuj ponownie.',
     PAYMENT_LEDGER_INVALID: 'Historia płatności użytkownika jest uszkodzona.',
     PAYMENT_STORAGE_UNAVAILABLE: 'Magazyn płatności jest chwilowo niedostępny.',
@@ -1588,7 +1589,7 @@
 
   async function deleteAdminUser(user, button) {
     const label = adminDisplayName(user);
-    if (!window.confirm(`Usunąć konto „${label}” (${user.email})? Tej operacji nie można cofnąć.`)) return;
+    if (!window.confirm(`Usunąć konto „${label}” (${user.email}) i jego historię płatności z ChemDisk? Tej operacji nie można cofnąć. Dane transakcji pozostaną w Stripe.`)) return;
     const originalText = button.textContent;
     button.disabled = true;
     button.textContent = '…';

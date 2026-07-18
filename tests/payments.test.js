@@ -20,6 +20,7 @@ function purchase(id, plan = 'month', amount = 5_000) {
     userId: USER_ID,
     plan,
     amount,
+    paidAt: new Date(NOW).toISOString(),
     paymentIntent: `pi_${id.replace(/^cs_(?:test_)?/, '')}`
   };
 }
@@ -99,6 +100,68 @@ test('replaying the same Checkout Session is idempotent', () => {
   assert.equal(replay.changed, false);
   assert.equal(replay.duplicate, true);
   assert.deepEqual(replay.ledger, first.ledger);
+});
+
+test('payment history keeps the latest 100 events without replaying a pruned Checkout Session', () => {
+  let ledger = payments.emptyLedger(USER_ID);
+  for (let index = 0; index < 105; index += 1) {
+    const timestamp = NOW + index * 1_000;
+    const checkout = purchase(`cs_test_retention${String(index).padStart(4, '0')}`);
+    checkout.paidAt = new Date(timestamp).toISOString();
+    ledger = payments.applyPurchase(ledger, checkout, timestamp).ledger;
+  }
+
+  assert.equal(payments.MAX_LEDGER_EVENTS, 100);
+  assert.equal(ledger.events.length, 100);
+  assert.equal(ledger.events[0].id, 'cs_test_retention0005');
+  assert.equal(ledger.checkoutSessionsProcessedThrough, new Date(NOW + 4_000).toISOString());
+  assert.equal(payments.publicLedger(ledger).history.length, 100);
+
+  const accessBeforeReplay = ledger.access.expiresAt;
+  const oldCheckout = purchase('cs_test_retention0000');
+  oldCheckout.paidAt = new Date(NOW).toISOString();
+  const replay = payments.applyPurchase(ledger, oldCheckout, NOW + 200_000);
+  assert.equal(replay.changed, false);
+  assert.equal(replay.duplicate, true);
+  assert.equal(replay.ledger.access.expiresAt, accessBeforeReplay);
+
+  const newCheckout = purchase('cs_test_retention0105');
+  newCheckout.paidAt = new Date(NOW + 105_000).toISOString();
+  const next = payments.applyPurchase(ledger, newCheckout, NOW + 105_000);
+  assert.equal(next.changed, true);
+  assert.equal(next.ledger.events.length, 100);
+  assert.equal(next.ledger.events.at(-1).id, 'cs_test_retention0105');
+});
+
+test('a legacy ledger above the new history limit is compacted on its next mutation', () => {
+  let ledger = payments.emptyLedger(USER_ID);
+  for (let index = 0; index < 100; index += 1) {
+    const timestamp = NOW + index * 1_000;
+    const checkout = purchase(`cs_test_legacy${String(index).padStart(4, '0')}`);
+    checkout.paidAt = new Date(timestamp).toISOString();
+    ledger = payments.applyPurchase(ledger, checkout, timestamp).ledger;
+  }
+  const oldest = {
+    ...ledger.events[0],
+    id: 'cs_test_legacyhistorical00',
+    paidAt: new Date(NOW - 1_000).toISOString(),
+    recordedAt: new Date(NOW - 1_000).toISOString()
+  };
+  const legacyLedger = {
+    ...ledger,
+    events: [oldest, ...ledger.events]
+  };
+  delete legacyLedger.checkoutSessionsProcessedThrough;
+
+  const compacted = payments.applyRevocation(legacyLedger, {
+    userId: USER_ID,
+    actorId: ADMIN_ID,
+    reason: 'migration test'
+  }, NOW + 200_000).ledger;
+
+  assert.equal(compacted.events.length, 100);
+  assert.equal(compacted.events.at(-1).type, 'revocation');
+  assert.equal(compacted.checkoutSessionsProcessedThrough, new Date(NOW).toISOString());
 });
 
 test('a new purchase after expiry starts from now while a mixed plan stacks exactly once', () => {

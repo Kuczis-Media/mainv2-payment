@@ -4,6 +4,11 @@
 // service URL and a short-lived operator token into clientContext; that token
 // is used only for server-to-server calls and is never returned to the client.
 
+const {
+  deleteUserLedger,
+  getPaymentStore
+} = require('../payment-common.js');
+
 const ACCESS_ROLES = Object.freeze([
   'admin',
   'active',
@@ -271,38 +276,65 @@ async function deleteUser(event, identity, currentAdmin) {
     return json({ error: 'CANNOT_DELETE_SELF' }, 409);
   }
 
+  let paymentStore;
+  try {
+    paymentStore = getPaymentStore();
+  } catch (error) {
+    return json({ error: error.code || 'PAYMENT_STORAGE_UNAVAILABLE' }, error.status || 503);
+  }
+
   const targetResponse = await identityFetch(
     identity.url,
     `/admin/users/${encodeURIComponent(id)}`,
     identity.token
   );
-  if (targetResponse.status === 404) return json({ error: 'USER_NOT_FOUND' }, 404);
-  if (targetResponse.status === 401 || targetResponse.status === 403) {
-    return json({ error: 'IDENTITY_ADMIN_UNAVAILABLE' }, 503);
-  }
-  if (!targetResponse.ok || !userId(await readJson(targetResponse))) {
-    return json({ error: 'IDENTITY_REQUEST_FAILED' }, 502);
+  const identityAlreadyDeleted = targetResponse.status === 404;
+  if (!identityAlreadyDeleted) {
+    if (targetResponse.status === 401 || targetResponse.status === 403) {
+      return json({ error: 'IDENTITY_ADMIN_UNAVAILABLE' }, 503);
+    }
+    if (!targetResponse.ok || !userId(await readJson(targetResponse))) {
+      return json({ error: 'IDENTITY_REQUEST_FAILED' }, 502);
+    }
+
+    const deleteResponse = await identityFetch(
+      identity.url,
+      `/admin/users/${encodeURIComponent(id)}`,
+      identity.token,
+      { method: 'DELETE' }
+    );
+    if (deleteResponse.status !== 404) {
+      if (deleteResponse.status === 401 || deleteResponse.status === 403) {
+        return json({ error: 'IDENTITY_ADMIN_UNAVAILABLE' }, 503);
+      }
+      if (!deleteResponse.ok) {
+        return json({ error: 'IDENTITY_DELETE_FAILED' }, 502);
+      }
+    }
   }
 
-  const deleteResponse = await identityFetch(
-    identity.url,
-    `/admin/users/${encodeURIComponent(id)}`,
-    identity.token,
-    { method: 'DELETE' }
-  );
-  if (deleteResponse.status === 404) return json({ error: 'USER_NOT_FOUND' }, 404);
-  if (deleteResponse.status === 401 || deleteResponse.status === 403) {
-    return json({ error: 'IDENTITY_ADMIN_UNAVAILABLE' }, 503);
-  }
-  if (!deleteResponse.ok) {
-    return json({ error: 'IDENTITY_DELETE_FAILED' }, 502);
+  try {
+    await deleteUserLedger(paymentStore, id);
+  } catch (error) {
+    console.error('Payment history cleanup after Identity deletion failed', safeErrorName(error));
+    return json({
+      error: 'PAYMENT_HISTORY_DELETE_FAILED',
+      identityDeleted: true,
+      id
+    }, error.status || 502);
   }
 
   console.info('Identity user deleted by administrator', {
     actorId: userId(currentAdmin),
-    targetId: id
+    targetId: id,
+    paymentHistoryDeleted: true
   });
-  return json({ deleted: true, id });
+  return json({
+    deleted: true,
+    id,
+    paymentHistoryDeleted: true,
+    identityAlreadyDeleted
+  });
 }
 
 async function updateUser(event, identity, currentAdmin) {
