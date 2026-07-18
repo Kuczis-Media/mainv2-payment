@@ -3,14 +3,16 @@
 
   const CONFIG_URL = '/.netlify/functions/payment-config';
   const CHECKOUT_URL = '/.netlify/functions/create-checkout';
-  const VALID_PLANS = new Set(['week', 'month', 'halfyear', 'year']);
+  const VALID_PLANS = new Set(['hour', 'day', 'week', 'month', 'halfyear', 'year']);
   const ERROR_MESSAGES = Object.freeze({
+    ACTIVE_ACCESS_EXISTS: 'Masz już aktywny dostęp. Kolejny pakiet kupisz po jego wygaśnięciu.',
     AUTH_EXPIRED: 'Sesja wygasła. Zaloguj się ponownie.',
     AUTH_REQUIRED: 'Zaloguj się, aby kupić dostęp.',
     IDENTITY_ADMIN_UNAVAILABLE: 'Usługa kont jest chwilowo niedostępna.',
     INVALID_PLAN: 'Wybrany pakiet jest nieprawidłowy.',
     PAYMENT_CONFIG_INVALID: 'Konfiguracja cen jest nieprawidłowa.',
     PAYMENT_STORAGE_UNAVAILABLE: 'Magazyn płatności jest chwilowo niedostępny.',
+    PLAN_UNAVAILABLE: 'Ten pakiet nie jest teraz dostępny. Odśwież ofertę i wybierz inny.',
     SAME_ORIGIN_REQUIRED: 'Odśwież stronę i spróbuj ponownie.',
     SESSION_REPLACED: 'To konto zalogowało się na innym urządzeniu.',
     STRIPE_CHECKOUT_FAILED: 'Stripe nie utworzył płatności. Spróbuj ponownie.',
@@ -60,6 +62,33 @@
     }
   }
 
+  function currentUser() {
+    const auth = window.ChemAuth;
+    return auth && typeof auth.getUser === 'function'
+      ? auth.getUser()
+      : window.netlifyIdentity && typeof window.netlifyIdentity.currentUser === 'function'
+        ? window.netlifyIdentity.currentUser()
+        : null;
+  }
+
+  function hasActiveCourseAccess(user) {
+    const appMetadata = user && user.app_metadata && typeof user.app_metadata === 'object'
+      ? user.app_metadata
+      : {};
+    const roles = Array.isArray(appMetadata.roles) ? appMetadata.roles : [];
+    if (roles.includes('active')) return true;
+    const timed = appMetadata.timed_access && typeof appMetadata.timed_access === 'object'
+      ? appMetadata.timed_access
+      : null;
+    return Boolean(
+      timed &&
+      VALID_PLANS.has(timed.role) &&
+      roles.includes(timed.role) &&
+      Number.isFinite(Date.parse(timed.expires_at || '')) &&
+      Date.parse(timed.expires_at) > Date.now()
+    );
+  }
+
   function renderContainer(container, config) {
     const mode = container.dataset.pricingMode || 'public';
     const compact = container.hasAttribute('data-pricing-compact');
@@ -67,9 +96,12 @@
     const fragment = document.createDocumentFragment();
     const grid = document.createElement('div');
     grid.className = `chem-pricing-grid${compact ? ' is-compact' : ''}`;
+    const stackingBlocked = config.stackingEnabled === false && hasActiveCourseAccess(currentUser());
+    let renderedPlans = 0;
 
     config.plans.forEach((plan) => {
-      if (!plan || !VALID_PLANS.has(plan.id)) return;
+      if (!plan || !VALID_PLANS.has(plan.id) || plan.enabled === false) return;
+      renderedPlans += 1;
       const card = document.createElement('article');
       card.className = `chem-price-card${plan.featured ? ' is-featured' : ''}${selectedPlan === plan.id ? ' is-selected' : ''}`;
       card.dataset.plan = plan.id;
@@ -104,19 +136,28 @@
       button.textContent = config.checkoutAvailable
         ? (mode === 'public' ? 'Wybieram pakiet' : 'Kup i przedłuż dostęp')
         : 'Płatności w przygotowaniu';
-      button.disabled = !config.checkoutAvailable;
+      button.disabled = !config.checkoutAvailable || stackingBlocked;
       button.addEventListener('click', () => startCheckout(plan.id, button, container));
 
       card.append(label, duration, price, feature, button);
       grid.append(card);
     });
 
+    if (!renderedPlans) {
+      const empty = document.createElement('p');
+      empty.className = 'chem-pricing-load-error';
+      empty.textContent = 'Administrator chwilowo nie udostępnia żadnego pakietu.';
+      fragment.append(empty);
+    } else {
+      fragment.append(grid);
+    }
+
     const status = document.createElement('p');
     status.className = 'chem-pricing-status';
     status.setAttribute('role', 'status');
     status.setAttribute('aria-live', 'polite');
     status.dataset.pricingStatus = 'true';
-    fragment.append(grid, status);
+    fragment.append(status);
 
     if (config.testMode) {
       const testNote = document.createElement('p');
@@ -127,7 +168,11 @@
 
     const stacking = document.createElement('p');
     stacking.className = 'chem-pricing-stacking';
-    stacking.textContent = 'Każdy kolejny zakup dodaje czas do obecnego terminu. Ten sam webhook nigdy nie nalicza pakietu drugi raz.';
+    stacking.textContent = config.stackingEnabled === false
+      ? (stackingBlocked
+          ? 'Masz aktywny dostęp. Administrator wyłączył dokupowanie pakietów przed jego wygaśnięciem.'
+          : 'Kolejny pakiet można kupić dopiero po wygaśnięciu bieżącego dostępu.')
+      : 'Każdy kolejny zakup dodaje czas do obecnego terminu. Ta sama płatność nigdy nie nalicza pakietu drugi raz.';
     fragment.append(stacking);
     container.replaceChildren(fragment);
 
@@ -171,16 +216,12 @@
   async function startCheckout(plan, button, container) {
     if (!VALID_PLANS.has(plan) || checkoutInFlight) return;
     const auth = window.ChemAuth;
-    const user = auth && typeof auth.getUser === 'function'
-      ? auth.getUser()
-      : window.netlifyIdentity && typeof window.netlifyIdentity.currentUser === 'function'
-        ? window.netlifyIdentity.currentUser()
-        : null;
+    const user = currentUser();
 
     if (!user) {
       const target = new URL('/login/', location.origin);
       target.searchParams.set('plan', plan);
-      target.searchParams.set('returnTo', '/members/');
+      target.searchParams.set('returnTo', `/purchase/?plan=${encodeURIComponent(plan)}`);
       location.assign(`${target.pathname}${target.search}`);
       return;
     }

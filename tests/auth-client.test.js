@@ -117,6 +117,12 @@ test('getReturnTo allows the local access-status page', () => {
   assert.equal(auth.getReturnTo(), '/time');
 });
 
+test('getReturnTo allows the separate purchase page with a selected plan', () => {
+  const auth = loadChemAuth('?returnTo=%2Fpurchase%2F%3Fplan%3Dmonth');
+
+  assert.equal(auth.getReturnTo(), '/purchase/?plan=month');
+});
+
 test('getReturnTo does not copy Identity type values into a module URL', () => {
   const auth = loadChemAuth('?returnTo=%2Fmembers%2F&type=recovery&error=denied');
 

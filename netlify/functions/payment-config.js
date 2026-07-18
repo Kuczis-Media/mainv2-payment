@@ -10,6 +10,8 @@ const {
 const {
   defaultPriceConfig,
   getPaymentStore,
+  PLANS,
+  SUPPORTED_CURRENCIES,
   paymentStoreConfig,
   publicPriceConfig,
   readPriceConfig,
@@ -79,7 +81,7 @@ exports.handler = async (event = {}, context = {}) => {
     if (!validation.ok) return json({ error: validation.code }, validation.status || 400);
     const saved = await writePriceConfig(
       store,
-      validation.value.prices,
+      validation.value,
       validation.value.expectedEtag,
       auth.userId
     );
@@ -102,13 +104,19 @@ function validateUpdate(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return { ok: false, code: 'INVALID_BODY' };
   }
-  if (Object.keys(body).some((key) => !['prices', 'expectedEtag'].includes(key))) {
+  if (Object.keys(body).some((key) => ![
+    'currency',
+    'enabledPlans',
+    'expectedEtag',
+    'prices',
+    'stackingEnabled'
+  ].includes(key))) {
     return { ok: false, code: 'UNEXPECTED_FIELDS' };
   }
   if (!body.prices || typeof body.prices !== 'object' || Array.isArray(body.prices)) {
     return { ok: false, code: 'INVALID_PRICE' };
   }
-  const allowedPlans = new Set(['week', 'month', 'halfyear', 'year']);
+  const allowedPlans = new Set(PLANS.map((plan) => plan.id));
   if (
     Object.keys(body.prices).length !== allowedPlans.size ||
     Object.keys(body.prices).some((key) => !allowedPlans.has(key))
@@ -123,6 +131,23 @@ function validateUpdate(body) {
     }
     prices[id] = amount;
   }
+  const currency = typeof body.currency === 'string' ? body.currency.trim().toLowerCase() : '';
+  if (!SUPPORTED_CURRENCIES.includes(currency)) {
+    return { ok: false, code: 'INVALID_CURRENCY' };
+  }
+  if (!Array.isArray(body.enabledPlans)) {
+    return { ok: false, code: 'INVALID_ENABLED_PLANS' };
+  }
+  const enabledPlans = Array.from(new Set(body.enabledPlans));
+  if (
+    enabledPlans.length !== body.enabledPlans.length ||
+    enabledPlans.some((id) => typeof id !== 'string' || !allowedPlans.has(id))
+  ) {
+    return { ok: false, code: 'INVALID_ENABLED_PLANS' };
+  }
+  if (typeof body.stackingEnabled !== 'boolean') {
+    return { ok: false, code: 'INVALID_STACKING_SETTING' };
+  }
   const expectedEtag = body.expectedEtag;
   if (expectedEtag !== null && (
     typeof expectedEtag !== 'string' ||
@@ -132,7 +157,16 @@ function validateUpdate(body) {
   )) {
     return { ok: false, code: 'INVALID_ETAG' };
   }
-  return { ok: true, value: { prices, expectedEtag } };
+  return {
+    ok: true,
+    value: {
+      currency,
+      enabledPlans,
+      expectedEtag,
+      prices,
+      stackingEnabled: body.stackingEnabled
+    }
+  };
 }
 
 function safeErrorName(error) {

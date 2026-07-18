@@ -97,6 +97,15 @@
     Expires = "0"
     X-Robots-Tag = "noindex, nofollow, noarchive"
 
+## Purchase screen reads the current offer and authenticated account state.
+[[headers]]
+  for = "/purchase/*"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"
+    Pragma = "no-cache"
+    Expires = "0"
+    X-Robots-Tag = "noindex, nofollow, noarchive"
+
 ## Access status reads the live Identity session in the browser.
 [[headers]]
   for = "/time"

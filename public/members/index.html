@@ -24,11 +24,8 @@
   <title>Panel kursanta — ChemDisk</title>
 
   <link rel="stylesheet" href="/members/dashboard.css" />
-  <link rel="stylesheet" href="/assets/payments/payments.css" />
-
   <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
   <script src="/assets/js/auth.js"></script>
-  <script defer src="/assets/payments/payments.js"></script>
   <script defer src="/members/dashboard.js"></script>
 </head>
 <body>
@@ -72,7 +69,7 @@
         </span>
       </button>
 
-      <a class="sidebar-action purchase-sidebar-action" href="#extend-access">
+      <a class="sidebar-action purchase-sidebar-action" href="/purchase/">
         <span class="action-icon" aria-hidden="true">＋</span>
         <span>
           <strong>Kup lub przedłuż</strong>
@@ -165,15 +162,6 @@
               <path class="flask-rim" d="M101 25h59" />
             </svg>
           </div>
-        </section>
-
-        <section class="dashboard-pricing-section" id="extend-access" aria-labelledby="extend-access-title">
-          <div class="dashboard-section-heading">
-            <span class="eyebrow">Płatności Stripe</span>
-            <h2 id="extend-access-title">Kup lub przedłuż dostęp</h2>
-            <p>Możesz dokupić kolejny okres w dowolnej chwili. Nowy czas zostanie doliczony do aktualnego terminu.</p>
-          </div>
-          <div class="chem-pricing" data-pricing data-pricing-mode="authenticated" aria-live="polite"></div>
         </section>
 
         <div class="dashboard-message" id="dashboard-message" role="status" aria-live="polite" hidden></div>
@@ -404,26 +392,56 @@
       <section class="admin-tab-panel" id="admin-panel-payments" role="tabpanel" aria-labelledby="admin-tab-payments" data-admin-panel="payments" hidden>
         <div class="admin-guidance">
           <span aria-hidden="true">zł</span>
-          <p><strong>Ceny pakietów</strong> Kwoty są zapisywane po stronie serwera i obowiązują dla nowych stron Stripe Checkout. Wcześniejsze transakcje zachowują pierwotną wartość.</p>
+          <p><strong>Oferta Stripe</strong> Ustaw walutę, ceny, dostępne długości i zasady przedłużania. Zmiany dotyczą nowych stron Checkout, a wcześniejsze transakcje zachowują pierwotne dane.</p>
         </div>
         <form class="admin-prices-form" id="admin-prices-form">
+          <div class="admin-payment-settings">
+            <label>
+              <span class="field-label">Waluta nowych płatności</span>
+              <select class="text-field" id="admin-payment-currency" required>
+                <option value="pln">PLN — złoty polski</option>
+                <option value="eur">EUR — euro</option>
+                <option value="usd">USD — dolar amerykański</option>
+                <option value="gbp">GBP — funt brytyjski</option>
+                <option value="chf">CHF — frank szwajcarski</option>
+                <option value="czk">CZK — korona czeska</option>
+                <option value="cad">CAD — dolar kanadyjski</option>
+                <option value="aud">AUD — dolar australijski</option>
+              </select>
+            </label>
+            <label class="admin-payment-switch">
+              <input id="admin-payment-block-stacking" type="checkbox" />
+              <span>
+                <strong>Blokuj dokupowanie przy aktywnym dostępie</strong>
+                <small>Po włączeniu użytkownik kupi kolejny pakiet dopiero po wygaśnięciu bieżącego. Po wyłączeniu okresy sumują się.</small>
+              </span>
+            </label>
+          </div>
           <div class="admin-prices-grid">
-            <label>
-              <span class="field-label">Tydzień (PLN)</span>
-              <input class="text-field" id="admin-price-week" name="week" type="number" min="1" max="10000" step="0.01" inputmode="decimal" required />
-            </label>
-            <label>
-              <span class="field-label">Miesiąc (PLN)</span>
-              <input class="text-field" id="admin-price-month" name="month" type="number" min="1" max="10000" step="0.01" inputmode="decimal" required />
-            </label>
-            <label>
-              <span class="field-label">Pół roku (PLN)</span>
-              <input class="text-field" id="admin-price-halfyear" name="halfyear" type="number" min="1" max="10000" step="0.01" inputmode="decimal" required />
-            </label>
-            <label>
-              <span class="field-label">Rok (PLN)</span>
-              <input class="text-field" id="admin-price-year" name="year" type="number" min="1" max="10000" step="0.01" inputmode="decimal" required />
-            </label>
+            <div class="admin-price-plan">
+              <label class="admin-plan-enabled"><input id="admin-enabled-hour" type="checkbox" /> Dostępny: 1 godzina</label>
+              <label><span class="field-label">Cena</span><input class="text-field" id="admin-price-hour" name="hour" type="number" min="1" max="10000" step="0.01" inputmode="decimal" required /></label>
+            </div>
+            <div class="admin-price-plan">
+              <label class="admin-plan-enabled"><input id="admin-enabled-day" type="checkbox" /> Dostępny: 1 dzień</label>
+              <label><span class="field-label">Cena</span><input class="text-field" id="admin-price-day" name="day" type="number" min="1" max="10000" step="0.01" inputmode="decimal" required /></label>
+            </div>
+            <div class="admin-price-plan">
+              <label class="admin-plan-enabled"><input id="admin-enabled-week" type="checkbox" /> Dostępny: 1 tydzień</label>
+              <label><span class="field-label">Cena</span><input class="text-field" id="admin-price-week" name="week" type="number" min="1" max="10000" step="0.01" inputmode="decimal" required /></label>
+            </div>
+            <div class="admin-price-plan">
+              <label class="admin-plan-enabled"><input id="admin-enabled-month" type="checkbox" /> Dostępny: 1 miesiąc</label>
+              <label><span class="field-label">Cena</span><input class="text-field" id="admin-price-month" name="month" type="number" min="1" max="10000" step="0.01" inputmode="decimal" required /></label>
+            </div>
+            <div class="admin-price-plan">
+              <label class="admin-plan-enabled"><input id="admin-enabled-halfyear" type="checkbox" /> Dostępny: pół roku</label>
+              <label><span class="field-label">Cena</span><input class="text-field" id="admin-price-halfyear" name="halfyear" type="number" min="1" max="10000" step="0.01" inputmode="decimal" required /></label>
+            </div>
+            <div class="admin-price-plan">
+              <label class="admin-plan-enabled"><input id="admin-enabled-year" type="checkbox" /> Dostępny: 1 rok</label>
+              <label><span class="field-label">Cena</span><input class="text-field" id="admin-price-year" name="year" type="number" min="1" max="10000" step="0.01" inputmode="decimal" required /></label>
+            </div>
           </div>
           <div class="admin-prices-actions">
             <p class="admin-status" id="admin-prices-status" role="status" aria-live="polite"></p>

@@ -2129,10 +2129,73 @@ html[data-theme="dark"] .admin-timed-status.is-expired {
   border-radius: 15px;
 }
 
+.admin-payment-settings {
+  display: grid;
+  margin-bottom: 15px;
+  padding-bottom: 15px;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(280px, 1.7fr);
+  gap: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.admin-payment-switch,
+.admin-plan-enabled {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  cursor: pointer;
+}
+
+.admin-payment-switch {
+  padding: 11px 13px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+}
+
+.admin-payment-switch input,
+.admin-plan-enabled input {
+  width: 17px;
+  height: 17px;
+  margin: 1px 0 0;
+  accent-color: var(--primary);
+}
+
+.admin-payment-switch span {
+  display: grid;
+  gap: 3px;
+}
+
+.admin-payment-switch strong {
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.admin-payment-switch small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
 .admin-prices-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 11px;
+}
+
+.admin-price-plan {
+  display: grid;
+  padding: 12px;
+  gap: 10px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+}
+
+.admin-plan-enabled {
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 800;
 }
 
 .admin-prices-actions {
@@ -2621,6 +2684,10 @@ html[data-theme="dark"] .admin-timed-status.is-expired {
   .admin-prices-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .admin-payment-settings {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 920px) {
@@ -2855,6 +2922,7 @@ html[data-theme="dark"] .admin-timed-status.is-expired {
   .admin-submission-fields,
   .admin-preview-sections,
   .admin-prices-grid,
+  .admin-payment-settings,
   .admin-account-facts {
     grid-template-columns: 1fr;
   }

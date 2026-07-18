@@ -8,6 +8,7 @@ ChemDisk jest statyczną aplikacją wdrażaną na Netlify. Publiczna strona prow
 public/
 ├── index.html                         # publiczna strona startowa
 ├── login/                             # logowanie, rejestracja i odzyskiwanie konta
+├── purchase/                          # osobny ekran zakupu i przedłużania dostępu
 ├── assets/js/auth.js                  # wspólna obsługa sesji, ról i profilu
 └── members/
     ├── index.html                     # panel kursanta
@@ -82,16 +83,18 @@ Formularz kontaktowy jest oznaczony `data-netlify="true"` i korzysta z Netlify F
 
 ## Konfiguracja Stripe
 
-Integracja sprzedaje **jednorazowe pakiety czasu**, a nie automatycznie odnawiane subskrypcje Stripe Billing. Użytkownik świadomie kupuje tydzień, miesiąc, pół roku albo rok. Kolejny zakup jest dołączany do późniejszej z dat: bieżący termin wygaśnięcia lub chwila zakupu.
+Integracja sprzedaje **jednorazowe pakiety czasu**, a nie automatycznie odnawiane subskrypcje Stripe Billing. Administrator może udostępnić godzinę, dzień, tydzień, miesiąc, pół roku albo rok. Zakup odbywa się na osobnej stronie `/purchase/`, otwieranej w panelu kursanta przez **Kup lub przedłuż**.
 
-Domyślne ceny:
+Domyślna konfiguracja:
 
-| Pakiet | Czas | Cena |
-| --- | ---: | ---: |
-| Tydzień | 7 dni | 30 zł |
-| Miesiąc | 30 dni | 50 zł |
-| Pół roku | 182 dni | 300 zł |
-| Rok | 365 dni | 500 zł |
+| Pakiet | Czas | Cena startowa | Domyślnie w ofercie |
+| --- | ---: | ---: | --- |
+| Godzina | 1 godzina | 5 zł | Nie |
+| Dzień | 24 godziny | 15 zł | Nie |
+| Tydzień | 7 dni | 30 zł | Tak |
+| Miesiąc | 30 dni | 50 zł | Tak |
+| Pół roku | 182 dni | 300 zł | Tak |
+| Rok | 365 dni | 500 zł | Tak |
 
 ### Tryb testowy
 
@@ -164,11 +167,20 @@ Nigdy nie kopiuj `sk_*` ani `whsec_*` do plików w `public`, kodu przeglądarki,
 
 ### Ceny, księga zakupów i bezpieczeństwo
 
-Ceny edytuje administrator w zakładce **Płatności**. Aplikacja przekazuje do Stripe `price_data` obliczone wyłącznie na serwerze; kwota z przeglądarki nie jest przyjmowana. Zmiana ceny dotyczy nowych Checkout Sessions. Poprzednia transakcja nadal zachowuje w Stripe i historii ChemDisk kwotę zapłaconą w chwili zakupu.
+Ceny i ofertę edytuje administrator w zakładce **Płatności**. Może tam:
+
+- ustawić ceny wszystkich sześciu okresów;
+- zaznaczyć, które okresy są aktualnie dostępne;
+- wybrać PLN, EUR, USD, GBP, CHF, CZK, CAD albo AUD;
+- włączyć blokadę dokupowania przy aktywnym dostępie.
+
+Zmiana waluty nie przelicza automatycznie wpisanych liczb — po wybraniu nowej waluty administrator powinien ustawić odpowiednie ceny i zapisać cały formularz. Aplikacja przekazuje do Stripe `price_data` obliczone wyłącznie na serwerze; kwota, waluta ani dostępność pakietu z przeglądarki nie są przyjmowane jako źródło prawdy. Zmiany dotyczą nowych Checkout Sessions. Poprzednia transakcja nadal zachowuje w Stripe i historii ChemDisk kwotę oraz walutę z chwili zakupu.
 
 Stripe Dashboard nie jest źródłem aktualnego cennika tej aplikacji. Zmiana przypadkowego Price w katalogu Stripe nie zmieni kart cenowych ChemDisk. Dzięki temu administrator nie musi kopiować nowych `price_...` po każdej zmianie kwoty.
 
-Księga użytkownika jest zapisywana w site-wide magazynie Netlify Blobs `chemdisk-payments`. Każdy zapis używa warunku ETag. Identyfikator Checkout Session może zostać zrealizowany tylko raz, nawet jeśli Stripe ponowi webhook lub strona sukcesu równocześnie sprawdzi płatność. Dwa różne, poprawnie opłacone Checkout Sessions dodają dwa okresy.
+Księga użytkownika jest zapisywana w site-wide magazynie Netlify Blobs `chemdisk-payments`. Każdy zapis używa warunku ETag. Identyfikator Checkout Session może zostać zrealizowany tylko raz, nawet jeśli Stripe ponowi webhook lub strona sukcesu równocześnie sprawdzi płatność.
+
+Gdy sumowanie jest włączone, kolejny zakup jest dołączany do późniejszej z dat: bieżący termin wygaśnięcia lub chwila zakupu. Gdy administrator włączy blokadę dokupowania, serwer nie utworzy Checkout użytkownikowi mającemu aktywny dostęp; następny zakup będzie możliwy dopiero po wygaśnięciu obecnego okresu.
 
 Webhook jest głównym mechanizmem nadawania dostępu. Strona `/payment-success/` wykonuje dodatkową, uwierzytelnioną weryfikację jako bezpieczny fallback i odświeża JWT z nową rolą. Samo wejście pod adres sukcesu bez opłaconej sesji niczego nie przyznaje.
 
@@ -233,7 +245,7 @@ Przycisk **Panel administratora** pojawia się w bocznym menu wyłącznie dla ko
 - rozwijać pojedyncze konta zamiast renderować wszystkie formularze naraz;
 - przeglądać historię zakupów Stripe i operacji odebrania dostępu;
 - odebrać płatny dostęp bez automatycznego wykonywania refundu;
-- edytować ceny czterech pakietów;
+- ustawić ceny i dostępność sześciu pakietów, walutę oraz zasadę sumowania okresów;
 - przeglądać i trwale usuwać zgłoszenia Netlify Forms;
 - edytować, podglądać, publikować i przywracać Markdown dashboardu;
 - obsłużyć całą listę użytkowników dzięki stronicowaniu.

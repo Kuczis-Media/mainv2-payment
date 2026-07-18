@@ -13,6 +13,7 @@ const {
 const STORE_NAME = 'chemdisk-payments';
 const CONFIG_KEY = 'config/prices.json';
 const LEDGER_VERSION = 1;
+const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const IDENTITY_TIMEOUT_MS = 8_000;
 const MAX_LEDGER_EVENTS = 2_000;
@@ -22,21 +23,45 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3
 const CHECKOUT_ID_PATTERN = /^cs_(?:test_|live_)?[A-Za-z0-9_]{8,240}$/;
 const PAYMENT_INTENT_PATTERN = /^pi_[A-Za-z0-9_]{8,240}$/;
 const COURSE_GRANT_ROLES = new Set(COURSE_ROLES.filter((role) => role !== 'admin'));
+const SUPPORTED_CURRENCIES = Object.freeze(['pln', 'eur', 'usd', 'gbp', 'chf', 'czk', 'cad', 'aud']);
+const SUPPORTED_CURRENCY_SET = new Set(SUPPORTED_CURRENCIES);
 
 const PLANS = Object.freeze([
+  Object.freeze({
+    id: 'hour',
+    label: 'Godzina',
+    durationLabel: '1 godzina dostępu',
+    durationDays: 1 / 24,
+    durationMs: HOUR_MS,
+    defaultAmount: 500,
+    defaultEnabled: false
+  }),
+  Object.freeze({
+    id: 'day',
+    label: 'Dzień',
+    durationLabel: '24 godziny dostępu',
+    durationDays: 1,
+    durationMs: DAY_MS,
+    defaultAmount: 1_500,
+    defaultEnabled: false
+  }),
   Object.freeze({
     id: 'week',
     label: 'Tydzień',
     durationLabel: '7 dni dostępu',
     durationDays: 7,
-    defaultAmount: 3_000
+    durationMs: 7 * DAY_MS,
+    defaultAmount: 3_000,
+    defaultEnabled: true
   }),
   Object.freeze({
     id: 'month',
     label: 'Miesiąc',
     durationLabel: '30 dni dostępu',
     durationDays: 30,
+    durationMs: 30 * DAY_MS,
     defaultAmount: 5_000,
+    defaultEnabled: true,
     featured: true
   }),
   Object.freeze({
@@ -44,14 +69,18 @@ const PLANS = Object.freeze([
     label: 'Pół roku',
     durationLabel: '182 dni dostępu',
     durationDays: 182,
-    defaultAmount: 30_000
+    durationMs: 182 * DAY_MS,
+    defaultAmount: 30_000,
+    defaultEnabled: true
   }),
   Object.freeze({
     id: 'year',
     label: 'Rok',
     durationLabel: '365 dni dostępu',
     durationDays: 365,
-    defaultAmount: 50_000
+    durationMs: 365 * DAY_MS,
+    defaultAmount: 50_000,
+    defaultEnabled: true
   })
 ]);
 const PLAN_BY_ID = new Map(PLANS.map((plan) => [plan.id, plan]));
@@ -62,6 +91,8 @@ function defaultPriceConfig() {
   return {
     version: 1,
     currency: 'pln',
+    enabledPlans: PLANS.filter((plan) => plan.defaultEnabled).map((plan) => plan.id),
+    stackingEnabled: true,
     updatedAt: null,
     updatedBy: null,
     prices: Object.fromEntries(PLANS.map((plan) => [plan.id, plan.defaultAmount]))
@@ -73,6 +104,8 @@ function publicPriceConfig(config, options = {}) {
   if (!normalized.ok) throw paymentError('PAYMENT_CONFIG_INVALID');
   return {
     currency: normalized.value.currency,
+    enabledPlans: [...normalized.value.enabledPlans],
+    stackingEnabled: normalized.value.stackingEnabled,
     updatedAt: normalized.value.updatedAt,
     checkoutAvailable: Boolean(options.checkoutAvailable),
     testMode: Boolean(options.testMode),
@@ -82,6 +115,7 @@ function publicPriceConfig(config, options = {}) {
       durationLabel: plan.durationLabel,
       durationDays: plan.durationDays,
       amount: normalized.value.prices[plan.id],
+      enabled: normalized.value.enabledPlans.includes(plan.id),
       featured: Boolean(plan.featured)
     }))
   };
@@ -89,12 +123,21 @@ function publicPriceConfig(config, options = {}) {
 
 function normalizePriceConfig(value) {
   if (!plainObject(value)) return { ok: false, code: 'PAYMENT_CONFIG_INVALID' };
-  if (value.currency !== 'pln' || !plainObject(value.prices)) {
+  if (!SUPPORTED_CURRENCY_SET.has(value.currency) || !plainObject(value.prices)) {
     return { ok: false, code: 'PAYMENT_CONFIG_INVALID' };
+  }
+  const legacyConfig = !Array.isArray(value.enabledPlans);
+  const enabledPlans = legacyConfig
+    ? PLANS.filter((plan) => plan.defaultEnabled).map((plan) => plan.id)
+    : uniqueStrings(value.enabledPlans);
+  if (enabledPlans.some((id) => !PLAN_BY_ID.has(id))) {
+    return { ok: false, code: 'INVALID_ENABLED_PLANS' };
   }
   const prices = {};
   for (const plan of PLANS) {
-    const amount = value.prices[plan.id];
+    const amount = value.prices[plan.id] == null && legacyConfig
+      ? plan.defaultAmount
+      : value.prices[plan.id];
     if (!Number.isSafeInteger(amount) || amount < 100 || amount > 1_000_000) {
       return { ok: false, code: 'INVALID_PRICE' };
     }
@@ -104,7 +147,9 @@ function normalizePriceConfig(value) {
     ok: true,
     value: {
       version: Number.isSafeInteger(value.version) && value.version > 0 ? value.version : 1,
-      currency: 'pln',
+      currency: value.currency,
+      enabledPlans,
+      stackingEnabled: typeof value.stackingEnabled === 'boolean' ? value.stackingEnabled : true,
       updatedAt: safeDateString(value.updatedAt),
       updatedBy: validUserId(value.updatedBy) ? value.updatedBy : null,
       prices
@@ -133,11 +178,13 @@ async function readPriceConfig(store) {
   };
 }
 
-async function writePriceConfig(store, prices, expectedEtag, actorId) {
+async function writePriceConfig(store, input, expectedEtag, actorId) {
   const validation = normalizePriceConfig({
     version: 1,
-    currency: 'pln',
-    prices,
+    currency: input.currency,
+    prices: input.prices,
+    enabledPlans: input.enabledPlans,
+    stackingEnabled: input.stackingEnabled,
     updatedAt: new Date().toISOString(),
     updatedBy: actorId
   });
@@ -213,14 +260,14 @@ function normalizeLedgerEvent(event) {
   if (!plainObject(event) || typeof event.id !== 'string' || event.id.length > 255) return null;
   if (event.type === 'purchase') {
     if (!CHECKOUT_ID_PATTERN.test(event.id) || !PLAN_BY_ID.has(event.plan)) return null;
-    if (!Number.isSafeInteger(event.amount) || event.amount < 0 || event.currency !== 'pln') return null;
+    if (!Number.isSafeInteger(event.amount) || event.amount < 0 || !SUPPORTED_CURRENCY_SET.has(event.currency)) return null;
     return {
       id: event.id,
       type: 'purchase',
       plan: event.plan,
       durationDays: PLAN_BY_ID.get(event.plan).durationDays,
       amount: event.amount,
-      currency: 'pln',
+      currency: event.currency,
       paidAt: safeDateString(event.paidAt),
       recordedAt: safeDateString(event.recordedAt),
       accessBefore: safeDateString(event.accessBefore),
@@ -257,7 +304,7 @@ function applyPurchase(ledgerInput, purchase, now = Date.now()) {
   const recordedAt = new Date(now).toISOString();
   const currentExpiresAt = parseTimestamp(ledger.access.expiresAt);
   const base = Math.max(now, currentExpiresAt);
-  const expiresAt = new Date(base + plan.durationDays * DAY_MS).toISOString();
+  const expiresAt = new Date(base + plan.durationMs).toISOString();
   const assignedAt = currentExpiresAt > now && ledger.access.assignedAt
     ? ledger.access.assignedAt
     : recordedAt;
@@ -266,7 +313,7 @@ function applyPurchase(ledgerInput, purchase, now = Date.now()) {
     type: 'purchase',
     plan: plan.id,
     amount: purchase.amount,
-    currency: 'pln',
+    currency: purchase.currency || 'pln',
     paidAt: safeDateString(purchase.paidAt) || recordedAt,
     recordedAt,
     accessBefore: currentExpiresAt > 0 ? new Date(currentExpiresAt).toISOString() : null,
@@ -388,7 +435,7 @@ function validateCheckoutSession(session) {
     session.client_reference_id !== targetUserId ||
     !PLAN_BY_ID.has(plan) ||
     metadata.durationDays !== String(planDuration) ||
-    currency !== 'pln' ||
+    !SUPPORTED_CURRENCY_SET.has(currency) ||
     !Number.isSafeInteger(amount) ||
     amount < 100 ||
     !Number.isSafeInteger(metadataAmount) ||
@@ -406,6 +453,7 @@ function validateCheckoutSession(session) {
       userId: targetUserId,
       plan,
       amount,
+      currency,
       paymentIntent: PAYMENT_INTENT_PATTERN.test(paymentIntent || '') ? paymentIntent : null,
       paidAt: Number.isFinite(Number(session.created))
         ? new Date(Number(session.created) * 1000).toISOString()
@@ -704,8 +752,10 @@ function isLocalHost(hostname) {
 module.exports = {
   CONFIG_KEY,
   DAY_MS,
+  HOUR_MS,
   PLAN_BY_ID,
   PLANS,
+  SUPPORTED_CURRENCIES,
   STORE_NAME,
   applyPurchase,
   applyRevocation,

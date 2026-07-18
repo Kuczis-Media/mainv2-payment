@@ -14,7 +14,9 @@ const {
   PLAN_BY_ID,
   getPaymentStore,
   paymentError,
+  publicAccess,
   readPriceConfig,
+  readUserLedger,
   stripeEnvironment
 } = require('../payment-common.js');
 
@@ -53,6 +55,15 @@ exports.handler = async (event = {}, context = {}) => {
     const store = getPaymentStore();
     const { config } = await readPriceConfig(store);
     const plan = PLAN_BY_ID.get(planId);
+    if (!config.enabledPlans.includes(plan.id)) {
+      return json({ error: 'PLAN_UNAVAILABLE' }, 409);
+    }
+    if (!config.stackingEnabled) {
+      const { ledger } = await readUserLedger(store, auth.userId);
+      if (publicAccess(ledger).active || hasTimedOrPermanentAccess(auth.user)) {
+        return json({ error: 'ACTIVE_ACCESS_EXISTS' }, 409);
+      }
+    }
     const amount = config.prices[plan.id];
     const origin = requestOrigin(event);
     if (!origin) return json({ error: 'SAME_ORIGIN_REQUIRED' }, 403);
@@ -67,7 +78,7 @@ exports.handler = async (event = {}, context = {}) => {
       line_items: [{
         quantity: 1,
         price_data: {
-          currency: 'pln',
+          currency: config.currency,
           unit_amount: amount,
           product_data: {
             name: `ChemDisk — dostęp na ${plan.label.toLocaleLowerCase('pl')}`,
@@ -84,6 +95,7 @@ exports.handler = async (event = {}, context = {}) => {
         userId: auth.userId,
         plan: plan.id,
         amount: String(amount),
+        currency: config.currency,
         durationDays: String(plan.durationDays)
       },
       payment_intent_data: {
@@ -92,11 +104,12 @@ exports.handler = async (event = {}, context = {}) => {
           userId: auth.userId,
           plan: plan.id,
           amount: String(amount),
+          currency: config.currency,
           durationDays: String(plan.durationDays)
         }
       },
       success_url: `${origin}/payment-success/?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}${hasCourseAccess(auth.user) ? '/members/?checkout=cancelled' : '/login/?checkout=cancelled'}`,
+      cancel_url: `${origin}/purchase/?checkout=cancelled&plan=${encodeURIComponent(plan.id)}`,
       submit_type: 'pay'
     });
 
@@ -120,9 +133,9 @@ function validatePlanRequest(body) {
   return PLAN_BY_ID.has(plan) ? plan : '';
 }
 
-function hasCourseAccess(user) {
+function hasTimedOrPermanentAccess(user) {
   const roles = rolesFrom(user);
-  if (roles.includes('admin') || roles.includes('active')) return true;
+  if (roles.includes('active')) return true;
   const appMetadata = user && user.app_metadata && typeof user.app_metadata === 'object'
     ? user.app_metadata
     : {};
@@ -160,7 +173,7 @@ function safeStripeError(error) {
 }
 
 exports._test = {
-  hasCourseAccess,
+  hasTimedOrPermanentAccess,
   requestOrigin,
   validatePlanRequest,
   setStripeFactory(factory) {

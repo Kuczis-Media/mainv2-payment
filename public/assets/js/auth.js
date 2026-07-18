@@ -175,6 +175,7 @@
   };
   const isLoginPage = () => location.pathname.startsWith(LOGIN_PATH);
   const isPaymentReturnPage = () => location.pathname.startsWith('/payment-success/');
+  const isPurchasePage = () => location.pathname.startsWith('/purchase/');
 
   const safeAppReturnTo = (value) => {
     if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//')) return '';
@@ -182,7 +183,8 @@
       const target = new URL(value, location.origin);
       const isMembersTarget = target.pathname.startsWith(MEMBERS_PATH);
       const isAccessStatusTarget = target.pathname === '/time';
-      if (target.origin !== location.origin || (!isMembersTarget && !isAccessStatusTarget)) return '';
+      const isPurchaseTarget = target.pathname.startsWith('/purchase/');
+      if (target.origin !== location.origin || (!isMembersTarget && !isAccessStatusTarget && !isPurchaseTarget)) return '';
       return `${target.pathname}${target.search}${target.hash}`;
     } catch {
       return '';
@@ -666,7 +668,7 @@
       // An inactive but authenticated account must remain signed in on the
       // purchase and payment-return screens so Checkout can be assigned to it.
       const state = await ensureFreshUserState(user, {
-        enforceLogout: !isLoginPage() && !isPaymentReturnPage()
+        enforceLogout: !isLoginPage() && !isPaymentReturnPage() && !isPurchasePage()
       });
       if (!state.active) return setSessionStatus({ ok: false, verified: Boolean(state.serverUser), active: false, reason: 'inactive' });
 

@@ -24,9 +24,11 @@ function purchase(id, plan = 'month', amount = 5_000) {
   };
 }
 
-test('default Stripe offer contains the requested PLN prices and durations', () => {
+test('default Stripe offer contains every timed role and keeps the original four plans enabled', () => {
   const config = payments.defaultPriceConfig();
   assert.deepEqual(config.prices, {
+    hour: 500,
+    day: 1_500,
     week: 3_000,
     month: 5_000,
     halfyear: 30_000,
@@ -34,8 +36,39 @@ test('default Stripe offer contains the requested PLN prices and durations', () 
   });
   assert.deepEqual(
     payments.PLANS.map(({ id, durationDays }) => [id, durationDays]),
-    [['week', 7], ['month', 30], ['halfyear', 182], ['year', 365]]
+    [['hour', 1 / 24], ['day', 1], ['week', 7], ['month', 30], ['halfyear', 182], ['year', 365]]
   );
+  assert.deepEqual(config.enabledPlans, ['week', 'month', 'halfyear', 'year']);
+  assert.equal(config.stackingEnabled, true);
+});
+
+test('an existing four-price configuration migrates without changing its public offer', () => {
+  const normalized = payments.normalizePriceConfig({
+    version: 1,
+    currency: 'pln',
+    prices: { week: 3_000, month: 5_000, halfyear: 30_000, year: 50_000 }
+  });
+  assert.equal(normalized.ok, true);
+  assert.equal(normalized.value.prices.hour, 500);
+  assert.equal(normalized.value.prices.day, 1_500);
+  assert.deepEqual(normalized.value.enabledPlans, ['week', 'month', 'halfyear', 'year']);
+  assert.equal(normalized.value.stackingEnabled, true);
+});
+
+test('hour and day purchases grant the exact durations represented in netlify.toml roles', () => {
+  const hour = payments.applyPurchase(
+    payments.emptyLedger(USER_ID),
+    purchase('cs_test_hourpurchase123', 'hour', 500),
+    NOW
+  );
+  assert.equal(Date.parse(hour.ledger.access.expiresAt) - NOW, payments.HOUR_MS);
+
+  const day = payments.applyPurchase(
+    payments.emptyLedger(USER_ID),
+    purchase('cs_test_daypurchase1234', 'day', 1_500),
+    NOW
+  );
+  assert.equal(Date.parse(day.ledger.access.expiresAt) - NOW, payments.DAY_MS);
 });
 
 test('a second purchase extends the existing expiry instead of resetting it', () => {
@@ -122,7 +155,7 @@ test('administrator revocation expires access and records an audit event', () =>
   assert.equal(payments.publicAccess(revoked.ledger, NOW + 2 * payments.DAY_MS).active, false);
 });
 
-test('Checkout fulfillment validation binds paid session to user, plan and PLN amount', () => {
+test('Checkout fulfillment validation binds paid session to user, plan, amount and supported currency', () => {
   const valid = payments.validateCheckoutSession({
     id: 'cs_test_checkoutvalid123',
     mode: 'payment',
@@ -136,12 +169,25 @@ test('Checkout fulfillment validation binds paid session to user, plan and PLN a
   });
   assert.equal(valid.ok, true);
   assert.equal(valid.value.userId, USER_ID);
+  assert.equal(valid.value.currency, 'pln');
+
+  const euro = payments.validateCheckoutSession({
+    id: 'cs_test_checkouteuro1234',
+    mode: 'payment',
+    payment_status: 'paid',
+    client_reference_id: USER_ID,
+    currency: 'eur',
+    amount_total: 5_000,
+    metadata: { userId: USER_ID, plan: 'month', amount: '5000', durationDays: '30' }
+  });
+  assert.equal(euro.ok, true);
+  assert.equal(euro.value.currency, 'eur');
 
   for (const override of [
     { payment_status: 'unpaid' },
     { client_reference_id: ADMIN_ID },
-    { currency: 'usd' },
-    { metadata: { userId: USER_ID, plan: 'hour' } }
+    { currency: 'nzd' },
+    { metadata: { userId: USER_ID, plan: 'minute' } }
   ]) {
     const invalid = payments.validateCheckoutSession({
       id: 'cs_test_checkoutvalid123',
@@ -158,31 +204,61 @@ test('Checkout fulfillment validation binds paid session to user, plan and PLN a
 });
 
 test('price and admin action inputs are strictly validated', () => {
+  const validPrices = {
+    hour: 500,
+    day: 1_500,
+    week: 3_000,
+    month: 5_000,
+    halfyear: 30_000,
+    year: 50_000
+  };
   assert.equal(paymentConfig._test.validateUpdate({
+    currency: 'eur',
+    enabledPlans: ['day', 'month'],
     expectedEtag: null,
-    prices: { week: 3_000, month: 5_000, halfyear: 30_000, year: 50_000 }
+    prices: validPrices,
+    stackingEnabled: false
   }).ok, true);
   assert.equal(paymentConfig._test.validateUpdate({
+    currency: 'pln',
+    enabledPlans: ['week'],
     expectedEtag: null,
-    prices: { week: 0, month: 5_000, halfyear: 30_000, year: 50_000 }
+    prices: { ...validPrices, week: 0 },
+    stackingEnabled: true
   }).code, 'INVALID_PRICE');
+  assert.equal(paymentConfig._test.validateUpdate({
+    currency: 'nzd',
+    enabledPlans: [],
+    expectedEtag: null,
+    prices: validPrices,
+    stackingEnabled: true
+  }).code, 'INVALID_CURRENCY');
   assert.equal(paymentAdmin._test.validateAction({ action: 'revoke', userId: USER_ID }).ok, true);
   assert.equal(paymentAdmin._test.validateAction({ action: 'refund', userId: USER_ID }).code, 'INVALID_PAYMENT_ACTION');
   assert.equal(createCheckout._test.validatePlanRequest({ plan: 'month' }), 'month');
-  assert.equal(createCheckout._test.validatePlanRequest({ plan: 'hour' }), '');
+  assert.equal(createCheckout._test.validatePlanRequest({ plan: 'hour' }), 'hour');
+  assert.equal(createCheckout._test.hasTimedOrPermanentAccess({
+    app_metadata: { roles: ['month'], timed_access: { role: 'month', expires_at: '2099-01-01T00:00:00.000Z' } }
+  }), true);
+  assert.equal(createCheckout._test.hasTimedOrPermanentAccess({
+    app_metadata: { roles: ['month'], timed_access: { role: 'month', expires_at: '2020-01-01T00:00:00.000Z' } }
+  }), false);
 });
 
-test('payment offer is published in all requested user-facing places and admin users are collapsible', () => {
+test('payment offer has a separate purchase page and admin users remain collapsible', () => {
   const root = path.join(__dirname, '..');
   const home = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
   const login = fs.readFileSync(path.join(root, 'public', 'login', 'index.html'), 'utf8');
   const members = fs.readFileSync(path.join(root, 'public', 'members', 'index.html'), 'utf8');
+  const purchasePage = fs.readFileSync(path.join(root, 'public', 'purchase', 'index.html'), 'utf8');
   const dashboard = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.js'), 'utf8');
 
   assert.match(home, /data-pricing-mode=["']public["']/);
   assert.match(login, /id=["']inactive-account["']/);
   assert.match(login, /data-pricing-mode=["']inactive["']/);
-  assert.match(members, /data-pricing-mode=["']authenticated["']/);
+  assert.doesNotMatch(members, /data-pricing-mode=["']authenticated["']/);
+  assert.match(members, /href=["']\/purchase\/["'][\s\S]*Kup lub przedłuż/);
+  assert.match(purchasePage, /data-pricing-mode=["']authenticated["']/);
   assert.match(members, /data-admin-tab=["']payments["']/);
   assert.match(members, /Kup lub przedłuż[\s\S]*Status dostępu/);
   assert.match(dashboard, /document\.createElement\('details'\)/);

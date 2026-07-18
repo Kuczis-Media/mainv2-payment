@@ -71,7 +71,10 @@
     NETLIFY_FORMS_UNAVAILABLE: 'Nie udało się połączyć z Netlify Forms.',
     NO_CHANGES: 'Nie wskazano żadnych zmian do zapisania.',
     INVALID_PAYMENT_ACTION: 'Wybrano nieprawidłową operację płatności.',
-    INVALID_PRICE: 'Cena musi wynosić od 1,00 zł do 10 000,00 zł.',
+    INVALID_CURRENCY: 'Wybierz obsługiwaną walutę.',
+    INVALID_ENABLED_PLANS: 'Lista dostępnych pakietów jest nieprawidłowa.',
+    INVALID_PRICE: 'Cena musi wynosić od 1,00 do 10 000,00 jednostek wybranej waluty.',
+    INVALID_STACKING_SETTING: 'Ustawienie przedłużania jest nieprawidłowe.',
     PAYMENT_CONFIG_CONFLICT: 'Ceny zostały w międzyczasie zmienione. Wczytaj je ponownie.',
     PAYMENT_CONFIG_INVALID: 'Zapisana konfiguracja cen jest nieprawidłowa.',
     PAYMENT_LEDGER_CONFLICT: 'Historia płatności zmieniła się w tym samym czasie. Spróbuj ponownie.',
@@ -141,10 +144,20 @@
     adminDashboardStatus: document.getElementById('admin-dashboard-status'),
     adminDashboardPreview: document.getElementById('admin-dashboard-preview'),
     adminPricesForm: document.getElementById('admin-prices-form'),
+    adminPaymentCurrency: document.getElementById('admin-payment-currency'),
+    adminPaymentBlockStacking: document.getElementById('admin-payment-block-stacking'),
+    adminPriceHour: document.getElementById('admin-price-hour'),
+    adminPriceDay: document.getElementById('admin-price-day'),
     adminPriceWeek: document.getElementById('admin-price-week'),
     adminPriceMonth: document.getElementById('admin-price-month'),
     adminPriceHalfyear: document.getElementById('admin-price-halfyear'),
     adminPriceYear: document.getElementById('admin-price-year'),
+    adminEnabledHour: document.getElementById('admin-enabled-hour'),
+    adminEnabledDay: document.getElementById('admin-enabled-day'),
+    adminEnabledWeek: document.getElementById('admin-enabled-week'),
+    adminEnabledMonth: document.getElementById('admin-enabled-month'),
+    adminEnabledHalfyear: document.getElementById('admin-enabled-halfyear'),
+    adminEnabledYear: document.getElementById('admin-enabled-year'),
     adminPricesStatus: document.getElementById('admin-prices-status'),
     adminPricesReload: document.getElementById('admin-prices-reload'),
     adminPricesSave: document.getElementById('admin-prices-save'),
@@ -1240,7 +1253,7 @@
     if (!Number.isFinite(amount)) return '';
     return new Intl.NumberFormat('pl-PL', {
       style: 'currency',
-      currency: 'PLN',
+      currency: String(event && event.currency || 'pln').toUpperCase(),
       minimumFractionDigits: 0,
       maximumFractionDigits: 2
     }).format(amount / 100);
@@ -2077,27 +2090,39 @@
   function setAdminPricesBusy(busy) {
     if (elements.adminPricesReload) elements.adminPricesReload.disabled = Boolean(busy);
     if (elements.adminPricesSave) elements.adminPricesSave.disabled = Boolean(busy);
-    [
-      elements.adminPriceWeek,
-      elements.adminPriceMonth,
-      elements.adminPriceHalfyear,
-      elements.adminPriceYear
-    ].forEach((input) => { if (input) input.disabled = Boolean(busy); });
+    if (elements.adminPaymentCurrency) elements.adminPaymentCurrency.disabled = Boolean(busy);
+    if (elements.adminPaymentBlockStacking) elements.adminPaymentBlockStacking.disabled = Boolean(busy);
+    adminPaymentPlanEntries().forEach((entry) => {
+      if (entry.input) entry.input.disabled = Boolean(busy);
+      if (entry.enabled) entry.enabled.disabled = Boolean(busy);
+    });
   }
 
-  function setAdminPriceInputs(plans) {
+  function adminPaymentPlanEntries() {
+    return [
+      { id: 'hour', input: elements.adminPriceHour, enabled: elements.adminEnabledHour },
+      { id: 'day', input: elements.adminPriceDay, enabled: elements.adminEnabledDay },
+      { id: 'week', input: elements.adminPriceWeek, enabled: elements.adminEnabledWeek },
+      { id: 'month', input: elements.adminPriceMonth, enabled: elements.adminEnabledMonth },
+      { id: 'halfyear', input: elements.adminPriceHalfyear, enabled: elements.adminEnabledHalfyear },
+      { id: 'year', input: elements.adminPriceYear, enabled: elements.adminEnabledYear }
+    ];
+  }
+
+  function setAdminPriceInputs(payload) {
+    const plans = payload && Array.isArray(payload.plans) ? payload.plans : [];
     const byId = new Map((plans || []).map((plan) => [plan.id, plan]));
-    [
-      ['week', elements.adminPriceWeek],
-      ['month', elements.adminPriceMonth],
-      ['halfyear', elements.adminPriceHalfyear],
-      ['year', elements.adminPriceYear]
-    ].forEach(([id, input]) => {
-      const plan = byId.get(id);
-      if (input && plan && Number.isSafeInteger(plan.amount)) {
-        input.value = (plan.amount / 100).toFixed(2);
+    adminPaymentPlanEntries().forEach((entry) => {
+      const plan = byId.get(entry.id);
+      if (entry.input && plan && Number.isSafeInteger(plan.amount)) {
+        entry.input.value = (plan.amount / 100).toFixed(2);
       }
+      if (entry.enabled) entry.enabled.checked = Boolean(plan && plan.enabled);
     });
+    if (elements.adminPaymentCurrency) elements.adminPaymentCurrency.value = String(payload.currency || 'pln');
+    if (elements.adminPaymentBlockStacking) {
+      elements.adminPaymentBlockStacking.checked = payload.stackingEnabled === false;
+    }
   }
 
   async function loadAdminPrices() {
@@ -2116,7 +2141,7 @@
       });
       const payload = await readAdminResponse(response);
       if (!payload || !Array.isArray(payload.plans)) throw new Error('Serwer zwrócił nieprawidłową konfigurację cen.');
-      setAdminPriceInputs(payload.plans);
+      setAdminPriceInputs(payload);
       adminPricesEtag = typeof payload.etag === 'string' ? payload.etag : null;
       adminPricesLoaded = true;
       setPanelStatus(
@@ -2148,22 +2173,20 @@
       setPanelStatus(elements.adminPricesStatus, 'Najpierw wczytaj aktualne ceny.', 'error');
       return;
     }
-    const entries = [
-      ['week', elements.adminPriceWeek],
-      ['month', elements.adminPriceMonth],
-      ['halfyear', elements.adminPriceHalfyear],
-      ['year', elements.adminPriceYear]
-    ];
     const prices = {};
-    for (const [id, input] of entries) {
-      const amount = priceInputToCents(input);
+    const enabledPlans = [];
+    for (const entry of adminPaymentPlanEntries()) {
+      const amount = priceInputToCents(entry.input);
       if (amount == null) {
-        setPanelStatus(elements.adminPricesStatus, 'Każda cena musi wynosić od 1,00 zł do 10 000,00 zł i mieć najwyżej dwa miejsca po przecinku.', 'error');
-        input.focus();
+        setPanelStatus(elements.adminPricesStatus, 'Każda cena musi wynosić od 1,00 do 10 000,00 jednostek wybranej waluty i mieć najwyżej dwa miejsca po przecinku.', 'error');
+        entry.input.focus();
         return;
       }
-      prices[id] = amount;
+      prices[entry.id] = amount;
+      if (entry.enabled && entry.enabled.checked) enabledPlans.push(entry.id);
     }
+    const currency = String(elements.adminPaymentCurrency.value || '').toLowerCase();
+    const stackingEnabled = !elements.adminPaymentBlockStacking.checked;
 
     setAdminPricesBusy(true);
     setPanelStatus(elements.adminPricesStatus, 'Zapisywanie cen…', 'loading');
@@ -2177,12 +2200,18 @@
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ prices, expectedEtag: adminPricesEtag })
+        body: JSON.stringify({
+          currency,
+          enabledPlans,
+          expectedEtag: adminPricesEtag,
+          prices,
+          stackingEnabled
+        })
       });
       const payload = await readAdminResponse(response);
       adminPricesEtag = typeof payload.etag === 'string' ? payload.etag : adminPricesEtag;
-      setAdminPriceInputs(payload.plans);
-      setPanelStatus(elements.adminPricesStatus, 'Ceny zapisano. Nowe kwoty są już widoczne w ofercie i będą używane w nowych płatnościach.', 'info');
+      setAdminPriceInputs(payload);
+      setPanelStatus(elements.adminPricesStatus, 'Oferta zapisana. Waluta, dostępne pakiety i zasady przedłużania obowiązują już dla nowych płatności.', 'info');
       if (window.ChemPayments && typeof window.ChemPayments.renderAll === 'function') {
         window.ChemPayments.renderAll(true);
       }
