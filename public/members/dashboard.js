@@ -9,6 +9,17 @@
   const PAYMENT_ADMIN_URL = '/.netlify/functions/payment-admin';
   const PAYMENT_CONFIG_URL = '/.netlify/functions/payment-config';
   const THEME_STORAGE_KEY = 'chem.theme';
+  const REQUIRED_HELP_SECTION_LINES = Object.freeze([
+    '## Pomoc i konto',
+    '',
+    'Zarządzaj dostępem albo skontaktuj się z prowadzącym.',
+    '',
+    '> Imię i nazwisko zmienisz po kliknięciu swojej karty konta w menu.',
+    '',
+    '- [Status dostępu](/time) — Sprawdź rolę i czas pozostały do końca dostępu.',
+    '- [Napisz do nas](/members/module/contact/?internal=Wiadomo%C5%9B%C4%87%20z%20panelu%20kursanta) — Wyślij wiadomość bez opuszczania platformy.'
+  ]);
+  const REQUIRED_HELP_SECTION = REQUIRED_HELP_SECTION_LINES.join('\n');
   const DASHBOARD_OVERRIDE_STARTER = [
     '# Twoja przestrzeń do nauki',
     '',
@@ -18,14 +29,7 @@
     '',
     '<!-- Dodaj własne działy ## i karty materiałów nad sekcją „Pomoc i konto”. -->',
     '',
-    '## Pomoc i konto',
-    '',
-    'Zarządzaj dostępem albo skontaktuj się z prowadzącym.',
-    '',
-    '> Imię i nazwisko zmienisz po kliknięciu swojej karty konta w menu.',
-    '',
-    '- [Status dostępu](/time) — Sprawdź rolę i czas pozostały do końca dostępu.',
-    '- [Napisz do nas](/members/module/contact/?internal=Wiadomo%C5%9B%C4%87%20z%20panelu%20kursanta) — Wyślij wiadomość bez opuszczania platformy.'
+    ...REQUIRED_HELP_SECTION_LINES
   ].join('\n');
   const ACCESS_ROLE_OPTIONS = Object.freeze([
     { value: '', label: 'Brak dostępu' },
@@ -263,6 +267,29 @@
       throw new Error('Parser dashboardu nie został załadowany.');
     }
     return window.ChemDashboardParser.parse(source);
+  }
+
+  function hasRequiredHelpSection(model) {
+    return Boolean(model && Array.isArray(model.sections) && model.sections.some(
+      (section) => normalizeText(section && section.title) === 'pomoc i konto'
+    ));
+  }
+
+  function ensureRequiredHelpSection(content) {
+    const text = String(content || '').replace(/\r\n?/g, '\n').trim();
+    if (!text) return text;
+    return hasRequiredHelpSection(parseMarkdown(text))
+      ? text
+      : `${text}\n\n${REQUIRED_HELP_SECTION}`;
+  }
+
+  function ensureRequiredDashboardModel(model) {
+    if (hasRequiredHelpSection(model)) return model;
+    const helpSection = parseMarkdown(REQUIRED_HELP_SECTION).sections[0];
+    return {
+      ...model,
+      sections: [...model.sections, helpSection]
+    };
   }
 
   function safeUrl(rawHref) {
@@ -511,6 +538,7 @@
   }
 
   function renderDashboard(model) {
+    model = ensureRequiredDashboardModel(model);
     elements.title.textContent = model.title;
     elements.intro.textContent = model.intro.length
       ? model.intro.join(' ')
@@ -562,8 +590,11 @@
     elements.nav.querySelectorAll('.nav-skeleton').forEach((node) => node.remove());
   }
 
-  async function fetchStaticDashboard() {
-    const response = await fetch(CONTENT_URL, {
+  async function fetchStaticDashboard(cacheBust = false) {
+    const contentUrl = cacheBust
+      ? `${CONTENT_URL}?restore=${Date.now()}`
+      : CONTENT_URL;
+    const response = await fetch(contentUrl, {
       cache: 'no-store',
       credentials: 'same-origin',
       headers: { Accept: 'text/markdown, text/plain;q=0.9' }
@@ -1845,7 +1876,7 @@
   }
 
   function renderAdminDashboardPreview(content) {
-    const model = parseMarkdown(content);
+    const model = ensureRequiredDashboardModel(parseMarkdown(content));
     const fragment = document.createDocumentFragment();
     const heading = document.createElement('h3');
     heading.textContent = model.title;
@@ -1893,8 +1924,9 @@
   }
 
   function validateDashboardEditorContent(content) {
-    const text = String(content || '').replace(/\r\n?/g, '\n').trim();
-    if (!text) throw new Error('Dashboard nie może być pusty.');
+    const rawText = String(content || '').replace(/\r\n?/g, '\n').trim();
+    if (!rawText) throw new Error('Dashboard nie może być pusty.');
+    const text = ensureRequiredHelpSection(rawText);
     if (new TextEncoder().encode(text).byteLength > 256 * 1024) throw new Error('Dashboard jest zbyt duży.');
     const model = parseMarkdown(text);
     if (!model.sections.length) throw new Error('Dodaj co najmniej jeden dział rozpoczynający się od ##.');
@@ -1946,9 +1978,9 @@
           adminDashboardSourceKind = 'blob';
         }
       }
-      const editorContent = adminDashboardSourceKind === 'static'
+      const editorContent = ensureRequiredHelpSection(adminDashboardSourceKind === 'static'
         ? DASHBOARD_OVERRIDE_STARTER
-        : content;
+        : content);
       elements.adminDashboardSource.value = editorContent;
       adminDashboardBaseline = editorContent;
       adminDashboardLoaded = true;
@@ -2042,7 +2074,7 @@
         body: JSON.stringify({ expectedEtag: adminDashboardEtag })
       });
       await readAdminResponse(response);
-      const content = await fetchStaticDashboard();
+      const content = await fetchStaticDashboard(true);
       adminDashboardEtag = null;
       adminDashboardSourceKind = 'static';
       adminDashboardBaseline = DASHBOARD_OVERRIDE_STARTER;

@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const adminDashboard = require('../netlify/functions/admin-dashboard.js');
+const withRequiredHelp = adminDashboard._test.ensureRequiredHelpSection;
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const IDENTITY_URL = 'https://course.example/.netlify/identity';
@@ -198,7 +199,7 @@ test('GET accepts active and valid timed canonical users and reads Blob strongly
     const response = await adminDashboard.handler(eventFor(), contextFor());
     assert.equal(response.statusCode, 200);
     assert.deepEqual(JSON.parse(response.body), {
-      content: '# Kurs\n\nTreść',
+      content: withRequiredHelp('# Kurs\n\nTreść'),
       source: 'blob',
       etag: 'etag-live',
       updatedAt
@@ -315,16 +316,17 @@ test('PUT creates a normalized Markdown override with an atomic only-if-new writ
     })
   }), contextFor());
   const payload = JSON.parse(response.body);
+  const expectedContent = withRequiredHelp('# Dashboard\n\nTreść');
 
   assert.equal(response.statusCode, 200);
-  assert.equal(payload.content, '# Dashboard\n\nTreść');
+  assert.equal(payload.content, expectedContent);
   assert.equal(payload.source, 'blob');
   assert.equal(payload.etag, 'etag-1');
   assert.ok(Number.isFinite(Date.parse(payload.updatedAt)));
 
   const setCall = store.calls.find((call) => call.method === 'set');
   assert.equal(setCall.key, 'dashboard.md');
-  assert.equal(setCall.data, '# Dashboard\n\nTreść');
+  assert.equal(setCall.data, expectedContent);
   assert.equal(setCall.options.onlyIfNew, true);
   assert.equal(setCall.options.onlyIfMatch, undefined);
   assert.equal(setCall.options.metadata.updatedBy, USER_ID);
@@ -369,10 +371,23 @@ test('PUT updates an existing override only with the exact current ETag', async 
     body: JSON.stringify({ content: '# New', expectedEtag: 'etag-old' })
   }), contextFor());
   assert.equal(response.statusCode, 200);
-  assert.equal(JSON.parse(response.body).content, '# New');
+  assert.equal(JSON.parse(response.body).content, withRequiredHelp('# New'));
   const setCall = store.calls.find((call) => call.method === 'set');
   assert.equal(setCall.options.onlyIfMatch, 'etag-old');
   assert.equal(setCall.options.onlyIfNew, undefined);
+});
+
+test('dashboard content always keeps the required Help and account section', () => {
+  const withoutHelp = '# Dashboard\n\n## Materiały\n\n- [Lekcja](/members/module/lesson/)';
+  const normalized = withRequiredHelp(withoutHelp);
+
+  assert.match(normalized, /^## Pomoc i konto$/m);
+  assert.match(normalized, /\[Status dostępu\]\(\/time\)/);
+  assert.match(normalized, /\[Napisz do nas\]\(\/members\/module\/contact\//);
+  assert.equal(withRequiredHelp(normalized), normalized);
+
+  const commentOnly = `${withoutHelp}\n\n<!-- ## Pomoc i konto -->`;
+  assert.match(withRequiredHelp(commentOnly), /\n## Pomoc i konto\n/);
 });
 
 test('PUT reports deterministic ETag conflicts without overwriting newer content', async (t) => {

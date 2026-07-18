@@ -85,6 +85,9 @@ test('dashboard admin editor starts clean without hiding untouched static resour
   assert.match(script, /const DASHBOARD_OVERRIDE_STARTER\s*=\s*\[/);
   assert.match(script, /adminDashboardSourceKind === 'static'\s*\?\s*DASHBOARD_OVERRIDE_STARTER\s*:\s*content/);
   assert.match(script, /domyślne materiały znikną dopiero po opublikowaniu zmian/);
+  assert.match(script, /function ensureRequiredHelpSection\(content\)/);
+  assert.match(script, /model = ensureRequiredDashboardModel\(model\)/);
+  assert.match(script, /fetchStaticDashboard\(true\)/);
   assert.match(script, /renderDashboard\(parseMarkdown\(content\)\)/);
 });
 

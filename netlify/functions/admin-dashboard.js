@@ -15,6 +15,16 @@ const FALLBACK_URL = '/members/dashboard.md';
 const MAX_MARKDOWN_BYTES = 256 * 1024;
 const MAX_BODY_BYTES = MAX_MARKDOWN_BYTES + 16 * 1024;
 const OPAQUE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+const REQUIRED_HELP_SECTION = [
+  '## Pomoc i konto',
+  '',
+  'Zarządzaj dostępem albo skontaktuj się z prowadzącym.',
+  '',
+  '> Imię i nazwisko zmienisz po kliknięciu swojej karty konta w menu.',
+  '',
+  '- [Status dostępu](/time) — Sprawdź rolę i czas pozostały do końca dostępu.',
+  '- [Napisz do nas](/members/module/contact/?internal=Wiadomo%C5%9B%C4%87%20z%20panelu%20kursanta) — Wyślij wiadomość bez opuszczania platformy.'
+].join('\n');
 let injectedStoreFactory = null;
 
 exports.handler = async (event = {}, context = {}) => {
@@ -79,8 +89,13 @@ async function readOverride(store) {
     return json({ error: 'DASHBOARD_STORAGE_INVALID', fallbackUrl: FALLBACK_URL }, 502);
   }
 
+  const content = ensureRequiredHelpSection(entry.data);
+  if (Buffer.byteLength(content, 'utf8') > MAX_MARKDOWN_BYTES) {
+    return json({ error: 'DASHBOARD_STORAGE_INVALID', fallbackUrl: FALLBACK_URL }, 502);
+  }
+
   return json({
-    content: entry.data,
+    content,
     source: 'blob',
     etag: entry.etag,
     updatedAt: safeDateString(entry.metadata && entry.metadata.updatedAt)
@@ -216,7 +231,7 @@ function validateWrite(body) {
     return { ok: false, code: 'UNEXPECTED_FIELDS' };
   }
   if (typeof body.content !== 'string') return { ok: false, code: 'INVALID_MARKDOWN' };
-  const content = body.content.replace(/\r\n?/g, '\n');
+  const content = ensureRequiredHelpSection(body.content.replace(/\r\n?/g, '\n'));
   const size = Buffer.byteLength(content, 'utf8');
   if (!content.trim() || size > MAX_MARKDOWN_BYTES || /[\u0000\u000b\u000c]/.test(content)) {
     return { ok: false, code: size > MAX_MARKDOWN_BYTES ? 'MARKDOWN_TOO_LARGE' : 'INVALID_MARKDOWN' };
@@ -238,6 +253,15 @@ function validateDelete(body) {
   return expected.ok
     ? { ok: true, value: { expectedEtag: expected.value } }
     : expected;
+}
+
+function ensureRequiredHelpSection(content) {
+  const text = String(content || '').trim();
+  if (!text) return text;
+  const visibleText = text.replace(/<!--[\s\S]*?-->/g, '');
+  return /^##[ \t]+Pomoc i konto[ \t]*$/im.test(visibleText)
+    ? text
+    : `${text}\n\n${REQUIRED_HELP_SECTION}`;
 }
 
 function validateExpectedEtag(body) {
@@ -310,6 +334,7 @@ exports._test = {
   FALLBACK_URL,
   MAX_MARKDOWN_BYTES,
   dashboardStoreConfig,
+  ensureRequiredHelpSection,
   etagMatchesExpected,
   isTombstone,
   setStoreFactory(factory) {
