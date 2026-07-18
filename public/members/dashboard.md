@@ -66,7 +66,7 @@ Filmy z lekcji i omówienia zadań.
 
 Sprawdź wiedzę i przećwicz zadania przed maturą.
 
-- [Izotopy węgla — lekcja interaktywna](/members/module/lesson/?file=przyklad.md) — Przejdź przez krótką prezentację i quiz ABCD o izotopach węgla.
+- [Izotopy węgla — lekcja interaktywna](/members/module/lesson/?file=izotopy-wegla.md) — Przejdź przez krótką prezentację i quiz ABCD o izotopach węgla.
 - [Asystent Gemini](/members/module/chat/?prompt=test.json) — Zapytaj asystenta korzystającego z przygotowanego promptu.
 - [Asystent naprowadzający — przykład](/members/module/chat/?plik=prompty-przyklad.txt&punkt=1) — Instrukcja wybrana z wielopunktowego pliku TXT.
 
@@ -87,7 +87,7 @@ Zestaw kontrolny wszystkich modułów i dostępnych trybów. Użyj go po wdroże
 
 ### Lekcja interaktywna
 
-- [Izotopy węgla — przykład Markdown](/members/module/lesson/?file=przyklad.md) — Prezentacja krokowa z zadaniem liczbowym i quizem ABCD.
+- [Izotopy węgla — przykład Markdown](/members/module/lesson/?file=izotopy-wegla.md) — Prezentacja krokowa z zadaniem liczbowym i quizem ABCD.
 
 ### Formularze
 

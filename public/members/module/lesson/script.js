@@ -134,7 +134,7 @@
     if (!state.filename) {
       showError(
         'Brakuje poprawnej nazwy pliku',
-        'Otwórz moduł przez link w formacie /members/module/lesson/?file=przyklad.md. Nazwa może zawierać litery, cyfry, kropki, myślniki i podkreślenia.',
+        'Otwórz moduł przez link w formacie /members/module/lesson/?file=izotopy-wegla.md. Nazwa może zawierać litery, cyfry, kropki, myślniki i podkreślenia.',
         false
       );
       return;

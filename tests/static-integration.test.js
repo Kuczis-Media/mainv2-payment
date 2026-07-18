@@ -66,6 +66,19 @@ test('members home is a local Markdown dashboard rather than a remote iframe', (
   assert.match(script, /createAccordionGroup\(child,\s*sectionTitle/);
 });
 
+test('every local lesson linked from the dashboard has a published Markdown file', () => {
+  const markdown = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.md'), 'utf8');
+  const lessonRoot = path.join(root, 'public', 'members', 'module', 'lesson');
+  const filenames = [...markdown.matchAll(/\/members\/module\/lesson\/\?file=([A-Za-z0-9._-]+\.md)/g)]
+    .map((match) => match[1])
+    .filter((filename) => filename !== 'nazwa-lekcji.md');
+
+  assert.ok(filenames.length > 0, 'dashboard should link to at least one local lesson');
+  for (const filename of filenames) {
+    assert.ok(fs.existsSync(path.join(lessonRoot, filename)), `missing dashboard lesson: ${filename}`);
+  }
+});
+
 test('members dashboard has a persistent accessible light and dark theme', () => {
   const html = fs.readFileSync(path.join(root, 'public', 'members', 'index.html'), 'utf8');
   const script = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.js'), 'utf8');

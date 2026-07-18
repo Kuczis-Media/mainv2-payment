@@ -8,8 +8,8 @@ const lessonRoot = path.join(root, 'public', 'members', 'module', 'lesson');
 const parser = require(path.join(lessonRoot, 'lesson-parser.js'));
 
 test('lesson parser builds a wizard from the bundled Markdown example', () => {
-  const markdown = fs.readFileSync(path.join(lessonRoot, 'przyklad.md'), 'utf8');
-  const lesson = parser.parseLesson(markdown, 'przyklad.md');
+  const markdown = fs.readFileSync(path.join(lessonRoot, 'izotopy-wegla.md'), 'utf8');
+  const lesson = parser.parseLesson(markdown, 'izotopy-wegla.md');
 
   assert.equal(lesson.title, 'Izotopy węgla');
   assert.equal(lesson.slides.length, 5);
@@ -23,6 +23,13 @@ test('lesson parser builds a wizard from the bundled Markdown example', () => {
   assert.equal(parser.checkAnswer(lesson.slides[3].task, '6'), true);
   assert.equal(parser.checkAnswer(lesson.slides[3].task, 'A'), false);
   assert.match(lesson.slides[1].html, /<sup>13<\/sup>C/);
+});
+
+test('the legacy example filename remains an exact alias of the published carbon lesson', () => {
+  const published = fs.readFileSync(path.join(lessonRoot, 'izotopy-wegla.md'), 'utf8');
+  const legacy = fs.readFileSync(path.join(lessonRoot, 'przyklad.md'), 'utf8');
+
+  assert.equal(legacy, published);
 });
 
 test('a slide separator inside a fenced code block remains lesson content', () => {

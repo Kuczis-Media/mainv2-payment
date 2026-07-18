@@ -329,7 +329,7 @@ Wartość `id` może być bezpośrednim identyfikatorem. Moduły Google i YouTub
 | `/members/module/whiteboard/` | Brak parametrów; biała tablica. | `/members/module/whiteboard/` |
 | `/members/module/kalkulator/` | Brak parametrów; kalkulator naukowy. | `/members/module/kalkulator/` |
 | `/members/module/classic/` | Brak parametrów; kalkulator klasyczny. | `/members/module/classic/` |
-| `/members/module/lesson/` | `file` — plik `.md` z folderu modułu; prezentacja krokowa z opcjonalnymi zadaniami. | `/members/module/lesson/?file=przyklad.md` |
+| `/members/module/lesson/` | `file` — plik `.md` z folderu modułu; prezentacja krokowa z opcjonalnymi zadaniami. | `/members/module/lesson/?file=izotopy-wegla.md` |
 | `/members/module/chat/` | `prompt=nazwa.json` albo `plik=nazwa.txt&punkt=N`; prompt jest wybierany po stronie funkcji. | `/members/module/chat/?plik=prompty-przyklad.txt&punkt=1` |
 | `/members/module/forms/` | `id` — ID albo zakodowany link Google Forms. | `/members/module/forms/?id=ID_FORMULARZA` |
 | `/members/module/contact/` | `internal` — stała informacja dołączana do zgłoszenia, maks. 240 znaków. | `/members/module/contact/?internal=Pytanie%20o%20dzia%C5%82%201` |
@@ -354,6 +354,7 @@ public/members/module/lesson/
 ├── lesson-parser.js
 ├── script.js
 ├── style.css
+├── izotopy-wegla.md
 ├── przyklad.md
 └── moja-lekcja.md
 ```
@@ -367,7 +368,7 @@ Lekcję otwiera parametr `file`:
 Do dashboardu można dodać ją jak każdy inny materiał:
 
 ```md
-- [Izotopy węgla](/members/module/lesson/?file=przyklad.md) — Lekcja interaktywna z krótkim zadaniem.
+- [Izotopy węgla](/members/module/lesson/?file=izotopy-wegla.md) — Lekcja interaktywna z krótkim zadaniem.
 ```
 
 Nazwa z parametru może zawierać litery ASCII, cyfry, kropki, myślniki i podkreślenia, musi kończyć się `.md` i nie może zawierać ścieżki do innego katalogu. Dzięki temu link nie może odczytać pliku spoza folderu modułu. Plik Markdown i sam moduł są objęte ochroną `/members/*`.
