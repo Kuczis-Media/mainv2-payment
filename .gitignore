@@ -1,0 +1,8 @@
+node_modules/
+.netlify/
+netlify/functions/*.zip
+netlify/functions/manifest.json
+.env
+.env.*
+!.env.example
+.DS_Store

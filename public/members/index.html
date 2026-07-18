@@ -24,9 +24,11 @@
   <title>Panel kursanta — ChemDisk</title>
 
   <link rel="stylesheet" href="/members/dashboard.css" />
+  <link rel="stylesheet" href="/assets/payments/payments.css" />
 
   <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
   <script src="/assets/js/auth.js"></script>
+  <script defer src="/assets/payments/payments.js"></script>
   <script defer src="/members/dashboard.js"></script>
 </head>
 <body>
@@ -69,6 +71,14 @@
           <small>Konta, zgłoszenia i treści</small>
         </span>
       </button>
+
+      <a class="sidebar-action purchase-sidebar-action" href="#extend-access">
+        <span class="action-icon" aria-hidden="true">＋</span>
+        <span>
+          <strong>Kup lub przedłuż</strong>
+          <small>Wybierz pakiet dostępu</small>
+        </span>
+      </a>
 
       <a class="sidebar-action" href="/time">
         <span class="action-icon" aria-hidden="true">◷</span>
@@ -157,6 +167,15 @@
           </div>
         </section>
 
+        <section class="dashboard-pricing-section" id="extend-access" aria-labelledby="extend-access-title">
+          <div class="dashboard-section-heading">
+            <span class="eyebrow">Płatności Stripe</span>
+            <h2 id="extend-access-title">Kup lub przedłuż dostęp</h2>
+            <p>Możesz dokupić kolejny okres w dowolnej chwili. Nowy czas zostanie doliczony do aktualnego terminu.</p>
+          </div>
+          <div class="chem-pricing" data-pricing data-pricing-mode="authenticated" aria-live="polite"></div>
+        </section>
+
         <div class="dashboard-message" id="dashboard-message" role="status" aria-live="polite" hidden></div>
 
         <div class="sections" id="markdown-sections" aria-live="polite" aria-busy="true">
@@ -235,7 +254,7 @@
         <div>
           <span class="eyebrow">Administracja</span>
           <h2 id="admin-dialog-title">Panel administratora</h2>
-          <p>Zarządzaj uczestnikami, zgłoszeniami formularzy i zawartością strony kursu.</p>
+          <p>Zarządzaj uczestnikami, płatnościami, zgłoszeniami i zawartością strony kursu.</p>
         </div>
         <button class="dialog-close" id="admin-close" type="button" aria-label="Zamknij panel administratora">×</button>
       </div>
@@ -249,6 +268,9 @@
         </button>
         <button class="admin-tab" id="admin-tab-dashboard" type="button" role="tab" aria-selected="false" aria-controls="admin-panel-dashboard" tabindex="-1" data-admin-tab="dashboard">
           <span aria-hidden="true">✎</span> Dashboard
+        </button>
+        <button class="admin-tab" id="admin-tab-payments" type="button" role="tab" aria-selected="false" aria-controls="admin-panel-payments" tabindex="-1" data-admin-tab="payments">
+          <span aria-hidden="true">zł</span> Płatności
         </button>
       </div>
 
@@ -377,6 +399,43 @@
         </div>
         <div class="admin-status" id="admin-dashboard-status" role="status" aria-live="polite"></div>
         <section class="admin-dashboard-preview" id="admin-dashboard-preview" aria-label="Podgląd struktury dashboardu"></section>
+      </section>
+
+      <section class="admin-tab-panel" id="admin-panel-payments" role="tabpanel" aria-labelledby="admin-tab-payments" data-admin-panel="payments" hidden>
+        <div class="admin-guidance">
+          <span aria-hidden="true">zł</span>
+          <p><strong>Ceny pakietów</strong> Kwoty są zapisywane po stronie serwera i obowiązują dla nowych stron Stripe Checkout. Wcześniejsze transakcje zachowują pierwotną wartość.</p>
+        </div>
+        <form class="admin-prices-form" id="admin-prices-form">
+          <div class="admin-prices-grid">
+            <label>
+              <span class="field-label">Tydzień (PLN)</span>
+              <input class="text-field" id="admin-price-week" name="week" type="number" min="1" max="10000" step="0.01" inputmode="decimal" required />
+            </label>
+            <label>
+              <span class="field-label">Miesiąc (PLN)</span>
+              <input class="text-field" id="admin-price-month" name="month" type="number" min="1" max="10000" step="0.01" inputmode="decimal" required />
+            </label>
+            <label>
+              <span class="field-label">Pół roku (PLN)</span>
+              <input class="text-field" id="admin-price-halfyear" name="halfyear" type="number" min="1" max="10000" step="0.01" inputmode="decimal" required />
+            </label>
+            <label>
+              <span class="field-label">Rok (PLN)</span>
+              <input class="text-field" id="admin-price-year" name="year" type="number" min="1" max="10000" step="0.01" inputmode="decimal" required />
+            </label>
+          </div>
+          <div class="admin-prices-actions">
+            <p class="admin-status" id="admin-prices-status" role="status" aria-live="polite"></p>
+            <div>
+              <button class="button button-secondary" id="admin-prices-reload" type="button">Wczytaj ponownie</button>
+              <button class="button button-primary" id="admin-prices-save" type="submit">Zapisz ceny</button>
+            </div>
+          </div>
+        </form>
+        <div class="admin-payment-note">
+          <strong>Ważne:</strong> odebranie dostępu w historii użytkownika nie wykonuje automatycznego zwrotu pieniędzy. Zwroty obsługuje się osobno w panelu Stripe.
+        </div>
       </section>
     </section>
   </dialog>

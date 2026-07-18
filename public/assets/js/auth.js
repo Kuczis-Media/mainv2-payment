@@ -174,6 +174,7 @@
     return location.pathname.startsWith(MEMBERS_PATH);
   };
   const isLoginPage = () => location.pathname.startsWith(LOGIN_PATH);
+  const isPaymentReturnPage = () => location.pathname.startsWith('/payment-success/');
 
   const safeAppReturnTo = (value) => {
     if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//')) return '';
@@ -662,7 +663,11 @@
     if (!user) return setSessionStatus({ ok: false, verified: false, active: false, reason: 'no_user' });
 
     try {
-      const state = await ensureFreshUserState(user, { enforceLogout: true });
+      // An inactive but authenticated account must remain signed in on the
+      // purchase and payment-return screens so Checkout can be assigned to it.
+      const state = await ensureFreshUserState(user, {
+        enforceLogout: !isLoginPage() && !isPaymentReturnPage()
+      });
       if (!state.active) return setSessionStatus({ ok: false, verified: Boolean(state.serverUser), active: false, reason: 'inactive' });
 
       const serverUser = state.serverUser;
@@ -756,7 +761,7 @@
       const flashBox = document.getElementById('flash');
       if (flashBox) {
         if (p.has('inactive')) {
-          flashBox.textContent = 'Konto nieaktywne – poproś administratora o aktywację.';
+          flashBox.textContent = 'Konto nie ma aktywnego pakietu. Zaloguj się i wybierz dostęp.';
           flashBox.className = 'flash warn';
         }
         if (p.has('loggedout')) {

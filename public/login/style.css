@@ -43,6 +43,10 @@ body::before {
   margin: 20px 0;
 }
 
+.wrapper.is-purchase {
+  width: min(980px, calc(100vw - 28px));
+}
+
 form {
   display: flex;
   flex-direction: column;
@@ -145,6 +149,59 @@ button:hover {
 /* Panele formularzy */
 .form { display: none; }
 .form.active { display: flex; flex-direction: column; }
+
+.inactive-account {
+  color: #fff;
+}
+
+.inactive-badge {
+  width: fit-content;
+  margin: 0 auto 10px;
+  padding: 6px 10px;
+  color: #d8fff5;
+  background: rgba(21, 102, 90, 0.72);
+  border: 1px solid rgba(188, 243, 230, 0.42);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.inactive-copy strong,
+.inactive-copy span {
+  display: block;
+}
+
+.inactive-copy {
+  margin-bottom: 8px;
+  color: #fff;
+}
+
+.inactive-copy span {
+  margin-top: 2px;
+  color: #e0e6e8;
+  font-size: 12px;
+}
+
+.inactive-info {
+  max-width: 670px;
+  margin: 0 auto 28px;
+  color: #eef2f3;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.login-pricing {
+  color: #1c2638;
+}
+
+.inactive-logout {
+  width: fit-content;
+  margin: 15px auto 0;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.4);
+  font-size: 12px;
+}
 
 /* Komunikaty */
 .helper { margin-top: 12px; color: #eee; }

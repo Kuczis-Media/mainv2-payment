@@ -35,8 +35,25 @@ section{
     padding: 0 80px;
     margin: auto;
 }
-.about, .services, .skills, .contact, footer{
+.about, .services, .pricing, .skills, .contact, footer{
     font-family: 'Poppins', sans-serif;
+}
+
+.pricing {
+    background: #f7f9fc;
+}
+
+.pricing .title::after {
+    content: "płatność Stripe";
+}
+
+.pricing-intro {
+    max-width: 720px;
+    margin: -18px auto 36px;
+    color: #667085;
+    font-family: "Poppins", sans-serif;
+    line-height: 1.7;
+    text-align: center;
 }
 .about .about-content,
 .services .serv-content,

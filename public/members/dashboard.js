@@ -6,6 +6,8 @@
   const ADMIN_USERS_URL = '/.netlify/functions/admin-users';
   const ADMIN_FORMS_URL = '/.netlify/functions/admin-forms';
   const ADMIN_DASHBOARD_URL = '/.netlify/functions/admin-dashboard';
+  const PAYMENT_ADMIN_URL = '/.netlify/functions/payment-admin';
+  const PAYMENT_CONFIG_URL = '/.netlify/functions/payment-config';
   const THEME_STORAGE_KEY = 'chem.theme';
   const ACCESS_ROLE_OPTIONS = Object.freeze([
     { value: '', label: 'Brak dostępu' },
@@ -68,6 +70,14 @@
     NETLIFY_FORMS_TOKEN_REJECTED: 'NETLIFY_API_TOKEN jest nieprawidłowy albo nie ma dostępu do tej witryny.',
     NETLIFY_FORMS_UNAVAILABLE: 'Nie udało się połączyć z Netlify Forms.',
     NO_CHANGES: 'Nie wskazano żadnych zmian do zapisania.',
+    INVALID_PAYMENT_ACTION: 'Wybrano nieprawidłową operację płatności.',
+    INVALID_PRICE: 'Cena musi wynosić od 1,00 zł do 10 000,00 zł.',
+    PAYMENT_CONFIG_CONFLICT: 'Ceny zostały w międzyczasie zmienione. Wczytaj je ponownie.',
+    PAYMENT_CONFIG_INVALID: 'Zapisana konfiguracja cen jest nieprawidłowa.',
+    PAYMENT_LEDGER_CONFLICT: 'Historia płatności zmieniła się w tym samym czasie. Spróbuj ponownie.',
+    PAYMENT_LEDGER_INVALID: 'Historia płatności użytkownika jest uszkodzona.',
+    PAYMENT_STORAGE_UNAVAILABLE: 'Magazyn płatności jest chwilowo niedostępny.',
+    STRIPE_NOT_CONFIGURED: 'Dodaj klucze Stripe w zmiennych środowiskowych Netlify.',
     REQUEST_TOO_LARGE: 'Przesłano zbyt dużo danych.',
     SAME_ORIGIN_REQUIRED: 'Ze względów bezpieczeństwa odśwież panel i spróbuj ponownie.',
     SESSION_CHECK_UNAVAILABLE: 'Nie udało się potwierdzić bieżącej sesji administratora.',
@@ -130,6 +140,14 @@
     adminDashboardSave: document.getElementById('admin-dashboard-save'),
     adminDashboardStatus: document.getElementById('admin-dashboard-status'),
     adminDashboardPreview: document.getElementById('admin-dashboard-preview'),
+    adminPricesForm: document.getElementById('admin-prices-form'),
+    adminPriceWeek: document.getElementById('admin-price-week'),
+    adminPriceMonth: document.getElementById('admin-price-month'),
+    adminPriceHalfyear: document.getElementById('admin-price-halfyear'),
+    adminPriceYear: document.getElementById('admin-price-year'),
+    adminPricesStatus: document.getElementById('admin-prices-status'),
+    adminPricesReload: document.getElementById('admin-prices-reload'),
+    adminPricesSave: document.getElementById('admin-prices-save'),
     profileButtons: [
       document.getElementById('sidebar-profile-button'),
       document.getElementById('top-profile-button')
@@ -150,6 +168,8 @@
   let adminDashboardEtag = null;
   let adminDashboardSourceKind = 'static';
   let adminDashboardBaseline = '';
+  let adminPricesLoaded = false;
+  let adminPricesEtag = null;
 
   function preferredTheme() {
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -899,13 +919,41 @@
             expiresAt: timedExpiresAt,
             active: rawTimedAccess.active !== false
           }
-        : null
+        : null,
+      confirmedAt: String(source.confirmedAt || source.confirmed_at || '').trim(),
+      createdAt: String(source.createdAt || source.created_at || '').trim(),
+      updatedAt: String(source.updatedAt || source.updated_at || '').trim(),
+      lastSignInAt: String(source.lastSignInAt || source.last_sign_in_at || '').trim(),
+      paymentDetails: null,
+      paymentDetailsLoaded: false
     };
   }
 
   function adminDisplayName(user) {
     const fullName = `${user.firstName} ${user.lastName}`.trim();
     return fullName || user.email || 'Użytkownik bez nazwy';
+  }
+
+  function adminDateLabel(value, fallback = 'Brak danych') {
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return fallback;
+    return new Intl.DateTimeFormat('pl-PL', {
+      dateStyle: 'medium',
+      timeStyle: 'short'
+    }).format(date);
+  }
+
+  function remainingAccessLabel(user) {
+    const expiresAt = user && user.timedAccess ? Date.parse(user.timedAccess.expiresAt || '') : 0;
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+      if (user && user.roles.includes('active')) return 'Dostęp stały';
+      if (user && user.roles.includes('admin')) return 'Administrator';
+      return 'Brak aktywnego dostępu';
+    }
+    const totalHours = Math.max(1, Math.ceil((expiresAt - Date.now()) / (60 * 60 * 1000)));
+    const days = Math.floor(totalHours / 24);
+    const hours = totalHours % 24;
+    return days ? `${days} d ${hours} godz. pozostało` : `${hours} godz. pozostało`;
   }
 
   function setAdminStatus(message, type) {
@@ -1004,12 +1052,12 @@
   }
 
   function createAdminUserCard(user) {
-    const article = document.createElement('article');
+    const article = document.createElement('details');
     article.className = 'admin-user-card';
     article.dataset.userId = user.id;
     article.dataset.search = normalizeText(`${user.firstName} ${user.lastName} ${user.email}`);
 
-    const header = document.createElement('header');
+    const header = document.createElement('summary');
     header.className = 'admin-user-heading';
     const avatar = document.createElement('span');
     avatar.className = 'avatar admin-user-avatar';
@@ -1020,18 +1068,31 @@
     heading.textContent = adminDisplayName(user);
     const email = document.createElement('p');
     email.textContent = user.email || 'Brak adresu e-mail';
-    headingCopy.append(heading, email);
+    const summaryMeta = document.createElement('div');
+    summaryMeta.className = 'admin-user-summary-meta';
+    const accessSummary = document.createElement('span');
+    accessSummary.dataset.adminAccessSummary = 'true';
+    accessSummary.textContent = remainingAccessLabel(user);
+    const createdSummary = document.createElement('span');
+    createdSummary.textContent = `Konto: ${adminDateLabel(user.createdAt, 'brak daty')}`;
+    summaryMeta.append(accessSummary, createdSummary);
+    headingCopy.append(heading, email, summaryMeta);
+    const chevron = document.createElement('span');
+    chevron.className = 'admin-user-chevron';
+    chevron.setAttribute('aria-hidden', 'true');
+    chevron.textContent = '⌄';
+    header.append(avatar, headingCopy, chevron);
+
     const remove = document.createElement('button');
     remove.className = 'admin-delete-button';
     remove.type = 'button';
-    remove.textContent = 'Usuń';
+    remove.textContent = 'Usuń konto';
     const currentId = currentUser && String(currentUser.id || currentUser.user_id || '').trim();
     const isOwnAccount = Boolean(currentId && currentId === user.id);
     remove.disabled = isOwnAccount;
     remove.title = isOwnAccount ? 'Nie możesz usunąć własnego konta' : `Usuń konto ${adminDisplayName(user)}`;
     remove.setAttribute('aria-label', remove.title);
     remove.addEventListener('click', () => deleteAdminUser(user, remove));
-    header.append(avatar, headingCopy, remove);
 
     const form = document.createElement('form');
     form.className = 'admin-user-form';
@@ -1060,6 +1121,24 @@
       createNameField('Nazwisko', 'lastName', user.lastName, 'off')
     );
 
+    const facts = document.createElement('div');
+    facts.className = 'admin-account-facts';
+    const createFact = (labelText, value) => {
+      const fact = document.createElement('div');
+      fact.className = 'admin-account-fact';
+      const label = document.createElement('span');
+      label.textContent = labelText;
+      const content = document.createElement('strong');
+      content.textContent = value;
+      fact.append(label, content);
+      return fact;
+    };
+    facts.append(
+      createFact('Utworzono', adminDateLabel(user.createdAt)),
+      createFact('Ostatnie logowanie', adminDateLabel(user.lastSignInAt)),
+      createFact('Pozostały czas', remainingAccessLabel(user))
+    );
+
     const roleFieldset = document.createElement('fieldset');
     roleFieldset.className = 'admin-roles';
     const legend = document.createElement('legend');
@@ -1078,12 +1157,23 @@
     save.className = 'button button-primary';
     save.type = 'submit';
     save.textContent = 'Zapisz użytkownika';
-    footer.append(message, save);
+    const footerActions = document.createElement('div');
+    footerActions.className = 'admin-user-footer-actions';
+    footerActions.append(remove, save);
+    footer.append(message, footerActions);
 
-    form.append(names, roleFieldset);
+    form.append(facts, names, roleFieldset);
     if (timedStatus) form.append(timedStatus);
+    const paymentHistory = document.createElement('section');
+    paymentHistory.className = 'admin-payment-history';
+    paymentHistory.dataset.paymentHistory = 'true';
+    paymentHistory.innerHTML = '<p class="admin-payment-empty">Rozwiń konto, aby wczytać historię płatności.</p>';
+    form.append(paymentHistory);
     form.append(footer);
     form.addEventListener('submit', (event) => saveAdminUser(event, user));
+    article.addEventListener('toggle', () => {
+      if (article.open && !user.paymentDetailsLoaded) loadAdminPaymentDetails(user, article);
+    });
     article.append(header, form);
     return article;
   }
@@ -1126,6 +1216,156 @@
     else if (next) {
       const footer = card.querySelector('.admin-user-footer');
       if (footer) footer.before(next);
+    }
+  }
+
+  function normalizePaymentDetails(payload) {
+    const source = payload && typeof payload === 'object' ? payload : {};
+    const access = source.access && typeof source.access === 'object' ? source.access : {};
+    return {
+      version: Number.isFinite(Number(source.version)) ? Number(source.version) : 0,
+      access: {
+        role: String(access.role || ''),
+        assignedAt: String(access.assignedAt || ''),
+        expiresAt: String(access.expiresAt || ''),
+        active: Boolean(access.active),
+        remainingMs: Math.max(0, Number(access.remainingMs) || 0)
+      },
+      history: Array.isArray(source.history) ? source.history.filter((event) => event && typeof event === 'object') : []
+    };
+  }
+
+  function paymentAmountLabel(event) {
+    const amount = Number(event && event.amount);
+    if (!Number.isFinite(amount)) return '';
+    return new Intl.NumberFormat('pl-PL', {
+      style: 'currency',
+      currency: 'PLN',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2
+    }).format(amount / 100);
+  }
+
+  function renderAdminPaymentDetails(user, card) {
+    const container = card.querySelector('[data-payment-history]');
+    if (!container) return;
+    const details = user.paymentDetails || normalizePaymentDetails(null);
+    const fragment = document.createDocumentFragment();
+    const heading = document.createElement('div');
+    heading.className = 'admin-payment-history-heading';
+    const title = document.createElement('strong');
+    title.textContent = `Historia płatności i dostępu (${details.history.length})`;
+    heading.append(title);
+
+    const hasPurchase = details.history.some((event) => event.type === 'purchase');
+    if (hasPurchase && details.access.active) {
+      const revoke = document.createElement('button');
+      revoke.className = 'admin-revoke-payment';
+      revoke.type = 'button';
+      revoke.textContent = 'Odbierz płatny dostęp';
+      revoke.addEventListener('click', () => revokeAdminPaymentAccess(user, card, revoke));
+      heading.append(revoke);
+    }
+    fragment.append(heading);
+
+    if (!details.history.length) {
+      const empty = document.createElement('p');
+      empty.className = 'admin-payment-empty';
+      empty.textContent = 'Brak zakupów Stripe i operacji odebrania dostępu.';
+      fragment.append(empty);
+    } else {
+      const list = document.createElement('div');
+      list.className = 'admin-payment-history-list';
+      details.history.forEach((event) => {
+        const row = document.createElement('div');
+        row.className = 'admin-payment-event';
+        const label = document.createElement('strong');
+        const plan = ACCESS_ROLE_OPTIONS.find((option) => option.value === event.plan);
+        label.textContent = event.type === 'purchase'
+          ? `Zakup: ${plan ? plan.label : event.plan || 'pakiet'}`
+          : 'Dostęp odebrany przez administratora';
+        const value = document.createElement('span');
+        value.textContent = event.type === 'purchase'
+          ? `${paymentAmountLabel(event)} · ${adminDateLabel(event.paidAt || event.recordedAt)}`
+          : adminDateLabel(event.recordedAt);
+        row.append(label, value);
+        if (event.id) {
+          const id = document.createElement('code');
+          id.textContent = event.id;
+          row.append(id);
+        }
+        list.append(row);
+      });
+      fragment.append(list);
+    }
+    container.replaceChildren(fragment);
+  }
+
+  async function loadAdminPaymentDetails(user, card) {
+    const container = card.querySelector('[data-payment-history]');
+    if (container) container.innerHTML = '<p class="admin-payment-empty">Wczytywanie historii płatności…</p>';
+    try {
+      const token = await getAdminToken();
+      const response = await fetch(`${PAYMENT_ADMIN_URL}?userId=${encodeURIComponent(user.id)}`, {
+        method: 'GET',
+        cache: 'no-store',
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const payload = await readAdminResponse(response);
+      user.paymentDetails = normalizePaymentDetails(payload);
+      user.paymentDetailsLoaded = true;
+      renderAdminPaymentDetails(user, card);
+    } catch (error) {
+      user.paymentDetailsLoaded = false;
+      if (container) {
+        const message = document.createElement('p');
+        message.className = 'admin-payment-empty';
+        message.textContent = error && error.message ? error.message : 'Nie udało się wczytać historii płatności.';
+        container.replaceChildren(message);
+      }
+    }
+  }
+
+  async function revokeAdminPaymentAccess(user, card, button) {
+    if (!window.confirm(`Odebrać płatny dostęp kontu ${adminDisplayName(user)}? To nie zwraca automatycznie pieniędzy w Stripe.`)) return;
+    const original = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Odbieranie…';
+    try {
+      const token = await getAdminToken();
+      const response = await fetch(PAYMENT_ADMIN_URL, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ action: 'revoke', userId: user.id })
+      });
+      const payload = await readAdminResponse(response);
+      user.paymentDetails = normalizePaymentDetails(payload);
+      user.paymentDetailsLoaded = true;
+      const preservePermanentAccess = user.roles.includes('active') && !user.timedAccess;
+      user.roles = user.roles.filter((role) => role === 'admin' || (preservePermanentAccess && role === 'active'));
+      user.timedAccess = null;
+      renderAdminPaymentDetails(user, card);
+      refreshTimedAccessStatus(card, user);
+      const summary = card.querySelector('[data-admin-access-summary]');
+      if (summary) summary.textContent = remainingAccessLabel(user);
+      const message = card.querySelector('.admin-user-message');
+      message.className = 'admin-user-message is-success';
+      message.textContent = 'Dostęp został odebrany. Zwrot pieniędzy, jeśli jest potrzebny, wykonaj osobno w Stripe.';
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = original;
+      const message = card.querySelector('.admin-user-message');
+      message.className = 'admin-user-message is-error';
+      message.textContent = error && error.message ? error.message : 'Nie udało się odebrać dostępu.';
     }
   }
 
@@ -1234,6 +1474,10 @@
       card.querySelector('.admin-user-heading h3').textContent = adminDisplayName(originalUser);
       card.querySelector('.admin-user-avatar').textContent = initialsFor(adminDisplayName(originalUser));
       refreshTimedAccessStatus(card, originalUser);
+      const accessSummary = card.querySelector('[data-admin-access-summary]');
+      if (accessSummary) accessSummary.textContent = remainingAccessLabel(originalUser);
+      const factValues = card.querySelectorAll('.admin-account-fact strong');
+      if (factValues[2]) factValues[2].textContent = remainingAccessLabel(originalUser);
       message.textContent = payload && payload.sessionRefreshRequired
         ? 'Zapisano. Nowe uprawnienia pojawią się po odświeżeniu sesji użytkownika.'
         : 'Zmiany zostały zapisane.';
@@ -1830,8 +2074,127 @@
     }
   }
 
+  function setAdminPricesBusy(busy) {
+    if (elements.adminPricesReload) elements.adminPricesReload.disabled = Boolean(busy);
+    if (elements.adminPricesSave) elements.adminPricesSave.disabled = Boolean(busy);
+    [
+      elements.adminPriceWeek,
+      elements.adminPriceMonth,
+      elements.adminPriceHalfyear,
+      elements.adminPriceYear
+    ].forEach((input) => { if (input) input.disabled = Boolean(busy); });
+  }
+
+  function setAdminPriceInputs(plans) {
+    const byId = new Map((plans || []).map((plan) => [plan.id, plan]));
+    [
+      ['week', elements.adminPriceWeek],
+      ['month', elements.adminPriceMonth],
+      ['halfyear', elements.adminPriceHalfyear],
+      ['year', elements.adminPriceYear]
+    ].forEach(([id, input]) => {
+      const plan = byId.get(id);
+      if (input && plan && Number.isSafeInteger(plan.amount)) {
+        input.value = (plan.amount / 100).toFixed(2);
+      }
+    });
+  }
+
+  async function loadAdminPrices() {
+    setAdminPricesBusy(true);
+    setPanelStatus(elements.adminPricesStatus, 'Wczytywanie cen…', 'loading');
+    try {
+      const token = await getAdminToken();
+      const response = await fetch(`${PAYMENT_CONFIG_URL}?admin=1`, {
+        method: 'GET',
+        cache: 'no-store',
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const payload = await readAdminResponse(response);
+      if (!payload || !Array.isArray(payload.plans)) throw new Error('Serwer zwrócił nieprawidłową konfigurację cen.');
+      setAdminPriceInputs(payload.plans);
+      adminPricesEtag = typeof payload.etag === 'string' ? payload.etag : null;
+      adminPricesLoaded = true;
+      setPanelStatus(
+        elements.adminPricesStatus,
+        payload.checkoutAvailable
+          ? `Ceny wczytane. Stripe działa w trybie ${payload.testMode ? 'testowym' : 'produkcyjnym'}.`
+          : 'Ceny wczytane, ale klucze Stripe lub webhook nie są jeszcze w pełni skonfigurowane.',
+        payload.checkoutAvailable ? 'info' : 'error'
+      );
+    } catch (error) {
+      adminPricesLoaded = false;
+      adminPricesEtag = null;
+      setPanelStatus(elements.adminPricesStatus, error && error.message ? error.message : 'Nie udało się wczytać cen.', 'error');
+    } finally {
+      setAdminPricesBusy(false);
+    }
+  }
+
+  function priceInputToCents(input) {
+    const normalized = String(input.value || '').replace(',', '.').trim();
+    if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) return null;
+    const amount = Math.round(Number(normalized) * 100);
+    return Number.isSafeInteger(amount) && amount >= 100 && amount <= 1_000_000 ? amount : null;
+  }
+
+  async function saveAdminPrices(event) {
+    event.preventDefault();
+    if (!adminPricesLoaded) {
+      setPanelStatus(elements.adminPricesStatus, 'Najpierw wczytaj aktualne ceny.', 'error');
+      return;
+    }
+    const entries = [
+      ['week', elements.adminPriceWeek],
+      ['month', elements.adminPriceMonth],
+      ['halfyear', elements.adminPriceHalfyear],
+      ['year', elements.adminPriceYear]
+    ];
+    const prices = {};
+    for (const [id, input] of entries) {
+      const amount = priceInputToCents(input);
+      if (amount == null) {
+        setPanelStatus(elements.adminPricesStatus, 'Każda cena musi wynosić od 1,00 zł do 10 000,00 zł i mieć najwyżej dwa miejsca po przecinku.', 'error');
+        input.focus();
+        return;
+      }
+      prices[id] = amount;
+    }
+
+    setAdminPricesBusy(true);
+    setPanelStatus(elements.adminPricesStatus, 'Zapisywanie cen…', 'loading');
+    try {
+      const token = await getAdminToken();
+      const response = await fetch(PAYMENT_CONFIG_URL, {
+        method: 'PUT',
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ prices, expectedEtag: adminPricesEtag })
+      });
+      const payload = await readAdminResponse(response);
+      adminPricesEtag = typeof payload.etag === 'string' ? payload.etag : adminPricesEtag;
+      setAdminPriceInputs(payload.plans);
+      setPanelStatus(elements.adminPricesStatus, 'Ceny zapisano. Nowe kwoty są już widoczne w ofercie i będą używane w nowych płatnościach.', 'info');
+      if (window.ChemPayments && typeof window.ChemPayments.renderAll === 'function') {
+        window.ChemPayments.renderAll(true);
+      }
+    } catch (error) {
+      setPanelStatus(elements.adminPricesStatus, error && error.message ? error.message : 'Nie udało się zapisać cen.', 'error');
+    } finally {
+      setAdminPricesBusy(false);
+    }
+  }
+
   function activateAdminTab(name, focusTab) {
-    const allowed = new Set(['users', 'forms', 'dashboard']);
+    const allowed = new Set(['users', 'forms', 'dashboard', 'payments']);
     const activeName = allowed.has(name) ? name : 'users';
     elements.adminTabs.forEach((tab) => {
       const active = tab.dataset.adminTab === activeName;
@@ -1843,6 +2206,7 @@
     elements.adminPanels.forEach((panel) => { panel.hidden = panel.dataset.adminPanel !== activeName; });
     if (activeName === 'forms' && !adminFormsLoaded) loadAdminForms();
     if (activeName === 'dashboard' && !adminDashboardLoaded) loadAdminDashboardEditor();
+    if (activeName === 'payments' && !adminPricesLoaded) loadAdminPrices();
   }
 
   function openAdminPanel(event) {
@@ -1961,6 +2325,8 @@
     elements.adminDashboardRestore.addEventListener('click', restoreStaticDashboard);
     elements.adminDashboardPreviewButton.addEventListener('click', previewAdminDashboard);
     elements.adminDashboardSave.addEventListener('click', saveAdminDashboard);
+    elements.adminPricesForm.addEventListener('submit', saveAdminPrices);
+    elements.adminPricesReload.addEventListener('click', loadAdminPrices);
     elements.adminDashboardSource.addEventListener('input', () => {
       if (!adminDashboardLoaded) return;
       if (elements.adminDashboardSource.value === adminDashboardBaseline) {

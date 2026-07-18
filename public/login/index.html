@@ -7,6 +7,7 @@
   <title>Logowanie – kursy maturalne</title>
   <link rel="icon" href="https://cdn.jsdelivr.net/gh/Kuczis-Media/logo/benzene-ring.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="/assets/payments/payments.css">
   <style>
     /* Wyłączamy domyślny widżet Netlify Identity, bo mamy własny UI */
     #netlify-identity-widget {
@@ -18,6 +19,7 @@
   <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
   <!-- Ogólna logika sesji (tokeny, nf_jwt, przekierowania) -->
   <script defer src="/assets/js/auth.js"></script>
+  <script defer src="/assets/payments/payments.js"></script>
   <!-- Spójna logika sesji/nawigacji dla widoku logowania -->
   <script defer src="./script.js"></script>
 </head>
@@ -85,6 +87,15 @@
       <button id="token-submit" type="submit">Zapisz</button>
       <p class="helper"><a id="token-cancel" href="/login/">Wróć do logowania</a></p>
     </form>
+
+    <section id="inactive-account" class="form inactive-account" aria-labelledby="inactive-title">
+      <span class="inactive-badge">Konto gotowe do zakupu</span>
+      <h2 id="inactive-title">Wybierz dostęp do kursu</h2>
+      <p class="inactive-copy"><strong id="inactive-user-name">Twoje konto</strong><span id="inactive-user-email"></span></p>
+      <p class="inactive-info">Konto jest zalogowane, ale nie ma aktywnego pakietu. Po płatności Stripe dostęp zostanie przypisany automatycznie.</p>
+      <div class="chem-pricing login-pricing" data-pricing data-pricing-mode="inactive" aria-live="polite"></div>
+      <button class="inactive-logout" id="inactive-logout" type="button">Wyloguj i użyj innego konta</button>
+    </section>
   </div>
 </body>
 </html>

@@ -266,6 +266,17 @@ a {
   border-color: rgba(255, 255, 255, 0.12);
 }
 
+.purchase-sidebar-action {
+  color: #165f55;
+  background: #edf8f5;
+  border-color: #d4ece6;
+}
+
+.purchase-sidebar-action .action-icon {
+  color: #fff;
+  background: var(--primary);
+}
+
 .action-icon {
   display: grid;
   width: 34px;
@@ -637,6 +648,36 @@ html[data-theme="dark"] .profile-access {
   border-color: #28443f;
 }
 
+html[data-theme="dark"] .dashboard-pricing-section,
+html[data-theme="dark"] .admin-payment-history,
+html[data-theme="dark"] .admin-user-card[open] .admin-user-heading,
+html[data-theme="dark"] .admin-account-fact {
+  background: #141c26;
+  border-color: #2d3947;
+}
+
+html[data-theme="dark"] .dashboard-section-heading h2,
+html[data-theme="dark"] .admin-account-fact strong,
+html[data-theme="dark"] .admin-payment-history-heading strong,
+html[data-theme="dark"] .admin-payment-event strong {
+  color: #e7eef5;
+}
+
+html[data-theme="dark"] .admin-user-summary-meta span {
+  color: #b4bfcb;
+  background: #283340;
+}
+
+html[data-theme="dark"] .admin-payment-event {
+  border-color: #303b48;
+}
+
+html[data-theme="dark"] .admin-payment-note {
+  color: #dfc680;
+  background: #302a1c;
+  border-color: #51462c;
+}
+
 html[data-theme="dark"] .admin-guidance strong {
   color: #d0e9e4;
 }
@@ -932,6 +973,38 @@ html[data-theme="dark"] .admin-timed-status.is-expired {
   display: grid;
   gap: 36px;
   margin-top: 35px;
+}
+
+.dashboard-pricing-section {
+  margin-top: 28px;
+  padding: clamp(20px, 3vw, 28px);
+  background: #f4f8f8;
+  border: 1px solid #e0e9e9;
+  border-radius: 21px;
+  scroll-margin-top: 100px;
+}
+
+.dashboard-section-heading {
+  margin-bottom: 24px;
+}
+
+.dashboard-section-heading .eyebrow {
+  color: var(--primary);
+}
+
+.dashboard-section-heading h2 {
+  margin: 0 0 7px;
+  color: #1c2639;
+  font-size: clamp(21px, 2.5vw, 27px);
+  letter-spacing: -0.035em;
+}
+
+.dashboard-section-heading p {
+  max-width: 720px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
 }
 
 .course-section {
@@ -1674,7 +1747,8 @@ html[data-theme="dark"] .admin-timed-status.is-expired {
 
 .admin-user-card {
   min-width: 0;
-  padding: 18px;
+  padding: 0;
+  overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -1683,9 +1757,31 @@ html[data-theme="dark"] .admin-timed-status.is-expired {
 
 .admin-user-heading {
   display: flex;
-  margin-bottom: 18px;
+  min-height: 78px;
+  margin: 0;
+  padding: 16px 18px;
   align-items: center;
   gap: 11px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.admin-user-heading::-webkit-details-marker {
+  display: none;
+}
+
+.admin-user-heading:focus-visible {
+  outline: 3px solid rgba(23, 107, 95, 0.2);
+  outline-offset: -3px;
+}
+
+.admin-user-card[open] .admin-user-heading {
+  background: #f8fafb;
+  border-bottom: 1px solid var(--line);
+}
+
+.admin-user-form {
+  padding: 17px 18px 18px;
 }
 
 .admin-user-heading .admin-delete-button {
@@ -1722,6 +1818,34 @@ html[data-theme="dark"] .admin-timed-status.is-expired {
   min-width: 0;
 }
 
+.admin-user-summary-meta {
+  display: flex;
+  margin-top: 5px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.admin-user-summary-meta span {
+  padding: 3px 6px;
+  color: #59677a;
+  background: #edf1f4;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 750;
+}
+
+.admin-user-chevron {
+  margin-left: auto;
+  color: #748094;
+  font-size: 19px;
+  transition: transform 160ms ease;
+}
+
+.admin-user-card[open] .admin-user-chevron {
+  transform: rotate(180deg);
+}
+
 .admin-user-heading h3,
 .admin-user-heading p {
   overflow: hidden;
@@ -1749,6 +1873,43 @@ html[data-theme="dark"] .admin-timed-status.is-expired {
 
 .admin-user-form .profile-name-grid {
   margin-bottom: 16px;
+}
+
+.admin-account-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 16px;
+  gap: 8px;
+}
+
+.admin-account-fact {
+  min-width: 0;
+  padding: 9px 10px;
+  background: #f7f9fb;
+  border: 1px solid #e5eaf0;
+  border-radius: 10px;
+}
+
+.admin-account-fact span,
+.admin-account-fact strong {
+  display: block;
+}
+
+.admin-account-fact span {
+  margin-bottom: 3px;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.admin-account-fact strong {
+  overflow: hidden;
+  color: #344054;
+  font-size: 10px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
 }
 
 .admin-roles {
@@ -1874,6 +2035,130 @@ html[data-theme="dark"] .admin-timed-status.is-expired {
   justify-content: space-between;
   gap: 12px;
   border-top: 1px solid var(--line);
+}
+
+.admin-user-footer-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+}
+
+.admin-payment-history {
+  margin-top: 14px;
+  padding: 13px;
+  background: #f7faf9;
+  border: 1px solid #dfeae7;
+  border-radius: 12px;
+}
+
+.admin-payment-history-heading {
+  display: flex;
+  margin-bottom: 10px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.admin-payment-history-heading strong {
+  color: #344054;
+  font-size: 11px;
+}
+
+.admin-payment-history-list {
+  display: grid;
+  gap: 7px;
+}
+
+.admin-payment-event {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 9px 10px;
+  gap: 5px 10px;
+  background: var(--surface);
+  border: 1px solid #e5ebe9;
+  border-radius: 9px;
+}
+
+.admin-payment-event strong,
+.admin-payment-event span {
+  min-width: 0;
+  font-size: 9px;
+}
+
+.admin-payment-event strong {
+  color: #344054;
+}
+
+.admin-payment-event span {
+  color: var(--muted);
+  text-align: right;
+}
+
+.admin-payment-event code {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: #7b8492;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-payment-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.admin-revoke-payment {
+  min-height: 31px;
+  padding: 6px 9px;
+  color: #a24851;
+  background: #fff0f1;
+  border: 1px solid #f3d3d6;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.admin-prices-form {
+  padding: 19px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 15px;
+}
+
+.admin-prices-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 11px;
+}
+
+.admin-prices-actions {
+  display: flex;
+  margin-top: 16px;
+  padding-top: 14px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.admin-prices-actions > div {
+  display: flex;
+  gap: 8px;
+}
+
+.admin-payment-note {
+  margin-top: 13px;
+  padding: 12px 14px;
+  color: #69511f;
+  background: #fff8e5;
+  border: 1px solid #f0dfaa;
+  border-radius: 11px;
+  font-size: 10px;
+  line-height: 1.55;
 }
 
 .admin-timed-status {
@@ -2332,6 +2617,10 @@ html[data-theme="dark"] .admin-timed-status.is-expired {
   .admin-invite-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .admin-prices-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 920px) {
@@ -2497,6 +2786,10 @@ html[data-theme="dark"] .admin-timed-status.is-expired {
     grid-template-columns: 1fr;
   }
 
+  .admin-account-facts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .admin-editor-actions {
     align-items: stretch;
     flex-direction: column;
@@ -2560,7 +2853,9 @@ html[data-theme="dark"] .admin-timed-status.is-expired {
 
   .admin-invite-grid,
   .admin-submission-fields,
-  .admin-preview-sections {
+  .admin-preview-sections,
+  .admin-prices-grid,
+  .admin-account-facts {
     grid-template-columns: 1fr;
   }
 
@@ -2596,6 +2891,25 @@ html[data-theme="dark"] .admin-timed-status.is-expired {
 
   .admin-user-footer .button {
     width: 100%;
+  }
+
+  .admin-user-footer-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .admin-user-footer-actions .admin-delete-button {
+    width: 100%;
+  }
+
+  .admin-prices-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-prices-actions > div {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 }
 

@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ChemDisk — kursy maturalne online</title>
     <link rel="stylesheet" href="assets/start_site/style.css">
+    <link rel="stylesheet" href="/assets/payments/payments.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"/>
     <!-- Netlify Identity -->
     <script>
@@ -28,6 +29,7 @@
     </script>
     <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
     <script defer src="/assets/js/auth.js"></script>
+    <script defer src="/assets/payments/payments.js"></script>
 
 </head>
 <body>
@@ -41,6 +43,7 @@
                 <li><a href="#home" class="menu-btn">Start</a></li>
                 <li><a href="#about" class="menu-btn">O nas</a></li>
                 <li><a href="#services" class="menu-btn">Kursy</a></li>
+                <li><a href="#pricing" class="menu-btn">Cennik</a></li>
                 <li><a href="#skills" class="menu-btn">Jak zacząć</a></li>
                 <li><a href="#contact" class="menu-btn">Kontakt</a></li>
                 <li><a id="login-btn" href="/members/" class="menu-btn">Zaloguj</a></li>
@@ -149,6 +152,15 @@
         </div>
     </section>
 
+    <!-- pricing section start -->
+    <section class="pricing" id="pricing">
+        <div class="max-width">
+            <h2 class="title">Wybierz dostęp</h2>
+            <p class="pricing-intro">Jednorazowa płatność kartą przez Stripe. Pakiety możesz łączyć — kolejny zakup zawsze dopisuje czas do obecnego terminu.</p>
+            <div class="chem-pricing" data-pricing data-pricing-mode="public" aria-live="polite"></div>
+        </div>
+    </section>
+
     <!-- skills section start -->
     <section class="skills" id="skills">
         <div class="max-width">
@@ -156,23 +168,23 @@
             <div class="skills-content">
                 <div class="column left">
                     <div class="text">Jak się zapisać?</div>
-                    <p>Skontaktuj się z nami w sprawie wybranego kursu. Po utworzeniu konta i aktywowaniu dostępu przez administratora wszystkie przypisane materiały pojawią się w panelu kursanta. Możesz też sprawdzić darmową aplikację Atonom do rysowania związków chemicznych.</p>
-                    <a href="#contact">Zapisz się!</a>
+                    <p>Utwórz konto, wybierz pakiet i opłać go bezpiecznie przez Stripe. Po potwierdzeniu płatności dostęp zostanie dopisany automatycznie, a wszystkie materiały pojawią się w panelu kursanta.</p>
+                    <a href="#pricing">Wybierz pakiet</a>
                     <a href="https://atonom.netlify.app">Atonom</a> 
                 </div>
                 <div class="column right">
                     <ol class="steps-list">
                         <li>
                             <span class="step-number">1</span>
-                            <div><strong>Wybierz kurs</strong><p>Napisz, jaki przedmiot i poziom Cię interesuje.</p></div>
-                        </li>
-                        <li>
-                            <span class="step-number">2</span>
                             <div><strong>Utwórz konto</strong><p>Podaj imię, nazwisko, e-mail i ustaw bezpieczne hasło.</p></div>
                         </li>
                         <li>
+                            <span class="step-number">2</span>
+                            <div><strong>Wybierz pakiet</strong><p>Zapłać kartą na bezpiecznej stronie Stripe Checkout.</p></div>
+                        </li>
+                        <li>
                             <span class="step-number">3</span>
-                            <div><strong>Wejdź do panelu</strong><p>Po aktywacji zobaczysz działy, materiały i narzędzia swojego kursu.</p></div>
+                            <div><strong>Wejdź do panelu</strong><p>Po potwierdzeniu płatności od razu zobaczysz działy, materiały i narzędzia.</p></div>
                         </li>
                     </ol>
                 </div>

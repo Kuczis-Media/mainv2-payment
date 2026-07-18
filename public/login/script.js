@@ -243,12 +243,12 @@
         return false;
       }
     };
+    let showInactiveAccount = () => {};
     const afterLogin = async (user) => {
-      if (!user) return;
+      if (!user) return 'missing';
       if (!hasAccess(user)) {
-        flash("Konto nieaktywne – poproś administratora o aktywację.", "warn");
-        await clearIdentitySession(user);
-        return;
+        showInactiveAccount(user);
+        return 'inactive';
       }
       try {
         const sid = user.app_metadata && user.app_metadata.session_id;
@@ -257,13 +257,25 @@
       const cookieReady = await setNFJwtCookie(user);
       if (!cookieReady) {
         flash("Nie udało się utworzyć sesji. Spróbuj zalogować się ponownie.", "error");
-        return;
+        return 'error';
+      }
+      let selectedPlan = '';
+      try { selectedPlan = new URLSearchParams(location.search || '').get('plan') || ''; } catch {}
+      if (
+        ['week', 'month', 'halfyear', 'year'].includes(selectedPlan) &&
+        window.ChemPayments &&
+        typeof window.ChemPayments.startCheckout === 'function'
+      ) {
+        flash("Zalogowano. Otwieram bezpieczną płatność Stripe…", "success");
+        await window.ChemPayments.startCheckout(selectedPlan, null, document.querySelector('[data-pricing]'));
+        return 'checkout';
       }
       flash("Zalogowano. Przenoszę...", "success");
       const returnTo = window.ChemAuth && typeof window.ChemAuth.getReturnTo === "function"
         ? window.ChemAuth.getReturnTo()
         : "/members/";
       setTimeout(() => { window.location.replace(returnTo); }, 250);
+      return 'active';
     };
 
     document.addEventListener("DOMContentLoaded", () => {
@@ -272,7 +284,8 @@
       const forms = {
         login: document.getElementById("login-form"),
         signup: document.getElementById("signup-form"),
-        token: document.getElementById("token-form")
+        token: document.getElementById("token-form"),
+        inactive: document.getElementById("inactive-account")
       };
       const ensureWidgetHidden = () => {
         const widget = document.getElementById("netlify-identity-widget");
@@ -326,6 +339,20 @@
       const toggleTabs = (visible) => {
         if (!tabsContainer) return;
         tabsContainer.style.display = visible ? "" : "none";
+      };
+      showInactiveAccount = (user) => {
+        const metadata = user && user.user_metadata ? user.user_metadata : {};
+        const fullName = String(metadata.full_name || metadata.name || '').trim();
+        const wrapper = document.querySelector('.wrapper');
+        if (wrapper) wrapper.classList.add('is-purchase');
+        document.getElementById('inactive-user-name').textContent = fullName || 'Twoje konto';
+        document.getElementById('inactive-user-email').textContent = user && user.email ? user.email : '';
+        toggleTabs(false);
+        showForm('inactive');
+        flash('Wybierz pakiet. Płatność zostanie bezpiecznie obsłużona przez Stripe.', 'success');
+        if (window.ChemPayments && typeof window.ChemPayments.renderAll === 'function') {
+          window.ChemPayments.renderAll(false);
+        }
       };
 
       tabs.forEach((btn) => {
@@ -551,6 +578,9 @@
             toggleTabs(true);
             showForm("login");
           }
+          if (params.get('checkout') === 'cancelled') {
+            flash('Płatność została anulowana. Nie pobrano opłaty — możesz wybrać pakiet ponownie.', 'warn');
+          }
         } catch {
           toggleTabs(true);
           showForm("login");
@@ -569,10 +599,6 @@
           const current = netlifyIdentity.currentUser() || user;
           if (current) {
             await afterLogin(current);
-            if (!hasAccess(current)) {
-              toggleTabs(true);
-              showForm("login");
-            }
           } else {
             flash("Adres e‑mail został potwierdzony. Możesz się zalogować.", "success");
           }
@@ -667,10 +693,6 @@
           const user = netlifyIdentity.currentUser();
           if (user) {
             await afterLogin(user);
-            if (!hasAccess(user)) {
-              toggleTabs(true);
-              showForm('login');
-            }
           } else {
             flash("Zalogowano, ale nie udało się pobrać danych użytkownika.", "error");
           }
@@ -684,7 +706,7 @@
           if (isInvalidGrant) {
             flash(`Nie ma takiego użytkownika z e‑mailem "${email}" lub hasło jest nieprawidłowe.`, "error");
           } else if (isInactive) {
-            flash("Konto nieaktywne – poproś administratora o aktywację.", "warn");
+            flash("Konto nie ma jeszcze aktywnego pakietu. Po zalogowaniu wybierz dostęp.", "warn");
           } else if (isUnconfirmed) {
             flash("Potwierdź swój adres e‑mail, zanim zalogujesz się do aplikacji.", "warn");
           } else {
@@ -729,8 +751,8 @@
             await refreshIdentity();
             const user = netlifyIdentity.currentUser();
             if (user) {
-              await afterLogin(user);
-              autoLoginSucceeded = hasAccess(user);
+              const result = await afterLogin(user);
+              autoLoginSucceeded = ['active', 'checkout', 'inactive'].includes(result);
             }
           } catch (loginErr) {
             const loginMsg = (loginErr && (loginErr.message || loginErr.msg)) ? String(loginErr.message || loginErr.msg) : '';
@@ -738,7 +760,7 @@
             if (lowerLoginMsg.includes('confirm')) {
               flash("Konto utworzone. Sprawdź skrzynkę i potwierdź adres e‑mail, aby się zalogować.", "success");
             } else if (lowerLoginMsg.includes('inactive') || lowerLoginMsg.includes('nieaktywne') || lowerLoginMsg.includes('unauthorized') || lowerLoginMsg.includes('webhook')) {
-              flash("Konto utworzone. Administrator musi je aktywować, zanim zalogujesz się do aplikacji.", "warn");
+              flash("Konto utworzone. Zaloguj się i wybierz pakiet dostępu.", "warn");
             } else {
               flash("Konto utworzone, ale nie udało się automatycznie zalogować. Spróbuj zalogować się ręcznie.", "warn");
             }
@@ -779,6 +801,26 @@
           flash("Nie udało się wysłać linku: " + (err?.message || err), "error");
         }
       });
+
+      document.getElementById('inactive-logout').addEventListener('click', async () => {
+        try {
+          if (window.ChemAuth && typeof window.ChemAuth.logout === 'function') {
+            await window.ChemAuth.logout({ redirect: false });
+          } else {
+            await clearIdentitySession(netlifyIdentity.currentUser());
+          }
+        } catch {}
+        window.location.replace('/login/?loggedout=1');
+      });
+
+      if (window.ChemAuth && window.ChemAuth.ready && typeof window.ChemAuth.ready.then === 'function') {
+        window.ChemAuth.ready.then((state) => {
+          const user = typeof window.ChemAuth.getUser === 'function' ? window.ChemAuth.getUser() : null;
+          if (state && state.authenticated && user && !hasAccess(user) && !rawFlow.type) {
+            showInactiveAccount(user);
+          }
+        }).catch(() => {});
+      }
 
       if (!tokenFlowActive && !rawFlow.type) {
         applyDefaultViewFromParams();

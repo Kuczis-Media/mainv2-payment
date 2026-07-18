@@ -1,6 +1,6 @@
 # ChemDisk — platforma kursów maturalnych
 
-ChemDisk jest statyczną aplikacją wdrażaną na Netlify. Publiczna strona prowadzi do logowania przez Netlify Identity, a zalogowany kursant otrzymuje panel z materiałami zdefiniowanymi w pliku Markdown. Dostęp kontrolują role zapisane przez administratora w `app_metadata`.
+ChemDisk jest statyczną aplikacją wdrażaną na Netlify. Publiczna strona prowadzi do logowania przez Netlify Identity, a zalogowany kursant otrzymuje panel z materiałami zdefiniowanymi w pliku Markdown. Dostęp kontrolują role w `app_metadata`, nadawane automatycznie po płatności Stripe albo ręcznie przez administratora.
 
 ## Architektura
 
@@ -18,11 +18,17 @@ netlify/functions/
 ├── identity-login.js                  # role czasowe i identyfikator sesji
 ├── identity-signup.js                 # sanitowanie profilu przy rejestracji
 ├── admin-users.js                     # konta, zaproszenia i role Identity
+├── create-checkout.js                 # uwierzytelnione tworzenie Stripe Checkout
+├── stripe-webhook.js                  # podpisany webhook i nadawanie dostępu
+├── payment-status.js                  # potwierdzenie płatności po powrocie ze Stripe
+├── payment-config.js                  # publiczny cennik i administracyjna edycja cen
+├── payment-admin.js                   # historia i odebranie płatnego dostępu
 ├── admin-forms.js                     # odczyt/usuwanie zgłoszeń Netlify Forms
 ├── admin-dashboard.js                 # aktywny Markdown w Netlify Blobs
 ├── chat-prompts/                      # prywatne prompty dołączane do funkcji
 └── chat.mjs                           # chronione połączenie z Gemini i limit Netlify
-netlify/admin-common.js                # wspólna kanoniczna autoryzacja administratora
+netlify/admin-common.js                # wspólna kanoniczna autoryzacja
+netlify/payment-common.js              # pakiety, księga zakupów i synchronizacja Identity
 netlify.toml                           # publikacja, nagłówki i ochrona /members/*
 tests/                                 # testy auth i Netlify Functions
 ```
@@ -40,12 +46,18 @@ npm run dev
 
 Polecenie uruchamia `netlify dev`, dzięki czemu jednocześnie działają statyczne strony, przekierowania i funkcje. Samo otwarcie pliku `public/index.html` z dysku nie odtworzy zachowania Netlify Identity ani Functions.
 
-Dla lokalnego czatu, zakładki formularzy i edytora dashboardu utwórz nieśledzony plik `.env`:
+Dla lokalnego czatu, zakładek administratora, edytora dashboardu i Stripe skopiuj `.env.example` jako nieśledzony plik `.env`:
+
+```bash
+cp .env.example .env
+```
 
 ```dotenv
 GEMINI_API_KEY=klucz_z_Google_AI_Studio
 NETLIFY_API_TOKEN=osobisty_token_Netlify
 SITE_ID=id_witryny_Netlify
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
 ```
 
 Nie umieszczaj kluczy w `public`, plikach JavaScript przeglądarki, `dashboard.md` ani `netlify.toml`. `SITE_ID` jest ustawiane automatycznie na wdrożeniu Netlify; ręcznie jest potrzebne tylko lokalnie.
@@ -54,18 +66,113 @@ Nie umieszczaj kluczy w `public`, plikach JavaScript przeglądarki, `dashboard.m
 
 1. Utwórz witrynę z tego repozytorium. Ustawienia publikacji i funkcji są już zapisane w `netlify.toml` (`public` oraz `netlify/functions`).
 2. Włącz Netlify Identity. W ustawieniach rejestracji wybierz rejestrację otwartą albo tylko na zaproszenie, zależnie od sposobu sprzedaży kursu. Jeśli wymagane jest potwierdzenie e-maila, pozostaw włączone wiadomości potwierdzające.
-3. Dodaj `GEMINI_API_KEY` oraz `NETLIFY_API_TOKEN` w zmiennych środowiskowych witryny i ustaw ich zakres na **Functions**. Token Netlify umożliwia zakładce administracyjnej obsługę zgłoszeń Forms oraz silnie spójny dostęp edytora dashboardu do Netlify Blobs; traktuj go jak sekret. `SITE_ID` Netlify ustawia automatycznie.
-4. Pierwszemu administratorowi przypisz ręcznie rolę `admin` w `app_metadata` w panelu Netlify Identity. Kolejnymi kontami można już zarządzać z panelu administratora w dashboardzie.
-5. Po rejestracji przypisz użytkownikowi jedną z ról dostępu opisaną niżej. Nowe konto bez roli może się uwierzytelnić, ale nie otworzy `/members/`.
-6. Udostępnij osadzane pliki Google odbiorcom, którzy mają je oglądać. Aplikacja nie omija uprawnień Dysku, Prezentacji ani Formularzy Google.
-7. Jeżeli używasz własnej domeny, ustaw ją jako główną domenę witryny, włącz HTTPS i sprawdź na niej link potwierdzający oraz zaproszenie Identity. Kod korzysta ze ścieżek same-origin i `location.origin`, więc nie wymaga zamiany `chemdisk.netlify.app` na `chemdisk.pl` w plikach.
-8. Po pierwszym deployu sprawdź logowanie, trzy zakładki panelu administratora, formularz kontaktowy, czat oraz po jednym materiale Google i YouTube na docelowej domenie.
+3. Dodaj `GEMINI_API_KEY` oraz `NETLIFY_API_TOKEN` w zmiennych środowiskowych witryny i ustaw ich zakres na **Functions**. Token Netlify umożliwia zakładce administracyjnej obsługę zgłoszeń Forms oraz silnie spójny dostęp do Netlify Blobs (dashboard, ceny i księgi zakupów); traktuj go jak sekret. `SITE_ID` Netlify ustawia automatycznie.
+4. Skonfiguruj Stripe według osobnej instrukcji poniżej i dodaj `STRIPE_SECRET_KEY` oraz `STRIPE_WEBHOOK_SECRET` z zakresem **Functions**.
+5. Pierwszemu administratorowi przypisz ręcznie rolę `admin` w `app_metadata` w panelu Netlify Identity. Kolejnymi kontami można już zarządzać z panelu administratora w dashboardzie.
+6. Nowe konto bez roli może się uwierzytelnić i zobaczy cennik, ale nie otworzy `/members/`. Po udanej płatności rola i dokładny termin są nadawane automatycznie. Administrator nadal może przyznać dostęp ręcznie.
+7. Udostępnij osadzane pliki Google odbiorcom, którzy mają je oglądać. Aplikacja nie omija uprawnień Dysku, Prezentacji ani Formularzy Google.
+8. Jeżeli używasz własnej domeny, ustaw ją jako główną domenę witryny, włącz HTTPS i sprawdź na niej link potwierdzający oraz zaproszenie Identity. Kod korzysta ze ścieżek same-origin i `location.origin`, więc nie wymaga zamiany `chemdisk.netlify.app` na `chemdisk.pl` w plikach.
+9. Po pierwszym deployu sprawdź logowanie, cztery zakładki panelu administratora, testową płatność, formularz kontaktowy, czat oraz po jednym materiale Google i YouTube na docelowej domenie.
 
 Dodanie `chemdisk.pl` jako domeny własnej do tej samej witryny nie zmienia danych. Utworzenie całkiem nowej witryny Netlify to migracja, nie sama zmiana domeny: użytkownicy Identity, zgłoszenia Forms i site-wide Blobs nie są automatycznie kopiowane między witrynami.
 
 W logu deployu sprawdź również etap post-processingu: Netlify powinien potwierdzić regułę limitu wywołań funkcji `chat`. Platformowy limit per IP jest uzupełniony limitem per konto wewnątrz funkcji.
 
 Formularz kontaktowy jest oznaczony `data-netlify="true"` i korzysta z Netlify Forms oraz reCAPTCHA. Netlify musi przetworzyć stronę podczas deployu, aby formularz pojawił się w panelu witryny.
+
+## Konfiguracja Stripe
+
+Integracja sprzedaje **jednorazowe pakiety czasu**, a nie automatycznie odnawiane subskrypcje Stripe Billing. Użytkownik świadomie kupuje tydzień, miesiąc, pół roku albo rok. Kolejny zakup jest dołączany do późniejszej z dat: bieżący termin wygaśnięcia lub chwila zakupu.
+
+Domyślne ceny:
+
+| Pakiet | Czas | Cena |
+| --- | ---: | ---: |
+| Tydzień | 7 dni | 30 zł |
+| Miesiąc | 30 dni | 50 zł |
+| Pół roku | 182 dni | 300 zł |
+| Rok | 365 dni | 500 zł |
+
+### Tryb testowy
+
+1. Otwórz [Stripe Dashboard](https://dashboard.stripe.com/) i przełącz konto na środowisko testowe/sandbox.
+2. W **Developers → API keys** skopiuj tajny klucz testowy zaczynający się od `sk_test_`. Nie używaj publishable key `pk_test_` jako `STRIPE_SECRET_KEY`.
+3. W Netlify dodaj zmienną `STRIPE_SECRET_KEY=sk_test_...` z zakresem **Functions**.
+4. Wykonaj deploy, aby publiczny adres funkcji webhook już istniał.
+5. W Stripe, w **Developers → Webhooks / Event destinations**, dodaj endpoint:
+
+   ```text
+   https://TWOJA-DOMENA/.netlify/functions/stripe-webhook
+   ```
+
+6. Zaznacz zdarzenia:
+
+   ```text
+   checkout.session.completed
+   checkout.session.async_payment_succeeded
+   ```
+
+7. Otwórz utworzony endpoint, odsłoń signing secret zaczynający się od `whsec_` i zapisz go w Netlify jako `STRIPE_WEBHOOK_SECRET` z zakresem **Functions**.
+8. Uruchom ponowny deploy. W panelu administratora otwórz **Płatności**. Komunikat powinien potwierdzić tryb testowy.
+
+Do udanej płatności testowej użyj:
+
+```text
+Numer karty: 4242 4242 4242 4242
+Data ważności: dowolny przyszły miesiąc i rok
+CVC: dowolne 3 cyfry
+Kod pocztowy: dowolny poprawny kod
+```
+
+Przydatne scenariusze testowe Stripe:
+
+| Karta | Wynik |
+| --- | --- |
+| `4242 4242 4242 4242` | Płatność udana. |
+| `4000 0000 0000 9995` | Odrzucenie z powodu braku środków. |
+| `4000 0025 0000 3155` | Przepływ wymagający uwierzytelnienia 3D Secure. |
+
+W trybie testowym nie używaj prawdziwych danych kart. Oficjalne scenariusze są opisane w [dokumentacji testów Stripe](https://docs.stripe.com/testing).
+
+### Test webhooka lokalnie
+
+Zainstaluj Stripe CLI, zaloguj się i w osobnym terminalu uruchom:
+
+```bash
+stripe listen --forward-to localhost:8888/.netlify/functions/stripe-webhook
+```
+
+CLI wyświetli tymczasowy sekret `whsec_...`. Wpisz właśnie ten sekret do lokalnego `.env` jako `STRIPE_WEBHOOK_SECRET` (sekret CLI jest inny niż sekret produkcyjnego endpointu), a potem uruchom:
+
+```bash
+npm run dev
+```
+
+Lokalny Checkout musi dostać działający kontekst Netlify Identity oraz konfigurację `NETLIFY_API_TOKEN` i `SITE_ID`, ponieważ historia i blokada przed podwójną realizacją są przechowywane w Netlify Blobs.
+
+### Przejście na prawdziwe płatności
+
+Tryb testowy i produkcyjny Stripe mają osobne klucze, webhooki oraz transakcje.
+
+1. Dokończ aktywację konta Stripe i wymagane dane firmy.
+2. Przełącz Dashboard Stripe na tryb live.
+3. Podmień w Netlify `STRIPE_SECRET_KEY` na `sk_live_...`.
+4. Utwórz osobny webhook live dla tego samego adresu funkcji i podmień `STRIPE_WEBHOOK_SECRET` na jego sekret.
+5. Wykonaj deploy i przeprowadź małą prawdziwą transakcję kontrolną.
+
+Nigdy nie kopiuj `sk_*` ani `whsec_*` do plików w `public`, kodu przeglądarki, repozytorium lub wiadomości błędu.
+
+### Ceny, księga zakupów i bezpieczeństwo
+
+Ceny edytuje administrator w zakładce **Płatności**. Aplikacja przekazuje do Stripe `price_data` obliczone wyłącznie na serwerze; kwota z przeglądarki nie jest przyjmowana. Zmiana ceny dotyczy nowych Checkout Sessions. Poprzednia transakcja nadal zachowuje w Stripe i historii ChemDisk kwotę zapłaconą w chwili zakupu.
+
+Stripe Dashboard nie jest źródłem aktualnego cennika tej aplikacji. Zmiana przypadkowego Price w katalogu Stripe nie zmieni kart cenowych ChemDisk. Dzięki temu administrator nie musi kopiować nowych `price_...` po każdej zmianie kwoty.
+
+Księga użytkownika jest zapisywana w site-wide magazynie Netlify Blobs `chemdisk-payments`. Każdy zapis używa warunku ETag. Identyfikator Checkout Session może zostać zrealizowany tylko raz, nawet jeśli Stripe ponowi webhook lub strona sukcesu równocześnie sprawdzi płatność. Dwa różne, poprawnie opłacone Checkout Sessions dodają dwa okresy.
+
+Webhook jest głównym mechanizmem nadawania dostępu. Strona `/payment-success/` wykonuje dodatkową, uwierzytelnioną weryfikację jako bezpieczny fallback i odświeża JWT z nową rolą. Samo wejście pod adres sukcesu bez opłaconej sesji niczego nie przyznaje.
+
+Odebranie płatnego dostępu w panelu administratora zapisuje zdarzenie w historii i natychmiast wygasza rolę, ale **nie wykonuje zwrotu pieniędzy**. Ewentualny refund wykonuje się osobno przy właściwej płatności w Stripe Dashboard.
 
 ## Identity, role i dostęp
 
@@ -94,7 +201,7 @@ Nie ustawiaj ręcznie `session_id` ani `timed_access`; zarządza nimi funkcja `i
 | `halfyear` | Dostęp przez 182 dni. |
 | `year` | Dostęp przez 365 dni. |
 
-Okres roli czasowej zaczyna się przy pierwszym udanym logowaniu po jej przypisaniu. Ponowne logowanie nie przedłuża działającego okresu. Po wygaśnięciu klient blokuje dostęp, a przy kolejnym logowaniu hook usuwa wygasłą rolę; aby przyznać kolejny okres, administrator musi ponownie nadać odpowiednią rolę.
+Okres roli czasowej przypisanej **ręcznie** zaczyna się przy pierwszym udanym logowaniu po jej przypisaniu. Okres kupiony przez Stripe zaczyna się po potwierdzeniu płatności i ma od razu dokładny termin wygaśnięcia. Ponowne logowanie nie przedłuża żadnego działającego okresu. Po wygaśnięciu klient blokuje dostęp, a przy kolejnym logowaniu hook usuwa wygasłą rolę.
 
 `netlify.toml` przepuszcza do `/members` i `/members/*` wyłącznie JWT z jedną z powyższych ról. Funkcja czatu dodatkowo sprawdza aktualny czas wygaśnięcia roli.
 
@@ -122,6 +229,11 @@ Przycisk **Panel administratora** pojawia się w bocznym menu wyłącznie dla ko
 - wybrać brak dostępu, stały dostęp albo dokładnie jeden okres czasowy;
 - dodatkowo przyznać rolę `admin`;
 - trwale usunąć inne konto (własne konto administratora jest chronione);
+- przeglądać datę i czas utworzenia konta, ostatnie logowanie i pozostały czas;
+- rozwijać pojedyncze konta zamiast renderować wszystkie formularze naraz;
+- przeglądać historię zakupów Stripe i operacji odebrania dostępu;
+- odebrać płatny dostęp bez automatycznego wykonywania refundu;
+- edytować ceny czterech pakietów;
 - przeglądać i trwale usuwać zgłoszenia Netlify Forms;
 - edytować, podglądać, publikować i przywracać Markdown dashboardu;
 - obsłużyć całą listę użytkowników dzięki stronicowaniu.
@@ -130,7 +242,7 @@ Interfejs wysyła JWT zalogowanego administratora do `/.netlify/functions/admin-
 
 Przy rzeczywistej zmianie roli stare `timed_access` jest czyszczone. Nowa rola czasowa rozpoczyna okres przy następnym logowaniu użytkownika. Sama poprawka imienia lub nazwiska z pozostawioną aktywną rolą czasową nie zeruje jej bieżącego terminu. Zmiany ról są w pełni widoczne po odświeżeniu tokenu albo ponownym logowaniu.
 
-Panel pokazuje termin aktywnej roli czasowej. Po wygaśnięciu pojawia się jawna akcja **Odnów ten okres**; dopiero ona przygotowuje nowy okres do uruchomienia przy kolejnym logowaniu. Zwykłe zapisanie nazwiska nie odnawia dostępu przypadkiem.
+Panel pokazuje termin aktywnej roli czasowej. Po wygaśnięciu roli nadanej ręcznie pojawia się jawna akcja **Odnów ten okres**; dopiero ona przygotowuje nowy okres do uruchomienia przy kolejnym logowaniu. Dostęp kupiony przedłuża się przez kolejny Checkout. Zwykłe zapisanie nazwiska nie odnawia dostępu przypadkiem.
 
 Panel administracyjny wymaga środowiska Netlify Functions (`netlify dev` lub deployu), ponieważ lokalne otwarcie statycznego HTML nie dostarcza serwerowego kontekstu Identity. Jeśli kontekst administratora Identity nie jest dostępny, endpoint kończy żądanie bezpiecznym błędem `503` zamiast wykonywać operację bez weryfikacji.
 
