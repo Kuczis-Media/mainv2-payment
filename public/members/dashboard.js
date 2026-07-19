@@ -9,6 +9,8 @@
   const PAYMENT_ADMIN_URL = '/.netlify/functions/payment-admin';
   const PAYMENT_CONFIG_URL = '/.netlify/functions/payment-config';
   const THEME_STORAGE_KEY = 'chem.theme';
+  const SIDEBAR_STORAGE_KEY = 'chem.sidebar';
+  const MOBILE_SIDEBAR_QUERY = '(max-width: 920px)';
   const REQUIRED_HELP_SECTION_LINES = Object.freeze([
     '## Pomoc i konto',
     '',
@@ -221,7 +223,7 @@
     const dark = next === 'dark';
     const label = dark ? 'Włącz jasny motyw' : 'Włącz ciemny motyw';
     const themeColor = document.getElementById('theme-color');
-    if (themeColor) themeColor.setAttribute('content', dark ? '#0d121a' : '#f7f9fc');
+    if (themeColor) themeColor.setAttribute('content', dark ? '#090f18' : '#edf2f7');
     if (elements.themeToggle) {
       elements.themeToggle.setAttribute('aria-label', label);
       elements.themeToggle.setAttribute('aria-pressed', String(dark));
@@ -246,6 +248,37 @@
 
   function toggleTheme() {
     applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark', true);
+  }
+
+  function isMobileSidebar() {
+    return Boolean(window.matchMedia && window.matchMedia(MOBILE_SIDEBAR_QUERY).matches);
+  }
+
+  function updateMenuButton() {
+    const expanded = isMobileSidebar()
+      ? elements.body.classList.contains('menu-open')
+      : document.documentElement.dataset.sidebar !== 'collapsed';
+    const label = isMobileSidebar()
+      ? (expanded ? 'Zamknij menu' : 'Otwórz menu')
+      : (expanded ? 'Zwiń menu boczne' : 'Rozwiń menu boczne');
+    elements.menuButton.setAttribute('aria-expanded', String(expanded));
+    elements.menuButton.setAttribute('aria-label', label);
+    elements.menuButton.title = label;
+  }
+
+  function setSidebarCollapsed(collapsed, persist) {
+    document.documentElement.dataset.sidebar = collapsed ? 'collapsed' : 'expanded';
+    if (persist) {
+      try {
+        localStorage.setItem(SIDEBAR_STORAGE_KEY, collapsed ? 'collapsed' : 'expanded');
+      } catch (_) {}
+    }
+    updateMenuButton();
+  }
+
+  function initializeSidebar() {
+    const collapsed = document.documentElement.dataset.sidebar === 'collapsed';
+    setSidebarCollapsed(collapsed, false);
   }
 
   function normalizeText(value) {
@@ -723,14 +756,12 @@
 
   function openMenu() {
     elements.body.classList.add('menu-open');
-    elements.menuButton.setAttribute('aria-expanded', 'true');
-    elements.menuButton.setAttribute('aria-label', 'Zamknij menu');
+    updateMenuButton();
   }
 
   function closeMenu() {
     elements.body.classList.remove('menu-open');
-    elements.menuButton.setAttribute('aria-expanded', 'false');
-    elements.menuButton.setAttribute('aria-label', 'Otwórz menu');
+    updateMenuButton();
   }
 
   function displayNameFor(user, profile) {
@@ -2326,10 +2357,26 @@
   function bindEvents() {
     if (elements.themeToggle) elements.themeToggle.addEventListener('click', toggleTheme);
     elements.menuButton.addEventListener('click', () => {
-      if (elements.body.classList.contains('menu-open')) closeMenu();
-      else openMenu();
+      if (isMobileSidebar()) {
+        if (elements.body.classList.contains('menu-open')) closeMenu();
+        else openMenu();
+        return;
+      }
+      setSidebarCollapsed(document.documentElement.dataset.sidebar !== 'collapsed', true);
     });
     elements.sidebarBackdrop.addEventListener('click', closeMenu);
+    if (window.matchMedia) {
+      const sidebarMedia = window.matchMedia(MOBILE_SIDEBAR_QUERY);
+      const handleSidebarBreakpoint = () => {
+        elements.body.classList.remove('menu-open');
+        updateMenuButton();
+      };
+      if (typeof sidebarMedia.addEventListener === 'function') {
+        sidebarMedia.addEventListener('change', handleSidebarBreakpoint);
+      } else if (typeof sidebarMedia.addListener === 'function') {
+        sidebarMedia.addListener(handleSidebarBreakpoint);
+      }
+    }
     elements.search.addEventListener('input', filterResources);
     elements.clearSearch.addEventListener('click', () => {
       elements.search.value = '';
@@ -2410,6 +2457,7 @@
 
   async function init() {
     initializeTheme();
+    initializeSidebar();
     bindEvents();
     setupIdentity();
     const auth = window.ChemAuth;

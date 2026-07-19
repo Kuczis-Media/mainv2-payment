@@ -92,6 +92,22 @@ test('members dashboard has a persistent accessible light and dark theme', () =>
   assert.match(styles, /color-scheme:\s*dark/);
 });
 
+test('members dashboard has a persistent accessible collapsible sidebar', () => {
+  const html = fs.readFileSync(path.join(root, 'public', 'members', 'index.html'), 'utf8');
+  const script = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.js'), 'utf8');
+  const styles = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.css'), 'utf8');
+
+  assert.match(html, /id=["']menu-button["'][^>]*aria-controls=["']sidebar["']/);
+  assert.match(html, /localStorage\.getItem\(['"]chem\.sidebar['"]\)/);
+  assert.match(script, /localStorage\.setItem\(SIDEBAR_STORAGE_KEY/);
+  assert.match(script, /MOBILE_SIDEBAR_QUERY\s*=\s*'\(max-width:\s*920px\)'/);
+  assert.match(script, /Zwiń menu boczne/);
+  assert.match(script, /Rozwiń menu boczne/);
+  assert.match(styles, /html\[data-sidebar=["']collapsed["']\]\s+\.sidebar/);
+  assert.match(styles, /html\[data-sidebar=["']collapsed["']\]\s+\.main-area/);
+  assert.match(styles, /\.nav-item\.is-active\s*\{[^}]*background:\s*#e6f8f4/s);
+});
+
 test('dashboard admin editor starts clean without hiding untouched static resources', () => {
   const script = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.js'), 'utf8');
 

@@ -5,16 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="x-members" content="1" />
   <meta name="robots" content="noindex, nofollow" />
-  <meta name="theme-color" id="theme-color" content="#f7f9fc" />
+  <meta name="theme-color" id="theme-color" content="#edf2f7" />
   <meta http-equiv="Cache-Control" content="no-store" />
 
   <script>
     (function () {
+      document.documentElement.dataset.sidebar = 'expanded';
       try {
         var saved = localStorage.getItem('chem.theme');
         var dark = saved === 'dark' || (!saved && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        var savedSidebar = localStorage.getItem('chem.sidebar');
         document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-        document.getElementById('theme-color').setAttribute('content', dark ? '#0d121a' : '#f7f9fc');
+        document.documentElement.dataset.sidebar = savedSidebar === 'collapsed' ? 'collapsed' : 'expanded';
+        document.getElementById('theme-color').setAttribute('content', dark ? '#090f18' : '#edf2f7');
       } catch (_) {
         document.documentElement.dataset.theme = 'light';
       }
@@ -105,7 +108,7 @@
 
     <main class="main-area" id="dashboard-content">
       <header class="topbar">
-        <button class="menu-button" id="menu-button" type="button" aria-label="Otwórz menu" aria-controls="sidebar" aria-expanded="false">
+        <button class="menu-button" id="menu-button" type="button" aria-label="Zwiń menu boczne" aria-controls="sidebar" aria-expanded="true" title="Zwiń menu boczne">
           <span></span><span></span><span></span>
         </button>
 
