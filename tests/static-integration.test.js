@@ -204,6 +204,8 @@ test('members dashboard has a persistent accessible collapsible sidebar', () => 
   assert.match(script, /Rozwiń menu boczne/);
   assert.match(styles, /html\[data-sidebar=["']collapsed["']\]\s+\.sidebar/);
   assert.match(styles, /html\[data-sidebar=["']collapsed["']\]\s+\.main-area/);
+  assert.match(styles, /\.sidebar\s*\{[^}]*overflow-y:\s*auto[^}]*scrollbar-width:\s*none/s);
+  assert.match(styles, /\.sidebar::\-webkit-scrollbar\s*\{[^}]*display:\s*none/s);
   assert.match(styles, /\.nav-item\.is-active\s*\{[^}]*background:\s*#e6f8f4/s);
 });
 

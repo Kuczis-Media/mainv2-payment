@@ -6,15 +6,27 @@ ChemDisk jest statyczną aplikacją wdrażaną na Netlify. Publiczna strona prow
 
 ```text
 public/
-├── index.html                         # publiczna strona startowa
+├── index.html                         # strona startowa, oferta i publiczny formularz
+├── 404.html                           # lokalna strona błędu
 ├── login/                             # logowanie, rejestracja i odzyskiwanie konta
 ├── purchase/                          # osobny ekran zakupu i przedłużania dostępu
+├── payment-success/                   # powrót ze Stripe i kontrolna realizacja zakupu
+├── time.html                          # bieżąca rola i termin dostępu
 ├── assets/js/auth.js                  # wspólna obsługa sesji, ról i profilu
 └── members/
     ├── index.html                     # panel kursanta
     ├── dashboard.md                   # działy i materiały widoczne w panelu
-    ├── dashboard.js / dashboard.css   # parser Markdown i interfejs panelu
-    └── module/                        # narzędzia i przeglądarki materiałów
+    ├── dashboard.js / dashboard.css   # interfejs, motyw, sidebar i wyszukiwarka
+    ├── dashboard-parser.js            # bezpieczny parser kart i harmonijek
+    ├── dashboard-navigation.js        # aktywna sekcja podczas kliknięcia/przewijania
+    ├── favicon.svg                    # lokalna ikona panelu kursanta
+    └── module/
+        ├── theme.js / theme.css       # wspólna paleta jasna/ciemna aplikacji
+        ├── media-*.js / *.css         # wspólne mechanizmy podglądów mediów
+        ├── studio/                    # Dashboard Builder i Lesson Builder
+        ├── lesson/                    # odtwarzacz lekcji oraz pliki .md
+        ├── atonom/                    # modele cząsteczek z polskich nazw
+        └── …                          # kalkulatory, tablice, media, czat i kontakt
 netlify/functions/
 ├── identity-login.js                  # role czasowe i identyfikator sesji
 ├── identity-signup.js                 # sanitowanie profilu przy rejestracji
@@ -36,16 +48,33 @@ tests/                                 # testy auth i Netlify Functions
 
 To nie jest aplikacja SPA ani projekt wymagający własnego, stale uruchomionego serwera. Netlify publikuje katalog `public`, a pliki z `netlify/functions` uruchamia na żądanie jako funkcje serverless. Profile i role przechowuje Identity, zgłoszenia — Netlify Forms, a aktywny Markdown edytora — Netlify Blobs.
 
+## Panel kursanta, motyw i nawigacja
+
+Panel buduje działy, harmonijki i karty z aktywnego Markdownu. Wyszukiwarka filtruje nazwy i opisy bez przeładowania strony; klawisz `/` przenosi do pola wyszukiwania. Po kliknięciu działu, ręcznym przewijaniu, zmianie hasha albo dojściu do końca strony właściwa pozycja menu jest zaznaczana od razu. Sekcje ukryte przez wyszukiwanie nie wpływają na wybór aktywnej pozycji.
+
+Na komputerze przycisk menu całkowicie chowa sidebar i zapamiętuje stan w `localStorage` pod kluczem `chem.sidebar`. Sama kolumna pozostaje przewijalna kółkiem, gładzikiem i klawiaturą, ale jej wewnętrzny scrollbar jest wizualnie ukryty. Na ekranach mobilnych ten sam przycisk otwiera menu jako warstwę nad treścią. Motyw jasny lub ciemny jest wspólny dla dashboardu, stron płatności i aplikacji modułów; wybór trafia do `chem.theme`, a bez zapisanego wyboru używane jest ustawienie systemowe. Zmiana w jednej karcie jest przekazywana pozostałym otwartym kartom przez zdarzenie `storage`.
+
+Wspólna paleta obejmuje interfejs należący do ChemDisk. Zawartość zewnętrznego iframe — między innymi tldraw, NumWorks, Google i YouTube — jest dokumentem innego dostawcy i nie może zostać przemalowana przez CSS aplikacji.
+
+Każda chroniona aplikacja modułu czeka na zakończenie pierwszej kontroli `ChemAuth.ready`. Przy chwilowej niedostępności Identity klient może zachować wcześniej aktywny stan lokalny, dlatego ostateczną granicą dostępu pozostają reguły ról CDN oraz ponowna autoryzacja wykonywana przez chronione Functions. Zewnętrzne iframe, odtwarzacze i API nie są uruchamiane, gdy kontrola zwróci brak aktywnej sesji.
+
 ## Uruchomienie lokalne
 
 Wymagane są Node.js 20.12.2 lub nowszy oraz npm (zgodnie z wymaganiami aktualnego Netlify CLI).
 
 ```bash
 npm install
+```
+
+Przy pierwszym uruchomieniu zaloguj CLI i połącz katalog wyłącznie z przygotowaną witryną testową:
+
+```bash
+npx netlify login
+npx netlify link
 npm run dev
 ```
 
-Polecenie uruchamia `netlify dev`, dzięki czemu jednocześnie działają statyczne strony, przekierowania i funkcje. Samo otwarcie pliku `public/index.html` z dysku nie odtworzy zachowania Netlify Identity ani Functions.
+`netlify link` dostarcza lokalnym Functions kontekst witryny i Identity. Bez poprawnie powiązanej witryny zakładki administracyjne mogą zakończyć się bezpiecznym błędem `503`, ponieważ nie otrzymają `clientContext.identity` ani tokena operatora. `npm run dev` uruchamia `netlify dev`, dzięki czemu jednocześnie działają statyczne strony, przekierowania i funkcje. Samo otwarcie pliku `public/index.html` z dysku nie odtworzy zachowania Netlify Identity ani Functions.
 
 Dla lokalnego czatu, zakładek administratora, edytora dashboardu i Stripe skopiuj `.env.example` jako nieśledzony plik `.env`:
 
@@ -63,17 +92,23 @@ STRIPE_WEBHOOK_SECRET=whsec_...
 
 Nie umieszczaj kluczy w `public`, plikach JavaScript przeglądarki, `dashboard.md` ani `netlify.toml`. `SITE_ID` jest ustawiane automatycznie na wdrożeniu Netlify; ręcznie jest potrzebne tylko lokalnie.
 
+`SITE_ID` i `NETLIFY_API_TOKEN` wskazują konkretną witrynę oraz jej site-wide Blobs. Jeżeli wpiszesz w lokalnym `.env` dane produkcyjne, funkcje uruchomione przez `netlify dev` mogą odczytać lub zmienić prawdziwy dashboard, konfigurację cen i księgi zakupów. Do prób administracyjnych i Stripe używaj osobnej witryny testowej z osobnym Identity, Blobs oraz kluczami Stripe test mode. Samo uruchomienie lokalne nie izoluje magazynów otwieranych z jawnymi poświadczeniami.
+
 ## Wdrożenie na Netlify
 
 1. Utwórz witrynę z tego repozytorium. Ustawienia publikacji i funkcji są już zapisane w `netlify.toml` (`public` oraz `netlify/functions`).
 2. Włącz Netlify Identity. W ustawieniach rejestracji wybierz rejestrację otwartą albo tylko na zaproszenie, zależnie od sposobu sprzedaży kursu. Jeśli wymagane jest potwierdzenie e-maila, pozostaw włączone wiadomości potwierdzające.
-3. Dodaj `GEMINI_API_KEY` oraz `NETLIFY_API_TOKEN` w zmiennych środowiskowych witryny i ustaw ich zakres na **Functions**. Token Netlify umożliwia zakładce administracyjnej obsługę zgłoszeń Forms oraz silnie spójny dostęp do Netlify Blobs (dashboard, ceny i księgi zakupów); traktuj go jak sekret. `SITE_ID` Netlify ustawia automatycznie.
-4. Skonfiguruj Stripe według osobnej instrukcji poniżej i dodaj `STRIPE_SECRET_KEY` oraz `STRIPE_WEBHOOK_SECRET` z zakresem **Functions**.
+3. Dodaj `GEMINI_API_KEY` oraz `NETLIFY_API_TOKEN` w zmiennych środowiskowych witryny i ustaw ich zakres na **Functions**. Token Netlify umożliwia zakładce administracyjnej obsługę zgłoszeń Forms oraz silnie spójny dostęp do Netlify Blobs (dashboard, ceny i księgi zakupów); traktuj go jak sekret. Musi należeć do konta mającego dostęp do witryny wskazanej przez `SITE_ID`. `SITE_ID` Netlify ustawia automatycznie na deployu.
+4. Skonfiguruj Stripe według osobnej instrukcji poniżej i dodaj `STRIPE_SECRET_KEY` oraz `STRIPE_WEBHOOK_SECRET` z zakresem **Functions**. Klucze live ogranicz do kontekstu Production; Preview/Branch powinny otrzymywać wyłącznie dane Stripe test mode i poświadczenia osobnej witryny testowej.
 5. Pierwszemu administratorowi przypisz ręcznie rolę `admin` w `app_metadata` w panelu Netlify Identity. Kolejnymi kontami można już zarządzać z panelu administratora w dashboardzie.
 6. Nowe konto bez roli może się uwierzytelnić i zobaczy cennik, ale nie otworzy `/members/`. Po udanej płatności rola i dokładny termin są nadawane automatycznie. Administrator nadal może przyznać dostęp ręcznie.
 7. Udostępnij osadzane pliki Google odbiorcom, którzy mają je oglądać. Aplikacja nie omija uprawnień Dysku, Prezentacji ani Formularzy Google.
 8. Jeżeli używasz własnej domeny, ustaw ją jako główną domenę witryny, włącz HTTPS i sprawdź na niej link potwierdzający oraz zaproszenie Identity. Kod korzysta ze ścieżek same-origin i `location.origin`, więc nie wymaga zamiany `chemdisk.netlify.app` na `chemdisk.pl` w plikach.
 9. Po pierwszym deployu sprawdź logowanie, cztery zakładki panelu administratora, testową płatność, formularz kontaktowy, czat oraz po jednym materiale Google i YouTube na docelowej domenie.
+
+Deploy Preview tej samej witryny może widzieć site-wide store `chemdisk-dashboard` oraz `chemdisk-payments`, jeśli udostępnisz mu produkcyjny token i `SITE_ID`. Publikacja dashboardu, edycja cen, usuwanie użytkownika lub test Checkoutu z takiego podglądu mogą zmienić realne dane. Nie wykonuj mutacji administracyjnych na Preview podłączonym do produkcyjnych Blobs.
+
+Po rotacji `NETLIFY_API_TOKEN` zaktualizuj zmienną środowiskową i wykonaj deploy Functions. Token służy również do podpisywania krótkotrwałych uprawnień kasowania zgłoszeń Forms, więc wcześniej otwarta akcja usuwania wygaśnie i trzeba ponownie pobrać listę — nie powoduje to utraty zgłoszenia.
 
 Dodanie `chemdisk.pl` jako domeny własnej do tej samej witryny nie zmienia danych. Utworzenie całkiem nowej witryny Netlify to migracja, nie sama zmiana domeny: użytkownicy Identity, zgłoszenia Forms i site-wide Blobs nie są automatycznie kopiowane między witrynami.
 
@@ -84,6 +119,8 @@ Formularz kontaktowy jest oznaczony `data-netlify="true"` i korzysta z Netlify F
 ## Konfiguracja Stripe
 
 Integracja sprzedaje **jednorazowe pakiety czasu**, a nie automatycznie odnawiane subskrypcje Stripe Billing. Administrator może udostępnić godzinę, dzień, tydzień, miesiąc, pół roku albo rok. Zakup odbywa się na osobnej stronie `/purchase/`, otwieranej w panelu kursanta przez **Kup lub przedłuż**.
+
+Checkout jest skonfigurowany dla metody `card`. Kod nie włącza obecnie BLIK-a, przelewów bankowych ani innych asynchronicznych metod płatności, niezależnie od tego, co jest dostępne globalnie na koncie Stripe.
 
 Domyślna konfiguracja:
 
@@ -137,6 +174,8 @@ Przydatne scenariusze testowe Stripe:
 
 W trybie testowym nie używaj prawdziwych danych kart. Oficjalne scenariusze są opisane w [dokumentacji testów Stripe](https://docs.stripe.com/testing).
 
+Po udanej próbie sprawdź w Stripe **Event deliveries**, czy właściwe zdarzenie zakończyło się odpowiedzią HTTP `200`, a w logach Netlify Functions — czy `stripe-webhook` nie zgłosił błędu. Następnie potwierdź rolę użytkownika oraz wpis w historii płatności ChemDisk. Odpowiedź `5xx` oznacza, że trzeba usunąć przyczynę i ponowić dostarczenie zdarzenia w Stripe. Nie polegaj wyłącznie na powrocie przeglądarki: `payment-success` jest kontrolnym fallbackiem tylko wtedy, gdy kupujący faktycznie wróci z Checkout.
+
 ### Test webhooka lokalnie
 
 Zainstaluj Stripe CLI, zaloguj się i w osobnym terminalu uruchom:
@@ -179,7 +218,9 @@ Zmiana waluty nie przelicza automatycznie wpisanych liczb — po wybraniu nowej 
 
 Stripe Dashboard nie jest źródłem aktualnego cennika tej aplikacji. Zmiana przypadkowego Price w katalogu Stripe nie zmieni kart cenowych ChemDisk. Dzięki temu administrator nie musi kopiować nowych `price_...` po każdej zmianie kwoty.
 
-Księga użytkownika jest zapisywana w site-wide magazynie Netlify Blobs `chemdisk-payments`. Każdy zapis używa warunku ETag. Historia przechowuje maksymalnie 100 najnowszych zakupów i operacji administracyjnych; starsze pozycje są automatycznie usuwane, a pojedynczy znacznik czasu nadal chroni przed ponownym naliczeniem starej Checkout Session. Usunięcie konta w panelu administratora usuwa również jego księgę z tego magazynu. Dane transakcji pozostają niezależnie w Stripe.
+Księga użytkownika jest zapisywana w site-wide magazynie Netlify Blobs `chemdisk-payments`. Każdy zapis używa warunku ETag. Historia przechowuje maksymalnie 100 najnowszych zakupów i operacji administracyjnych; starsze pozycje są automatycznie usuwane, a pojedynczy znacznik czasu nadal chroni przed ponownym naliczeniem starej Checkout Session. Dane transakcji pozostają niezależnie w Stripe.
+
+Usunięcie konta nie jest jedną transakcją obejmującą Identity i Blobs. Funkcja najpierw usuwa użytkownika z Identity, a następnie próbuje usunąć jego księgę. Jeśli pojawi się `PAYMENT_HISTORY_DELETE_FAILED` z `identityDeleted: true`, zachowaj zwrócone ID użytkownika i ponów akcję **Usuń konto**; endpoint potrafi dokończyć czyszczenie także wtedy, gdy rekord Identity już nie istnieje. Do czasu skutecznego ponowienia w Blobs może pozostawać osierocona księga.
 
 Globalne wyłączenie płatności pozostawia ofertę i ceny widoczne, ale dezaktywuje przyciski zakupu, a serwer odrzuca każdą próbę utworzenia Checkout. Ponowne włączenie nie wymaga zmiany kluczy Stripe.
 
@@ -224,13 +265,17 @@ Okres roli czasowej przypisanej **ręcznie** zaczyna się przy pierwszym udanym 
 
 Przy każdym udanym logowaniu konta z dostępem `identity-login` zapisuje nowy `app_metadata.session_id`. Zalogowana przeglądarka porównuje swój identyfikator z bieżącym kontem mniej więcej co 30 sekund oraz po powrocie do karty lub odzyskaniu sieci. Gdy inne urządzenie się zaloguje, starsza sesja jest lokalnie zamykana. Moduły czekają z uruchomieniem zewnętrznych iframe i API na wynik pierwszej kontroli. Funkcja czatu i funkcje administracyjne również porównują identyfikator po stronie serwera i odrzucają token poprzedniego urządzenia.
 
+Monitor pomija ukryte karty, aby kilka kart tej samej przeglądarki nie próbowało jednocześnie odświeżać tokenu po uśpieniu komputera. Widoczna karta ponawia kontrolę po `focus`, `online`, `pageshow` i wybudzeniu. Chwilowy brak sieci, timeout Identity albo nieudane odświeżenie ciasteczka nie powodują samodzielnie wylogowania poprawnej sesji; aplikacja zachowuje stan i próbuje ponownie. Wylogowanie następuje dopiero po potwierdzonym zastąpieniu sesji, braku aktywnego dostępu albo świadomej akcji użytkownika.
+
+„Jedna aktywna sesja” oznacza ostatnie poprawne logowanie, a nie jedną kartę. Karty w tym samym profilu przeglądarki współdzielą dane GoTrue i `localStorage`; starsza karta przed wyczyszczeniem stanu ponownie sprawdza, czy inna karta nie zapisała już nowszej sesji.
+
 Ważne ograniczenie: statyczny CDN Netlify sprawdza role znajdujące się w już wydanym JWT, ale nie odpytuje bazy Identity o aktualny `session_id` przy każdym pliku. Dlatego wcześniej wydany token może nadal przejść samą regułę CDN do czasu jego wygaśnięcia, choć zwykły interfejs wyloguje starą kartę po kontroli sesji. Zmiana roli również staje się w pełni widoczna po odświeżeniu lub ponownym wydaniu tokenu.
 
 Jeśli każdy pojedynczy zasób ma wymagać natychmiastowej, serwerowej weryfikacji jednej sesji, nie może być podawany bezpośrednio jako statyczny plik. Trzeba go obsłużyć przez Function/Edge Function albo osobny backend, który przy każdym żądaniu sprawdza bieżący stan konta.
 
 ## Profil kursanta
 
-Rejestracja wymaga imienia, nazwiska, e-maila i hasła mającego co najmniej 10 znaków. Imię i nazwisko trafiają do `user_metadata`; hook rejestracji normalizuje tekst i usuwa z tych metadanych pola wyglądające jak uprawnienia.
+Interfejs rejestracji, przyjmowania zaproszenia i resetowania hasła w ChemDisk wymaga co najmniej 10 znaków. Jest to walidacja po stronie tej aplikacji; niezależną, serwerową politykę haseł konfiguruje Netlify Identity. Hook `identity-signup` nie ocenia siły hasła — normalizuje imię i nazwisko trafiające do `user_metadata` oraz usuwa z tych metadanych pola wyglądające jak uprawnienia.
 
 W Identity zapisywane są zgodne pola `first_name`, `last_name`, `full_name` i `name`. Dashboard pokazuje nazwę oraz inicjały konta. Zalogowany użytkownik może kliknąć swoją kartę konta i zmienić imię oraz nazwisko. Zmiana własnego profilu nie zmienia roli, czasu dostępu ani aktywnej sesji.
 
@@ -261,28 +306,108 @@ Panel pokazuje termin aktywnej roli czasowej. Po wygaśnięciu roli nadanej ręc
 
 Panel administracyjny wymaga środowiska Netlify Functions (`netlify dev` lub deployu), ponieważ lokalne otwarcie statycznego HTML nie dostarcza serwerowego kontekstu Identity. Jeśli kontekst administratora Identity nie jest dostępny, endpoint kończy żądanie bezpiecznym błędem `503` zamiast wykonywać operację bez weryfikacji.
 
-Zakładka **Formularze** pokazuje formularze przetworzone przez Netlify Forms, np. `members-contact` oraz publiczny `contact`. Nie pobiera odpowiedzi z osadzonych Google Forms — te pozostają w Google Forms/Sheets. Każde usunięcie wymaga potwierdzenia, a funkcja wydaje dla konkretnego zgłoszenia krótkotrwały, podpisany token; `NETLIFY_API_TOKEN` nigdy nie trafia do przeglądarki.
+Zakładka **Formularze** pokazuje formularze przetworzone przez Netlify Forms, np. `members-contact` oraz publiczny `contact`. Nie pobiera odpowiedzi z osadzonych Google Forms — te pozostają w Google Forms/Sheets. Panel stronicuje odpowiedzi po 50 i wczytuje maksymalnie 100 stron; po przekroczeniu tego zakresu przerywa z jawnym błędem zamiast pokazywać niepełną listę. Każde usunięcie wymaga potwierdzenia, a funkcja wydaje dla konkretnego zgłoszenia podpisany token ważny przez 15 minut. Po jego wygaśnięciu odśwież listę przed ponowieniem; `NETLIFY_API_TOKEN` nigdy nie trafia do przeglądarki.
 
 ## Edycja dashboardu
 
 Wersją bazową jest `public/members/dashboard.md`. Administrator może również zapisać aktywną wersję w zakładce **Dashboard** bez wykonywania deployu. Jest ona przechowywana w Netlify Blobs, a zapis używa kontroli wersji (`etag`) i silnie spójnego dostępu przez serwerowe `NETLIFY_API_TOKEN` oraz `SITE_ID`, aby dwóch administratorów nie nadpisało sobie zmian po cichu. Sekretny token nie jest wysyłany do przeglądarki. Przycisk przywracania atomowo dezaktywuje override i ponownie aktywuje plik z wdrożenia.
 
+Aplikacja ma dwa interfejsy dla tego samego aktywnego klucza:
+
+- zakładka **Dashboard** w panelu administratora służy do bezpośredniej edycji Markdownu, podglądu, publikacji i przywracania pliku z wdrożenia;
+- **Dashboard Builder** w Studio zamienia obsługiwany Markdown na graficzne klocki, pozwala importować plik i publikować, ale nie ma akcji przywracania wersji statycznej.
+
+Przywracanie wykonuj wyłącznie z zakładki administratora. Oba edytory używają tego samego `etag`, więc otwarcie ich równocześnie może prawidłowo zakończyć starszą publikację konfliktem `409`.
+
 Panel kursanta najpierw próbuje pobrać aktywną wersję z funkcji, a gdy jej nie ma lub magazyn jest chwilowo niedostępny, bezpiecznie wraca do `dashboard.md`. Nie trzeba zmieniać `index.html`.
 
-Jeżeli administrator nie opublikował własnej wersji, kursanci widzą pełny bazowy `dashboard.md` ze wszystkimi przykładowymi materiałami i narzędziami. Przy pierwszym otwarciu edytora administrator dostaje czysty szablon zawierający tylko ekran Start oraz sekcję **Pomoc i konto**. Dopiero kliknięcie **Opublikuj zmiany** zapisuje ten szablon jako aktywną wersję i ukrywa bazowe materiały. Sekcja **Pomoc i konto** jest obowiązkowa i aplikacja automatycznie dołącza ją podczas publikacji, jeżeli administrator pominie ją we własnym tekście. Akcja **Przywróć plik z wdrożenia** usuwa własną wersję, omija starą kopię z pamięci podręcznej i ponownie pokazuje pełny dashboard bazowy.
+Jeżeli administrator nie opublikował własnej wersji, kursanci widzą pełny bazowy `dashboard.md` ze wszystkimi przykładowymi materiałami i narzędziami. Przy pierwszym otwarciu edytora administrator dostaje czysty szablon zawierający tylko ekran Start oraz sekcję **Pomoc i konto**. Dopiero kliknięcie **Opublikuj zmiany** zapisuje ten szablon jako aktywną wersję i ukrywa bazowe materiały. Nagłówek **Pomoc i konto** jest obowiązkowy: jeżeli nie występuje, aplikacja dołącza cały domyślny szablon sekcji. Jeżeli autor utworzył już taki nagłówek, jego własna treść jest zachowywana i brakujące domyślne linki nie są dopisywane pojedynczo. Akcja **Przywróć plik z wdrożenia** dezaktywuje override, omija starą kopię z pamięci podręcznej i ponownie pokazuje pełny dashboard bazowy.
 
-Magazyn `chemdisk-dashboard` jest site-wide i pozostaje po kolejnych wdrożeniach. Deploy Preview tej samej witryny również może zobaczyć ten magazyn, dlatego nie publikuj zmian z podglądu, jeśli nie mają trafić do produkcyjnego dashboardu. Lokalny `netlify dev` korzysta z lokalnego magazynu testowego.
+Magazyn `chemdisk-dashboard` jest site-wide i pozostaje po kolejnych wdrożeniach. Deploy Preview tej samej witryny również może zobaczyć ten magazyn, dlatego nie publikuj zmian z podglądu, jeśli nie mają trafić do produkcyjnego dashboardu.
+
+Uwaga na pracę lokalną: `admin-dashboard` celowo otwiera magazyn z jawnymi `SITE_ID` i `NETLIFY_API_TOKEN`, aby uzyskać silną spójność. Jeżeli lokalny `.env` wskazuje produkcyjną witrynę, `netlify dev` może odczytać i zmienić jej site-wide Blobs. Do prób zapisu używaj osobnej witryny testowej i jej danych albo nie wykonuj mutacji z lokalnego środowiska. Lokalny sandbox Blobs nie zastępuje magazynu wskazanego jawnymi poświadczeniami.
+
+Aktywna treść znajduje się pod jednym kluczem `dashboard.md` i może mieć maksymalnie 256 KiB po dołączeniu obowiązkowej sekcji pomocy. Otwarcie lub odświeżenie panelu wykonuje jeden chroniony `GET` do `admin-dashboard`, jedną kanoniczną kontrolę Identity i jeden silnie spójny odczyt Bloba. Dashboard nie odpytuje Blobs cyklicznie — pozostawienie otwartej strony nie pobiera ponownie Markdownu. Jeżeli override nie istnieje, klient wykonuje dodatkowy odczyt statycznego `/members/dashboard.md`.
+
+Udana publikacja to jedno żądanie `PUT`. Funkcja odczytuje metadane bieżącej wersji, wykonuje zapis warunkowy i odczyt kontrolny, po czym zwraca treść oraz nowy `etag`. Przywracanie zapisuje wersjonowany tombstone zamiast wykonywać niekontrolowane usunięcie; następnie klient pobiera plik statyczny. Żadna z tych operacji nie uruchamia production deployu.
+
+### Blobs i kredyty Netlify
+
+W aktualnej tabeli metered billing Netlify Blobs nie występuje jako osobny miernik miejsca ani pojedynczych operacji `get`/`set`. Z tego wynika, że w tej architekturze koszt dostępu do Blobs powstaje pośrednio przez:
+
+- web request do Function;
+- czas działania Function, obejmujący kontrolę Identity i komunikację z Blobs;
+- transfer odpowiedzi JSON z Markdownem do przeglądarki;
+- pozostałe pliki i żądania całej strony, które nie są kosztem samego Bloba.
+
+Aktualna tabela planów kredytowych podaje:
+
+| Miernik | Zużycie |
+| --- | ---: |
+| Udany production deploy | 15 kredytów |
+| Deploy Preview, branch deploy, nieudany deploy lub rollback | 0 kredytów |
+| Compute Functions | 10 kredytów za GB-godzinę |
+| Web bandwidth | 20 kredytów za GB |
+| Web requests | 2 kredyty za 10 000 żądań |
+
+Plan Free zawiera 300 kredytów miesięcznie i ma twardy limit, Personal — 1000, a Pro zaczyna się od 3000. Według bieżącej tabeli automatyczne doładowanie kosztuje w Personal 5 USD za 500 kredytów, a w Pro 10 USD za 1500 kredytów. Stawki i zasady mogą się zmieniać; przed szacowaniem ruchu sprawdź [aktualne zasady kredytów](https://docs.netlify.com/manage/accounts-and-billing/billing/billing-for-credit-based-plans/how-credits-work/), [naliczanie Functions](https://docs.netlify.com/build/functions/usage-and-billing/) oraz [dokumentację Netlify Blobs](https://docs.netlify.com/build/data-and-storage/netlify-blobs/). Konto Free, Starter lub Pro utworzone przed 4 września 2025 r. może nadal korzystać z planu Legacy, którego limity są rozliczane inaczej.
+
+Zapis w Studio nie jest deployem, dlatego nie nalicza 15 kredytów przewidzianych dla production deployu. Zużywa jednak zwykłe żądanie i compute Function podczas publikowania dashboardu.
+
+Ten sam model rozliczenia dotyczy publicznego pobrania cennika, utworzenia Checkout, webhooka oraz widoków historii: korzystają z Functions i magazynu `chemdisk-payments`. Roboczy zapis Lesson Buildera jest wyłącznie lokalny i nie używa Blobs ani Functions; kredyty Netlify zaczyna zużywać dopiero zwykłe wdrożenie i późniejszy ruch do opublikowanej lekcji.
+
+### Trwałe dane, kopie i rollback
+
+Kod w Git oraz deploy Netlify nie są kopią wszystkich danych aplikacji:
+
+| System | Dane |
+| --- | --- |
+| Repozytorium/deploy | Bazowy `public/members/dashboard.md`, lekcje `.md`, pliki aplikacji i Functions. |
+| Blob `chemdisk-dashboard` | Jeden aktywny klucz `dashboard.md` albo tombstone przywracający wersję bazową. |
+| Blob `chemdisk-payments` | Cennik w `config/prices.json` i księgi `users/<uuid>.json`, po maksymalnie 100 ostatnich zdarzeń. |
+| Netlify Identity | Konta, role, `timed_access`, profil i identyfikator ostatniej sesji. |
+| Netlify Forms | Zgłoszenia formularzy ChemDisk. |
+| Stripe | Checkout Sessions, płatności, zdarzenia i dane rozliczeniowe Stripe. |
+
+Rollback deployu przywraca pliki oraz kod Functions z wybranego wdrożenia, ale nie cofa site-wide Blobs, Identity, Forms ani Stripe. `etag`, numer wersji i metadane `updatedAt`/`updatedBy` chronią przed przypadkowym nadpisaniem i ułatwiają diagnostykę; aplikacja nie udostępnia na ich podstawie historii poprzednich wersji. Akcja przywrócenia dashboardu aktywuje bieżący plik statyczny z deployu, a nie wcześniejszy override z Blobs.
+
+Przed zmianą produkcyjnego dashboardu, cennika, migracją witryny albo masowym usuwaniem skopiuj aktywny Markdown do lokalnego pliku i wykonaj osobny eksport potrzebnych danych przez stronę **Blobs** w panelu Netlify, autoryzowane API/SDK lub panel właściwego dostawcy. Kopię trzymaj poza tą samą witryną. Lekcje nie są obecnie przechowywane w Blobs, więc ich źródłem prawdy i historią powinno pozostać repozytorium Git.
 
 ### Graficzne Studio treści
 
-Administrator widzi w bocznym menu dodatkowy skrót **Studio treści** prowadzący do `/members/module/studio/`. Studio ma dwa tryby:
+Administrator widzi w bocznym menu dodatkowy skrót **Studio treści** prowadzący do `/members/module/studio/`. Reguły w `netlify.toml` chronią cały katalog Studio rolą `admin` przed ogólną regułą `/members/*`; samo ukrycie linku w interfejsie nie jest mechanizmem autoryzacji.
 
-- **Dashboard Builder** — przeciąganie sekcji, harmonijek, tekstów, komunikatów i kart wszystkich modułów; formularze konfigurują identyfikator, wariant oraz właściwy dla modułu tryb `type`;
-- **Lesson Builder** — slajdy, stylowany tekst, obrazy HTTPS, listy, cytaty, callouty, kod, harmonijki oraz pytania tekstowe, liczbowe, wyboru i ABCD.
+Studio ma dwa tryby:
 
-Przed publikacją dashboardu Studio zawsze pobiera pełną aktywną wersję wraz z jej `etag`. Zapis jest wykonywany warunkowo przez `admin-dashboard`; konflikt nie nadpisuje nowszej wersji i pozostawia lokalny draft do porównania. JWT nie jest zapisywany w pamięci trwałej przeglądarki. Robocze modele obu edytorów są automatycznie przechowywane lokalnie, a cofanie i ponawianie obejmuje do 60 operacji.
+- **Dashboard Builder** — przeciąganie sekcji, harmonijek poziomów 3–6, tekstów, komunikatów i kart modułów. Inspektor konfiguruje ID lub link materiału, wariant kalkulatora/tablicy, tryb ochrony `type`, plik lekcji, prompt czatu, notatkę kontaktową albo bezpieczny własny link;
+- **Lesson Builder** — układanie slajdów oraz bloków nagłówka, tekstu, obrazu HTTPS, listy, cytatu, calloutu, kodu, stylowanej sekcji i harmonijki. Do slajdu można dodać jedno pytanie tekstowe, liczbowe, wyboru albo ABCD wraz z wariantami odpowiedzi, podpowiedzią i komunikatem sukcesu.
 
-Lesson Builder nie publikuje jeszcze plików do Blobs ani GitHuba. Generuje, kopiuje lub pobiera gotowy plik `.md`, który należy umieścić w `public/members/module/lesson/`.
+#### Przepływ Dashboard Buildera
+
+1. Kliknij **Wczytaj aktywny**, zanim zaczniesz publikować. Studio pobiera wtedy override z Blobs albo bazowy `dashboard.md` oraz zapamiętuje jego `etag`.
+2. Edytuj klocki, ich ustawienia albo kod w oknie **Markdown**. Podgląd korzysta z tego samego modelu co eksport.
+3. Kliknij **Opublikuj**. `PUT` używa zapamiętanego `etag`; Studio nie wykonuje automatycznie nowego `GET` tuż przed zapisem.
+4. Jeżeli inna karta lub administrator zdążył opublikować nowszą wersję, serwer zwraca `409`. Nowszy dashboard nie zostaje nadpisany, a lokalny draft pozostaje w przeglądarce. Ponowne wczytanie aktywnej wersji zastępuje draft dopiero po potwierdzeniu użytkownika; Studio nie wykonuje automatycznego diffu ani scalania.
+
+Import pliku dashboardu w Studio przyjmuje do 512 KiB, ale publikacja nadal ma twardy limit 256 KiB UTF-8. Walidacja wymaga tytułu, co najmniej jednego działu i jednej poprawnej karty, sprawdza typy ochrony, domeny Google/YouTube, nazwę pliku lekcji i bezpieczne adresy. Domyślny szablon **Pomoc i konto** jest dołączany, gdy w dokumencie nie ma nagłówka o tej nazwie.
+
+Round-trip dashboardu zachowuje znaczenie składni obsługiwanej przez parser, lecz nie gwarantuje identycznego tekstu źródłowego. Komentarze i nadmiarowe puste linie są usuwane, formatowanie jest normalizowane, parametry URL mogą zostać ponownie zakodowane, a nieobsługiwana konstrukcja może zmienić się w zwykły tekst. Przed importem rozbudowanego, ręcznie pisanego pliku zachowaj jego kopię.
+
+#### Przepływ Lesson Buildera
+
+Lesson Builder może rozpocząć pustą lekcję albo zaimportować istniejący `.md`, zamienić go na edytowalne bloki i ponownie wygenerować deterministyczny Markdown. Dostępne są podgląd, edycja źródła, kopiowanie do schowka i pobranie pliku. Import pliku ma limit 512 KiB, edytor źródła przyjmuje do 524 288 znaków, lekcja może zawierać od 1 do 100 slajdów, a nazwa pliku musi kończyć się `.md`, zaczynać znakiem alfanumerycznym, mieć maksymalnie 80 znaków i nie może zawierać `..` ani ścieżki katalogu. Builder przyjmuje dla obrazów wyłącznie pełne adresy `https://`.
+
+Lesson Builder nie publikuje jeszcze plików do Blobs ani GitHuba. Wygenerowany `.md` trzeba umieścić w `public/members/module/lesson/` i wdrożyć razem z aplikacją. Sam odtwarzacz lekcji obsługuje także bezpieczne względne obrazy znajdujące się w module, ale graficzny Builder celowo wymaga obrazów HTTPS.
+
+Odtwarzacz lekcji odrzuca plik większy niż 512 KiB lub zawierający ponad 100 slajdów. Builder pilnuje liczby slajdów, lecz obecnie nie blokuje pobrania tylko dlatego, że wynikowy Markdown przekroczył limit bajtów odtwarzacza. Przed wdrożeniem bardzo dużej lekcji sprawdź rozmiar, np. `wc -c public/members/module/lesson/nazwa.md`, i utrzymaj go poniżej 524 288 bajtów.
+
+Na jednym slajdzie może znajdować się najwyżej jedno zadanie. Quiz ABCD wymaga czterech opcji; pytanie `choice` co najmniej dwóch, a graficzne pole Studio zachowuje maksymalnie osiem. Opcje i aliasy odpowiedzi nie mogą zawierać separatora `|`. Kontenery `:::style` i `:::accordion` muszą mieć treść i nie mogą zawierać kolejnego kontenera tego typu. Studio nie kopiuje obrazów do repozytorium ani Blobs; import względnego obrazu można odczytać, ale przed ponownym eksportem jego adres trzeba zmienić na pełny HTTPS.
+
+Eksport zawsze synchronizuje nagłówek `#` pierwszego slajdu z globalnym tytułem lekcji. Ton calloutu nie ma osobnego pola w Markdownzie i po ponownym imporcie jest rozpoznawany z jego tytułu. Tak jak przy dashboardzie, dla ważnego ręcznie pisanego źródła zachowaj kopię przed round-tripem przez graficzne klocki.
+
+Robocze modele są automatycznie zapisywane w `localStorage` jako `chemdisk.studio.dashboard.v1` i `chemdisk.studio.lesson.v1`; autosave nie wysyła requestu, nie zapisuje Bloba i nie synchronizuje danych między urządzeniami. Draft nie jest przypisany do ID administratora, dlatego inny administrator korzystający z tego samego profilu przeglądarki zobaczy ten sam lokalny stan. Historia obejmuje do 60 operacji osobno dla każdego trybu, ale istnieje tylko do przeładowania strony i nie jest odtwarzana razem z draftem. `Ctrl/Cmd+Z` cofa, `Ctrl/Cmd+Shift+Z` lub `Ctrl/Cmd+Y` ponawia, a `Ctrl/Cmd+S` otwiera publikację dashboardu albo pobiera lekcję. JWT jest pobierany dopiero do operacji serwerowej i nie trafia do trwałej pamięci Studio.
+
+Podglądy w Studio są celowo uproszczone: dashboard pokazuje strukturę i wygląd kart bez całej logiki właściwego panelu, a podgląd lekcji pokazuje wybrany slajd i opis zadania, nie w pełni działający formularz odpowiedzi. Ostateczny test wykonuj w `/members/` oraz w rzeczywistym module `/members/module/lesson/`.
 
 Obsługiwana składnia:
 
@@ -336,10 +461,11 @@ Wartość `id` może być bezpośrednim identyfikatorem. Moduły Google i YouTub
 
 | Moduł | Parametry i działanie | Przykład |
 | --- | --- | --- |
-| `/members/module/bitpaper/` | Brak parametrów; prosta tablica. | `/members/module/bitpaper/` |
+| `/members/module/bitpaper/` | Opcjonalne `path` — bezpieczna nazwa opublikowanego pliku JSON z katalogu modułu; lokalna tablica z importem i eksportem. | `/members/module/bitpaper/?path=plansza.json` |
 | `/members/module/whiteboard/` | Brak parametrów; biała tablica. | `/members/module/whiteboard/` |
 | `/members/module/kalkulator/` | Brak parametrów; kalkulator naukowy. | `/members/module/kalkulator/` |
 | `/members/module/classic/` | Brak parametrów; kalkulator klasyczny. | `/members/module/classic/` |
+| `/members/module/atonom/` | Opcjonalne `formula` — polska nazwa obsługiwanego związku; interaktywny model cząsteczki. Bez parametru otwiera fenol. | `/members/module/atonom/?formula=cis-but-2-en` |
 | `/members/module/lesson/` | `file` — plik `.md` z folderu modułu; prezentacja krokowa z opcjonalnymi zadaniami. | `/members/module/lesson/?file=izotopy-wegla.md` |
 | `/members/module/chat/` | `prompt=nazwa.json` albo `plik=nazwa.txt&punkt=N`; prompt jest wybierany po stronie funkcji. | `/members/module/chat/?plik=prompty-przyklad.txt&punkt=1` |
 | `/members/module/forms/` | `id` — ID albo zakodowany link Google Forms. | `/members/module/forms/?id=ID_FORMULARZA` |
@@ -350,6 +476,8 @@ Wartość `id` może być bezpośrednim identyfikatorem. Moduły Google i YouTub
 | `/members/module/filmv1/` | Nowy odtwarzacz: YouTube w Video.js; Drive w osadzeniu Google. Obsługuje `type=1/2/3` albo `provider=youtube/drive`. | `/members/module/filmv1/?id=CH50zuS8DD0&type=1` |
 | `/members/module/yt/` | `id` — ID albo link YouTube; własne kontrolki i maska odtwarzacza. Obsługuje też linki `youtu.be`, `watch`, `shorts`, `live` i `embed`. | `/members/module/yt/?id=CH50zuS8DD0` |
 | `/time` | Brak parametrów; pokazuje rolę i pozostały czas dostępu. | `/time` |
+
+`/members/module/studio/` nie jest kartą kursową. To osobna aplikacja administracyjna chroniona rolą `admin`; zwykły kursant jest przekierowywany do panelu.
 
 W trybach ograniczonych (`pdf: type=1`, `slides: type=2`) odnośniki „Awaryjnie” i „Sprawdź w Google” są ukryte i nie otrzymują adresu pliku. „Ponów” tylko ponownie ładuje osadzony podgląd. Dla Slides `type=1` jest świadomie zwykłym podglądem, dlatego może udostępniać przejście do Google — do materiałów chronionych używaj `type=2`.
 
@@ -366,8 +494,7 @@ public/members/module/lesson/
 ├── script.js
 ├── style.css
 ├── izotopy-wegla.md
-├── przyklad.md
-└── moja-lekcja.md
+└── przyklad.md
 ```
 
 Lekcję otwiera parametr `file`:
@@ -455,6 +582,8 @@ Pola bloku zadania:
 
 Można również używać polskich nazw pól bez znaków diakrytycznych lub z nimi: `typ`, `odpowiedź`, `etykieta`, `przykład`, `podpowiedź`, `sukces`, `opcje`, `wielkość liter`.
 
+Odpowiedź tekstowa jest normalizowana Unicode NFKC, przycinana i ma łączone wielokrotne odstępy. Odpowiedź liczbowa akceptuje przecinek albo kropkę dziesiętną, ale porównanie jest dokładne — bez tolerancji i bez automatycznego rozpoznawania jednostek. Liczbę akceptowanych aliasów zwiększa się separatorem `|`. Liczba prób nie jest ograniczona; błędna próba pokazuje podpowiedź, a dopiero poprawna odpowiedź odblokowuje następny slajd.
+
 Przykład pytania wyboru:
 
 ```md
@@ -481,6 +610,51 @@ success: Dobrze — węgiel ma liczbę atomową 6.
 ```
 
 Postęp, rozwiązane zadania i ukończenie są zachowywane w `sessionStorage`, czyli przy odświeżeniu w tej samej karcie. Przycisk **Powtórz lekcję** czyści ten postęp. Odpowiedzi znajdują się w statycznym pliku Markdown, więc ten moduł służy do nauki i samosprawdzenia, a nie do tajnych lub punktowanych egzaminów.
+
+### Atonom — modele cząsteczek
+
+Moduł `/members/module/atonom/` buduje edukacyjny, interaktywny model cząsteczki na podstawie polskiej nazwy związku. Pokazuje wzór sumaryczny, rodzinę związku, liczbę atomów i wiązań, przybliżoną masę molową oraz krótką wskazówkę dotyczącą budowy. Canvas można obracać i powiększać; dostępne są pauza animacji, reset widoku oraz suwaki energii ruchu, rozmiaru atomów i odległości kamery.
+
+Obsługiwany zakres obejmuje między innymi:
+
+- proste i rozgałęzione alkany, alkeny, alkiny oraz cykloalkany do 12 atomów węgla w łańcuchu głównym;
+- halogenowe i alkilowe podstawniki z lokantami;
+- alkohole i polialkohole, aldehydy, ketony, kwasy karboksylowe, estry i aminy;
+- benzen, fenol, toluen, anilinę i podstawione pochodne benzenu;
+- glicynę, alaninę, wodę, amoniak i dwutlenek węgla;
+- poprawne przypadki izomerii `cis`/`trans` dla obsługiwanych alkenów.
+
+Parser nie jest pełnym parserem całej nomenklatury IUPAC. Nieobsługiwana albo chemicznie niespójna nazwa daje czytelny błąd i przykład poprawnego zapisu zamiast zgadywania struktury. Model ma charakter dydaktyczny — nie zastępuje obliczeń geometrii kwantowej ani profesjonalnego oprogramowania chemicznego.
+
+Wybrany związek można przekazać i udostępnić w parametrze `formula`:
+
+```text
+/members/module/atonom/?formula=fenol
+/members/module/atonom/?formula=cis-but-2-en
+/members/module/atonom/?formula=kwas%202-metylopropanowy
+```
+
+Przycisk kopiowania zachowuje aktualną nazwę w linku. Indywidualne kolory atomów i wiązań są zapisywane lokalnie w `atonom-atom-colors` oraz `atonom-bond-colors`; można je przywrócić do palety domyślnej. Atonom respektuje wspólny `chem.theme` i ograniczenie ruchu `prefers-reduced-motion`.
+
+Na publicznej stronie głównej pozycja **Atonom** prowadzi obecnie do osobnej witryny `https://atonom.netlify.app`, natomiast karta w chronionym dashboardzie otwiera lokalny moduł `/members/module/atonom/`. Są to dwa różne wdrożenia; zmiana zewnętrznej witryny nie aktualizuje automatycznie wersji dołączonej do ChemDisk i odwrotnie.
+
+### Kalkulatory i tablice
+
+`/members/module/kalkulator/` osadza naukowy symulator NumWorks. Wymaga połączenia z zewnętrzną usługą i uruchamia iframe dopiero po potwierdzeniu sesji.
+
+`/members/module/classic/` działa lokalnie i obsługuje dodawanie, odejmowanie, mnożenie, dzielenie, modulo, nawiasy, znaki jednoargumentowe oraz kropkę lub przecinek dziesiętny. Nie używa `eval`. Można klikać przyciski albo pisać z klawiatury:
+
+- cyfry, `+`, `-`, `*`, `/`, `%`, `(`, `)`, `.` i `,` wpisują działanie;
+- `x`, `X` i `×` oznaczają mnożenie, a `:` i `÷` — dzielenie;
+- `Enter` lub `=` oblicza wynik;
+- `Backspace` i `Delete` usuwają ostatni znak;
+- `Escape` czyści kalkulator.
+
+Operator `%` oznacza resztę z dzielenia, a nie przeliczenie wartości procentowej.
+
+`/members/module/bitpaper/` jest lokalną tablicą canvas z przesuwaniem, skalowaniem, zaznaczaniem, ołówkiem, gumką, tekstem, cofaniem/ponawianiem oraz oknami zadań, do których można dodawać obrazy. Planszę można wyeksportować/importować jako JSON albo pobrać jako PNG. Import planszy ma limit 15 MB, a pojedynczy obraz zadania 8 MB. Parametr `path=nazwa.json` automatycznie wczytuje bezpiecznie nazwaną planszę opublikowaną w katalogu modułu.
+
+BitPaper nie synchronizuje uczestników w czasie rzeczywistym i nie zapisuje planszy na serwerze; do przenoszenia stanu służy plik JSON. `/members/module/whiteboard/` osadza tldraw i podobnie jak NumWorks wymaga dostępności usługi zewnętrznej.
 
 ### Filmy i FilmV1
 
@@ -562,6 +736,8 @@ Obsługiwany jest też prostszy zapis zgodny ze zwykłą numerowaną listą:
 
 Nie mieszaj obu zapisów w jednym pliku. Jeżeli pojedyncza instrukcja sama zawiera numerowaną listę, użyj wariantu `::punkt N`, aby granice punktów pozostały jednoznaczne.
 
+Netlify nakłada na funkcję `chat` limit 30 wywołań na minutę dla agregacji IP i domeny. Dodatkowy licznik w funkcji dopuszcza 12 wywołań na minutę dla użytkownika, lecz istnieje tylko w pamięci danego ciepłego wystąpienia Function — nie jest globalnym, trwałym licznikiem między wszystkimi instancjami. Obie warstwy ograniczają nadużycia i koszt, ale nie zastępują zewnętrznego systemu limitów, jeśli potrzebny jest ścisły globalny przydział na konto.
+
 ### Osobne pliki CSS i JavaScript modułu
 
 Każdy moduł ma stały element `<base>`, np.:
@@ -592,7 +768,7 @@ npm test
 npm run build
 ```
 
-Oba polecenia uruchamiają bez zależności frameworkowych testy hooków Identity, autoryzacji czatu, zachowania klienta auth i spójności plików statycznych. Netlify wykonuje `npm run build` przed publikacją katalogu `public`.
+Oba skrypty uruchamiają `node --test`; projekt nie ma osobnego etapu bundlowania ani kompilowania zasobów. Testy obejmują między innymi hooki Identity, odporność sesji po uśpieniu i w wielu kartach, funkcje administracyjne, Stripe i księgi Blobs, parser dashboardu, natychmiastowe śledzenie sekcji, wspólny motyw, media, kalkulator klasyczny, parser chemiczny Atonom, odtwarzacz lekcji oraz oba modele Studio. Netlify wykonuje tę samą bramkę `npm run build` przed publikacją katalogu `public`.
 
 Opcjonalna kontrola składni wszystkich plików JavaScript:
 
@@ -604,11 +780,19 @@ Przed publikacją wykonaj też krótki test ręczny:
 
 1. konto bez roli jest odsyłane do logowania;
 2. każda z używanych ról otwiera dashboard i właściwe materiały;
-3. drugie logowanie wylogowuje pierwszą przeglądarkę po kontroli sesji;
-4. wygasła rola czasowa blokuje czat i panel;
-5. zmiana imienia i nazwiska pozostaje po odświeżeniu;
-6. administrator widzi listę kont, a zwykły kursant nie widzi panelu administracyjnego;
-7. zmiana roli w panelu działa po ponownym logowaniu i nie przedłuża czasu przy samej zmianie nazwiska;
-8. formularz kontaktowy pojawia się w Netlify Forms, a administrator może odczytać testowe zgłoszenie;
-9. edycja dashboardu działa po odświeżeniu i można ją przywrócić do wersji z wdrożenia;
-10. linki Google i YouTube działają na docelowej domenie i przy docelowych ustawieniach udostępniania.
+3. drugie logowanie na innym urządzeniu wylogowuje pierwszą przeglądarkę po kontroli sesji, ale kilka kart tego samego profilu pozostaje zalogowanych;
+4. po uśpieniu i wybudzeniu komputera chwilowy brak sieci nie wylogowuje poprawnej sesji, a faktycznie zastąpiona sesja zostaje zamknięta;
+5. wygasła rola czasowa blokuje czat i panel;
+6. zmiana imienia i nazwiska pozostaje po odświeżeniu;
+7. administrator widzi listę kont, a zwykły kursant nie widzi panelu administracyjnego;
+8. zmiana roli w panelu działa po ponownym logowaniu i nie przedłuża czasu przy samej zmianie nazwiska;
+9. formularz kontaktowy pojawia się w Netlify Forms, a administrator może odczytać i po potwierdzeniu usunąć testowe zgłoszenie;
+10. edycja dashboardu działa po odświeżeniu i można ją przywrócić do wersji z wdrożenia;
+11. zwijanie sidebara jest zapamiętane, a aktywny dział zmienia się od razu po kliknięciu i podczas przewijania;
+12. przełączenie motywu dashboardu jest respektowane przez każdą aplikację modułu, stronę zakupu i status dostępu;
+13. kalkulator klasyczny przyjmuje cyfry, operatory, `Enter`, `=`, `Backspace`, `Delete` i `Escape` z klawiatury;
+14. BitPaper importuje i eksportuje JSON, zapisuje PNG oraz respektuje limity planszy i obrazu;
+15. Atonom poprawnie buduje kilka rodzin związków, pokazuje błąd dla nieobsługiwanej nazwy i kopiuje link z `formula`;
+16. Studio wczytuje aktywny dashboard, zachowuje lokalny draft, wykrywa konflikt `etag` i publikuje poprawny układ;
+17. Lesson Builder importuje istniejącą lekcję, odtwarza jej bloki i quizy oraz generuje plik działający w module `lesson`;
+18. linki Google i YouTube działają na docelowej domenie i przy docelowych ustawieniach udostępniania.
