@@ -26,10 +26,12 @@
 
   <title>Panel kursanta — ChemDisk</title>
 
+  <link rel="icon" href="/members/favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="/members/dashboard.css" />
   <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
   <script src="/assets/js/auth.js"></script>
   <script defer src="/members/dashboard-parser.js"></script>
+  <script defer src="/members/dashboard-navigation.js"></script>
   <script defer src="/members/dashboard.js"></script>
 </head>
 <body>
@@ -55,7 +57,7 @@
 
       <div class="sidebar-label">Twój kurs</div>
       <nav class="course-nav" id="course-nav" aria-label="Działy kursu">
-        <a class="nav-item is-active" href="#start" data-static-nav>
+        <a class="nav-item is-active" href="#start" data-static-nav aria-current="location">
           <span class="nav-dot" aria-hidden="true"></span>
           Start
         </a>

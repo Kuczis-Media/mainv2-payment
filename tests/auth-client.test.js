@@ -6,6 +6,12 @@ const vm = require('node:vm');
 
 const authSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'assets', 'js', 'auth.js'), 'utf8');
 
+const jwtFor = (appMetadata = {}) => {
+  const encode = (value) => Buffer.from(JSON.stringify(value))
+    .toString('base64url');
+  return `${encode({ alg: 'none', typ: 'JWT' })}.${encode({ app_metadata: appMetadata })}.test-signature`;
+};
+
 const loadChemAuth = (search, currentUser = null, overrides = {}) => {
   const location = {
     hash: overrides.hash || '',
@@ -26,13 +32,21 @@ const loadChemAuth = (search, currentUser = null, overrides = {}) => {
   const document = {
     title: 'Login',
     cookie: '',
-    hidden: false,
-    addEventListener() {},
+    hidden: Boolean(overrides.documentHidden),
+    addEventListener(name, callback) {
+      if (typeof overrides.onDocumentListener === 'function') {
+        overrides.onDocumentListener(name, callback);
+      }
+    },
     querySelector: () => null
   };
   const window = {
     netlifyIdentity: identity,
-    addEventListener() {},
+    addEventListener(name, callback) {
+      if (typeof overrides.onWindowListener === 'function') {
+        overrides.onWindowListener(name, callback);
+      }
+    },
     dispatchEvent() {},
     setInterval: () => 1,
     setTimeout,
@@ -60,6 +74,9 @@ const loadChemAuth = (search, currentUser = null, overrides = {}) => {
     window
   });
 
+  if (typeof overrides.onIdentityListeners === 'function') {
+    overrides.onIdentityListeners(identityListeners);
+  }
   return window.ChemAuth;
 };
 
@@ -212,4 +229,250 @@ test('a canonical session mismatch invalidates only the old local device', async
   assert.equal(storage.has('gotrue.user'), false);
   assert.equal(identityLogoutCalls, 0, 'mismatch must not revoke the new device refresh token');
   assert.match(redirect, /^\/login\/\?loggedout=1&returnTo=/);
+});
+
+test('a refreshed JWT repairs stale local session state after sleep without logging out', async () => {
+  const storage = new Map([
+    ['chem_session_id', 'before-sleep-session'],
+    ['gotrue.user', '{"token":"persisted"}']
+  ]);
+  let redirect = '';
+  const user = {
+    email: 'kursant@example.com',
+    app_metadata: { roles: ['active'], session_id: 'before-sleep-session' },
+    user_metadata: {},
+    jwt: async () => jwtFor({ roles: ['active'], session_id: 'after-wake-session' })
+  };
+  const auth = loadChemAuth('', user, {
+    pathname: '/members/',
+    onReplace(value) { redirect = value; },
+    localStorage: {
+      getItem(key) { return storage.get(key) || null; },
+      removeItem(key) { storage.delete(key); },
+      setItem(key, value) { storage.set(key, value); }
+    },
+    fetch: async () => ({
+      ok: true,
+      async json() {
+        return {
+          email: user.email,
+          app_metadata: { roles: ['active'], session_id: 'after-wake-session' },
+          user_metadata: {}
+        };
+      }
+    })
+  });
+
+  const status = await auth.checkSession();
+
+  assert.equal(status.ok, true);
+  assert.equal(status.reason, 'ok');
+  assert.equal(storage.get('chem_session_id'), 'after-wake-session');
+  assert.equal(storage.has('gotrue.user'), true);
+  assert.equal(redirect, '');
+});
+
+test('a stale tab cannot erase a newer shared browser session', async () => {
+  const storage = new Map([
+    ['chem_session_id', 'current-tab-session'],
+    ['gotrue.user', '{"token":"current"}']
+  ]);
+  let redirect = '';
+  const staleUser = {
+    email: 'kursant@example.com',
+    app_metadata: { roles: ['active'], session_id: 'stale-tab-session' },
+    user_metadata: {},
+    jwt: async () => jwtFor({ roles: ['active'], session_id: 'stale-tab-session' })
+  };
+  const auth = loadChemAuth('', staleUser, {
+    pathname: '/members/module/forms/',
+    onReplace(value) { redirect = value; },
+    localStorage: {
+      getItem(key) { return storage.get(key) || null; },
+      removeItem(key) { storage.delete(key); },
+      setItem(key, value) { storage.set(key, value); }
+    },
+    fetch: async () => ({
+      ok: true,
+      async json() {
+        return {
+          email: staleUser.email,
+          app_metadata: { roles: ['active'], session_id: 'current-tab-session' },
+          user_metadata: {}
+        };
+      }
+    })
+  });
+
+  const status = await auth.checkSession();
+
+  assert.equal(status.ok, true);
+  assert.equal(status.reason, 'ok');
+  assert.equal(storage.get('chem_session_id'), 'current-tab-session');
+  assert.equal(storage.has('gotrue.user'), true);
+  assert.equal(redirect, '');
+});
+
+test('session invalidation rechecks shared storage before clearing another tab login', async () => {
+  const storage = new Map([
+    ['chem_session_id', 'old-session'],
+    ['gotrue.user', '{"token":"current"}']
+  ]);
+  let sidReads = 0;
+  let redirect = '';
+  const user = {
+    email: 'kursant@example.com',
+    app_metadata: { roles: ['active'], session_id: 'old-session' },
+    user_metadata: {},
+    jwt: async () => jwtFor({ roles: ['active'], session_id: 'old-session' })
+  };
+  const auth = loadChemAuth('', user, {
+    pathname: '/members/',
+    onReplace(value) { redirect = value; },
+    localStorage: {
+      getItem(key) {
+        if (key === 'chem_session_id') {
+          sidReads += 1;
+          return sidReads === 1 ? 'old-session' : 'new-session';
+        }
+        return storage.get(key) || null;
+      },
+      removeItem(key) { storage.delete(key); },
+      setItem(key, value) { storage.set(key, value); }
+    },
+    fetch: async () => ({
+      ok: true,
+      async json() {
+        return {
+          email: user.email,
+          app_metadata: { roles: ['active'], session_id: 'new-session' },
+          user_metadata: {}
+        };
+      }
+    })
+  });
+
+  const status = await auth.checkSession();
+
+  assert.equal(status.ok, true);
+  assert.equal(status.reason, 'ok');
+  assert.equal(storage.has('gotrue.user'), true);
+  assert.equal(redirect, '');
+});
+
+test('opening a members page reuses a valid JWT instead of forcing a cross-tab refresh', async () => {
+  const documentListeners = {};
+  const jwtCalls = [];
+  const token = jwtFor({ roles: ['active'], session_id: 'same-session' });
+  const user = {
+    email: 'kursant@example.com',
+    app_metadata: { roles: ['active'], session_id: 'same-session' },
+    user_metadata: {},
+    async jwt(forceRefresh) {
+      jwtCalls.push(forceRefresh);
+      return token;
+    }
+  };
+  let redirect = '';
+  const auth = loadChemAuth('', user, {
+    pathname: '/members/',
+    onReplace(value) { redirect = value; },
+    onDocumentListener(name, callback) { documentListeners[name] = callback; },
+    localStorage: {
+      getItem(key) { return key === 'chem_session_id' ? 'same-session' : null; },
+      removeItem() {},
+      setItem() {}
+    },
+    fetch: async () => ({
+      ok: true,
+      async json() {
+        return {
+          email: user.email,
+          app_metadata: { roles: ['active'], session_id: 'same-session' },
+          user_metadata: {}
+        };
+      }
+    })
+  });
+
+  await documentListeners.DOMContentLoaded();
+  const ready = await auth.ready;
+
+  assert.equal(ready.authenticated, true);
+  assert.equal(ready.session.ok, true);
+  assert.equal(jwtCalls.includes(true), false);
+  assert.deepEqual(jwtCalls, [undefined, false]);
+  assert.equal(redirect, '');
+});
+
+test('a transient cookie refresh failure after wake stays authenticated and retries later', async () => {
+  const documentListeners = {};
+  const token = jwtFor({ roles: ['active'], session_id: 'same-session' });
+  let jwtCalls = 0;
+  const user = {
+    email: 'kursant@example.com',
+    app_metadata: { roles: ['active'], session_id: 'same-session' },
+    user_metadata: {},
+    async jwt() {
+      jwtCalls += 1;
+      if (jwtCalls === 1) return token;
+      throw new Error('network unavailable');
+    }
+  };
+  let redirect = '';
+  const storage = new Map([
+    ['chem_session_id', 'same-session'],
+    ['gotrue.user', '{"token":"persisted"}']
+  ]);
+  const auth = loadChemAuth('', user, {
+    pathname: '/members/',
+    onReplace(value) { redirect = value; },
+    onDocumentListener(name, callback) { documentListeners[name] = callback; },
+    localStorage: {
+      getItem(key) { return storage.get(key) || null; },
+      removeItem(key) { storage.delete(key); },
+      setItem(key, value) { storage.set(key, value); }
+    },
+    fetch: async () => ({
+      ok: true,
+      async json() {
+        return {
+          email: user.email,
+          app_metadata: { roles: ['active'], session_id: 'same-session' },
+          user_metadata: {}
+        };
+      }
+    })
+  });
+
+  await documentListeners.DOMContentLoaded();
+  const ready = await auth.ready;
+
+  assert.equal(ready.authenticated, true);
+  assert.equal(ready.session.ok, true);
+  assert.equal(ready.session.reason, 'token_refresh_pending');
+  assert.equal(storage.has('gotrue.user'), true);
+  assert.equal(redirect, '');
+});
+
+test('a hidden tab ignores token expiry and leaves shared refresh work to the visible tab', async () => {
+  let listeners;
+  let jwtCalls = 0;
+  const user = {
+    app_metadata: { roles: ['active'], session_id: 'same-session' },
+    user_metadata: {},
+    async jwt() {
+      jwtCalls += 1;
+      return jwtFor({ roles: ['active'], session_id: 'same-session' });
+    }
+  };
+  loadChemAuth('', user, {
+    pathname: '/members/',
+    documentHidden: true,
+    onIdentityListeners(value) { listeners = value; }
+  });
+
+  await listeners.tokenExpired();
+
+  assert.equal(jwtCalls, 0);
 });

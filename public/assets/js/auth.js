@@ -151,6 +151,8 @@
   let authReadySettled = false;
   let sessionCheckInFlight = null;
   let sessionMonitorId = null;
+  let jwtCookieRefreshPending = false;
+  let jwtClaimsRefreshRequired = false;
   let redirectInProgress = false;
   let lastSessionStatus = {
     ok: false,
@@ -318,6 +320,20 @@
     return typeof sid === 'string' && sid ? sid : '';
   };
 
+  const jwtPayloadFrom = (token) => {
+    if (typeof token !== 'string') return null;
+    const pieces = token.split('.');
+    if (pieces.length < 2 || !pieces[1]) return null;
+    try {
+      const normalized = pieces[1].replace(/-/g, '+').replace(/_/g, '/');
+      const padding = normalized.length % 4 === 0 ? '' : '='.repeat(4 - (normalized.length % 4));
+      const payload = JSON.parse(atob(normalized + padding));
+      return payload && typeof payload === 'object' ? payload : null;
+    } catch {
+      return null;
+    }
+  };
+
   const normalizeProfileName = (value) => {
     if (typeof value !== 'string') return '';
     return value
@@ -431,23 +447,29 @@
     document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax` + (location.protocol === 'https:' ? '; Secure' : '');
   };
 
-  const setNFJwtCookie = async (user) => {
+  const setNFJwtCookie = async (user, { forceRefresh = false } = {}) => {
     try {
       if (!user || !isActiveUser(user)) {
+        jwtCookieRefreshPending = false;
         clearNFJwtCookie();
         return false;
       }
-      // Force a fresh token so a role changed by an administrator is reflected
-      // in the nf_jwt cookie used by Netlify's role redirect immediately.
-      const token = await withTimeout(() => user.jwt(true));
+      // Reuse a still-valid JWT. Forcing a refresh on every page load makes
+      // several tabs race over the same persisted refresh token.
+      const token = await withTimeout(() => user.jwt(Boolean(forceRefresh || jwtClaimsRefreshRequired)));
       if (!token) {
-        clearNFJwtCookie();
+        jwtCookieRefreshPending = true;
         return false;
       }
       setCookie(NF_JWT_COOKIE, token, { sameSite: 'Lax' });
+      jwtCookieRefreshPending = false;
+      jwtClaimsRefreshRequired = false;
       return true;
     } catch {
-      clearNFJwtCookie();
+      // A sleeping laptop can regain focus before the network is usable. Keep
+      // the last cookie and retry instead of turning a transient refresh error
+      // into a local logout.
+      jwtCookieRefreshPending = true;
       return false;
     }
   };
@@ -515,7 +537,15 @@
           ...(controller ? { signal: controller.signal } : {})
         });
         if (!res.ok) throw new Error('user fetch failed');
-        return await res.json();
+        const serverUser = await res.json();
+        const tokenPayload = jwtPayloadFrom(token);
+        return {
+          serverUser,
+          tokenPayload,
+          // A decoded, Identity-accepted JWT is a more reliable view than the
+          // widget's in-memory user object, which can lag after sleep/refresh.
+          tokenSessionId: tokenPayload ? sessionIdFrom(tokenPayload) : sessionIdFrom(user)
+        };
       });
 
       const timeout = new Promise((resolve) => {
@@ -534,8 +564,13 @@
   };
 
   const ensureFreshUserState = async (user, { enforceLogout = false } = {}) => {
-    if (!user) return { active: false, user: null, serverUser: null, serverRoles: [] };
-    const serverUser = await fetchServerUser(user);
+    if (!user) return { active: false, user: null, serverUser: null, serverRoles: [], tokenSessionId: '' };
+    const serverState = await fetchServerUser(user);
+    const serverUser = serverState ? serverState.serverUser : null;
+    const tokenSessionId = serverState ? serverState.tokenSessionId : '';
+    const tokenRoles = serverState && serverState.tokenPayload
+      ? getRoles(serverState.tokenPayload)
+      : getRoles(user);
     let serverRoles = serverUser ? getRoles(serverUser) : null;
     const now = Date.now();
     const serverTimedState = timedAccessState(serverUser);
@@ -580,6 +615,11 @@
       const appMeta = Object.assign({}, user.app_metadata || {});
       appMeta.roles = serverRoles;
       user.app_metadata = appMeta;
+    }
+    if (Array.isArray(serverRoles) && !rolesEqual(serverRoles, tokenRoles)) {
+      // A canonical role change is the exceptional case that really requires
+      // a refreshed JWT before updating Netlify's role cookie.
+      jwtClaimsRefreshRequired = true;
     }
 
     const hasTimedField = serverUser && serverUser.app_metadata && Object.prototype.hasOwnProperty.call(serverUser.app_metadata, 'timed_access');
@@ -626,19 +666,24 @@
       : isActiveUser(user);
     if (!active) {
       if (enforceLogout) await logoutAsInactive();
-      return { active: false, user: null, serverUser, serverRoles: serverRoles || [] };
+      return { active: false, user: null, serverUser, serverRoles: serverRoles || [], tokenSessionId };
     }
 
-    return { active: true, user, serverUser, serverRoles: serverRoles || getRoles(user) };
+    return { active: true, user, serverUser, serverRoles: serverRoles || getRoles(user), tokenSessionId };
   };
 
-  const handleSessionMismatch = async (reason = 'session_mismatch') => {
+  const handleSessionMismatch = async (reason = 'session_mismatch', serverSid = '') => {
+    // Another tab may have completed the current login while this tab was
+    // waiting for /identity/user. Never let the stale tab erase the newer
+    // shared GoTrue/local session.
+    if (serverSid && localSessionId() === serverSid) return false;
     clearNFJwtCookie();
     clearLocalSessionId();
     clearLocalIdentity();
     setSessionStatus({ ok: false, verified: true, active: false, reason });
     dispatchAuthEvent('chem-auth-user-changed', { authenticated: false, profile: null });
     redirectToLoginWithParam('loggedout');
+    return true;
   };
 
   const ensureAuthenticatedOrRedirect = async () => {
@@ -653,9 +698,9 @@
     if (!session.ok) return false;
     const cookieReady = await setNFJwtCookie(getUser() || user);
     if (!cookieReady) {
-      setSessionStatus({ ok: false, verified: session.verified, active: true, reason: 'token_unavailable' });
-      redirectToLoginWithParam('sessionerror');
-      return false;
+      // Do not discard an otherwise verified session only because the machine
+      // woke before Wi-Fi (or another tab's refresh) became ready.
+      setSessionStatus({ ok: true, verified: session.verified, active: true, reason: 'token_refresh_pending' });
     }
     return Boolean(getUser() || user);
   };
@@ -679,19 +724,28 @@
 
       const serverSid = sessionIdFrom(serverUser);
       const localSid = localSessionId();
-      const userSid = sessionIdFrom(user);
-      const clientSid = localSid || userSid;
+      const tokenSid = state.tokenSessionId;
+      const clientSid = tokenSid || localSid;
 
       if (serverSid && !clientSid) {
-        await handleSessionMismatch('session_missing');
+        const invalidated = await handleSessionMismatch('session_missing', serverSid);
+        if (!invalidated) {
+          return setSessionStatus({ ok: true, verified: true, active: true, reason: 'ok' });
+        }
         return { ...lastSessionStatus };
       }
-      if (serverSid && clientSid !== serverSid) {
-        await handleSessionMismatch('session_mismatch');
+      if (serverSid && tokenSid !== serverSid && localSid !== serverSid) {
+        const invalidated = await handleSessionMismatch('session_mismatch', serverSid);
+        if (!invalidated) {
+          return setSessionStatus({ ok: true, verified: true, active: true, reason: 'ok' });
+        }
         return { ...lastSessionStatus };
       }
-      if (serverSid && !localSid && userSid === serverSid) saveLocalSessionId(serverSid);
-      if (!serverSid && userSid && !localSid) saveLocalSessionId(userSid);
+      if (serverSid && tokenSid !== serverSid && localSid === serverSid) {
+        jwtClaimsRefreshRequired = true;
+      }
+      if (serverSid && tokenSid === serverSid && localSid !== serverSid) saveLocalSessionId(serverSid);
+      if (!serverSid && tokenSid && !localSid) saveLocalSessionId(tokenSid);
 
       return setSessionStatus({
         ok: true,
@@ -715,10 +769,23 @@
 
   const startSessionMonitor = () => {
     if (sessionMonitorId || isLoginPage()) return;
-    const rescan = () => { checkSingleSessionOrLogout(); };
+    const rescan = () => {
+      // Hidden tabs share the same GoTrue/localStorage session. Let the visible
+      // tab refresh it, avoiding a refresh-token stampede after sleep/wake.
+      if (document.hidden) return;
+      checkSingleSessionOrLogout()
+        .then((session) => {
+          if (session.ok && (jwtCookieRefreshPending || jwtClaimsRefreshRequired)) {
+            return setNFJwtCookie(getUser());
+          }
+          return null;
+        })
+        .catch(() => {});
+    };
     document.addEventListener('visibilitychange', () => { if (!document.hidden) rescan(); });
     window.addEventListener('focus', rescan);
     window.addEventListener('online', rescan);
+    window.addEventListener('pageshow', rescan);
     sessionMonitorId = window.setInterval(rescan, SESSION_CHECK_INTERVAL_MS);
   };
 
@@ -858,10 +925,11 @@
     } catch {}
     try {
       ID.on('tokenExpired', async () => {
-        // Refresh token & cookie when possible
+        // Only the visible tab refreshes the shared browser session. Hidden
+        // tabs reconcile when they become visible.
+        if (document.hidden) return;
         const user = getUser();
         if (user) {
-          try { await ID.refresh(); } catch {}
           const session = await checkSingleSessionOrLogout();
           if (session.ok) {
             try { await setNFJwtCookie(getUser()); } catch {}

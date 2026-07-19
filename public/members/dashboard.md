@@ -140,7 +140,7 @@ Zestaw kontrolny wszystkich modułów i dostępnych trybów. Użyj go po wdroże
 ### Kontakt i materiały zewnętrzne
 
 - [Formularz kontaktowy](/members/module/contact/?internal=wiadomosc) — Test formularza z przekazaną informacją wewnętrzną.
-- [ATONOM](https://atonom.netlify.app) — Otwórz zewnętrzny materiał w nowej karcie.
+- [ATONOM](/members/module/atonom/) — Buduj interaktywne modele cząsteczek z polskich nazw związków.
 
 ## Pomoc i konto
 

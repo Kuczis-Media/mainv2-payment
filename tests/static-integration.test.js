@@ -13,7 +13,7 @@ test('every members module has stable asset paths and waits for initial auth', (
     .sort();
 
   assert.deepEqual(moduleNames, [
-    'bitpaper', 'chat', 'classic', 'contact', 'film', 'filmv1', 'forms',
+    'atonom', 'bitpaper', 'chat', 'classic', 'contact', 'film', 'filmv1', 'forms',
     'kalkulator', 'lesson', 'pdf', 'slides', 'whiteboard', 'yt'
   ]);
 
@@ -47,6 +47,31 @@ test('all member applications follow the persistent dashboard theme', () => {
   assert.match(themeStyles, /--chem-bg:\s*#edf2f7/);
   assert.match(themeStyles, /:root\[data-theme=["']dark["']\]/);
   assert.match(themeStyles, /--chem-primary:\s*#70cfbc/);
+});
+
+test('Atonom is published locally with protected assets and the shared theme', () => {
+  const directory = path.join(modulesRoot, 'atonom');
+  const html = fs.readFileSync(path.join(directory, 'index.html'), 'utf8');
+  const script = fs.readFileSync(path.join(directory, 'script.js'), 'utf8');
+  const styles = fs.readFileSync(path.join(directory, 'style.css'), 'utf8');
+  const markdown = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.md'), 'utf8');
+
+  const expectedAssets = ['chemistry.js', 'favicon.svg', 'index.html', 'script.js', 'style.css'];
+  assert.deepEqual(fs.readdirSync(directory).sort(), expectedAssets);
+  for (const filename of expectedAssets) {
+    assert.ok(fs.existsSync(path.join(directory, filename)), `atonom: missing ${filename}`);
+    assert.equal(fs.lstatSync(path.join(directory, filename)).isSymbolicLink(), false, `atonom: ${filename} must not be a symlink`);
+  }
+  assert.match(html, /<base href=["']\/members\/module\/atonom\/["']\s*\/?>/);
+  assert.match(html, /<meta name=["']x-members["'] content=["']1["']\s*\/?>/);
+  assert.match(script, /await window\.ChemAuth\.ready/);
+  assert.match(script, /writeStorage\(["']chem\.theme["']/);
+  assert.doesNotMatch(script, /atonom-theme/);
+  assert.match(styles, /--paper:\s*#edf2f7/);
+  assert.match(styles, /--lime:\s*#0e665a/);
+  assert.match(styles, /html\[data-theme=["']dark["']\]/);
+  assert.match(markdown, /\[ATONOM\]\(\/members\/module\/atonom\/\)/);
+  assert.doesNotMatch(markdown, /\[ATONOM\]\(https?:\/\//);
 });
 
 test('classic calculator supports complete physical keyboard input', async () => {
@@ -108,7 +133,7 @@ test('classic calculator supports complete physical keyboard input', async () =>
 });
 
 test('large member modules keep CSS and JavaScript outside index.html', () => {
-  for (const name of ['bitpaper', 'whiteboard', 'forms', 'lesson', 'yt']) {
+  for (const name of ['atonom', 'bitpaper', 'whiteboard', 'forms', 'lesson', 'yt']) {
     const directory = path.join(modulesRoot, name);
     const html = fs.readFileSync(path.join(directory, 'index.html'), 'utf8');
     assert.doesNotMatch(html, /<style\b/i, `${name}: CSS remains inline`);
