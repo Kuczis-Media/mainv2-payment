@@ -141,6 +141,7 @@
     profileClose: document.getElementById('profile-close'),
     profileCancel: document.getElementById('profile-cancel'),
     adminButton: document.getElementById('admin-panel-button'),
+    contentStudioLink: document.getElementById('content-studio-link'),
     adminDialog: document.getElementById('admin-dialog'),
     adminClose: document.getElementById('admin-close'),
     adminSearch: document.getElementById('admin-user-search'),
@@ -974,9 +975,9 @@
   }
 
   function updateAdminVisibility(user) {
-    if (!elements.adminButton) return;
     const visible = isAdminUser(user || currentUser);
-    elements.adminButton.hidden = !visible;
+    if (elements.adminButton) elements.adminButton.hidden = !visible;
+    if (elements.contentStudioLink) elements.contentStudioLink.hidden = !visible;
     if (!visible && elements.adminDialog && elements.adminDialog.open) closeAdminPanel();
   }
 

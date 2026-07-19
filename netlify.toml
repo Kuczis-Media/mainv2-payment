@@ -22,6 +22,47 @@
 
 ## Role-based access to members area on the CDN edge.
 ## Requires the browser to send nf_jwt cookie (set in auth.js after login).
+## Content Studio contains administrator-only editing tools. These rules must
+## stay before the general members rules so an active course role cannot load it.
+[[redirects]]
+  from = "/members/module/studio"
+  to = "/members/module/studio/index.html"
+  status = 200
+  force = true
+  conditions = { Role = ["admin"] }
+
+[[redirects]]
+  from = "/members/module/studio"
+  to = "/members/"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/members/module/studio/"
+  to = "/members/module/studio/index.html"
+  status = 200
+  force = true
+  conditions = { Role = ["admin"] }
+
+[[redirects]]
+  from = "/members/module/studio/"
+  to = "/members/"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/members/module/studio/*"
+  to = "/members/module/studio/:splat"
+  status = 200
+  force = true
+  conditions = { Role = ["admin"] }
+
+[[redirects]]
+  from = "/members/module/studio/*"
+  to = "/members/"
+  status = 302
+  force = true
+
 [[redirects]]
   from = "/members"
   to = "/members/index.html"

@@ -14,7 +14,7 @@ test('every members module has stable asset paths and waits for initial auth', (
 
   assert.deepEqual(moduleNames, [
     'atonom', 'bitpaper', 'chat', 'classic', 'contact', 'film', 'filmv1', 'forms',
-    'kalkulator', 'lesson', 'pdf', 'slides', 'whiteboard', 'yt'
+    'kalkulator', 'lesson', 'pdf', 'slides', 'studio', 'whiteboard', 'yt'
   ]);
 
   for (const name of moduleNames) {

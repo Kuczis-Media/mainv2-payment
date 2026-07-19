@@ -6,6 +6,14 @@
   const SAFE_FILENAME = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.md$/i;
   const TASK_START = /^\s*:::(?:task|zadanie)\s*$/i;
   const TASK_END = /^\s*:::\s*$/;
+  const QUESTION_START = /^\s*:::question\s*$/i;
+  const STYLE_START = /^\s*:::style(?:\s+(.+?))?\s*$/i;
+  const ACCORDION_START = /^\s*:::accordion(?:\s+(.+?))?\s*$/i;
+  const RICH_CONTAINER_END = /^\s*:::\s*$/;
+  const SAFE_STYLE_COLOR = /^#[0-9a-f]{6}$/i;
+  const STYLE_FONTS = new Set(['sans', 'serif', 'rounded', 'mono']);
+  const STYLE_SIZES = new Set(['small', 'normal', 'large', 'xlarge']);
+  const STYLE_ALIGNS = new Set(['left', 'center', 'right']);
 
   class LessonFormatError extends Error {
     constructor(code, message) {
@@ -314,6 +322,44 @@
     return '';
   }
 
+  function parseStyleOptions(source) {
+    const values = {};
+    String(source || '').replace(
+      /([a-z_]+)=("[^"]*"|'[^']*'|[^\s]+)/gi,
+      (_, rawKey, rawValue) => {
+        const key = rawKey.toLowerCase();
+        const value = rawValue.replace(/^(["'])|(["'])$/g, '').trim().toLowerCase();
+        values[key] = value;
+        return '';
+      }
+    );
+    const font = STYLE_FONTS.has(values.font) ? values.font : 'sans';
+    const size = STYLE_SIZES.has(values.size) ? values.size : 'normal';
+    const align = STYLE_ALIGNS.has(values.align) ? values.align : 'left';
+    const color = SAFE_STYLE_COLOR.test(values.color || '') ? values.color.toLowerCase() : '';
+    return { font, size, align, color };
+  }
+
+  function styleContainerHtml(options) {
+    const classes = [
+      'lesson-rich-style',
+      `lesson-font-${options.font}`,
+      `lesson-size-${options.size}`,
+      `lesson-align-${options.align}`
+    ];
+    const style = options.color
+      ? ` style="--lesson-rich-color:${escapeHtml(options.color)}"`
+      : '';
+    return `<div class="${classes.join(' ')}"${style}>`;
+  }
+
+  function parseAccordionOptions(source) {
+    const raw = String(source || '').trim();
+    const open = /\s+open=(?:1|true|yes|tak)\s*$/i.test(raw);
+    const title = raw.replace(/\s+open=(?:1|true|yes|tak)\s*$/i, '').trim();
+    return { open, title: title || 'Więcej informacji' };
+  }
+
   function renderInline(source) {
     const tokens = [];
     const keep = (html) => `CHEMLESSONTOKEN${tokens.push(html) - 1}END`;
@@ -338,7 +384,12 @@
     value = value.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
     value = value.replace(/\^([^^\n]{1,40})\^/g, '<sup>$1</sup>');
     value = value.replace(/~([^~\n]{1,40})~/g, '<sub>$1</sub>');
-    return value.replace(/CHEMLESSONTOKEN(\d+)END/g, (_, index) => tokens[Number(index)] || '');
+    return value
+      .replace(/CHEMLESSONTOKEN(\d+)END/g, (_, index) => tokens[Number(index)] || '')
+      .replace(
+        /<img\b([^>]*)\sloading="lazy">/g,
+        '<img$1 loading="lazy" decoding="async" referrerpolicy="no-referrer">'
+      );
   }
 
   function renderMarkdown(source) {
@@ -347,6 +398,7 @@
     let inCode = false;
     let listType = '';
     let paragraph = [];
+    const richContainers = [];
 
     const closeList = () => {
       if (!listType) return;
@@ -361,6 +413,12 @@
     const closeBlocks = () => {
       closeParagraph();
       closeList();
+    };
+    const closeRichContainer = () => {
+      const container = richContainers.pop();
+      if (!container) return false;
+      html += container === 'accordion' ? '</div></details>' : '</div>';
+      return true;
     };
 
     for (const rawLine of lines) {
@@ -380,6 +438,37 @@
         html += `${escapeHtml(line)}\n`;
         continue;
       }
+
+      if (QUESTION_START.test(line)) {
+        closeBlocks();
+        html += '<div class="lesson-question">';
+        richContainers.push('question');
+        continue;
+      }
+
+      const styleStart = STYLE_START.exec(line);
+      if (styleStart) {
+        closeBlocks();
+        html += styleContainerHtml(parseStyleOptions(styleStart[1]));
+        richContainers.push('style');
+        continue;
+      }
+
+      const accordionStart = ACCORDION_START.exec(line);
+      if (accordionStart) {
+        closeBlocks();
+        const accordion = parseAccordionOptions(accordionStart[1]);
+        html += `<details class="lesson-accordion"${accordion.open ? ' open' : ''}><summary>${renderInline(accordion.title)}</summary><div class="lesson-accordion-content">`;
+        richContainers.push('accordion');
+        continue;
+      }
+
+      if (RICH_CONTAINER_END.test(line) && richContainers.length) {
+        closeBlocks();
+        closeRichContainer();
+        continue;
+      }
+
       if (!line.trim()) {
         closeBlocks();
         continue;
@@ -420,6 +509,7 @@
 
     closeBlocks();
     if (inCode) html += '</code></pre>';
+    while (richContainers.length) closeRichContainer();
     return html;
   }
 

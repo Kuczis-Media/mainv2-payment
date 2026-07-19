@@ -108,6 +108,39 @@ test('lesson tasks support an ABCD quiz with a letter or option as the answer', 
   );
 });
 
+test('lesson renderer supports allowlisted typography, colors and accordions without executing HTML', () => {
+  const lesson = parser.parseLesson([
+    '# Stylowana lekcja',
+    '',
+    ':::style font=serif color=#0e665a size=large align=center',
+    '## Kolorowy nagłówek',
+    '',
+    'Tekst zapisany bez surowego HTML.',
+    ':::',
+    '',
+    ':::accordion Dodatkowe wyjaśnienie open=true',
+    'Treść **harmonijki**.',
+    ':::',
+    '',
+    ':::style font=evil color=red size=huge align=justify',
+    '<script>alert(1)</script>',
+    ':::'
+  ].join('\n'), 'style.md');
+
+  const html = lesson.slides[0].html;
+  assert.match(html, /lesson-font-serif/);
+  assert.match(html, /lesson-size-large/);
+  assert.match(html, /lesson-align-center/);
+  assert.match(html, /--lesson-rich-color:#0e665a/);
+  assert.match(html, /<details class="lesson-accordion" open>/);
+  assert.match(html, /<summary>Dodatkowe wyjaśnienie<\/summary>/);
+  assert.match(html, /Treść <strong>harmonijki<\/strong>/);
+  assert.match(html, /lesson-font-sans/);
+  assert.doesNotMatch(html, /color:red|font-evil|size-huge|align-justify/);
+  assert.doesNotMatch(html, /<script>/);
+  assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
+});
+
 test('lesson filename and Markdown rendering reject path traversal and active HTML', () => {
   assert.equal(parser.validateFilename('dzial-1.md'), 'dzial-1.md');
   assert.equal(parser.validateFilename('../sekret.md'), '');
@@ -117,11 +150,16 @@ test('lesson filename and Markdown rendering reject path traversal and active HT
     '# Test',
     '<script>alert(1)</script>',
     '[zły link](javascript:alert(1))',
-    '![zły obraz](data:text/html,boom)'
+    '![zły obraz](data:text/html,boom)',
+    '![bezpieczny obraz](https://example.com/schemat.png)'
   ].join('\n'));
   assert.doesNotMatch(html, /<script>/i);
   assert.doesNotMatch(html, /href="javascript:/i);
   assert.doesNotMatch(html, /src="data:/i);
+  assert.match(
+    html,
+    /<img src="https:\/\/example\.com\/schemat\.png" alt="bezpieczny obraz" loading="lazy" decoding="async" referrerpolicy="no-referrer">/
+  );
 });
 
 test('lesson parser reports authoring errors instead of silently skipping tasks', () => {

@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <base href="/members/module/studio/">
+  <meta charset="utf-8">
+  <meta name="x-members" content="1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" id="theme-color" content="#edf2f7">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="description" content="ChemDisk Studio — graficzny kreator dashboardu i lekcji Markdown.">
+  <title>Studio treści — ChemDisk</title>
+  <link rel="icon" href="/members/favicon.svg" type="image/svg+xml">
+  <script src="/members/module/theme.js"></script>
+  <link rel="stylesheet" href="/members/module/theme.css">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/members/dashboard-parser.js"></script>
+  <script src="/members/module/lesson/lesson-parser.js"></script>
+  <script src="dashboard-model.js"></script>
+  <script src="lesson-model.js"></script>
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <div class="ambient ambient-one" aria-hidden="true"></div>
+  <div class="ambient ambient-two" aria-hidden="true"></div>
+
+  <header class="studio-header">
+    <a class="brand" href="/members/" aria-label="Wróć do panelu ChemDisk">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 48 48">
+          <path d="M17 7v10L8.5 32.1A6 6 0 0 0 13.7 41h20.6a6 6 0 0 0 5.2-8.9L31 17V7"></path>
+          <path d="M14.5 27h19M14 7h20"></path>
+          <circle cx="19" cy="33" r="2"></circle>
+          <circle cx="29" cy="35" r="1.5"></circle>
+        </svg>
+      </span>
+      <span class="brand-copy">
+        <strong>ChemDisk Studio</strong>
+        <small>Dashboardy i lekcje bez ręcznego Markdown</small>
+      </span>
+    </a>
+
+    <nav class="mode-switch" id="mode-switch" aria-label="Rodzaj projektu" hidden>
+      <button type="button" data-switch-mode="home">Start</button>
+      <button type="button" data-switch-mode="dashboard">Dashboard</button>
+      <button type="button" data-switch-mode="lesson">Lekcja</button>
+    </nav>
+
+    <div class="header-actions">
+      <span class="save-indicator" id="save-indicator" role="status" aria-live="polite">
+        <span class="save-indicator-dot" aria-hidden="true"></span>
+        <span id="save-indicator-label">Gotowe</span>
+      </span>
+      <button class="icon-button" id="undo-button" type="button" title="Cofnij" aria-label="Cofnij" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 7-5 5 5 5M5 12h8a6 6 0 0 1 6 6"></path></svg>
+      </button>
+      <button class="icon-button" id="redo-button" type="button" title="Ponów" aria-label="Ponów" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 7 5 5-5 5M19 12h-8a6 6 0 0 0-6 6"></path></svg>
+      </button>
+      <button class="icon-button" id="theme-toggle" type="button" title="Zmień motyw" aria-label="Zmień motyw">
+        <svg class="theme-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 15.2A8.5 8.5 0 0 1 8.8 4 8.5 8.5 0 1 0 20 15.2Z"></path></svg>
+        <svg class="theme-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="studio-main">
+    <section class="access-state" id="access-state" aria-live="polite">
+      <span class="spinner" aria-hidden="true"></span>
+      <h1>Otwieram Studio…</h1>
+      <p>Sprawdzam sesję administratora i przygotowuję narzędzia.</p>
+    </section>
+
+    <div id="studio-app" hidden>
+      <section class="home-view" id="home-view">
+        <div class="home-hero">
+          <span class="eyebrow">Wizualne studio publikacji</span>
+          <h1>Co chcesz dziś zbudować?</h1>
+          <p>Układaj treść z klocków, przeciągaj elementy, podejrzyj efekt i dopiero wtedy publikuj albo pobierz gotowy plik.</p>
+        </div>
+
+        <div class="project-choices">
+          <button class="project-card project-card-dashboard" type="button" data-open-mode="dashboard">
+            <span class="project-icon" aria-hidden="true">
+              <svg viewBox="0 0 40 40"><rect x="4" y="5" width="12" height="30" rx="4"></rect><rect x="20" y="5" width="16" height="13" rx="4"></rect><rect x="20" y="22" width="16" height="13" rx="4"></rect></svg>
+            </span>
+            <span class="project-copy">
+              <small>Publikacja przez Netlify Blobs</small>
+              <strong>Builder dashboardu</strong>
+              <span>Sekcje, harmonijki, teksty i gotowe moduły z konfiguracją ochrony.</span>
+            </span>
+            <span class="project-arrow" aria-hidden="true">→</span>
+          </button>
+
+          <button class="project-card project-card-lesson" type="button" data-open-mode="lesson">
+            <span class="project-icon" aria-hidden="true">
+              <svg viewBox="0 0 40 40"><path d="M9 5h18l6 6v24H9z"></path><path d="M27 5v7h6M15 18h12M15 24h12M15 30h8"></path></svg>
+            </span>
+            <span class="project-copy">
+              <small>Eksport pliku Markdown</small>
+              <strong>Konfigurator lekcji</strong>
+              <span>Slajdy, obrazy, quizy ABCD, pytania, kolory, czcionki i harmonijki.</span>
+            </span>
+            <span class="project-arrow" aria-hidden="true">→</span>
+          </button>
+        </div>
+
+        <div class="feature-strip" aria-label="Możliwości Studia">
+          <span><b>↕</b> Przeciąganie klocków</span>
+          <span><b>◫</b> Podgląd na żywo</span>
+          <span><b>↶</b> Cofnij i ponów</span>
+          <span><b>●</b> Lokalny autozapis</span>
+        </div>
+      </section>
+
+      <section class="workspace-view" id="dashboard-workspace" data-workspace="dashboard" hidden>
+        <div class="workspace-toolbar">
+          <div>
+            <span class="eyebrow">Builder dashboardu</span>
+            <h1>Układ panelu kursanta</h1>
+          </div>
+          <div class="toolbar-actions">
+            <input id="dashboard-file-input" type="file" accept=".md,text/markdown,text/plain" hidden>
+            <button class="button button-soft" id="dashboard-import-button" type="button">Importuj .md</button>
+            <button class="button button-soft" id="dashboard-load-button" type="button">
+              <span aria-hidden="true">↻</span> Wczytaj aktywny
+            </button>
+            <button class="button button-soft" id="dashboard-source-button" type="button">Markdown</button>
+            <button class="button button-primary" id="dashboard-publish-button" type="button">
+              <span aria-hidden="true">●</span> Opublikuj
+            </button>
+          </div>
+        </div>
+
+        <div class="builder-layout">
+          <aside class="palette-panel" aria-label="Klocki dashboardu">
+            <div class="panel-heading">
+              <div><small>Biblioteka</small><strong>Przeciągnij klocek</strong></div>
+              <span class="count-badge" id="dashboard-block-count">0</span>
+            </div>
+            <label class="palette-search">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg>
+              <input id="dashboard-palette-search" type="search" placeholder="Szukaj modułu…" autocomplete="off">
+            </label>
+
+            <div class="palette-scroll">
+              <section class="palette-group">
+                <h2>Struktura</h2>
+                <div class="palette-grid">
+                  <button class="palette-item" type="button" draggable="true" data-dashboard-add="section" data-search="sekcja dział">
+                    <span class="palette-symbol is-navy">§</span><span><strong>Sekcja</strong><small>Pozycja w menu</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-dashboard-add="group" data-search="harmonijka grupa">
+                    <span class="palette-symbol is-teal">⌄</span><span><strong>Harmonijka</strong><small>Zagnieżdżona grupa</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-dashboard-add="text" data-search="tekst opis">
+                    <span class="palette-symbol is-blue">T</span><span><strong>Pole tekstowe</strong><small>Opis sekcji</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-dashboard-add="notice" data-search="komunikat uwaga">
+                    <span class="palette-symbol is-amber">!</span><span><strong>Komunikat</strong><small>Wyróżniona informacja</small></span>
+                  </button>
+                </div>
+              </section>
+
+              <section class="palette-group">
+                <h2>Materiały</h2>
+                <div class="palette-grid">
+                  <button class="palette-item" type="button" draggable="true" data-dashboard-add="slides" data-search="prezentacja slides google">
+                    <span class="palette-symbol is-amber">▤</span><span><strong>Prezentacja</strong><small>Google Slides</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-dashboard-add="pdf" data-search="pdf dokument">
+                    <span class="palette-symbol is-red">PDF</span><span><strong>Dokument PDF</strong><small>3 tryby ochrony</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-dashboard-add="film" data-search="film video youtube drive">
+                    <span class="palette-symbol is-violet">▶</span><span><strong>Film</strong><small>YouTube lub Drive</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-dashboard-add="filmv1" data-search="film videojs">
+                    <span class="palette-symbol is-violet">V1</span><span><strong>Film V1</strong><small>Odtwarzacz Video.js</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-dashboard-add="yt" data-search="youtube yt">
+                    <span class="palette-symbol is-red">YT</span><span><strong>Odtwarzacz YT</strong><small>Własne kontrolki</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-dashboard-add="lesson" data-search="lekcja quiz">
+                    <span class="palette-symbol is-teal">L</span><span><strong>Lekcja</strong><small>Plik lesson .md</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-dashboard-add="forms" data-search="formularz forms test">
+                    <span class="palette-symbol is-blue">✓</span><span><strong>Google Forms</strong><small>Test lub ankieta</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-dashboard-add="chat" data-search="chat asystent ai">
+                    <span class="palette-symbol is-violet">✦</span><span><strong>Asystent AI</strong><small>Prompt JSON/TXT</small></span>
+                  </button>
+                </div>
+              </section>
+
+              <section class="palette-group">
+                <h2>Narzędzia</h2>
+                <div class="palette-grid">
+                  <button class="palette-item" type="button" draggable="true" data-dashboard-add="kalkulator" data-search="kalkulator naukowy">
+                    <span class="palette-symbol is-teal">±</span><span><strong>Kalkulator</strong><small>Naukowy</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-dashboard-add="classic" data-search="kalkulator prosty classic">
+                    <span class="palette-symbol is-teal">＋</span><span><strong>Classic</strong><small>Prosty kalkulator</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-dashboard-add="whiteboard" data-search="tablica whiteboard">
+                    <span class="palette-symbol is-blue">✎</span><span><strong>Biała tablica</strong><small>Rysowanie</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-dashboard-add="bitpaper" data-search="bitpaper tablica">
+                    <span class="palette-symbol is-blue">⌁</span><span><strong>BitPaper</strong><small>Wspólna tablica</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-dashboard-add="atonom" data-search="atonom cząsteczki">
+                    <span class="palette-symbol is-teal">⚛</span><span><strong>ATONOM</strong><small>Modele cząsteczek</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-dashboard-add="contact" data-search="kontakt formularz wiadomość">
+                    <span class="palette-symbol is-amber">✉</span><span><strong>Kontakt</strong><small>Gotowa wiadomość</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-dashboard-add="external" data-search="link zewnętrzny strona">
+                    <span class="palette-symbol is-navy">↗</span><span><strong>Link zewnętrzny</strong><small>Dowolny adres HTTPS</small></span>
+                  </button>
+                </div>
+              </section>
+            </div>
+          </aside>
+
+          <section class="canvas-panel" aria-label="Układ dashboardu">
+            <div class="document-settings">
+              <label>
+                <span>Tytuł dashboardu</span>
+                <input id="dashboard-title-input" type="text" maxlength="120" placeholder="Twoja przestrzeń do nauki">
+              </label>
+              <label>
+                <span>Opis powitalny</span>
+                <textarea id="dashboard-intro-input" rows="2" maxlength="600" placeholder="Krótki opis widoczny na początku dashboardu."></textarea>
+              </label>
+            </div>
+            <div class="canvas-topline">
+              <div><small>Obszar roboczy</small><strong>Sekcje dashboardu</strong></div>
+              <button class="mini-button" type="button" data-dashboard-add="section">＋ Dodaj sekcję</button>
+            </div>
+            <div class="builder-canvas dashboard-canvas" id="dashboard-canvas" data-drop-root="dashboard">
+              <div class="empty-canvas" id="dashboard-empty">
+                <span aria-hidden="true">↙</span>
+                <strong>Przeciągnij tutaj pierwszą sekcję</strong>
+                <p>Możesz też kliknąć dowolny klocek w bibliotece.</p>
+              </div>
+            </div>
+          </section>
+
+          <aside class="inspector-panel" aria-label="Ustawienia zaznaczonego elementu">
+            <div class="inspector-tabs" role="tablist" aria-label="Panel boczny dashboardu">
+              <button class="is-active" type="button" role="tab" aria-selected="true" data-dashboard-panel="inspector">Ustawienia</button>
+              <button type="button" role="tab" aria-selected="false" data-dashboard-panel="preview">Podgląd</button>
+            </div>
+            <div class="inspector-content" id="dashboard-inspector">
+              <div class="inspector-empty">
+                <span aria-hidden="true">◎</span>
+                <strong>Zaznacz klocek</strong>
+                <p>Tutaj zmienisz jego treść, parametry modułu i ochronę.</p>
+              </div>
+            </div>
+            <div class="preview-content" id="dashboard-preview" hidden></div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="workspace-view" id="lesson-workspace" data-workspace="lesson" hidden>
+        <div class="workspace-toolbar">
+          <div>
+            <span class="eyebrow">Konfigurator lesson</span>
+            <h1>Interaktywna lekcja Markdown</h1>
+          </div>
+          <div class="toolbar-actions">
+            <input id="lesson-file-input" type="file" accept=".md,text/markdown,text/plain" hidden>
+            <button class="button button-soft" id="lesson-import-button" type="button">Importuj .md</button>
+            <button class="button button-soft" id="lesson-source-button" type="button">Markdown</button>
+            <button class="button button-soft" id="lesson-copy-button" type="button">Kopiuj</button>
+            <button class="button button-primary" id="lesson-download-button" type="button">
+              <span aria-hidden="true">↓</span> Pobierz .md
+            </button>
+          </div>
+        </div>
+
+        <div class="builder-layout">
+          <aside class="palette-panel" aria-label="Klocki lekcji">
+            <div class="panel-heading">
+              <div><small>Biblioteka</small><strong>Treść slajdu</strong></div>
+              <span class="count-badge" id="lesson-slide-count">1</span>
+            </div>
+            <label class="palette-search">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg>
+              <input id="lesson-palette-search" type="search" placeholder="Szukaj klocka…" autocomplete="off">
+            </label>
+
+            <div class="palette-scroll">
+              <section class="palette-group">
+                <h2>Slajdy</h2>
+                <div class="palette-grid">
+                  <button class="palette-item palette-item-wide" type="button" draggable="true" data-lesson-add="slide" data-search="nowy slajd krok">
+                    <span class="palette-symbol is-navy">＋</span><span><strong>Nowy slajd</strong><small>Kolejny krok lekcji</small></span>
+                  </button>
+                </div>
+              </section>
+              <section class="palette-group">
+                <h2>Treść</h2>
+                <div class="palette-grid">
+                  <button class="palette-item" type="button" draggable="true" data-lesson-add="heading" data-search="nagłówek tytuł">
+                    <span class="palette-symbol is-navy">H</span><span><strong>Nagłówek</strong><small>H1, H2 lub H3</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-lesson-add="style" data-search="tekst akapit czcionka kolor">
+                    <span class="palette-symbol is-blue">T</span><span><strong>Tekst</strong><small>Styl, kolor i wyrównanie</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-lesson-add="image" data-search="obraz zdjęcie url link">
+                    <span class="palette-symbol is-violet">▧</span><span><strong>Obraz z URL</strong><small>Link i opis ALT</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-lesson-add="list" data-search="lista punkty numerowana">
+                    <span class="palette-symbol is-blue">☷</span><span><strong>Lista</strong><small>Punktowana lub numerowana</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-lesson-add="quote" data-search="cytat definicja wyróżnienie">
+                    <span class="palette-symbol is-violet">❞</span><span><strong>Cytat</strong><small>Wyróżniony fragment</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-lesson-add="callout" data-search="uwaga wskazówka komunikat">
+                    <span class="palette-symbol is-amber">!</span><span><strong>Callout</strong><small>Wskazówka lub uwaga</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-lesson-add="code" data-search="kod wzór blok">
+                    <span class="palette-symbol is-navy">&lt;/&gt;</span><span><strong>Blok kodu</strong><small>Monospace</small></span>
+                  </button>
+                  <button class="palette-item palette-item-wide" type="button" draggable="true" data-lesson-add="accordion" data-search="harmonijka szczegóły rozwijane">
+                    <span class="palette-symbol is-teal">⌄</span><span><strong>Harmonijka</strong><small>Rozwijane dodatkowe wyjaśnienie</small></span>
+                  </button>
+                </div>
+              </section>
+
+              <section class="palette-group">
+                <h2>Interakcje</h2>
+                <div class="palette-grid">
+                  <button class="palette-item" type="button" draggable="true" data-lesson-add="task-abcd" data-search="quiz abcd test">
+                    <span class="palette-symbol is-violet">AB</span><span><strong>Quiz ABCD</strong><small>4 odpowiedzi</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-lesson-add="task-choice" data-search="wybór opcje quiz">
+                    <span class="palette-symbol is-violet">✓</span><span><strong>Wybór</strong><small>2–8 odpowiedzi</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-lesson-add="task-text" data-search="pytanie tekst odpowiedź">
+                    <span class="palette-symbol is-teal">Aa</span><span><strong>Pytanie tekstowe</strong><small>Obsługuje aliasy</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-lesson-add="task-number" data-search="pytanie liczba obliczenie">
+                    <span class="palette-symbol is-teal">#</span><span><strong>Pytanie liczbowe</strong><small>Przecinek lub kropka</small></span>
+                  </button>
+                </div>
+              </section>
+            </div>
+          </aside>
+
+          <section class="canvas-panel" aria-label="Układ lekcji">
+            <div class="document-settings lesson-document-settings">
+              <label>
+                <span>Nazwa pliku</span>
+                <div class="filename-field">
+                  <input id="lesson-filename-input" type="text" maxlength="80" value="nowa-lekcja.md" spellcheck="false">
+                  <small>Dodasz go potem do folderu modułu lesson.</small>
+                </div>
+              </label>
+              <label>
+                <span>Tytuł lekcji</span>
+                <input id="lesson-title-input" type="text" maxlength="120" placeholder="Nowa lekcja">
+              </label>
+            </div>
+            <div class="canvas-topline">
+              <div><small>Scenariusz</small><strong>Slajdy lekcji</strong></div>
+              <button class="mini-button" type="button" data-lesson-add="slide">＋ Dodaj slajd</button>
+            </div>
+            <div class="builder-canvas lesson-canvas" id="lesson-canvas" data-drop-root="lesson"></div>
+          </section>
+
+          <aside class="inspector-panel" aria-label="Ustawienia lekcji">
+            <div class="inspector-tabs" role="tablist" aria-label="Panel boczny lekcji">
+              <button class="is-active" type="button" role="tab" aria-selected="true" data-lesson-panel="inspector">Ustawienia</button>
+              <button type="button" role="tab" aria-selected="false" data-lesson-panel="preview">Podgląd</button>
+            </div>
+            <div class="inspector-content" id="lesson-inspector">
+              <div class="inspector-empty">
+                <span aria-hidden="true">◎</span>
+                <strong>Zaznacz slajd lub klocek</strong>
+                <p>Edytuj treść, wygląd, odpowiedzi i komunikaty po rozwiązaniu.</p>
+              </div>
+            </div>
+            <div class="preview-content lesson-live-preview" id="lesson-preview" hidden></div>
+          </aside>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <dialog class="source-dialog" id="source-dialog">
+    <form method="dialog" class="dialog-shell">
+      <header>
+        <div>
+          <span class="eyebrow" id="source-dialog-eyebrow">Markdown</span>
+          <h2 id="source-dialog-title">Kod źródłowy</h2>
+        </div>
+        <button class="icon-button" value="cancel" aria-label="Zamknij" title="Zamknij" type="submit">×</button>
+      </header>
+      <p id="source-dialog-help">Możesz skopiować kod lub wkleić istniejący Markdown i zastosować go w builderze.</p>
+      <textarea id="source-textarea" spellcheck="true" aria-label="Kod Markdown"></textarea>
+      <footer>
+        <span class="dialog-status" id="source-dialog-status" role="status" aria-live="polite"></span>
+        <button class="button button-soft" id="source-copy-button" type="button">Kopiuj</button>
+        <button class="button button-primary" id="source-apply-button" type="button">Zastosuj w builderze</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog class="confirm-dialog" id="publish-dialog">
+    <form method="dialog" class="dialog-shell dialog-shell-small">
+      <span class="confirm-icon" aria-hidden="true">●</span>
+      <h2>Opublikować dashboard?</h2>
+      <p>Aktywna wersja w Netlify Blobs zostanie zastąpiona. Kursanci zobaczą nowy układ od razu po odświeżeniu.</p>
+      <div class="publish-summary" id="publish-summary"></div>
+      <footer>
+        <button class="button button-soft" value="cancel" type="submit">Anuluj</button>
+        <button class="button button-primary" id="publish-confirm-button" value="default" type="submit">Tak, publikuj</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
+</body>
+</html>

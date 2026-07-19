@@ -8,9 +8,13 @@ const identitySignup = require('../netlify/functions/identity-signup.js');
 
 test('netlify.toml grants the same course roles handled by the login hook', () => {
   const config = fs.readFileSync(path.join(__dirname, '..', 'netlify.toml'), 'utf8');
-  const roleCondition = config.match(/conditions\s*=\s*\{\s*Role\s*=\s*\[([^\]]+)]\s*}/);
+  const membersRule = config.match(
+    /\[\[redirects\]\]\s+from\s*=\s*"\/members"\s+to\s*=\s*"\/members\/index\.html"[\s\S]*?(?=\n\[\[redirects\]\])/
+  );
 
-  assert.ok(roleCondition, 'missing Role redirect condition');
+  assert.ok(membersRule, 'missing exact members redirect');
+  const roleCondition = membersRule[0].match(/conditions\s*=\s*\{\s*Role\s*=\s*\[([^\]]+)]\s*}/);
+  assert.ok(roleCondition, 'missing Role redirect condition on the members route');
   const configuredRoles = Array.from(roleCondition[1].matchAll(/"([^"]+)"/g), (match) => match[1]).sort();
   assert.deepEqual(configuredRoles, ['active', 'admin', 'day', 'halfyear', 'hour', 'month', 'week', 'year']);
 });

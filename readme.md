@@ -273,6 +273,17 @@ Jeżeli administrator nie opublikował własnej wersji, kursanci widzą pełny b
 
 Magazyn `chemdisk-dashboard` jest site-wide i pozostaje po kolejnych wdrożeniach. Deploy Preview tej samej witryny również może zobaczyć ten magazyn, dlatego nie publikuj zmian z podglądu, jeśli nie mają trafić do produkcyjnego dashboardu. Lokalny `netlify dev` korzysta z lokalnego magazynu testowego.
 
+### Graficzne Studio treści
+
+Administrator widzi w bocznym menu dodatkowy skrót **Studio treści** prowadzący do `/members/module/studio/`. Studio ma dwa tryby:
+
+- **Dashboard Builder** — przeciąganie sekcji, harmonijek, tekstów, komunikatów i kart wszystkich modułów; formularze konfigurują identyfikator, wariant oraz właściwy dla modułu tryb `type`;
+- **Lesson Builder** — slajdy, stylowany tekst, obrazy HTTPS, listy, cytaty, callouty, kod, harmonijki oraz pytania tekstowe, liczbowe, wyboru i ABCD.
+
+Przed publikacją dashboardu Studio zawsze pobiera pełną aktywną wersję wraz z jej `etag`. Zapis jest wykonywany warunkowo przez `admin-dashboard`; konflikt nie nadpisuje nowszej wersji i pozostawia lokalny draft do porównania. JWT nie jest zapisywany w pamięci trwałej przeglądarki. Robocze modele obu edytorów są automatycznie przechowywane lokalnie, a cofanie i ponawianie obejmuje do 60 operacji.
+
+Lesson Builder nie publikuje jeszcze plików do Blobs ani GitHuba. Generuje, kopiuje lub pobiera gotowy plik `.md`, który należy umieścić w `public/members/module/lesson/`.
+
 Obsługiwana składnia:
 
 ```md
@@ -393,6 +404,22 @@ Wprowadzenie do tematu.
 Parser obsługuje nagłówki `#`, `##`, `###`, akapity, listy numerowane i punktowane, cytaty `>`, pogrubienie `**tekst**`, kursywę `*tekst*`, kod, bezpieczne linki oraz obrazy. Obraz można trzymać w podfolderze modułu i wstawić np. jako `![Opis](obrazy/schemat.png)`. Surowy HTML jest wyświetlany jako tekst i nie jest wykonywany.
 
 Dodatkowo zapis `^13^C` tworzy indeks górny (¹³C), a `H~2~O` — indeks dolny. Jest to wygodne przy zapisie izotopów i wzorów chemicznych.
+
+Stylowany fragment i harmonijkę można zapisać bez wykonywania HTML lub dowolnego CSS:
+
+```md
+:::style font=serif color=#0e665a size=large align=center
+Treść z wybraną czcionką, kolorem, rozmiarem i wyrównaniem.
+:::
+
+:::accordion Dodatkowe wyjaśnienie open=true
+Treść widoczna po rozwinięciu. Parametr `open=true` jest opcjonalny.
+:::
+```
+
+Dozwolone czcionki to `sans`, `serif`, `rounded` i `mono`; rozmiary: `small`, `normal`, `large`, `xlarge`; wyrównanie: `left`, `center`, `right`. Kolor musi mieć format `#RRGGBB`. Inne wartości wracają do bezpiecznych ustawień domyślnych.
+
+Gdy pytanie utworzone w Studio zawiera kilka akapitów albo element Markdown, builder otacza je blokiem `:::question … :::` bezpośrednio przed `:::task`. Dzięki temu ponowny import jednoznacznie odróżnia treść pytania od pozostałej zawartości slajdu; moduł lekcji renderuje wnętrze tego bloku jak zwykły, bezpieczny Markdown.
 
 #### Zadanie z polem odpowiedzi
 

@@ -275,6 +275,26 @@ a {
   border-color: rgba(255, 255, 255, 0.3);
 }
 
+.studio-sidebar-action {
+  color: #3f326d;
+  background: #f1edff;
+  border-color: #d8cff8;
+}
+
+.studio-sidebar-action .action-icon {
+  color: #fff;
+  background: #6652a3;
+}
+
+.sidebar-action.studio-sidebar-action small {
+  color: #675b86;
+}
+
+.studio-sidebar-action:hover {
+  background: #e5defd;
+  border-color: #bfb0ee;
+}
+
 .admin-sidebar-action {
   color: #5c4014;
   background: #fff3da;
@@ -334,6 +354,26 @@ html[data-theme="dark"] .admin-sidebar-action {
   color: #f4d8a1;
   background: #392d18;
   border-color: #66502b;
+}
+
+html[data-theme="dark"] .studio-sidebar-action {
+  color: #e5ddff;
+  background: #2b2545;
+  border-color: #4a416c;
+}
+
+html[data-theme="dark"] .studio-sidebar-action .action-icon {
+  color: #1b1631;
+  background: #c3b7f4;
+}
+
+html[data-theme="dark"] .sidebar-action.studio-sidebar-action small {
+  color: #bcb0dc;
+}
+
+html[data-theme="dark"] .studio-sidebar-action:hover {
+  background: #373056;
+  border-color: #665b8d;
 }
 
 html[data-theme="dark"] .admin-sidebar-action small {
