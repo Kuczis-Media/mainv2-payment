@@ -1,3 +1,15 @@
+:root {
+  --contact-button: #0e665a;
+  --contact-button-hover: #095247;
+  --contact-on-button: #ffffff;
+}
+
+:root[data-theme="dark"] {
+  --contact-button: #70cfbc;
+  --contact-button-hover: #8cddcd;
+  --contact-on-button: #102a26;
+}
+
 *{
   margin: 0;
   padding: 0;
@@ -7,17 +19,22 @@
 body{
   min-height: 100vh;
   width: 100%;
-  background: #c8e8e9;
+  color: var(--chem-text);
+  background:
+    radial-gradient(circle at 12% 8%, rgba(14, 102, 90, .18), transparent 34rem),
+    var(--chem-bg);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .container{
   width: 85%;
-  background: #fff;
-  border-radius: 6px;
+  max-width: 1120px;
+  background: var(--chem-surface);
+  border: 1px solid var(--chem-line);
+  border-radius: 22px;
   padding: 20px 60px 30px 40px;
-  box-shadow: 0 5px 10px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--chem-shadow-lg);
 }
 .container .content{
   display: flex;
@@ -42,7 +59,7 @@ body{
   right: -15px;
   top: 50%;
   transform: translateY(-50%);
-  background: #afafb6;
+  background: var(--chem-line);
 }
 .content .left-side .details{
   margin: 14px;
@@ -51,7 +68,7 @@ body{
 .content .left-side .details .detail-icon{
   display: block;
   font-size: 30px;
-  color: #3e2093;
+  color: var(--chem-primary);
   margin-bottom: 10px;
 }
 .content .left-side .details .topic{
@@ -61,7 +78,7 @@ body{
 .content .left-side .details .text-one,
 .content .left-side .details .text-two{
   font-size: 14px;
-  color: #afafb6;
+  color: var(--chem-muted);
 }
 .container .content .right-side{
   width: 75%;
@@ -70,16 +87,16 @@ body{
 .content .right-side .topic-text{
   font-size: 23px;
   font-weight: 600;
-  color: #3e2093;
+  color: var(--chem-primary);
 }
 .internal-banner{
   display: block;
   margin: 16px 0;
   padding: 12px 14px;
   border-radius: 8px;
-  border: 1px solid rgba(62, 32, 147, 0.25);
-  background: rgba(62, 32, 147, 0.08);
-  color: #2b1678;
+  border: 1px solid color-mix(in srgb, var(--chem-primary) 32%, var(--chem-line));
+  background: var(--chem-primary-soft);
+  color: var(--chem-primary-hover);
   line-height: 1.4;
 }
 .internal-banner .label{
@@ -102,11 +119,12 @@ body{
 .right-side .input-box textarea{
   height: 100%;
   width: 100%;
-  border: none;
+  border: 1px solid var(--chem-line);
   outline: none;
   font-size: 16px;
-  background: #F0F1F8;
-  border-radius: 6px;
+  color: var(--chem-text);
+  background: var(--chem-surface-soft);
+  border-radius: 10px;
   padding: 0 15px;
   resize: none;
 }
@@ -122,24 +140,24 @@ body{
 }
 .right-side .button input[type="button"],
 .right-side .button input[type="submit"]{
-  color: #fff;
+  color: var(--contact-on-button);
   font-size: 18px;
   outline: none;
   border: none;
   padding: 8px 16px;
-  border-radius: 6px;
-  background: #3e2093;
+  border-radius: 10px;
+  background: var(--contact-button);
   cursor: pointer;
   transition: all 0.3s ease;
 }
 .button input[type="button"]:hover,
 .button input[type="submit"]:hover{
-  background: #5029bc;
+  background: var(--contact-button-hover);
 }
 .right-side input:focus-visible,
 .right-side textarea:focus-visible,
 .right-side .button input:focus-visible{
-  outline: 3px solid rgba(62, 32, 147, .28);
+  outline: 3px solid color-mix(in srgb, var(--chem-primary) 34%, transparent);
   outline-offset: 2px;
 }
 .right-side .button input:disabled{

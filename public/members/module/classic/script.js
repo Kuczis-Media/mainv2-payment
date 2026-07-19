@@ -65,7 +65,21 @@
 
   function append(value) {
     display.classList.remove('error');
+    if (display.value === 'Błąd') display.value = '';
     display.value += value;
+    display.focus();
+  }
+
+  function clearDisplay() {
+    display.value = '';
+    display.classList.remove('error');
+    display.focus();
+  }
+
+  function deleteLastCharacter() {
+    if (display.value === 'Błąd') display.value = '';
+    else display.value = display.value.slice(0, -1);
+    display.classList.remove('error');
     display.focus();
   }
 
@@ -84,8 +98,8 @@
     const button = event.target.closest('button');
     if (!button) return;
     const action = button.dataset.action;
-    if (action === 'clear') { display.value = ''; display.classList.remove('error'); display.focus(); return; }
-    if (action === 'delete') { display.value = display.value.slice(0, -1); display.classList.remove('error'); display.focus(); return; }
+    if (action === 'clear') { clearDisplay(); return; }
+    if (action === 'delete') { deleteLastCharacter(); return; }
     if (action === 'equals') { calculate(); return; }
     if (button.dataset.value) append(button.dataset.value);
   });
@@ -96,6 +110,48 @@
   });
   display.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' || event.key === '=') { event.preventDefault(); calculate(); }
-    if (event.key === 'Escape') { display.value = ''; display.classList.remove('error'); }
+    if (event.key === 'Escape') { event.preventDefault(); clearDisplay(); }
   });
+
+  function flashKey(selector) {
+    const button = keys.querySelector(selector);
+    if (!button) return;
+    button.classList.add('is-keyboard-active');
+    window.setTimeout(() => button.classList.remove('is-keyboard-active'), 100);
+  }
+
+  document.addEventListener('keydown', (event) => {
+    if (event.ctrlKey || event.metaKey || event.altKey || event.target === display) return;
+
+    const aliases = { x: '*', X: '*', '×': '*', ':': '/', '÷': '/', ',': ',' };
+    const value = aliases[event.key] || event.key;
+
+    if (/^[0-9+\-*/%().,]$/.test(value)) {
+      event.preventDefault();
+      append(value);
+      flashKey(`[data-value="${CSS.escape(value === ',' ? '.' : value)}"]`);
+      return;
+    }
+    if (event.key === 'Enter' || event.key === '=') {
+      event.preventDefault();
+      calculate();
+      flashKey('[data-action="equals"]');
+      return;
+    }
+    if (event.key === 'Backspace' || event.key === 'Delete') {
+      event.preventDefault();
+      deleteLastCharacter();
+      flashKey('[data-action="delete"]');
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      clearDisplay();
+      flashKey('[data-action="clear"]');
+    }
+  });
+
+  if (window.matchMedia && window.matchMedia('(pointer: fine)').matches) {
+    display.focus({ preventScroll: true });
+  }
 })();

@@ -266,13 +266,28 @@ a {
 }
 
 .admin-sidebar-action .action-icon {
-  color: #f7cb86;
-  background: rgba(240, 170, 72, 0.13);
+  color: #fff;
+  background: #9a6517;
 }
 
 .sidebar-action:hover {
   background: rgba(255, 255, 255, 0.15);
   border-color: rgba(255, 255, 255, 0.3);
+}
+
+.admin-sidebar-action {
+  color: #5c4014;
+  background: #fff3da;
+  border-color: #edcf94;
+}
+
+.sidebar-action.admin-sidebar-action small {
+  color: #80683e;
+}
+
+.admin-sidebar-action:hover {
+  background: #ffe9bd;
+  border-color: #d8ae5e;
 }
 
 .purchase-sidebar-action {
@@ -284,6 +299,50 @@ a {
 .purchase-sidebar-action .action-icon {
   color: #fff;
   background: var(--primary);
+}
+
+.sidebar-action.purchase-sidebar-action small {
+  color: #526d69;
+}
+
+.purchase-sidebar-action:hover {
+  background: #dff3ee;
+  border-color: #abdcd1;
+}
+
+.access-sidebar-action {
+  color: #183653;
+  background: #edf3fa;
+  border-color: #cedbea;
+}
+
+.sidebar-action.access-sidebar-action small {
+  color: #59687c;
+}
+
+.access-sidebar-action .action-icon {
+  color: #fff;
+  background: #176b5f;
+}
+
+.access-sidebar-action:hover {
+  background: #dfeaf5;
+  border-color: #abc1d8;
+}
+
+html[data-theme="dark"] .admin-sidebar-action {
+  color: #f4d8a1;
+  background: #392d18;
+  border-color: #66502b;
+}
+
+html[data-theme="dark"] .admin-sidebar-action small {
+  color: #d4bd91;
+}
+
+html[data-theme="dark"] .admin-sidebar-action:hover {
+  background: #49391d;
+  border-color: #8a6c38;
 }
 
 html[data-theme="dark"] .purchase-sidebar-action {
@@ -299,6 +358,31 @@ html[data-theme="dark"] .purchase-sidebar-action small {
 html[data-theme="dark"] .purchase-sidebar-action .action-icon {
   color: #102a26;
   background: #70cfbc;
+}
+
+html[data-theme="dark"] .purchase-sidebar-action:hover {
+  background: #205047;
+  border-color: #3d756a;
+}
+
+html[data-theme="dark"] .access-sidebar-action {
+  color: #deebf8;
+  background: #162a40;
+  border-color: #304a65;
+}
+
+html[data-theme="dark"] .access-sidebar-action small {
+  color: #b4c6d8;
+}
+
+html[data-theme="dark"] .access-sidebar-action .action-icon {
+  color: #102a26;
+  background: #70cfbc;
+}
+
+html[data-theme="dark"] .access-sidebar-action:hover {
+  background: #1d3752;
+  border-color: #456889;
 }
 
 .action-icon {

@@ -1,30 +1,43 @@
 :root {
-  color-scheme: dark;
+  color-scheme: light;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --surface: #111827;
-  --surface-raised: rgba(15, 23, 42, 0.96);
-  --line: rgba(148, 163, 184, 0.22);
-  --text: #f8fafc;
-  --muted: #aebbd0;
-  --accent: #60a5fa;
-  --danger: #fca5a5;
+  --surface: var(--chem-surface);
+  --surface-raised: color-mix(in srgb, var(--chem-surface) 96%, transparent);
+  --line: var(--chem-line);
+  --text: var(--chem-text);
+  --muted: var(--chem-muted);
+  --accent: var(--chem-primary);
+  --accent-fill: #0e665a;
+  --accent-fill-hover: #095247;
+  --on-accent: #ffffff;
+  --danger: var(--chem-danger);
+  --viewer-page: var(--chem-bg);
+  --viewer-bar: color-mix(in srgb, var(--chem-surface) 94%, transparent);
+  --viewer-control: var(--chem-surface-soft);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --accent-fill: #70cfbc;
+  --accent-fill-hover: #8cddcd;
+  --on-accent: #102a26;
 }
 
 * { box-sizing: border-box; }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(96, 165, 250, 0.7) rgba(15, 23, 42, 0.55);
+  scrollbar-color: color-mix(in srgb, var(--accent) 72%, transparent) var(--viewer-control);
 }
 
 *::-webkit-scrollbar { width: 10px; height: 10px; }
-*::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.55); }
+*::-webkit-scrollbar-track { background: var(--viewer-control); }
 *::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #60a5fa, #2563eb);
-  border: 2px solid #111827;
+  background: linear-gradient(180deg, var(--accent), var(--accent-fill));
+  border: 2px solid var(--surface);
   border-radius: 999px;
 }
-*::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #93c5fd, #3b82f6); }
+*::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, var(--accent-fill-hover), var(--accent-fill)); }
 
 html,
 body {
@@ -32,7 +45,7 @@ body {
   height: 100%;
   margin: 0;
   overflow: hidden;
-  background: #05070b;
+  background: var(--viewer-page);
   color: var(--text);
 }
 
@@ -50,8 +63,8 @@ a { font: inherit; }
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   background:
-    radial-gradient(circle at 20% 0%, rgba(37, 99, 235, 0.18), transparent 36%),
-    #05070b;
+    radial-gradient(circle at 20% 0%, rgba(14, 102, 90, 0.2), transparent 36%),
+    var(--viewer-page);
 }
 
 .viewer-bar {
@@ -61,7 +74,7 @@ a { font: inherit; }
   gap: 12px;
   padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left));
   border-bottom: 1px solid var(--line);
-  background: rgba(5, 9, 17, 0.94);
+  background: var(--viewer-bar);
   backdrop-filter: blur(16px);
   z-index: 10;
 }
@@ -74,7 +87,7 @@ a { font: inherit; }
   place-items: center;
   padding: 0;
   color: var(--muted);
-  background: rgba(30, 41, 59, 0.78);
+  background: var(--viewer-control);
   border: 1px solid var(--line);
   border-radius: 11px;
   cursor: pointer;
@@ -94,12 +107,12 @@ a { font: inherit; }
 
 .viewer-bar-toggle:hover {
   color: var(--text);
-  background: rgba(37, 99, 235, 0.24);
-  border-color: rgba(96, 165, 250, 0.68);
+  background: var(--chem-primary-soft);
+  border-color: color-mix(in srgb, var(--accent) 56%, var(--line));
 }
 
 .viewer-bar-toggle:focus-visible {
-  outline: 3px solid rgba(96, 165, 250, 0.42);
+  outline: 3px solid color-mix(in srgb, var(--accent) 42%, transparent);
   outline-offset: 2px;
 }
 
@@ -118,8 +131,8 @@ a { font: inherit; }
 
 .viewer-bar.is-collapsed > :not(.viewer-bar-toggle) { display: none !important; }
 .viewer-bar.is-collapsed .viewer-bar-toggle {
-  color: var(--text);
-  background: rgba(5, 9, 17, 0.8);
+  color: #f0f4fa;
+  background: rgba(8, 23, 43, 0.9);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
 }
 .viewer-bar.is-collapsed .viewer-bar-toggle svg { transform: rotate(180deg); }
@@ -135,7 +148,7 @@ a { font: inherit; }
   border: 1px solid var(--line);
   border-radius: 11px;
   color: var(--text);
-  background: rgba(30, 41, 59, 0.74);
+  background: var(--viewer-control);
   text-decoration: none;
   cursor: pointer;
   transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
@@ -146,8 +159,8 @@ a { font: inherit; }
 
 .viewer-back:hover,
 .viewer-action:hover {
-  border-color: rgba(96, 165, 250, 0.7);
-  background: rgba(37, 99, 235, 0.2);
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
+  background: var(--chem-primary-soft);
 }
 
 .viewer-back:active,
@@ -155,7 +168,7 @@ a { font: inherit; }
 
 .viewer-action:focus-visible,
 .viewer-back:focus-visible {
-  outline: 3px solid rgba(96, 165, 250, 0.42);
+  outline: 3px solid color-mix(in srgb, var(--accent) 42%, transparent);
   outline-offset: 2px;
 }
 
@@ -201,8 +214,8 @@ a { font: inherit; }
   padding: 22px;
   text-align: center;
   background:
-    radial-gradient(circle at 50% 18%, rgba(37, 99, 235, 0.23), transparent 42%),
-    rgba(5, 8, 14, 0.96);
+    radial-gradient(circle at 50% 18%, rgba(14, 102, 90, 0.23), transparent 42%),
+    color-mix(in srgb, var(--viewer-page) 96%, transparent);
 }
 
 .viewer-overlay[hidden] { display: none; }
@@ -215,14 +228,14 @@ a { font: inherit; }
   border: 1px solid var(--line);
   border-radius: 22px;
   background: var(--surface-raised);
-  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.44);
+  box-shadow: var(--chem-shadow-lg);
   overscroll-behavior: contain;
 }
 
 .viewer-card h1 { margin: 0 0 10px; font-size: clamp(1.25rem, 4vw, 1.75rem); }
 .viewer-card p { margin: 8px 0 0; color: var(--muted); line-height: 1.55; }
 .viewer-card .error-copy { color: var(--danger); }
-.viewer-card code { padding: 2px 6px; border-radius: 6px; background: rgba(255,255,255,.1); overflow-wrap: anywhere; }
+.viewer-card code { padding: 2px 6px; border-radius: 6px; background: var(--chem-surface-strong); overflow-wrap: anywhere; }
 
 .viewer-actions {
   display: flex;
@@ -232,14 +245,14 @@ a { font: inherit; }
   margin-top: 20px;
 }
 
-.viewer-action.primary { border-color: transparent; background: #2563eb; font-weight: 750; }
-.viewer-action.primary:hover { background: #1d4ed8; }
+.viewer-action.primary { border-color: transparent; color: var(--on-accent); background: var(--accent-fill); font-weight: 750; }
+.viewer-action.primary:hover { background: var(--accent-fill-hover); }
 
 .viewer-spinner {
   width: 42px;
   height: 42px;
   margin: 0 auto 18px;
-  border: 3px solid rgba(255,255,255,.15);
+  border: 3px solid var(--line);
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: viewer-spin .8s linear infinite;

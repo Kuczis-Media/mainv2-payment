@@ -28,9 +28,83 @@ test('every members module has stable asset paths and waits for initial auth', (
 
     assert.match(html, new RegExp(`<base href=["']/members/module/${name}/["']\\s*/?>`), `${name}: missing stable base`);
     assert.match(html, /<meta name=["']x-members["'] content=["']1["']\s*\/?>/, `${name}: missing members marker`);
+    assert.match(html, /<script src=["']\/members\/module\/theme\.js["']><\/script>/, `${name}: missing shared theme bootstrap`);
+    assert.match(html, /<link rel=["']stylesheet["'] href=["']\/members\/module\/theme\.css["']\s*\/?>/, `${name}: missing shared theme palette`);
     assert.match(html, /<script src=["']\/assets\/js\/auth\.js["']><\/script>/, `${name}: auth must initialize before module code`);
     assert.match(source, /await window\.ChemAuth\.ready/, `${name}: module starts before the session check`);
   }
+});
+
+test('all member applications follow the persistent dashboard theme', () => {
+  const themeScript = fs.readFileSync(path.join(modulesRoot, 'theme.js'), 'utf8');
+  const themeStyles = fs.readFileSync(path.join(modulesRoot, 'theme.css'), 'utf8');
+
+  assert.match(themeScript, /localStorage\.getItem\(STORAGE_KEY\)/);
+  assert.match(themeScript, /STORAGE_KEY\s*=\s*['"]chem\.theme['"]/);
+  assert.match(themeScript, /document\.documentElement|const root = document\.documentElement/);
+  assert.match(themeScript, /prefers-color-scheme:\s*dark/);
+  assert.match(themeScript, /addEventListener\(['"]storage['"]/);
+  assert.match(themeStyles, /--chem-bg:\s*#edf2f7/);
+  assert.match(themeStyles, /:root\[data-theme=["']dark["']\]/);
+  assert.match(themeStyles, /--chem-primary:\s*#70cfbc/);
+});
+
+test('classic calculator supports complete physical keyboard input', async () => {
+  const html = fs.readFileSync(path.join(modulesRoot, 'classic', 'index.html'), 'utf8');
+  const script = fs.readFileSync(path.join(modulesRoot, 'classic', 'script.js'), 'utf8');
+
+  assert.match(html, /aria-keyshortcuts=["']Enter =["']/);
+  assert.match(html, /aria-keyshortcuts=["']Backspace Delete["']/);
+  assert.match(script, /document\.addEventListener\(['"]keydown['"]/);
+  assert.match(script, /event\.key === ['"]Enter['"] \|\| event\.key === ['"]=['"]/);
+  assert.match(script, /event\.key === ['"]Backspace['"] \|\| event\.key === ['"]Delete['"]/);
+  assert.match(script, /event\.key === ['"]Escape['"]/);
+  assert.match(script, /const aliases = \{[^}]*x:\s*['"]\*['"][^}]*['"]:['"]:\s*['"]\/['"]/);
+
+  const displayHandlers = {};
+  const documentHandlers = {};
+  const display = {
+    value: '',
+    classList: { add() {}, remove() {} },
+    focus() {},
+    select() {},
+    addEventListener(name, handler) { displayHandlers[name] = handler; }
+  };
+  const keys = {
+    addEventListener() {},
+    querySelector() { return null; }
+  };
+  const context = vm.createContext({
+    CSS: { escape: (value) => value },
+    document: {
+      getElementById: (id) => id === 'display' ? display : keys,
+      addEventListener: (name, handler) => { documentHandlers[name] = handler; }
+    },
+    window: {
+      ChemAuth: { ready: Promise.resolve({ authenticated: true, session: { ok: true } }) },
+      matchMedia: () => ({ matches: false }),
+      setTimeout
+    }
+  });
+
+  await vm.runInContext(script, context);
+  const press = (key) => documentHandlers.keydown({
+    key,
+    target: {},
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    preventDefault() {}
+  });
+
+  ['1', '+', '2', 'Enter'].forEach(press);
+  assert.equal(display.value, '3');
+  press('Backspace');
+  assert.equal(display.value, '');
+  ['9', ':', '3', '='].forEach(press);
+  assert.equal(display.value, '3');
+  press('Escape');
+  assert.equal(display.value, '');
 });
 
 test('large member modules keep CSS and JavaScript outside index.html', () => {

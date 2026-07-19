@@ -29,8 +29,8 @@
 
 .filmv1-stage .video-js { font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
 .filmv1-stage .vjs-control-bar { min-height: 3.5em; background: linear-gradient(0deg, rgba(0,0,0,.94), rgba(0,0,0,.68)); }
-.filmv1-stage .vjs-big-play-button { border: 0; border-radius: 999px; background: rgba(37, 99, 235, 0.92); }
-.filmv1-stage .vjs-big-play-button:hover { background: #1d4ed8; }
+.filmv1-stage .vjs-big-play-button { border: 0; border-radius: 999px; color: var(--on-accent); background: var(--accent-fill); }
+.filmv1-stage .vjs-big-play-button:hover { background: var(--accent-fill-hover); }
 
 .filmv1-stage .vjs-control {
   min-width: 3.2em;
@@ -38,11 +38,11 @@
 }
 
 .filmv1-stage .vjs-control:hover,
-.filmv1-stage .vjs-control:focus-visible { background: rgba(37, 99, 235, 0.34); }
+.filmv1-stage .vjs-control:focus-visible { background: rgba(14, 102, 90, 0.44); }
 
 .filmv1-stage .vjs-progress-control .vjs-progress-holder { height: .45em; border-radius: 999px; }
 .filmv1-stage .vjs-play-progress,
-.filmv1-stage .vjs-volume-level { background: linear-gradient(90deg, #60a5fa, #22d3ee); }
+.filmv1-stage .vjs-volume-level { background: linear-gradient(90deg, var(--accent), var(--accent-fill)); }
 .filmv1-stage .vjs-play-progress::before { color: #e0f2fe; }
 
 .filmv1-guard-share {

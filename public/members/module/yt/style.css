@@ -1,18 +1,27 @@
 :root {
-      color-scheme: dark;
+      color-scheme: light;
       font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
-      --bg-outer: #020617;
-      --bg-inner: #0f172a;
-      --bg-highlight: #1e293b;
-      --accent: #38bdf8;
-      --accent-strong: #22d3ee;
-      --accent-soft: rgba(56, 189, 248, 0.18);
+      --bg-outer: var(--chem-bg);
+      --bg-inner: #dfe7ef;
+      --bg-highlight: #cfdbe6;
+      --bg-bottom: #d9e2eb;
+      --accent: #70cfbc;
+      --accent-strong: #8cddcd;
+      --accent-soft: rgba(112, 207, 188, 0.2);
       --text-primary: #f8fafc;
-      --text-muted: #94a3b8;
-      --control-bg: rgba(15, 23, 42, 0.55);
-      --control-bg-strong: rgba(15, 23, 42, 0.78);
-      --control-border: rgba(148, 163, 184, 0.28);
-      --shadow-strong: 0 30px 80px rgba(15, 23, 42, 0.65);
+      --text-muted: #c0ccdd;
+      --control-bg: rgba(8, 23, 43, 0.64);
+      --control-bg-strong: rgba(8, 23, 43, 0.84);
+      --control-border: rgba(192, 204, 221, 0.34);
+      --shadow-strong: var(--chem-shadow-lg);
+    }
+
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --bg-outer: var(--chem-bg);
+      --bg-inner: var(--chem-navy);
+      --bg-highlight: #17304a;
+      --bg-bottom: #000000;
     }
 
     * {
@@ -20,17 +29,16 @@
     }
 
     ::selection {
-      background: rgba(56, 189, 248, 0.35);
+      background: rgba(112, 207, 188, 0.38);
       color: var(--text-primary);
     }
 
     html, body {
       margin: 0;
       height: 100%;
-      background: radial-gradient(circle at 20% -10%, rgba(59, 130, 246, 0.25), transparent 40%),
-                  radial-gradient(circle at 80% -10%, rgba(14, 116, 144, 0.25), transparent 45%),
-                  radial-gradient(circle at 50% 120%, rgba(2, 132, 199, 0.2), transparent 55%),
-                  linear-gradient(180deg, var(--bg-inner) 0%, var(--bg-outer) 45%, #000 100%);
+      background: radial-gradient(circle at 20% -10%, rgba(14, 102, 90, 0.24), transparent 40%),
+                  radial-gradient(circle at 80% -10%, rgba(240, 170, 72, 0.12), transparent 45%),
+                  linear-gradient(180deg, var(--bg-inner) 0%, var(--bg-outer) 48%, var(--bg-bottom) 100%);
       color: var(--text-primary);
       overscroll-behavior: none;
     }
@@ -49,7 +57,7 @@
       content: "";
       position: absolute;
       inset: -40vh -30vw -45vh -30vw;
-      background: radial-gradient(circle, rgba(56, 189, 248, 0.09) 0%, transparent 65%);
+      background: radial-gradient(circle, rgba(112, 207, 188, 0.12) 0%, transparent 65%);
       filter: blur(120px);
       z-index: -2;
     }
@@ -73,7 +81,7 @@
       position: absolute;
       inset: clamp(1rem, 3vw, 2.8rem);
       border-radius: clamp(1.6rem, 4vw, 3rem);
-      background: linear-gradient(135deg, rgba(56, 189, 248, 0.08), rgba(59, 130, 246, 0));
+      background: linear-gradient(135deg, rgba(112, 207, 188, 0.12), rgba(14, 102, 90, 0));
       opacity: 0.5;
       z-index: -1;
     }
@@ -223,7 +231,7 @@
       border-radius: 50%;
       background: var(--accent);
       border: 2px solid rgba(15, 23, 42, 0.6);
-      box-shadow: 0 0 18px rgba(56, 189, 248, 0.55);
+      box-shadow: 0 0 18px rgba(112, 207, 188, 0.55);
       margin-top: -6px;
       transition: transform 0.15s ease;
     }
@@ -234,7 +242,7 @@
       border-radius: 50%;
       background: var(--accent);
       border: 2px solid rgba(15, 23, 42, 0.6);
-      box-shadow: 0 0 18px rgba(56, 189, 248, 0.55);
+      box-shadow: 0 0 18px rgba(112, 207, 188, 0.55);
       transition: transform 0.15s ease;
     }
 
@@ -294,9 +302,9 @@
 
     .btn:hover {
       transform: translateY(-2px);
-      background: linear-gradient(135deg, rgba(59, 130, 246, 0.35), rgba(14, 116, 144, 0.25));
-      border-color: rgba(56, 189, 248, 0.35);
-      box-shadow: 0 16px 32px rgba(2, 132, 199, 0.28);
+      background: linear-gradient(135deg, rgba(14, 102, 90, 0.58), rgba(9, 82, 71, 0.42));
+      border-color: rgba(112, 207, 188, 0.56);
+      box-shadow: 0 16px 32px rgba(14, 102, 90, 0.3);
     }
 
     .btn:active {
@@ -305,7 +313,7 @@
     }
 
     .btn:focus-visible {
-      outline: 2px solid rgba(56, 189, 248, 0.6);
+      outline: 3px solid rgba(112, 207, 188, 0.62);
       outline-offset: 2px;
     }
 

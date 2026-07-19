@@ -2,7 +2,9 @@ html, body {
         margin: 0;
         padding: 0;
         height: 100%;
-        background: #0b0b0c; /* opcjonalnie ciemne tło */
+        background:
+          radial-gradient(circle at 18% 8%, rgba(14, 102, 90, .18), transparent 36rem),
+          var(--chem-bg);
       }
       .viewport {
         min-height: 100dvh; /* lepsze na mobile */
