@@ -167,17 +167,19 @@ test('members home is a local Markdown dashboard rather than a remote iframe', (
   assert.match(script, /createAccordionGroup\(child,\s*sectionTitle/);
 });
 
-test('every local lesson linked from the dashboard has a published Markdown file', () => {
+test('dashboard lesson links are resolved through the private content library', () => {
   const markdown = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.md'), 'utf8');
   const lessonRoot = path.join(root, 'public', 'members', 'module', 'lesson');
+  const lessonScript = fs.readFileSync(path.join(lessonRoot, 'script.js'), 'utf8');
+  const dashboardScript = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.js'), 'utf8');
   const filenames = [...markdown.matchAll(/\/members\/module\/lesson\/\?file=([A-Za-z0-9._-]+\.md)/g)]
     .map((match) => match[1])
     .filter((filename) => filename !== 'nazwa-lekcji.md');
 
-  assert.ok(filenames.length > 0, 'dashboard should link to at least one local lesson');
-  for (const filename of filenames) {
-    assert.ok(fs.existsSync(path.join(lessonRoot, filename)), `missing dashboard lesson: ${filename}`);
-  }
+  assert.ok(filenames.length > 0, 'dashboard should link to at least one repository lesson');
+  assert.match(lessonScript, /library\.readLesson\(filename,\s*\{\s*repositoryId\s*\}\)/);
+  assert.match(dashboardScript, /ChemContentLibrary/);
+  assert.equal(fs.readdirSync(lessonRoot).some((filename) => filename.endsWith('.md')), false);
 });
 
 test('members dashboard has a persistent accessible light and dark theme', () => {
@@ -236,23 +238,31 @@ test('dashboard exposes user management only through the guarded admin workflow'
   assert.doesNotMatch(script, /operator[-_ ]token/i);
 });
 
-test('administrator UI covers invitations, deletion, Forms and versioned Markdown editing', () => {
+test('administrator UI covers users, Forms, dashboard and private content status', () => {
   const html = fs.readFileSync(path.join(root, 'public', 'members', 'index.html'), 'utf8');
   const script = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.js'), 'utf8');
 
-  for (const tab of ['users', 'forms', 'dashboard']) {
+  for (const tab of ['users', 'forms', 'dashboard', 'content', 'payments']) {
     assert.match(html, new RegExp(`data-admin-tab=["']${tab}["']`));
     assert.match(html, new RegExp(`data-admin-panel=["']${tab}["']`));
   }
+  assert.match(html, /Contents:\s*Read and write/);
+  assert.match(html, /GITHUB_CONTENT_TOKEN=github_pat_/);
+  assert.match(html, /GITHUB_CONTENT_REPOSITORIES=/);
+  assert.match(html, /id=["']admin-content-repository-select["']/);
+  assert.match(html, /Token GitHub nigdy nie trafia do tej strony/);
   assert.match(script, /\/\.netlify\/functions\/admin-users/);
   assert.match(script, /\/\.netlify\/functions\/admin-forms/);
   assert.match(script, /\/\.netlify\/functions\/admin-dashboard/);
+  assert.match(script, /const library = window\.ChemContentLibrary/);
+  assert.match(script, /library\.repositories\(\)/);
+  assert.match(script, /library\.status\(\{\s*refresh:/);
   assert.match(script, /method:\s*'POST'/);
   assert.match(script, /method:\s*'DELETE'/);
   assert.match(script, /deleteToken:\s*submission\.deleteToken/);
   assert.match(script, /expectedEtag:\s*adminDashboardEtag/);
   assert.match(script, /window\.confirm/);
-  assert.doesNotMatch(script, /process\.env|api\.netlify\.com/);
+  assert.doesNotMatch(script, /process\.env|api\.netlify\.com|github_pat_[A-Za-z0-9]/);
 });
 
 test('dashboard runtime editor initializes strong Netlify Blobs API access', () => {

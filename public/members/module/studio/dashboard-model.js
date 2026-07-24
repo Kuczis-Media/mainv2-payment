@@ -279,6 +279,7 @@
     const prompt = singleLine(source.prompt);
     const file = singleLine(source.file || source.plik);
     const point = singleLine(source.point || source.punkt);
+    const repositoryId = singleLine(source.repositoryId || source.repo).toLowerCase();
     const sourceMode = source.source === 'file' || (!source.source && file)
       ? 'file'
       : 'prompt';
@@ -296,6 +297,7 @@
       prompt,
       file,
       point,
+      repositoryId,
       internal: singleLine(source.internal),
       formula: canonical.module === 'atonom' ? singleLine(source.formula) : '',
       href: singleLine(source.href),
@@ -428,6 +430,7 @@
       prompt: '',
       file: '',
       point: '',
+      repositoryId: '',
       internal: '',
       formula: '',
       hash: '',
@@ -475,12 +478,16 @@
       parsed.protection = allowedProtection(parsed.module, take('type'));
     }
     if (parsed.module === 'chat') {
+      parsed.repositoryId = take('repo').toLowerCase();
       parsed.prompt = take('prompt');
       parsed.file = take('plik');
       parsed.point = take('punkt');
       parsed.source = parsed.file ? 'file' : 'prompt';
     }
-    if (parsed.module === 'lesson') parsed.file = take('file');
+    if (parsed.module === 'lesson') {
+      parsed.repositoryId = take('repo').toLowerCase();
+      parsed.file = take('file');
+    }
     if (parsed.module === 'contact') parsed.internal = take('internal');
     if (parsed.module === 'atonom') parsed.formula = take('formula');
 
@@ -517,6 +524,7 @@
     }
     if (PROTECTION_OPTIONS[card.module]) add('type', card.protection);
     if (card.module === 'chat') {
+      add('repo', card.repositoryId);
       if (card.source === 'file') {
         add('plik', card.file);
         add('punkt', card.point);
@@ -524,7 +532,10 @@
         add('prompt', card.prompt);
       }
     }
-    if (card.module === 'lesson') add('file', card.file);
+    if (card.module === 'lesson') {
+      add('repo', card.repositoryId);
+      add('file', card.file);
+    }
     if (card.module === 'contact') add('internal', card.internal);
     if (card.module === 'atonom') add('formula', card.formula);
 
@@ -817,6 +828,11 @@
     return new RegExp(`^[A-Za-z0-9][A-Za-z0-9_.-]*\\.${extension}$`, 'i').test(filename);
   }
 
+  function safeRepositoryId(value) {
+    const repositoryId = singleLine(value).toLowerCase();
+    return !repositoryId || /^[a-z0-9][a-z0-9-]{0,39}$/.test(repositoryId);
+  }
+
   function safeBuilderLink(value) {
     const href = singleLine(value);
     if (!href || href.length > 2_048 || /[\u0000-\u0020()\\]/.test(href)) return false;
@@ -862,6 +878,9 @@
         }
         if (block.module === 'lesson' && !safeBuilderFilename(block.file, 'md')) {
           addError('LESSON_FILE_REQUIRED', 'Podaj bezpieczną nazwę pliku lekcji zakończoną przez .md.', block);
+        }
+        if (['lesson', 'chat'].includes(block.module) && !safeRepositoryId(block.repositoryId)) {
+          addError('CONTENT_REPOSITORY_INVALID', 'Wybierz poprawne repozytorium materiałów.', block);
         }
         if (block.module === 'chat') {
           if (block.source === 'file') {

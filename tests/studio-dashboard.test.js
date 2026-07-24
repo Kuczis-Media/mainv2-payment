@@ -54,6 +54,14 @@ test('module cards serialize to the exact URLs consumed by existing applications
     [{ module: 'chat', source: 'prompt', prompt: 'pomoc.json' }, '/members/module/chat/?prompt=pomoc.json'],
     [{ module: 'chat', source: 'file', file: 'pomoc.txt', point: 4 }, '/members/module/chat/?plik=pomoc.txt&punkt=4'],
     [{ module: 'lesson', file: 'atomy.md' }, '/members/module/lesson/?file=atomy.md'],
+    [
+      { module: 'chat', source: 'prompt', repositoryId: 'organiczna', prompt: 'pomoc.json' },
+      '/members/module/chat/?repo=organiczna&prompt=pomoc.json'
+    ],
+    [
+      { module: 'lesson', repositoryId: 'organiczna', file: 'atomy.md' },
+      '/members/module/lesson/?repo=organiczna&file=atomy.md'
+    ],
     [{ module: 'calculator', variant: 'classic' }, '/members/module/classic/'],
     [{ module: 'calculators', variant: 'kalkulator' }, '/members/module/kalkulator/'],
     [{ module: 'whiteboards', variant: 'bitpaper' }, '/members/module/bitpaper/'],
@@ -67,6 +75,17 @@ test('module cards serialize to the exact URLs consumed by existing applications
   ];
   for (const [input, expected] of cases) {
     assert.equal(studio.moduleHref(studio.createModule(input)), expected);
+  }
+});
+
+test('repository selection survives dashboard Markdown import and export', () => {
+  for (const href of [
+    '/members/module/lesson/?repo=organiczna&file=alkany.md',
+    '/members/module/chat/?repo=organiczna&plik=alkany.txt&punkt=3'
+  ]) {
+    const parsed = studio.parseModuleHref(href);
+    assert.equal(parsed.repositoryId, 'organiczna');
+    assert.equal(studio.moduleHref(studio.createModule(parsed)), href);
   }
 });
 

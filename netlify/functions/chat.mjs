@@ -1,5 +1,4 @@
-import { readFile } from 'node:fs/promises';
-import { resolve, sep } from 'node:path';
+import contentRepository from '../content-repository.js';
 
 const MODEL_DEFAULT = 'gemini-2.5-flash';
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
@@ -34,10 +33,6 @@ const ALLOWED_IMAGE_TYPES = new Set([
 const SAFE_PROMPT_FILENAME = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.(json|txt)$/i;
 const PROMPT_POINT_HEADER = /^::punkt[ \t]+([1-9]\d{0,3})[ \t]*$/i;
 const SIMPLE_PROMPT_POINT_HEADER = /^([1-9]\d{0,3})[.)][ \t]+(.+)$/;
-const PROMPT_DIRECTORY = resolve(
-  process.env.LAMBDA_TASK_ROOT || process.cwd(),
-  'netlify/functions/chat-prompts'
-);
 const userRateBuckets = new Map();
 
 export const handler = async (event, context = {}) => {
@@ -312,7 +307,7 @@ function validatePromptConfig(raw) {
   }
 
   const keys = Object.keys(raw);
-  if (keys.some((key) => !['filename', 'point'].includes(key))) {
+  if (keys.some((key) => !['filename', 'point', 'repositoryId'].includes(key))) {
     return { ok: false, code: 'INVALID_PROMPT_CONFIG' };
   }
 
@@ -321,16 +316,23 @@ function validatePromptConfig(raw) {
     return { ok: false, code: 'INVALID_PROMPT_CONFIG' };
   }
 
+  const repositoryId = typeof raw.repositoryId === 'string'
+    ? raw.repositoryId.trim().toLowerCase()
+    : '';
+  if (repositoryId && !/^[a-z0-9][a-z0-9-]{0,39}$/.test(repositoryId)) {
+    return { ok: false, code: 'INVALID_PROMPT_CONFIG' };
+  }
+
   const format = filename.slice(filename.lastIndexOf('.') + 1).toLowerCase();
   if (format === 'txt') {
     if (!Number.isSafeInteger(raw.point) || raw.point < 1 || raw.point > 9_999) {
       return { ok: false, code: 'INVALID_PROMPT_CONFIG' };
     }
-    return { ok: true, value: { filename, format, point: raw.point } };
+    return { ok: true, value: { filename, repositoryId, format, point: raw.point } };
   }
 
   if (raw.point != null) return { ok: false, code: 'INVALID_PROMPT_CONFIG' };
-  return { ok: true, value: { filename, format, point: null } };
+  return { ok: true, value: { filename, repositoryId, format, point: null } };
 }
 
 function parseNumberedPromptFile(rawText, selectedPoint) {
@@ -426,26 +428,34 @@ function parsePromptFile(buffer, promptConfig) {
   return selected;
 }
 
-async function loadPromptInstruction(promptConfig) {
+async function loadPromptInstruction(promptConfig, options = {}) {
   if (!promptConfig) return '';
-  const filePath = resolve(PROMPT_DIRECTORY, promptConfig.filename);
-  // `filename` is already basename-only; this check remains defense in depth.
-  if (!filePath.startsWith(`${PROMPT_DIRECTORY}${sep}`)) {
-    throw new PromptFileError('INVALID_PROMPT_CONFIG');
-  }
-
-  let buffer;
+  const readPrompt = typeof options.readPrompt === 'function'
+    ? options.readPrompt
+    : async (filename, repositoryId) => contentRepository.readAsset(
+      'prompt',
+      filename,
+      { repositoryId }
+    );
   try {
-    buffer = await readFile(filePath);
+    const asset = await readPrompt(promptConfig.filename, promptConfig.repositoryId);
+    const content = asset && typeof asset.content === 'string' ? asset.content : '';
+    if (!content) throw new PromptFileError('PROMPT_FILE_INVALID');
+    return parsePromptFile(Buffer.from(content, 'utf8'), promptConfig);
   } catch (error) {
-    if (error && error.code === 'ENOENT') throw new PromptFileError('PROMPT_NOT_FOUND');
+    if (error instanceof PromptFileError) throw error;
+    if (
+      error instanceof contentRepository.ContentRepositoryError &&
+      error.code === 'CONTENT_FILE_NOT_FOUND'
+    ) {
+      throw new PromptFileError('PROMPT_NOT_FOUND', 404);
+    }
     throw new PromptFileError('PROMPT_UNAVAILABLE', 503);
   }
-  return parsePromptFile(buffer, promptConfig);
 }
 
-async function buildSystemPrompt(promptConfig) {
-  const instruction = await loadPromptInstruction(promptConfig);
+async function buildSystemPrompt(promptConfig, options) {
+  const instruction = await loadPromptInstruction(promptConfig, options);
   return instruction ? `${DEFAULT_SYSTEM_PROMPT}\n\n${instruction}` : DEFAULT_SYSTEM_PROMPT;
 }
 

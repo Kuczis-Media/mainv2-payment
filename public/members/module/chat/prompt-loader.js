@@ -6,6 +6,7 @@
   'use strict';
 
   const SAFE_FILENAME = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.(json|txt)$/i;
+  const SAFE_REPOSITORY_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 
   class PromptConfigError extends Error {
     constructor(code, message) {
@@ -46,7 +47,13 @@
     const fileValues = url.searchParams.getAll('plik');
     const legacyValues = url.searchParams.getAll('prompt');
     const pointValues = url.searchParams.getAll('punkt');
-    if (fileValues.length > 1 || legacyValues.length > 1 || pointValues.length > 1) {
+    const repositoryValues = url.searchParams.getAll('repo');
+    if (
+      fileValues.length > 1 ||
+      legacyValues.length > 1 ||
+      pointValues.length > 1 ||
+      repositoryValues.length > 1
+    ) {
       fail('AMBIGUOUS_QUERY', 'Parametry konfiguracji nie mogą się powtarzać.');
     }
 
@@ -58,6 +65,10 @@
     }
 
     const filename = sanitizePromptFilename(fileValue || legacyValue);
+    const repositoryId = repositoryValues[0] ? repositoryValues[0].trim().toLowerCase() : '';
+    if (repositoryId && !SAFE_REPOSITORY_ID.test(repositoryId)) {
+      fail('INVALID_REPOSITORY', 'Identyfikator repozytorium jest nieprawidłowy.');
+    }
     const format = filename.slice(filename.lastIndexOf('.') + 1).toLowerCase();
     const pointRaw = pointValues[0] ? pointValues[0].trim() : '';
     if (format === 'txt' && !pointRaw) fail('POINT_REQUIRED', 'Dla pliku TXT wymagany jest parametr punkt.');
@@ -65,6 +76,7 @@
 
     return {
       filename,
+      repositoryId,
       format,
       point: format === 'txt' ? parsePointNumber(pointRaw) : null
     };

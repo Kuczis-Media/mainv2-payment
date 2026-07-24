@@ -6,3 +6,4 @@ netlify/functions/manifest.json
 .env.*
 !.env.example
 .DS_Store
+/chemdisk-content/

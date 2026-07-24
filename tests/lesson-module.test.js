@@ -6,10 +6,55 @@ const path = require('node:path');
 const root = path.join(__dirname, '..');
 const lessonRoot = path.join(root, 'public', 'members', 'module', 'lesson');
 const parser = require(path.join(lessonRoot, 'lesson-parser.js'));
+const exampleMarkdown = [
+  '# Izotopy węgla',
+  '',
+  'Krótka lekcja pokazująca, jak działa prezentacja i zadanie w pliku Markdown.',
+  '',
+  '---',
+  '',
+  '## Co oznacza zapis ^13^C?',
+  '',
+  'Liczba masowa to **13**, a liczba atomowa to **6**.',
+  '',
+  '---',
+  '',
+  '## Zadanie',
+  '',
+  ':::task',
+  'type: number',
+  'answer: 7',
+  ':::',
+  '',
+  '---',
+  '',
+  '## Quiz ABCD',
+  '',
+  ':::task',
+  'type: abcd',
+  'options: 4 | 6 | 12 | 13',
+  'answer: B',
+  ':::',
+  '',
+  '---',
+  '',
+  '## Podsumowanie',
+  '',
+  'Liczba neutronów to A − Z.'
+].join('\n');
 
-test('lesson parser builds a wizard from the bundled Markdown example', () => {
-  const markdown = fs.readFileSync(path.join(lessonRoot, 'izotopy-wegla.md'), 'utf8');
-  const lesson = parser.parseLesson(markdown, 'izotopy-wegla.md');
+test('lesson application exposes a repository selector for the live library', () => {
+  const html = fs.readFileSync(path.join(lessonRoot, 'index.html'), 'utf8');
+  const script = fs.readFileSync(path.join(lessonRoot, 'script.js'), 'utf8');
+
+  assert.match(html, /id=["']lesson-library-repository["']/);
+  assert.match(script, /ChemContentLibrary\.repositories\(\)/);
+  assert.match(script, /readLesson\(filename,\s*\{\s*repositoryId\s*\}\)/);
+  assert.match(script, /searchParams\.set\(['"]repo['"],\s*asset\.repositoryId\)/);
+});
+
+test('lesson parser builds a wizard from repository Markdown', () => {
+  const lesson = parser.parseLesson(exampleMarkdown, 'izotopy-wegla.md');
 
   assert.equal(lesson.title, 'Izotopy węgla');
   assert.equal(lesson.slides.length, 5);
@@ -23,13 +68,6 @@ test('lesson parser builds a wizard from the bundled Markdown example', () => {
   assert.equal(parser.checkAnswer(lesson.slides[3].task, '6'), true);
   assert.equal(parser.checkAnswer(lesson.slides[3].task, 'A'), false);
   assert.match(lesson.slides[1].html, /<sup>13<\/sup>C/);
-});
-
-test('the legacy example filename remains an exact alias of the published carbon lesson', () => {
-  const published = fs.readFileSync(path.join(lessonRoot, 'izotopy-wegla.md'), 'utf8');
-  const legacy = fs.readFileSync(path.join(lessonRoot, 'przyklad.md'), 'utf8');
-
-  assert.equal(legacy, published);
 });
 
 test('a slide separator inside a fenced code block remains lesson content', () => {

@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" id="theme-color" content="#edf2f7">
   <meta name="robots" content="noindex,nofollow">
-  <meta name="description" content="ChemDisk Studio — graficzny kreator dashboardu i lekcji Markdown.">
+  <meta name="description" content="ChemDisk Studio — graficzny kreator dashboardu, lekcji i promptów AI.">
   <title>Studio treści — ChemDisk</title>
   <link rel="icon" href="/members/favicon.svg" type="image/svg+xml">
   <script src="/members/module/theme.js"></script>
@@ -15,10 +15,12 @@
   <link rel="stylesheet" href="style.css">
   <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
   <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/content-library.js"></script>
   <script src="/members/dashboard-parser.js"></script>
   <script src="/members/module/lesson/lesson-parser.js"></script>
   <script src="dashboard-model.js"></script>
   <script src="lesson-model.js"></script>
+  <script src="prompt-model.js"></script>
   <script src="script.js" defer></script>
 </head>
 <body>
@@ -37,7 +39,7 @@
       </span>
       <span class="brand-copy">
         <strong>ChemDisk Studio</strong>
-        <small>Dashboardy i lekcje bez ręcznego Markdown</small>
+        <small>Dashboardy, lekcje i prompty bez ręcznej edycji plików</small>
       </span>
     </a>
 
@@ -45,6 +47,7 @@
       <button type="button" data-switch-mode="home">Start</button>
       <button type="button" data-switch-mode="dashboard">Dashboard</button>
       <button type="button" data-switch-mode="lesson">Lekcja</button>
+      <button type="button" data-switch-mode="prompt">Prompt AI</button>
     </nav>
 
     <div class="header-actions">
@@ -98,9 +101,21 @@
               <svg viewBox="0 0 40 40"><path d="M9 5h18l6 6v24H9z"></path><path d="M27 5v7h6M15 18h12M15 24h12M15 30h8"></path></svg>
             </span>
             <span class="project-copy">
-              <small>Eksport pliku Markdown</small>
+              <small>GitHub lub plik Markdown</small>
               <strong>Konfigurator lekcji</strong>
               <span>Slajdy, wideo, ATONOM, fiszki, luki, quizy, kolory, tła i harmonijki.</span>
+            </span>
+            <span class="project-arrow" aria-hidden="true">→</span>
+          </button>
+
+          <button class="project-card project-card-prompt" type="button" data-open-mode="prompt">
+            <span class="project-icon" aria-hidden="true">
+              <svg viewBox="0 0 40 40"><path d="M8 7h24v26H8z"></path><path d="M14 15h12M14 21h12M14 27h7"></path><path d="m27 25 2 2 4-5"></path></svg>
+            </span>
+            <span class="project-copy">
+              <small>JSON lub zestaw punktów TXT</small>
+              <strong>Builder promptów AI</strong>
+              <span>Twórz instrukcje asystenta, testuj strukturę i zapisuj wersje bezpośrednio w prywatnym repo.</span>
             </span>
             <span class="project-arrow" aria-hidden="true">→</span>
           </button>
@@ -143,6 +158,21 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg>
               <input id="dashboard-palette-search" type="search" placeholder="Szukaj modułu…" autocomplete="off">
             </label>
+            <details class="repository-library" open>
+              <summary>
+                <span><strong>Materiały z GitHuba</strong><small>Lekcje i prompty AI</small></span>
+                <span aria-hidden="true">⌄</span>
+              </summary>
+              <div class="repository-library-body">
+                <label class="repository-picker">
+                  <span>Repozytorium</span>
+                  <select id="dashboard-repository-select" aria-label="Repozytorium materiałów dashboardu"></select>
+                </label>
+                <input id="dashboard-asset-search" type="search" placeholder="Szukaj pliku…" autocomplete="off">
+                <p id="dashboard-asset-status" role="status" aria-live="polite">Łączenie z repozytorium…</p>
+                <div class="repository-asset-list" id="dashboard-asset-list"></div>
+              </div>
+            </details>
 
             <div class="palette-scroll">
               <section class="palette-group">
@@ -231,7 +261,6 @@
               <label>
                 <span>Opis powitalny</span>
                 <textarea id="dashboard-intro-input" rows="2" maxlength="600" placeholder="Krótki opis widoczny na początku dashboardu."></textarea>
-              </label>
             </div>
             <div class="canvas-topline">
               <div><small>Obszar roboczy</small><strong>Sekcje dashboardu</strong></div>
@@ -274,9 +303,11 @@
             <button class="button button-soft" id="lesson-import-button" type="button">Importuj .md</button>
             <button class="button button-soft" id="lesson-source-button" type="button">Markdown</button>
             <button class="button button-soft" id="lesson-copy-button" type="button">Kopiuj</button>
-            <button class="button button-primary" id="lesson-download-button" type="button">
+            <button class="button button-soft" id="lesson-download-button" type="button">
               <span aria-hidden="true">↓</span> Pobierz .md
             </button>
+            <button class="button button-danger" id="lesson-repository-delete-button" type="button" disabled>Usuń z GitHuba</button>
+            <button class="button button-primary" id="lesson-repository-save-button" type="button">Zapisz w GitHubie</button>
           </div>
         </div>
 
@@ -290,6 +321,21 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg>
               <input id="lesson-palette-search" type="search" placeholder="Szukaj klocka…" autocomplete="off">
             </label>
+            <details class="repository-library" open>
+              <summary>
+                <span><strong>Gotowe lekcje z GitHuba</strong><small>Wczytaj do buildera</small></span>
+                <span aria-hidden="true">⌄</span>
+              </summary>
+              <div class="repository-library-body">
+                <label class="repository-picker">
+                  <span>Repozytorium</span>
+                  <select id="lesson-repository-select" aria-label="Repozytorium lekcji"></select>
+                </label>
+                <input id="lesson-asset-search" type="search" placeholder="Szukaj lekcji…" autocomplete="off">
+                <p id="lesson-asset-status" role="status" aria-live="polite">Łączenie z repozytorium…</p>
+                <div class="repository-asset-list" id="lesson-asset-list"></div>
+              </div>
+            </details>
 
             <div class="palette-scroll">
               <section class="palette-group">
@@ -374,7 +420,7 @@
                 <span>Nazwa pliku</span>
                 <div class="filename-field">
                   <input id="lesson-filename-input" type="text" maxlength="80" value="nowa-lekcja.md" spellcheck="false">
-                  <small>Dodasz go potem do folderu modułu lesson.</small>
+                  <small>Zapisz w GitHubie albo pobierz i dodaj plik ręcznie do repozytorium.</small>
                 </div>
               </label>
               <label>
@@ -402,6 +448,86 @@
               </div>
             </div>
             <div class="preview-content lesson-live-preview" id="lesson-preview" hidden></div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="workspace-view" id="prompt-workspace" data-workspace="prompt" hidden>
+        <div class="workspace-toolbar">
+          <div>
+            <span class="eyebrow">Builder promptów AI</span>
+            <h1>Instrukcje asystenta JSON i TXT</h1>
+          </div>
+          <div class="toolbar-actions">
+            <input id="prompt-file-input" type="file" accept=".json,.txt,application/json,text/plain" hidden>
+            <button class="button button-soft" id="prompt-import-button" type="button">Importuj plik</button>
+            <button class="button button-soft" id="prompt-source-button" type="button">Kod źródłowy</button>
+            <button class="button button-soft" id="prompt-copy-button" type="button">Kopiuj</button>
+            <button class="button button-soft" id="prompt-download-button" type="button">↓ Pobierz plik</button>
+            <button class="button button-danger" id="prompt-repository-delete-button" type="button" disabled>Usuń z GitHuba</button>
+            <button class="button button-primary" id="prompt-repository-save-button" type="button">Zapisz w GitHubie</button>
+          </div>
+        </div>
+
+        <div class="builder-layout prompt-builder-layout">
+          <aside class="palette-panel" aria-label="Biblioteka promptów">
+            <div class="panel-heading">
+              <div><small>Prywatne repozytorium</small><strong>Gotowe prompty</strong></div>
+              <span class="count-badge" id="prompt-point-count">1</span>
+            </div>
+            <label class="palette-search">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg>
+              <input id="prompt-asset-search" type="search" placeholder="Szukaj promptu…" autocomplete="off">
+            </label>
+            <label class="repository-picker repository-picker-prompt">
+              <span>Repozytorium</span>
+              <select id="prompt-repository-select" aria-label="Repozytorium promptów"></select>
+            </label>
+            <p class="prompt-repository-status" id="prompt-asset-status" role="status" aria-live="polite">Łączenie z repozytorium…</p>
+            <div class="repository-asset-list prompt-repository-list" id="prompt-asset-list"></div>
+            <div class="prompt-help-card">
+              <strong>JSON czy TXT?</strong>
+              <p>JSON zawiera jedną instrukcję. TXT może mieć wiele instrukcji wybieranych w linku parametrem <code>punkt</code>.</p>
+              <p>Każdy zapis w GitHubie tworzy osobny commit. Ręczne pobieranie i import pozostają dostępne.</p>
+            </div>
+          </aside>
+
+          <section class="canvas-panel prompt-canvas-panel" aria-label="Edycja promptu">
+            <div class="document-settings prompt-document-settings">
+              <label>
+                <span>Nazwa pliku</span>
+                <input id="prompt-filename-input" type="text" maxlength="84" value="nowy-prompt.json" spellcheck="false">
+              </label>
+              <label>
+                <span>Format</span>
+                <select id="prompt-format-select">
+                  <option value="json">JSON — jedna instrukcja</option>
+                  <option value="txt">TXT — numerowane punkty</option>
+                </select>
+              </label>
+            </div>
+
+            <section class="prompt-json-editor" id="prompt-json-editor">
+              <label for="prompt-instruction-input">Instrukcja systemowa dla asystenta</label>
+              <textarea id="prompt-instruction-input" maxlength="10000" rows="18" placeholder="Opisz rolę asystenta, sposób prowadzenia ucznia, ograniczenia i oczekiwany format odpowiedzi."></textarea>
+              <small>Builder zapisze poprawny JSON z polem <code>prompt</code>. Maksymalnie 10 000 znaków.</small>
+            </section>
+
+            <section class="prompt-points-editor" id="prompt-points-editor" hidden>
+              <div class="canvas-topline">
+                <div><small>Zestaw instrukcji</small><strong>Punkty wybierane przez moduł czatu</strong></div>
+                <button class="mini-button" id="prompt-add-point-button" type="button">＋ Dodaj punkt</button>
+              </div>
+              <div class="prompt-points-list" id="prompt-points-list"></div>
+            </section>
+          </section>
+
+          <aside class="inspector-panel prompt-preview-panel" aria-label="Podgląd promptu">
+            <div class="panel-heading">
+              <div><small>Walidacja na żywo</small><strong>Podgląd pliku</strong></div>
+            </div>
+            <div class="prompt-validation-status" id="prompt-validation-status" role="status" aria-live="polite"></div>
+            <pre class="prompt-source-preview" id="prompt-source-preview"></pre>
           </aside>
         </div>
       </section>

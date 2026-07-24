@@ -30,6 +30,7 @@
   <link rel="stylesheet" href="/members/dashboard.css" />
   <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
   <script src="/assets/js/auth.js"></script>
+  <script defer src="/assets/js/content-library.js"></script>
   <script defer src="/members/dashboard-parser.js"></script>
   <script defer src="/members/dashboard-navigation.js"></script>
   <script defer src="/members/dashboard.js"></script>
@@ -271,6 +272,9 @@
         <button class="admin-tab" id="admin-tab-dashboard" type="button" role="tab" aria-selected="false" aria-controls="admin-panel-dashboard" tabindex="-1" data-admin-tab="dashboard">
           <span aria-hidden="true">✎</span> Dashboard
         </button>
+        <button class="admin-tab" id="admin-tab-content" type="button" role="tab" aria-selected="false" aria-controls="admin-panel-content" tabindex="-1" data-admin-tab="content">
+          <span aria-hidden="true">◆</span> Materiały
+        </button>
         <button class="admin-tab" id="admin-tab-payments" type="button" role="tab" aria-selected="false" aria-controls="admin-panel-payments" tabindex="-1" data-admin-tab="payments">
           <span aria-hidden="true">zł</span> Płatności
         </button>
@@ -401,6 +405,51 @@
         </div>
         <div class="admin-status" id="admin-dashboard-status" role="status" aria-live="polite"></div>
         <section class="admin-dashboard-preview" id="admin-dashboard-preview" aria-label="Podgląd struktury dashboardu"></section>
+      </section>
+
+      <section class="admin-tab-panel" id="admin-panel-content" role="tabpanel" aria-labelledby="admin-tab-content" data-admin-panel="content" hidden>
+        <div class="admin-guidance admin-guidance-warning">
+          <span aria-hidden="true">!</span>
+          <p><strong>Token GitHub nigdy nie trafia do tej strony.</strong> Ustaw go jako tajną zmienną środowiskową Netlify z zakresem Functions. Ogranicz token tylko do wybranych repozytoriów materiałów; przeglądarka wysyła wyłącznie JWT administratora.</p>
+        </div>
+
+        <div class="admin-content-status-card">
+          <div>
+            <span class="field-label">Stan prywatnego repozytorium</span>
+            <select id="admin-content-repository-select" aria-label="Wybierz repozytorium materiałów"></select>
+            <strong id="admin-content-connection">Sprawdzanie konfiguracji…</strong>
+            <small id="admin-content-repository">Repozytorium nie zostało jeszcze odczytane.</small>
+          </div>
+          <div class="admin-content-counts">
+            <span><strong id="admin-content-lessons">0</strong><small>lekcji .md</small></span>
+            <span><strong id="admin-content-prompts">0</strong><small>promptów .txt/.json</small></span>
+          </div>
+        </div>
+
+        <details class="admin-content-setup" open>
+          <summary>Jak bezpiecznie podłączyć prywatne repozytoria</summary>
+          <ol>
+            <li>Utwórz jedno lub kilka prywatnych repozytoriów z folderami <code>lessons</code> i <code>prompts</code>.</li>
+            <li>W GitHub utwórz fine-grained token ograniczony wyłącznie do wybranych repozytoriów. Nadaj mu tylko <strong>Contents: Read and write</strong>, aby Studio mogło dodawać, poprawiać i usuwać pliki.</li>
+            <li>W Netlify przejdź do <strong>Project configuration → Environment variables</strong> i dodaj poniższe zmienne. Token oznacz jako sekret i ogranicz do Functions.</li>
+            <li>Dla kilku repozytoriów ustaw dodatkowo <code>GITHUB_CONTENT_REPOSITORIES</code> zgodnie z instrukcją w README. Uruchom nowy deploy Functions, a potem wybieraj repozytorium z listy.</li>
+          </ol>
+          <pre id="admin-content-env-template">GITHUB_CONTENT_TOKEN=github_pat_…
+GITHUB_CONTENT_REPOSITORIES=
+GITHUB_CONTENT_REPOSITORY=Kuczis-Media/chemdisk-content
+GITHUB_CONTENT_REF=main
+GITHUB_CONTENT_ROOT=</pre>
+          <div class="admin-content-links">
+            <a class="button button-secondary" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">Utwórz token GitHub</a>
+            <a class="button button-secondary" href="https://app.netlify.com/" target="_blank" rel="noopener noreferrer">Otwórz Netlify</a>
+            <button class="button button-secondary" id="admin-content-copy-env" type="button">Kopiuj nazwy zmiennych</button>
+          </div>
+        </details>
+
+        <div class="admin-editor-actions">
+          <p class="admin-status" id="admin-content-status" role="status" aria-live="polite"></p>
+          <button class="button button-primary" id="admin-content-refresh" type="button">Sprawdź ponownie</button>
+        </div>
       </section>
 
       <section class="admin-tab-panel" id="admin-panel-payments" role="tabpanel" aria-labelledby="admin-tab-payments" data-admin-panel="payments" hidden>

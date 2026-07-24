@@ -435,6 +435,12 @@ button {
   --card-color: var(--studio-violet);
 }
 
+.project-card-prompt {
+  --card-color: var(--studio-blue);
+  grid-column: 1 / -1;
+  min-height: 205px;
+}
+
 .project-icon {
   display: grid;
   width: 68px;
@@ -711,6 +717,170 @@ button {
   color: var(--chem-subtle);
 }
 
+.repository-library {
+  margin: 0 14px 12px;
+  flex: 0 0 auto;
+  background: color-mix(in srgb, var(--chem-primary-soft) 48%, var(--chem-surface));
+  border: 1px solid color-mix(in srgb, var(--chem-primary) 18%, var(--chem-line));
+  border-radius: 12px;
+}
+
+.repository-library > summary {
+  display: flex;
+  min-height: 48px;
+  padding: 9px 10px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.repository-library > summary::-webkit-details-marker {
+  display: none;
+}
+
+.repository-library > summary strong,
+.repository-library > summary small {
+  display: block;
+}
+
+.repository-library > summary strong {
+  font-size: 0.65rem;
+}
+
+.repository-library > summary small {
+  margin-top: 2px;
+  color: var(--chem-muted);
+  font-size: 0.52rem;
+}
+
+.repository-library > summary > span:last-child {
+  color: var(--chem-primary);
+  transition: transform 160ms ease;
+}
+
+.repository-library[open] > summary > span:last-child {
+  transform: rotate(180deg);
+}
+
+.repository-library-body {
+  display: grid;
+  padding: 0 8px 9px;
+  gap: 7px;
+}
+
+.repository-library-body > input {
+  width: 100%;
+  min-height: 34px;
+  padding: 0 9px;
+  color: var(--chem-text);
+  background: var(--chem-surface);
+  border: 1px solid var(--chem-line);
+  border-radius: 9px;
+  font-size: 0.61rem;
+}
+
+.repository-picker {
+  display: grid;
+  gap: 4px;
+  color: var(--chem-muted);
+  font-size: 0.53rem;
+  font-weight: 760;
+}
+
+.repository-picker select {
+  width: 100%;
+  min-height: 34px;
+  padding: 0 28px 0 9px;
+  color: var(--chem-text);
+  background: var(--chem-surface);
+  border: 1px solid var(--chem-line);
+  border-radius: 9px;
+  font: inherit;
+  font-size: 0.61rem;
+}
+
+.repository-picker-prompt {
+  margin: 0 14px 10px;
+}
+
+.repository-library-body > p {
+  min-height: 16px;
+  margin: 0 2px;
+  color: var(--chem-muted);
+  font-size: 0.54rem;
+  line-height: 1.35;
+}
+
+.repository-library-body > p.is-error {
+  color: var(--chem-danger);
+}
+
+.repository-asset-list {
+  display: grid;
+  max-height: 176px;
+  gap: 5px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.repository-asset {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 46px;
+  padding: 6px 7px;
+  align-items: center;
+  gap: 7px;
+  color: var(--chem-text);
+  text-align: left;
+  background: var(--chem-surface);
+  border: 1px solid var(--chem-line);
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.repository-asset:hover {
+  border-color: color-mix(in srgb, var(--chem-primary) 42%, var(--chem-line));
+}
+
+.repository-asset-kind {
+  display: grid;
+  min-width: 27px;
+  height: 27px;
+  padding: 0 5px;
+  place-items: center;
+  color: var(--chem-primary);
+  background: var(--chem-primary-soft);
+  border-radius: 7px;
+  font-size: 0.52rem;
+  font-weight: 850;
+}
+
+.repository-asset strong,
+.repository-asset small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repository-asset strong {
+  font-size: 0.57rem;
+}
+
+.repository-asset small {
+  margin-top: 2px;
+  color: var(--chem-subtle);
+  font-size: 0.48rem;
+}
+
+.repository-asset-action {
+  color: var(--chem-primary);
+  font-size: 0.52rem;
+  font-weight: 800;
+}
+
 .palette-scroll,
 .inspector-content,
 .preview-content {
@@ -880,6 +1050,7 @@ button {
 
 .document-settings input,
 .document-settings textarea,
+.document-settings select,
 .inspector-form input,
 .inspector-form textarea,
 .inspector-form select,
@@ -894,6 +1065,7 @@ button {
 }
 
 .document-settings input,
+.document-settings select,
 .inspector-form input,
 .inspector-form select {
   min-height: 41px;
@@ -910,6 +1082,7 @@ button {
 
 .document-settings input:focus,
 .document-settings textarea:focus,
+.document-settings select:focus,
 .inspector-form input:focus,
 .inspector-form textarea:focus,
 .inspector-form select:focus,
@@ -920,6 +1093,214 @@ button {
 
 .lesson-document-settings {
   grid-template-columns: minmax(220px, 0.72fr) minmax(280px, 1.4fr);
+}
+
+.prompt-document-settings {
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 0.7fr);
+}
+
+.prompt-repository-status {
+  min-height: 18px;
+  margin: 0;
+  padding: 0 16px 8px;
+  color: var(--chem-muted);
+  font-size: 0.58rem;
+  line-height: 1.45;
+}
+
+.prompt-repository-status.is-error {
+  color: var(--chem-danger);
+}
+
+.prompt-repository-list {
+  max-height: none;
+  margin: 0 12px;
+  padding-right: 3px;
+  flex: 1 1 auto;
+}
+
+.prompt-help-card {
+  margin: 14px;
+  padding: 13px;
+  color: var(--chem-muted);
+  background: var(--chem-surface-soft);
+  border: 1px solid var(--chem-line);
+  border-radius: 12px;
+  font-size: 0.6rem;
+  line-height: 1.55;
+}
+
+.prompt-help-card strong {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--chem-text);
+  font-size: 0.67rem;
+}
+
+.prompt-help-card p {
+  margin: 6px 0 0;
+}
+
+.prompt-json-editor,
+.prompt-points-editor {
+  padding: clamp(18px, 3vw, 30px);
+  background: color-mix(in srgb, var(--chem-surface) 88%, transparent);
+  border: 1px solid var(--chem-line);
+  border-radius: 18px;
+  box-shadow: var(--chem-shadow-sm);
+}
+
+.prompt-json-editor label {
+  display: block;
+  margin-bottom: 9px;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.prompt-json-editor textarea {
+  width: 100%;
+  min-height: 390px;
+  padding: 16px;
+  color: var(--chem-text);
+  background: var(--chem-surface);
+  border: 1px solid var(--chem-line);
+  border-radius: 13px;
+  outline: 0;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.prompt-json-editor textarea:focus,
+.prompt-point textarea:focus,
+.prompt-point input:focus {
+  border-color: var(--chem-primary);
+  box-shadow: 0 0 0 3px var(--studio-focus);
+}
+
+.prompt-json-editor > small {
+  display: block;
+  margin-top: 8px;
+  color: var(--chem-subtle);
+  font-size: 0.61rem;
+  line-height: 1.5;
+}
+
+.prompt-points-editor .canvas-topline {
+  margin-bottom: 15px;
+}
+
+.prompt-points-list {
+  display: grid;
+  gap: 12px;
+}
+
+.prompt-point {
+  padding: 14px;
+  background: var(--chem-surface);
+  border: 1px solid var(--chem-line);
+  border-radius: 14px;
+}
+
+.prompt-point-header {
+  display: flex;
+  margin-bottom: 10px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.prompt-point-number {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--chem-muted);
+  font-size: 0.65rem;
+  font-weight: 800;
+}
+
+.prompt-point-number input {
+  width: 76px;
+  min-height: 35px;
+  padding: 0 9px;
+  color: var(--chem-text);
+  background: var(--chem-surface-soft);
+  border: 1px solid var(--chem-line);
+  border-radius: 9px;
+}
+
+.prompt-point-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.prompt-point-actions button {
+  display: grid;
+  width: 31px;
+  height: 31px;
+  padding: 0;
+  place-items: center;
+  color: var(--chem-muted);
+  background: var(--chem-surface-soft);
+  border: 1px solid var(--chem-line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.prompt-point-actions button:hover {
+  color: var(--chem-primary);
+  border-color: color-mix(in srgb, var(--chem-primary) 38%, var(--chem-line));
+}
+
+.prompt-point textarea {
+  width: 100%;
+  min-height: 150px;
+  padding: 12px;
+  color: var(--chem-text);
+  background: var(--chem-surface-soft);
+  border: 1px solid var(--chem-line);
+  border-radius: 10px;
+  outline: 0;
+  resize: vertical;
+  line-height: 1.55;
+}
+
+.prompt-preview-panel {
+  padding-bottom: 14px;
+}
+
+.prompt-validation-status {
+  margin: 0 15px 12px;
+  padding: 11px 12px;
+  color: var(--chem-primary);
+  background: var(--chem-primary-soft);
+  border: 1px solid color-mix(in srgb, var(--chem-primary) 22%, var(--chem-line));
+  border-radius: 11px;
+  font-size: 0.62rem;
+  font-weight: 750;
+  line-height: 1.5;
+}
+
+.prompt-validation-status.is-error {
+  color: var(--chem-danger);
+  background: color-mix(in srgb, var(--chem-danger) 8%, var(--chem-surface));
+  border-color: color-mix(in srgb, var(--chem-danger) 28%, var(--chem-line));
+}
+
+.prompt-source-preview {
+  min-height: 0;
+  margin: 0 15px;
+  padding: 14px;
+  flex: 1 1 auto;
+  overflow: auto;
+  color: var(--chem-text);
+  background: var(--chem-surface-soft);
+  border: 1px solid var(--chem-line);
+  border-radius: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.61rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .filename-field {
@@ -2363,6 +2744,10 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .project-card-prompt {
+    grid-column: auto;
+  }
+
   .project-card {
     min-height: 200px;
   }
@@ -2413,8 +2798,18 @@ button {
   }
 
   .document-settings,
-  .lesson-document-settings {
+  .lesson-document-settings,
+  .prompt-document-settings {
     grid-template-columns: 1fr;
+  }
+
+  .prompt-json-editor textarea {
+    min-height: 300px;
+  }
+
+  .prompt-repository-list {
+    max-height: 330px;
+    flex: none;
   }
 
   .inspector-content,

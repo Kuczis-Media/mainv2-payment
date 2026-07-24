@@ -5,10 +5,6 @@
   publish = "public"
   functions = "netlify/functions"
 
-## Prompt sets stay in the serverless bundle and are never published to the CDN.
-[functions.chat]
-  included_files = ["netlify/functions/chat-prompts/**"]
-
 ## Baseline browser hardening for all static pages. Module-specific iframes are
 ## still allowed to load external teaching tools; this only prevents ChemDisk
 ## itself from being embedded by unrelated sites.

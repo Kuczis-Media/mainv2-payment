@@ -57,22 +57,38 @@ test('Dashboard Builder loads and conditionally publishes the active Blob versio
   assert.doesNotMatch(script, /localStorage\.setItem\([^)]*(?:token|jwt)/i);
 });
 
-test('both visual editors expose drag-and-drop, previews and reversible source workflows', () => {
+test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   const html = read('public/members/module/studio/index.html');
   const script = read('public/members/module/studio/script.js');
   const styles = read('public/members/module/studio/style.css');
 
   assert.ok(fs.existsSync(path.join(studioRoot, 'dashboard-model.js')));
   assert.ok(fs.existsSync(path.join(studioRoot, 'lesson-model.js')));
+  assert.ok(fs.existsSync(path.join(studioRoot, 'prompt-model.js')));
   assert.match(html, /draggable=["']true["']/);
   assert.match(html, /id=["']lesson-download-button["']/);
   assert.match(html, /id=["']lesson-copy-button["']/);
+  assert.match(html, /id=["']lesson-repository-save-button["']/);
+  assert.match(html, /id=["']lesson-repository-delete-button["']/);
+  assert.match(html, /id=["']prompt-workspace["']/);
+  assert.match(html, /id=["']prompt-download-button["']/);
+  assert.match(html, /id=["']prompt-import-button["']/);
+  assert.match(html, /id=["']prompt-repository-save-button["']/);
+  assert.match(html, /id=["']prompt-repository-delete-button["']/);
   assert.match(html, /id=["']source-dialog["']/);
   assert.match(html, /data-lesson-add=["']quote["']/);
   assert.match(html, /data-lesson-add=["']youtube["']/);
   assert.match(html, /data-lesson-add=["']atonom["']/);
   assert.match(html, /data-lesson-add=["']flashcards["']/);
   assert.match(html, /data-lesson-add=["']task-gaps["']/);
+  assert.match(html, /\/assets\/js\/content-library\.js/);
+  assert.match(html, /id=["']dashboard-asset-search["']/);
+  assert.match(html, /id=["']dashboard-repository-select["']/);
+  assert.match(html, /id=["']lesson-repository-select["']/);
+  assert.match(html, /id=["']prompt-repository-select["']/);
+  assert.match(html, /id=["']lesson-asset-search["']/);
+  assert.match(html, /id=["']dashboard-asset-list["']/);
+  assert.match(html, /id=["']lesson-asset-list["']/);
   assert.match(script, /addEventListener\(['"]dragstart['"]/);
   assert.match(script, /addEventListener\(['"]drop['"]/);
   assert.match(script, /window\.open\(/);
@@ -80,6 +96,14 @@ test('both visual editors expose drag-and-drop, previews and reversible source w
   assert.match(script, /state\.lesson\.model\.slides\.forEach/);
   assert.match(script, /serializeLesson/);
   assert.match(script, /parseLesson/);
+  assert.match(script, /library\.list\(['"]lesson['"]/);
+  assert.match(script, /library\.list\(['"]prompt['"]/);
+  assert.match(script, /library\.repositories\(\)/);
+  assert.match(script, /ChemContentLibrary\.readLesson/);
+  assert.match(script, /ChemContentLibrary\.readPrompt/);
+  assert.match(script, /ChemContentLibrary\.save/);
+  assert.match(script, /ChemContentLibrary\.remove/);
+  assert.match(script, /library\.search/);
   assert.match(styles, /\.studio-preview-window/);
   assert.match(styles, /\.full-preview-main/);
   assert.match(styles, /\.full-lesson-list/);
@@ -94,7 +118,7 @@ test('both visual editors expose drag-and-drop, previews and reversible source w
   );
   assert.match(dashboardClone, /delete node\.uid/);
   assert.doesNotMatch(dashboardClone, /delete node\.id/);
-  assert.match(script, /saveTimers:\s*\{\s*dashboard:\s*0,\s*lesson:\s*0\s*\}/);
+  assert.match(script, /saveTimers:\s*\{\s*dashboard:\s*0,\s*lesson:\s*0,\s*prompt:\s*0\s*\}/);
   assert.match(script, /addEventListener\(['"]pagehide['"],\s*flushDrafts\)/);
 });
 

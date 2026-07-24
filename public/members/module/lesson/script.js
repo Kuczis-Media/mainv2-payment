@@ -27,17 +27,27 @@
     previous: document.getElementById('previous-button'),
     next: document.getElementById('next-button'),
     restart: document.getElementById('restart-button'),
-    themeToggle: document.getElementById('theme-toggle')
+    themeToggle: document.getElementById('theme-toggle'),
+    libraryButton: document.getElementById('lesson-library-button'),
+    libraryDialog: document.getElementById('lesson-library-dialog'),
+    libraryClose: document.getElementById('lesson-library-close'),
+    librarySearch: document.getElementById('lesson-library-search'),
+    libraryRepository: document.getElementById('lesson-library-repository'),
+    libraryStatus: document.getElementById('lesson-library-status'),
+    libraryList: document.getElementById('lesson-library-list')
   };
 
   const state = {
     filename: '',
+    repositoryId: '',
     lesson: null,
     index: 0,
     maxReached: 0,
     solved: new Set(),
     completed: false,
-    attempts: new Map()
+    attempts: new Map(),
+    libraryAssets: [],
+    repositories: []
   };
 
   function readFilename() {
@@ -47,8 +57,16 @@
     return parser.validateFilename(files[0]);
   }
 
+  function readRepositoryId() {
+    const params = new URLSearchParams(window.location.search);
+    const values = params.getAll('repo');
+    if (values.length > 1) return '';
+    const value = values[0] ? values[0].trim().toLowerCase() : '';
+    return !value || /^[a-z0-9][a-z0-9-]{0,39}$/.test(value) ? value : '';
+  }
+
   function progressKey() {
-    return `chemdisk.lesson.v1:${state.filename}`;
+    return `chemdisk.lesson.v1:${state.repositoryId || 'default'}:${state.filename}`;
   }
 
   function loadProgress() {
@@ -117,7 +135,7 @@
 
   function friendlyLoadError(error) {
     if (error?.code || error?.name === 'LessonFormatError') return error.message;
-    if (error?.message === 'NOT_FOUND') return `Nie znaleziono pliku „${state.filename}” w folderze modułu lesson.`;
+    if (error?.message === 'NOT_FOUND') return `Nie znaleziono lekcji „${state.filename}” w prywatnej bibliotece.`;
     if (error?.message === 'TOO_LARGE') return 'Plik lekcji jest zbyt duży.';
     return 'Sprawdź połączenie, nazwę pliku i spróbuj ponownie.';
   }
@@ -131,26 +149,19 @@
     elements.navigation.hidden = true;
 
     state.filename = readFilename();
+    state.repositoryId = readRepositoryId();
     if (!state.filename) {
       showError(
-        'Brakuje poprawnej nazwy pliku',
-        'Otwórz moduł przez link w formacie /members/module/lesson/?file=izotopy-wegla.md. Nazwa może zawierać litery, cyfry, kropki, myślniki i podkreślenia.',
+        'Wybierz lekcję z biblioteki',
+        'Otwórz bibliotekę u góry i wybierz materiał z prywatnego repozytorium.',
         false
       );
+      openLessonLibrary();
       return;
     }
 
     try {
-      const response = await fetch(`./${encodeURIComponent(state.filename)}`, {
-        cache: 'no-store',
-        credentials: 'same-origin',
-        headers: { Accept: 'text/markdown,text/plain;q=0.9' }
-      });
-      if (response.status === 404) throw new Error('NOT_FOUND');
-      if (!response.ok) throw new Error('FETCH_FAILED');
-      const contentLength = Number(response.headers.get('content-length') || 0);
-      if (contentLength > 512 * 1024) throw new Error('TOO_LARGE');
-      const markdown = await response.text();
+      const markdown = await fetchLessonMarkdown(state.filename, state.repositoryId);
       state.lesson = parser.parseLesson(markdown, state.filename);
       state.index = 0;
       state.maxReached = 0;
@@ -170,6 +181,144 @@
       console.error('Nie udało się wczytać lekcji', error);
       showError('Nie udało się wczytać lekcji', friendlyLoadError(error));
     }
+  }
+
+  async function fetchLessonMarkdown(filename, repositoryId) {
+    const library = window.ChemContentLibrary;
+    if (library && typeof library.readLesson === 'function') {
+      try {
+        const asset = await library.readLesson(filename, { repositoryId });
+        return asset.content;
+      } catch (error) {
+        if (repositoryId) throw error;
+        const mayUseBundledFallback = [
+          'CONTENT_REPOSITORY_NOT_CONFIGURED',
+          'CONTENT_DIRECTORY_NOT_FOUND',
+          'CONTENT_FILE_NOT_FOUND'
+        ].includes(error && error.code);
+        if (!mayUseBundledFallback) throw error;
+      }
+    }
+    const response = await fetch(`./${encodeURIComponent(filename)}`, {
+      cache: 'no-store',
+      credentials: 'same-origin',
+      headers: { Accept: 'text/markdown,text/plain;q=0.9' }
+    });
+    if (response.status === 404) throw new Error('NOT_FOUND');
+    if (!response.ok) throw new Error('FETCH_FAILED');
+    const contentLength = Number(response.headers.get('content-length') || 0);
+    if (contentLength > 512 * 1024) throw new Error('TOO_LARGE');
+    return response.text();
+  }
+
+  async function openLessonLibrary() {
+    if (!elements.libraryDialog.open) {
+      if (typeof elements.libraryDialog.showModal === 'function') elements.libraryDialog.showModal();
+      else elements.libraryDialog.setAttribute('open', '');
+    }
+    elements.librarySearch.value = '';
+    elements.librarySearch.focus();
+    try {
+      await loadRepositoryOptions();
+    } catch (error) {
+      elements.libraryStatus.className = 'lesson-library-status is-error';
+      elements.libraryStatus.textContent = error && error.message
+        ? error.message
+        : 'Nie udało się pobrać listy repozytoriów.';
+      return;
+    }
+    if (state.libraryAssets.length) {
+      renderLessonLibrary();
+      return;
+    }
+    elements.libraryStatus.className = 'lesson-library-status is-loading';
+    elements.libraryStatus.textContent = 'Pobieranie listy lekcji…';
+    elements.libraryList.replaceChildren();
+    try {
+      state.libraryAssets = await window.ChemContentLibrary.list('lesson', {
+        repositoryId: state.repositoryId
+      });
+      elements.libraryStatus.className = 'lesson-library-status';
+      elements.libraryStatus.textContent = state.libraryAssets.length
+        ? `${state.libraryAssets.length} lekcji w wybranym repozytorium.`
+        : 'Repozytorium nie zawiera jeszcze lekcji.';
+      renderLessonLibrary();
+    } catch (error) {
+      elements.libraryStatus.className = 'lesson-library-status is-error';
+      elements.libraryStatus.textContent = error && error.message
+        ? error.message
+        : 'Nie udało się pobrać biblioteki.';
+    }
+  }
+
+  async function loadRepositoryOptions() {
+    if (!state.repositories.length) {
+      state.repositories = await window.ChemContentLibrary.repositories();
+    }
+    if (!state.repositories.length) throw new Error('Nie skonfigurowano żadnego repozytorium.');
+    const selected = state.repositories.find((repository) => repository.id === state.repositoryId)
+      || state.repositories.find((repository) => repository.default)
+      || state.repositories[0];
+    state.repositoryId = selected.id;
+    elements.libraryRepository.replaceChildren(
+      ...state.repositories.map((repository) => {
+        const option = document.createElement('option');
+        option.value = repository.id;
+        option.textContent = repository.label || repository.repository;
+        return option;
+      })
+    );
+    elements.libraryRepository.value = state.repositoryId;
+  }
+
+  function closeLessonLibrary() {
+    if (typeof elements.libraryDialog.close === 'function') elements.libraryDialog.close();
+    else elements.libraryDialog.removeAttribute('open');
+  }
+
+  function renderLessonLibrary() {
+    const library = window.ChemContentLibrary;
+    const assets = library.search(state.libraryAssets, elements.librarySearch.value);
+    const fragment = document.createDocumentFragment();
+    assets.forEach((asset) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'lesson-library-item';
+      const icon = document.createElement('span');
+      icon.className = 'lesson-library-icon';
+      icon.textContent = 'L';
+      icon.setAttribute('aria-hidden', 'true');
+      const copy = document.createElement('span');
+      const title = document.createElement('strong');
+      title.textContent = asset.title || asset.filename;
+      const description = document.createElement('small');
+      description.textContent = asset.description || asset.filename;
+      copy.append(title, description);
+      const arrow = document.createElement('span');
+      arrow.textContent = '→';
+      arrow.setAttribute('aria-hidden', 'true');
+      button.append(icon, copy, arrow);
+      button.addEventListener('click', () => selectLibraryLesson(asset));
+      fragment.append(button);
+    });
+    if (!assets.length && state.libraryAssets.length) {
+      const empty = document.createElement('p');
+      empty.className = 'lesson-library-empty';
+      empty.textContent = 'Nie znaleziono lekcji pasującej do wyszukiwania.';
+      fragment.append(empty);
+    }
+    elements.libraryList.replaceChildren(fragment);
+  }
+
+  function selectLibraryLesson(asset) {
+    if (!asset || !asset.filename) return;
+    const url = new URL(window.location.href);
+    url.search = '';
+    url.searchParams.set('file', asset.filename);
+    if (asset.repositoryId) url.searchParams.set('repo', asset.repositoryId);
+    window.history.pushState({}, '', url);
+    closeLessonLibrary();
+    loadLesson();
   }
 
   function buildOutline() {
@@ -447,6 +596,18 @@
   }
 
   elements.themeToggle.addEventListener('click', toggleTheme);
+  elements.libraryButton.addEventListener('click', openLessonLibrary);
+  elements.libraryClose.addEventListener('click', closeLessonLibrary);
+  elements.librarySearch.addEventListener('input', renderLessonLibrary);
+  elements.libraryRepository.addEventListener('change', async () => {
+    state.repositoryId = elements.libraryRepository.value;
+    state.libraryAssets = [];
+    await openLessonLibrary();
+  });
+  elements.libraryDialog.addEventListener('click', (event) => {
+    if (event.target === elements.libraryDialog) closeLessonLibrary();
+  });
+  window.addEventListener('popstate', loadLesson);
   elements.retry.addEventListener('click', loadLesson);
   elements.previous.addEventListener('click', goPrevious);
   elements.next.addEventListener('click', goNext);

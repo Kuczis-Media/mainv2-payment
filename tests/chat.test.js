@@ -119,6 +119,8 @@ test('chat only calls the configured model for an active user', async (t) => {
   const originalKey = process.env.GEMINI_API_KEY;
   const originalUrl = process.env.URL;
   const originalDeployUrl = process.env.DEPLOY_PRIME_URL;
+  const originalGithubToken = process.env.GITHUB_CONTENT_TOKEN;
+  const originalGithubRepository = process.env.GITHUB_CONTENT_REPOSITORY;
 
   t.after(() => {
     global.fetch = originalFetch;
@@ -128,15 +130,29 @@ test('chat only calls the configured model for an active user', async (t) => {
     else process.env.URL = originalUrl;
     if (originalDeployUrl === undefined) delete process.env.DEPLOY_PRIME_URL;
     else process.env.DEPLOY_PRIME_URL = originalDeployUrl;
+    if (originalGithubToken === undefined) delete process.env.GITHUB_CONTENT_TOKEN;
+    else process.env.GITHUB_CONTENT_TOKEN = originalGithubToken;
+    if (originalGithubRepository === undefined) delete process.env.GITHUB_CONTENT_REPOSITORY;
+    else process.env.GITHUB_CONTENT_REPOSITORY = originalGithubRepository;
   });
 
   process.env.GEMINI_API_KEY = 'test-key';
   delete process.env.URL;
   delete process.env.DEPLOY_PRIME_URL;
+  process.env.GITHUB_CONTENT_TOKEN = 'github_pat_test';
+  process.env.GITHUB_CONTENT_REPOSITORY = 'Kuczis-Media/chemdisk-content';
 
   let requestedUrl = '';
   let requestedOptions = {};
   global.fetch = async (url, options = {}) => {
+    if (String(url).startsWith('https://api.github.com/')) {
+      return new Response([
+        '::punkt 1',
+        'Jesteś korepetytorem chemii.',
+        '::punkt 2',
+        'Zadawaj krótkie pytania naprowadzające.'
+      ].join('\n'), { status: 200 });
+    }
     requestedUrl = String(url);
     requestedOptions = options;
     return {
@@ -202,7 +218,32 @@ test('chat rejects arbitrary client system prompts and validates prompt referenc
   );
   assert.deepEqual(
     chat._test.validatePromptConfig({ filename: 'zestaw.txt', point: 7 }),
-    { ok: true, value: { filename: 'zestaw.txt', format: 'txt', point: 7 } }
+    {
+      ok: true,
+      value: { filename: 'zestaw.txt', repositoryId: '', format: 'txt', point: 7 }
+    }
+  );
+  assert.deepEqual(
+    chat._test.validatePromptConfig({
+      filename: 'zestaw.json',
+      repositoryId: 'organiczna'
+    }),
+    {
+      ok: true,
+      value: {
+        filename: 'zestaw.json',
+        repositoryId: 'organiczna',
+        format: 'json',
+        point: null
+      }
+    }
+  );
+  assert.deepEqual(
+    chat._test.validatePromptConfig({
+      filename: 'zestaw.json',
+      repositoryId: '../inne'
+    }),
+    { ok: false, code: 'INVALID_PROMPT_CONFIG' }
   );
 });
 
@@ -272,16 +313,28 @@ test('server prompt parser rejects ambiguous or oversized files', () => {
 });
 
 test('server loads private JSON and TXT prompt files', async () => {
+  const files = {
+    'test.json': JSON.stringify({
+      prompt: ['Jesteś egzaminatorem maturalnym.', 'Sprawdzaj kryteria.']
+    }),
+    'prompty-przyklad.txt': [
+      '::punkt 1',
+      'Jesteś korepetytorem chemii.',
+      '::punkt 2',
+      'Zadawaj krótkie pytania naprowadzające.'
+    ].join('\n')
+  };
+  const readPrompt = async (filename) => ({ content: files[filename] });
   const json = await chat._test.loadPromptInstruction({
     filename: 'test.json',
     format: 'json',
     point: null
-  });
+  }, { readPrompt });
   const point = await chat._test.loadPromptInstruction({
     filename: 'prompty-przyklad.txt',
     format: 'txt',
     point: 2
-  });
+  }, { readPrompt });
 
   assert.match(json, /egzaminatorem maturalnym/i);
   assert.match(point, /pytania naprowadzające/i);

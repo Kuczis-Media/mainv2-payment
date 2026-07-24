@@ -1,6 +1,6 @@
 # ChemDisk — platforma kursów maturalnych
 
-ChemDisk jest statyczną aplikacją wdrażaną na Netlify. Publiczna strona prowadzi do logowania przez Netlify Identity, a zalogowany kursant otrzymuje panel z materiałami zdefiniowanymi w pliku Markdown. Dostęp kontrolują role w `app_metadata`, nadawane automatycznie po płatności Stripe albo ręcznie przez administratora.
+ChemDisk jest statyczną aplikacją wdrażaną na Netlify. Publiczna strona prowadzi do logowania przez Netlify Identity, a zalogowany kursant otrzymuje panel z materiałami zdefiniowanymi w Markdownzie dashboardu i prywatnych repozytoriach lekcji. Dostęp kontrolują role w `app_metadata`, nadawane automatycznie po płatności Stripe albo ręcznie przez administratora.
 
 ## Architektura
 
@@ -24,7 +24,7 @@ public/
         ├── theme.js / theme.css       # wspólna paleta jasna/ciemna aplikacji
         ├── media-*.js / *.css         # wspólne mechanizmy podglądów mediów
         ├── studio/                    # Dashboard Builder i Lesson Builder
-        ├── lesson/                    # odtwarzacz lekcji oraz pliki .md
+        ├── lesson/                    # odtwarzacz lekcji z prywatnego repo treści
         ├── atonom/                    # modele cząsteczek z polskich nazw
         └── …                          # kalkulatory, tablice, media, czat i kontakt
 netlify/functions/
@@ -38,15 +38,16 @@ netlify/functions/
 ├── payment-admin.js                   # historia i odebranie płatnego dostępu
 ├── admin-forms.js                     # odczyt/usuwanie zgłoszeń Netlify Forms
 ├── admin-dashboard.js                 # aktywny Markdown w Netlify Blobs
-├── chat-prompts/                      # prywatne prompty dołączane do funkcji
+├── content-library.js                 # chroniona lista i odczyt repo treści
 └── chat.mjs                           # chronione połączenie z Gemini i limit Netlify
 netlify/admin-common.js                # wspólna kanoniczna autoryzacja
+netlify/content-repository.js           # serwerowy klient GitHub Contents API
 netlify/payment-common.js              # pakiety, księga zakupów i synchronizacja Identity
 netlify.toml                           # publikacja, nagłówki i ochrona /members/*
 tests/                                 # testy auth i Netlify Functions
 ```
 
-To nie jest aplikacja SPA ani projekt wymagający własnego, stale uruchomionego serwera. Netlify publikuje katalog `public`, a pliki z `netlify/functions` uruchamia na żądanie jako funkcje serverless. Profile i role przechowuje Identity, zgłoszenia — Netlify Forms, a aktywny Markdown edytora — Netlify Blobs.
+To nie jest aplikacja SPA ani projekt wymagający własnego, stale uruchomionego serwera. Netlify publikuje katalog `public`, a pliki z `netlify/functions` uruchamia na żądanie jako funkcje serverless. Profile i role przechowuje Identity, zgłoszenia — Netlify Forms, aktywny Markdown edytora — Netlify Blobs, a lekcje i prompty — osobne prywatne repozytorium GitHub odczytywane wyłącznie przez Functions.
 
 ## Panel kursanta, motyw i nawigacja
 
@@ -86,11 +87,16 @@ cp .env.example .env
 GEMINI_API_KEY=klucz_z_Google_AI_Studio
 NETLIFY_API_TOKEN=osobisty_token_Netlify
 SITE_ID=id_witryny_Netlify
+GITHUB_CONTENT_TOKEN=github_pat_...
+GITHUB_CONTENT_REPOSITORIES=
+GITHUB_CONTENT_REPOSITORY=Kuczis-Media/chemdisk-content
+GITHUB_CONTENT_REF=main
+GITHUB_CONTENT_ROOT=
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 ```
 
-Nie umieszczaj kluczy w `public`, plikach JavaScript przeglądarki, `dashboard.md` ani `netlify.toml`. `SITE_ID` jest ustawiane automatycznie na wdrożeniu Netlify; ręcznie jest potrzebne tylko lokalnie.
+Nie umieszczaj kluczy w `public`, plikach JavaScript przeglądarki, `dashboard.md` ani `netlify.toml`. `GITHUB_CONTENT_TOKEN` jest używany wyłącznie przez Functions i nigdy nie jest zwracany do przeglądarki. `SITE_ID` jest ustawiane automatycznie na wdrożeniu Netlify; ręcznie jest potrzebne tylko lokalnie.
 
 `SITE_ID` i `NETLIFY_API_TOKEN` wskazują konkretną witrynę oraz jej site-wide Blobs. Jeżeli wpiszesz w lokalnym `.env` dane produkcyjne, funkcje uruchomione przez `netlify dev` mogą odczytać lub zmienić prawdziwy dashboard, konfigurację cen i księgi zakupów. Do prób administracyjnych i Stripe używaj osobnej witryny testowej z osobnym Identity, Blobs oraz kluczami Stripe test mode. Samo uruchomienie lokalne nie izoluje magazynów otwieranych z jawnymi poświadczeniami.
 
@@ -99,12 +105,13 @@ Nie umieszczaj kluczy w `public`, plikach JavaScript przeglądarki, `dashboard.m
 1. Utwórz witrynę z tego repozytorium. Ustawienia publikacji i funkcji są już zapisane w `netlify.toml` (`public` oraz `netlify/functions`).
 2. Włącz Netlify Identity. W ustawieniach rejestracji wybierz rejestrację otwartą albo tylko na zaproszenie, zależnie od sposobu sprzedaży kursu. Jeśli wymagane jest potwierdzenie e-maila, pozostaw włączone wiadomości potwierdzające.
 3. Dodaj `GEMINI_API_KEY` oraz `NETLIFY_API_TOKEN` w zmiennych środowiskowych witryny i ustaw ich zakres na **Functions**. Token Netlify umożliwia zakładce administracyjnej obsługę zgłoszeń Forms oraz silnie spójny dostęp do Netlify Blobs (dashboard, ceny i księgi zakupów); traktuj go jak sekret. Musi należeć do konta mającego dostęp do witryny wskazanej przez `SITE_ID`. `SITE_ID` Netlify ustawia automatycznie na deployu.
-4. Skonfiguruj Stripe według osobnej instrukcji poniżej i dodaj `STRIPE_SECRET_KEY` oraz `STRIPE_WEBHOOK_SECRET` z zakresem **Functions**. Klucze live ogranicz do kontekstu Production; Preview/Branch powinny otrzymywać wyłącznie dane Stripe test mode i poświadczenia osobnej witryny testowej.
-5. Pierwszemu administratorowi przypisz ręcznie rolę `admin` w `app_metadata` w panelu Netlify Identity. Kolejnymi kontami można już zarządzać z panelu administratora w dashboardzie.
-6. Nowe konto bez roli może się uwierzytelnić i zobaczy cennik, ale nie otworzy `/members/`. Po udanej płatności rola i dokładny termin są nadawane automatycznie. Administrator nadal może przyznać dostęp ręcznie.
-7. Udostępnij osadzane pliki Google odbiorcom, którzy mają je oglądać. Aplikacja nie omija uprawnień Dysku, Prezentacji ani Formularzy Google.
-8. Jeżeli używasz własnej domeny, ustaw ją jako główną domenę witryny, włącz HTTPS i sprawdź na niej link potwierdzający oraz zaproszenie Identity. Kod korzysta ze ścieżek same-origin i `location.origin`, więc nie wymaga zamiany `chemdisk.netlify.app` na `chemdisk.pl` w plikach.
-9. Po pierwszym deployu sprawdź logowanie, cztery zakładki panelu administratora, testową płatność, formularz kontaktowy, czat oraz po jednym materiale Google i YouTube na docelowej domenie.
+4. Utwórz i podłącz prywatne repozytorium lub repozytoria materiałów według instrukcji poniżej. Zmienne `GITHUB_CONTENT_*` również ustaw z zakresem **Functions**.
+5. Skonfiguruj Stripe według osobnej instrukcji poniżej i dodaj `STRIPE_SECRET_KEY` oraz `STRIPE_WEBHOOK_SECRET` z zakresem **Functions**. Klucze live ogranicz do kontekstu Production; Preview/Branch powinny otrzymywać wyłącznie dane Stripe test mode i poświadczenia osobnej witryny testowej.
+6. Pierwszemu administratorowi przypisz ręcznie rolę `admin` w `app_metadata` w panelu Netlify Identity. Kolejnymi kontami można już zarządzać z panelu administratora w dashboardzie.
+7. Nowe konto bez roli może się uwierzytelnić i zobaczy cennik, ale nie otworzy `/members/`. Po udanej płatności rola i dokładny termin są nadawane automatycznie. Administrator nadal może przyznać dostęp ręcznie.
+8. Udostępnij osadzane pliki Google odbiorcom, którzy mają je oglądać. Aplikacja nie omija uprawnień Dysku, Prezentacji ani Formularzy Google.
+9. Jeżeli używasz własnej domeny, ustaw ją jako główną domenę witryny, włącz HTTPS i sprawdź na niej link potwierdzający oraz zaproszenie Identity. Kod korzysta ze ścieżek same-origin i `location.origin`, więc nie wymaga zamiany `chemdisk.netlify.app` na `chemdisk.pl` w plikach.
+10. Po pierwszym deployu sprawdź logowanie, pięć zakładek panelu administratora, status biblioteki materiałów, testową płatność, formularz kontaktowy, czat oraz po jednym materiale Google i YouTube na docelowej domenie.
 
 Deploy Preview tej samej witryny może widzieć site-wide store `chemdisk-dashboard` oraz `chemdisk-payments`, jeśli udostępnisz mu produkcyjny token i `SITE_ID`. Publikacja dashboardu, edycja cen, usuwanie użytkownika lub test Checkoutu z takiego podglądu mogą zmienić realne dane. Nie wykonuj mutacji administracyjnych na Preview podłączonym do produkcyjnych Blobs.
 
@@ -115,6 +122,86 @@ Dodanie `chemdisk.pl` jako domeny własnej do tej samej witryny nie zmienia dany
 W logu deployu sprawdź również etap post-processingu: Netlify powinien potwierdzić regułę limitu wywołań funkcji `chat`. Platformowy limit per IP jest uzupełniony limitem per konto wewnątrz funkcji.
 
 Formularz kontaktowy jest oznaczony `data-netlify="true"` i korzysta z Netlify Forms oraz reCAPTCHA. Netlify musi przetworzyć stronę podczas deployu, aby formularz pojawił się w panelu witryny.
+
+## Prywatne repozytoria materiałów
+
+Lekcje i prompty AI mają osobne źródło prawdy — jedno lub kilka prywatnych repozytoriów GitHub, niezależnych od kodu i deployu aplikacji. Każde repozytorium ma taką samą strukturę:
+
+```text
+chemdisk-content/
+├── catalog.json
+├── lessons/
+│   └── nazwa-lekcji.md
+└── prompts/
+    ├── nazwa-promptu.json
+    └── zestaw-promptow.txt
+```
+
+`catalog.json` jest opcjonalny. Pozwala nadać plikom tytuły, opisy i tagi używane przez wyszukiwarki dashboardu, odtwarzacza lekcji i Studio:
+
+```json
+{
+  "assets": {
+    "lessons/izotopy-wegla.md": {
+      "title": "Izotopy węgla",
+      "description": "Lekcja o zapisie izotopowym i neutronach.",
+      "tags": ["atom", "matura"]
+    }
+  }
+}
+```
+
+Konfiguracja krok po kroku:
+
+1. Utwórz prywatne repozytorium, np. `Kuczis-Media/chemdisk-content`, z gałęzią `main`. W tym katalogu roboczym gotowy zalążek osobnego repo znajduje się w `chemdisk-content/`; katalog jest ignorowany przez repo aplikacji.
+
+   ```bash
+   cd chemdisk-content
+   git remote add origin git@github.com:Kuczis-Media/chemdisk-content.git
+   git push -u origin main
+   ```
+
+2. Na GitHubie otwórz **Settings → Developer settings → Personal access tokens → Fine-grained tokens** i utwórz token ograniczony wyłącznie do repozytoriów materiałów:
+   - w **Repository access** wybierz **Only select repositories** i wskaż tylko repozytoria, które mają pojawić się w selektorze;
+   - w **Repository permissions** ustaw wyłącznie **Contents: Read and write**;
+   - pozostałych uprawnień nie rozszerzaj i nie wybieraj dostępu do wszystkich repozytoriów.
+
+   Jeden fine-grained token może obejmować kilka jawnie wybranych repozytoriów tego samego właściciela zasobów. Uprawnienie zapisu jest potrzebne tylko funkcji serwerowej obsługującej Lesson Builder i Prompt Builder. Token nadal nie daje dostępu do pozostałych repozytoriów konta.
+3. W Netlify otwórz ustawienia witryny i dodaj poniższe zmienne środowiskowe z zakresem **Functions**:
+
+   ```dotenv
+   GITHUB_CONTENT_TOKEN=github_pat_...
+   GITHUB_CONTENT_REPOSITORY=Kuczis-Media/chemdisk-content
+   GITHUB_CONTENT_REF=main
+   GITHUB_CONTENT_ROOT=
+   ```
+
+   `GITHUB_CONTENT_ROOT` pozostaw pusty, jeśli `lessons`, `prompts` i `catalog.json` leżą w katalogu głównym. Dla monorepo można ustawić np. `materials`.
+4. Dla kilku repozytoriów pozostaw `GITHUB_CONTENT_TOKEN` i zamiast trzech zmiennych opisujących pojedyncze repo ustaw jedną listę JSON:
+
+   ```dotenv
+   GITHUB_CONTENT_TOKEN=github_pat_...
+   GITHUB_CONTENT_REPOSITORIES=[{"id":"glowne","label":"Materiały główne","repository":"Kuczis-Media/chemdisk-content","ref":"main","root":"","default":true},{"id":"organiczna","label":"Chemia organiczna","repository":"Kuczis-Media/chemia-organiczna","ref":"main","root":""}]
+   ```
+
+   `id` jest trwałym identyfikatorem zapisywanym w linkach jako `repo=...`; używaj małych liter, cyfr i myślników. `label` to nazwa widoczna w selektorze. Jedna pozycja może mieć `default: true`; bez tego domyślna jest pierwsza. Lista obsługuje najwyżej 20 repozytoriów.
+
+   Jeśli repozytoria należą do różnych właścicieli zasobów, utwórz osobne, równie wąskie tokeny. Drugi zapisz np. jako `GITHUB_CONTENT_TOKEN_SZKOLA`, a w odpowiedniej pozycji listy dodaj `"tokenEnv":"GITHUB_CONTENT_TOKEN_SZKOLA"`. Nazwa wskazanej zmiennej musi zaczynać się od `GITHUB_CONTENT_TOKEN`.
+5. Wykonaj jeden deploy Functions po dodaniu lub zmianie zmiennych środowiskowych. Następnie w dashboardzie administratora otwórz zakładkę **Materiały**, wybierz każde repozytorium i sprawdź liczbę znalezionych plików.
+
+Późniejsze dodanie, poprawienie lub usunięcie pliku w repo materiałów — przez GitHub albo Studio — nie wymaga deployu ani ponownego commitu aplikacji. Lista jest pobierana na żywo przez GitHub Contents API i trzymana w pamięci funkcji najwyżej przez 20 sekund; administrator może wymusić odświeżenie w zakładce **Materiały**. Odtwarzacz lekcji pobiera wskazany plik przy otwarciu.
+
+Przeglądarka nigdy nie otrzymuje tokenu GitHub. Kursant po sprawdzeniu aktywnego dostępu może pobrać treść lekcji, ponieważ musi ją wyświetlić, ale nie może zapisywać ani usuwać plików. Lista i treść promptów są dostępne w bibliotece tylko administratorowi, aby Prompt Builder mógł je edytować; zwykły moduł czatu nadal pobiera wybrany prompt po stronie funkcji `chat` i nie wysyła go kursantowi.
+
+Dozwolone są lekcje `.md` do 512 KiB oraz prompty `.txt` i `.json` do 256 KiB. Nazwa pliku nie może zawierać ścieżki, `..` ani niedozwolonych znaków. `catalog.json` ma limit 256 KiB. Po rotacji tokenu zaktualizuj `GITHUB_CONTENT_TOKEN` w Netlify i ponownie wdróż Functions.
+
+Te same repozytoria materiałów mogą zasilać inne wdrożenie ChemDisk: skopiuj do niego moduł `netlify/content-repository.js`, funkcję `content-library`, klienta `public/assets/js/content-library.js` i ustaw tę samą konfigurację `GITHUB_CONTENT_*`. Klient domyślnie używa chronionej funkcji w tej samej domenie. Jeśli aplikacja ma własny zgodny endpoint, można wskazać go w `<head>` przez:
+
+```html
+<meta name="chemdisk-content-endpoint" content="/.netlify/functions/content-library">
+```
+
+Celowo nie ma bezpośrednich zapytań z przeglądarki do prywatnego GitHuba ani domyślnie otwartego endpointu między domenami. Dzięki temu token i kontrola dostępu pozostają po stronie każdej aplikacji.
 
 ## Konfiguracja Stripe
 
@@ -296,6 +383,7 @@ Przycisk **Panel administratora** pojawia się w bocznym menu wyłącznie dla ko
 - ustawić ceny i dostępność sześciu pakietów, walutę, globalny stan płatności oraz zasadę sumowania okresów;
 - przeglądać i trwale usuwać zgłoszenia Netlify Forms;
 - edytować, podglądać, publikować i przywracać Markdown dashboardu;
+- sprawdzić konfigurację prywatnego repo materiałów oraz liczbę lekcji i promptów bez ujawniania tokenu;
 - obsłużyć całą listę użytkowników dzięki stronicowaniu.
 
 Interfejs wysyła JWT zalogowanego administratora do `/.netlify/functions/admin-users`. Funkcja ponownie pobiera aktualny rekord administratora z Identity, dopiero wtedy używa dostarczonego przez środowisko Netlify krótkotrwałego tokena operatora do listowania lub aktualizacji kont. Token operatora nigdy nie jest zwracany do przeglądarki. Funkcja blokuje odebranie sobie własnej roli administratora i zachowuje `session_id` oraz niezwiązane metadane konta.
@@ -354,7 +442,7 @@ Plan Free zawiera 300 kredytów miesięcznie i ma twardy limit, Personal — 100
 
 Zapis w Studio nie jest deployem, dlatego nie nalicza 15 kredytów przewidzianych dla production deployu. Zużywa jednak zwykłe żądanie i compute Function podczas publikowania dashboardu.
 
-Ten sam model rozliczenia dotyczy publicznego pobrania cennika, utworzenia Checkout, webhooka oraz widoków historii: korzystają z Functions i magazynu `chemdisk-payments`. Roboczy zapis Lesson Buildera jest wyłącznie lokalny i nie używa Blobs ani Functions; kredyty Netlify zaczyna zużywać dopiero zwykłe wdrożenie i późniejszy ruch do opublikowanej lekcji.
+Ten sam model rozliczenia dotyczy publicznego pobrania cennika, utworzenia Checkout, webhooka, biblioteki materiałów oraz widoków historii: korzystają z Functions. Biblioteka wykonuje dodatkowo autoryzowany odczyt GitHub API. Roboczy zapis Lesson Buildera jest lokalny; pobranie listy lub import lekcji ze zdalnego repo używa Function, ale zapis draftu w przeglądarce nie używa Blobs.
 
 ### Trwałe dane, kopie i rollback
 
@@ -362,7 +450,8 @@ Kod w Git oraz deploy Netlify nie są kopią wszystkich danych aplikacji:
 
 | System | Dane |
 | --- | --- |
-| Repozytorium/deploy | Bazowy `public/members/dashboard.md`, lekcje `.md`, pliki aplikacji i Functions. |
+| Repozytorium/deploy aplikacji | Bazowy `public/members/dashboard.md`, pliki aplikacji i Functions. |
+| Prywatne repo materiałów | Lekcje `lessons/*.md`, prompty `prompts/*.txt`/`*.json` i opcjonalny `catalog.json`. |
 | Blob `chemdisk-dashboard` | Jeden aktywny klucz `dashboard.md` albo tombstone przywracający wersję bazową. |
 | Blob `chemdisk-payments` | Cennik w `config/prices.json` i księgi `users/<uuid>.json`, po maksymalnie 100 ostatnich zdarzeń. |
 | Netlify Identity | Konta, role, `timed_access`, profil i identyfikator ostatniej sesji. |
@@ -371,16 +460,17 @@ Kod w Git oraz deploy Netlify nie są kopią wszystkich danych aplikacji:
 
 Rollback deployu przywraca pliki oraz kod Functions z wybranego wdrożenia, ale nie cofa site-wide Blobs, Identity, Forms ani Stripe. `etag`, numer wersji i metadane `updatedAt`/`updatedBy` chronią przed przypadkowym nadpisaniem i ułatwiają diagnostykę; aplikacja nie udostępnia na ich podstawie historii poprzednich wersji. Akcja przywrócenia dashboardu aktywuje bieżący plik statyczny z deployu, a nie wcześniejszy override z Blobs.
 
-Przed zmianą produkcyjnego dashboardu, cennika, migracją witryny albo masowym usuwaniem skopiuj aktywny Markdown do lokalnego pliku i wykonaj osobny eksport potrzebnych danych przez stronę **Blobs** w panelu Netlify, autoryzowane API/SDK lub panel właściwego dostawcy. Kopię trzymaj poza tą samą witryną. Lekcje nie są obecnie przechowywane w Blobs, więc ich źródłem prawdy i historią powinno pozostać repozytorium Git.
+Przed zmianą produkcyjnego dashboardu, cennika, migracją witryny albo masowym usuwaniem skopiuj aktywny Markdown do lokalnego pliku i wykonaj osobny eksport potrzebnych danych przez stronę **Blobs** w panelu Netlify, autoryzowane API/SDK lub panel właściwego dostawcy. Kopię trzymaj poza tą samą witryną. Lekcje i prompty nie są przechowywane w Blobs ani deployu aplikacji; ich źródłem prawdy, kopią i historią jest prywatne repozytorium materiałów.
 
 ### Graficzne Studio treści
 
 Administrator widzi w bocznym menu dodatkowy skrót **Studio treści** prowadzący do `/members/module/studio/`. Reguły w `netlify.toml` chronią cały katalog Studio rolą `admin` przed ogólną regułą `/members/*`; samo ukrycie linku w interfejsie nie jest mechanizmem autoryzacji.
 
-Studio ma dwa tryby:
+Studio ma trzy tryby:
 
-- **Dashboard Builder** — przeciąganie sekcji, harmonijek poziomów 3–6, tekstów, komunikatów i kart modułów. Inspektor konfiguruje ID lub link materiału, wariant kalkulatora/tablicy, tryb ochrony `type`, plik lekcji, prompt czatu, notatkę kontaktową albo bezpieczny własny link;
-- **Lesson Builder** — układanie slajdów oraz bloków nagłówka, tekstu, obrazu HTTPS, listy, cytatu, calloutu, kodu, stylowanej sekcji i harmonijki. Do slajdu można dodać jedno pytanie tekstowe, liczbowe, wyboru albo ABCD wraz z wariantami odpowiedzi, podpowiedzią i komunikatem sukcesu.
+- **Dashboard Builder** — przeciąganie sekcji, harmonijek poziomów 3–6, tekstów, komunikatów i kart modułów. Inspektor konfiguruje ID lub link materiału, wariant kalkulatora/tablicy, tryb ochrony `type`, plik lekcji, prompt czatu, notatkę kontaktową albo bezpieczny własny link. Selektor przełącza przeszukiwane repozytorium, a karta zapamiętuje jego `id`, więc identyczne nazwy plików nie kolidują;
+- **Lesson Builder** — układanie slajdów oraz bloków nagłówka, tekstu, obrazu HTTPS, wideo YouTube, listy, cytatu, calloutu, kodu, stylowanej sekcji i harmonijki. Do slajdu można dodać pytanie tekstowe, liczbowe, wyboru, ABCD lub uzupełnianie luk wraz z wariantami odpowiedzi, podpowiedzią i komunikatem sukcesu. Lekcję można wyszukać, wczytać, zapisać, zaktualizować albo usunąć w repozytorium wybranym z listy;
+- **Prompt Builder** — tworzenie pojedynczego promptu `.json` lub zestawu ponumerowanych instrukcji `.txt`. Builder waliduje numery punktów, limity treści i format, pokazuje gotowe źródło oraz obsługuje ten sam ręczny, repozytoryjny i wielorepozytoryjny obieg co lekcje.
 
 #### Przepływ Dashboard Buildera
 
@@ -397,17 +487,19 @@ Round-trip dashboardu zachowuje znaczenie składni obsługiwanej przez parser, l
 
 Lesson Builder może rozpocząć pustą lekcję albo zaimportować istniejący `.md`, zamienić go na edytowalne bloki i ponownie wygenerować deterministyczny Markdown. Dostępne są podgląd, edycja źródła, kopiowanie do schowka i pobranie pliku. Import pliku ma limit 512 KiB, edytor źródła przyjmuje do 524 288 znaków, lekcja może zawierać od 1 do 100 slajdów, a nazwa pliku musi kończyć się `.md`, zaczynać znakiem alfanumerycznym, mieć maksymalnie 80 znaków i nie może zawierać `..` ani ścieżki katalogu. Builder przyjmuje dla obrazów wyłącznie pełne adresy `https://`.
 
-Lesson Builder nie publikuje jeszcze plików do Blobs ani GitHuba. Wygenerowany `.md` trzeba umieścić w `public/members/module/lesson/` i wdrożyć razem z aplikacją. Sam odtwarzacz lekcji obsługuje także bezpieczne względne obrazy znajdujące się w module, ale graficzny Builder celowo wymaga obrazów HTTPS.
+Ręczny obieg pozostaje zawsze dostępny: kliknij **Pobierz .md**, a następnie samodzielnie dodaj plik do `lessons/` w prywatnym repo i wykonaj commit. Możesz też wybrać repozytorium nad biblioteką i użyć przycisku **Zapisz w GitHubie**. Nowy plik tworzy commit, a wcześniej wczytany plik jest aktualizowany tylko wtedy, gdy jego SHA nie zmienił się od odczytu. Zmiana repozytorium albo nazwy wczytanego dokumentu tworzy nowy plik i pozostawia oryginał do osobnego usunięcia. **Usuń z GitHuba** jest aktywne wyłącznie dla repozytorium, z którego plik wczytano, wymaga potwierdzenia i także zapisuje zmianę jako commit; zawartość można odzyskać z historii repo.
 
-Odtwarzacz lekcji odrzuca plik większy niż 512 KiB lub zawierający ponad 100 slajdów. Builder pilnuje liczby slajdów, lecz obecnie nie blokuje pobrania tylko dlatego, że wynikowy Markdown przekroczył limit bajtów odtwarzacza. Przed wdrożeniem bardzo dużej lekcji sprawdź rozmiar, np. `wc -c public/members/module/lesson/nazwa.md`, i utrzymaj go poniżej 524 288 bajtów.
+Studio nie wykonuje cichego automatycznego zapisu do GitHuba. Autosave zapisuje wyłącznie lokalny draft, a operacja sieciowa następuje dopiero po kliknięciu przycisku repozytorium. Gdy inna karta albo osoba zmieni plik wcześniej, serwer zwraca konflikt zamiast nadpisywać nowszą wersję. Należy wtedy ponownie wczytać plik i świadomie połączyć zmiany.
 
-Na jednym slajdzie może znajdować się najwyżej jedno zadanie. Quiz ABCD wymaga czterech opcji; pytanie `choice` co najmniej dwóch, a graficzne pole Studio zachowuje maksymalnie osiem. Opcje i aliasy odpowiedzi nie mogą zawierać separatora `|`. Kontenery `:::style` i `:::accordion` muszą mieć treść i nie mogą zawierać kolejnego kontenera tego typu. Studio nie kopiuje obrazów do repozytorium ani Blobs; import względnego obrazu można odczytać, ale przed ponownym eksportem jego adres trzeba zmienić na pełny HTTPS.
+Odtwarzacz lekcji odrzuca plik większy niż 512 KiB lub zawierający ponad 100 slajdów. Builder pilnuje liczby slajdów, lecz obecnie nie blokuje pobrania tylko dlatego, że wynikowy Markdown przekroczył limit bajtów odtwarzacza. Przed wysłaniem bardzo dużej lekcji sprawdź rozmiar, np. `wc -c lessons/nazwa.md`, i utrzymaj go poniżej 524 288 bajtów.
+
+Na jednym slajdzie może znajdować się najwyżej jedno zadanie. Quiz ABCD wymaga czterech opcji; pytanie `choice` co najmniej dwóch, a graficzne pole Studio zachowuje maksymalnie osiem. Opcje i aliasy odpowiedzi nie mogą zawierać separatora `|`. Kontenery `:::style` i `:::accordion` muszą mieć treść i nie mogą zawierać kolejnego kontenera tego typu. Studio nie kopiuje obrazów do repozytorium ani Blobs; użyj pełnego publicznego adresu HTTPS do obrazu, także gdy sam plik obrazu leży w innym publicznym repozytorium GitHub.
 
 Eksport zawsze synchronizuje nagłówek `#` pierwszego slajdu z globalnym tytułem lekcji. Ton calloutu nie ma osobnego pola w Markdownzie i po ponownym imporcie jest rozpoznawany z jego tytułu. Tak jak przy dashboardzie, dla ważnego ręcznie pisanego źródła zachowaj kopię przed round-tripem przez graficzne klocki.
 
-Robocze modele są automatycznie zapisywane w `localStorage` jako `chemdisk.studio.dashboard.v1` i `chemdisk.studio.lesson.v1`; autosave nie wysyła requestu, nie zapisuje Bloba i nie synchronizuje danych między urządzeniami. Draft nie jest przypisany do ID administratora, dlatego inny administrator korzystający z tego samego profilu przeglądarki zobaczy ten sam lokalny stan. Historia obejmuje do 60 operacji osobno dla każdego trybu, ale istnieje tylko do przeładowania strony i nie jest odtwarzana razem z draftem. `Ctrl/Cmd+Z` cofa, `Ctrl/Cmd+Shift+Z` lub `Ctrl/Cmd+Y` ponawia, a `Ctrl/Cmd+S` otwiera publikację dashboardu albo pobiera lekcję. JWT jest pobierany dopiero do operacji serwerowej i nie trafia do trwałej pamięci Studio.
+Robocze modele są automatycznie zapisywane w `localStorage` jako `chemdisk.studio.dashboard.v1`, `chemdisk.studio.lesson.v1` i `chemdisk.studio.prompt.v1`; autosave nie wysyła requestu, nie zapisuje Bloba i nie synchronizuje danych między urządzeniami. Draft nie jest przypisany do ID administratora, dlatego inny administrator korzystający z tego samego profilu przeglądarki zobaczy ten sam lokalny stan. Historia obejmuje do 60 operacji osobno dla każdego trybu, ale istnieje tylko do przeładowania strony i nie jest odtwarzana razem z draftem. `Ctrl/Cmd+Z` cofa, `Ctrl/Cmd+Shift+Z` lub `Ctrl/Cmd+Y` ponawia, a `Ctrl/Cmd+S` otwiera publikację dashboardu albo pobiera lekcję lub prompt na dysk — nie zapisuje go automatycznie w GitHubie. JWT jest pobierany dopiero do operacji serwerowej i nie trafia do trwałej pamięci Studio.
 
-Podglądy w Studio są celowo uproszczone: dashboard pokazuje strukturę i wygląd kart bez całej logiki właściwego panelu, a podgląd lekcji pokazuje wybrany slajd i opis zadania, nie w pełni działający formularz odpowiedzi. Ostateczny test wykonuj w `/members/` oraz w rzeczywistym module `/members/module/lesson/`.
+Podglądy w Studio są celowo uproszczone: dashboard pokazuje strukturę i wygląd kart bez całej logiki właściwego panelu, podgląd lekcji pokazuje wybrany slajd i opis zadania, nie w pełni działający formularz odpowiedzi, a Prompt Builder pokazuje dokładne źródło, które zostanie zapisane. Dashboard i lekcję można otworzyć także jako pełny podgląd w osobnym oknie. Ostateczny test wykonuj w `/members/` oraz w rzeczywistym module `/members/module/lesson/`.
 
 Obsługiwana składnia:
 
@@ -466,8 +558,8 @@ Wartość `id` może być bezpośrednim identyfikatorem. Moduły Google i YouTub
 | `/members/module/kalkulator/` | Brak parametrów; kalkulator naukowy. | `/members/module/kalkulator/` |
 | `/members/module/classic/` | Brak parametrów; kalkulator klasyczny. | `/members/module/classic/` |
 | `/members/module/atonom/` | Opcjonalne `formula` — polska nazwa obsługiwanego związku; interaktywny model cząsteczki. Bez parametru otwiera fenol. | `/members/module/atonom/?formula=cis-but-2-en` |
-| `/members/module/lesson/` | `file` — plik `.md` z folderu modułu; prezentacja krokowa z opcjonalnymi zadaniami. | `/members/module/lesson/?file=izotopy-wegla.md` |
-| `/members/module/chat/` | `prompt=nazwa.json` albo `plik=nazwa.txt&punkt=N`; prompt jest wybierany po stronie funkcji. | `/members/module/chat/?plik=prompty-przyklad.txt&punkt=1` |
+| `/members/module/lesson/` | `file` — plik `.md` z `lessons/`; opcjonalne `repo` wybiera skonfigurowane repozytorium. Bez `file` otwiera wyszukiwarkę biblioteki. | `/members/module/lesson/?repo=organiczna&file=izotopy-wegla.md` |
+| `/members/module/chat/` | Opcjonalne `repo` oraz `prompt=nazwa.json` albo `plik=nazwa.txt&punkt=N`; prompt jest wybierany po stronie funkcji. | `/members/module/chat/?repo=organiczna&plik=prompty-przyklad.txt&punkt=1` |
 | `/members/module/forms/` | `id` — ID albo zakodowany link Google Forms. | `/members/module/forms/?id=ID_FORMULARZA` |
 | `/members/module/contact/` | `internal` — stała informacja dołączana do zgłoszenia, maks. 240 znaków. | `/members/module/contact/?internal=Pytanie%20o%20dzia%C5%82%201` |
 | `/members/module/slides/` | `id` — ID/link Google Slides; `type=1` zwykły podgląd, `type=2` ograniczony interfejs. | `/members/module/slides/?id=ID_PREZENTACJI&type=2` |
@@ -485,22 +577,20 @@ Maski, sandbox i ukrycie linków ograniczają typowe przejścia z interfejsu, al
 
 ### Interaktywne lekcje z Markdown
 
-Moduł `/members/module/lesson/` zamienia plik Markdown w prezentację typu wizard. Pliki lekcji umieszczaj bezpośrednio w katalogu:
+Moduł `/members/module/lesson/` zamienia plik Markdown w prezentację typu wizard. Pliki lekcji umieszczaj w osobnym prywatnym repo:
 
 ```text
-public/members/module/lesson/
-├── index.html
-├── lesson-parser.js
-├── script.js
-├── style.css
-├── izotopy-wegla.md
-└── przyklad.md
+chemdisk-content/
+└── lessons/
+    ├── izotopy-wegla.md
+    └── przyklad.md
 ```
 
-Lekcję otwiera parametr `file`:
+Lekcję otwiera parametr `file`. Przy wielu źródłach `repo` wskazuje `id` z konfiguracji; link bez `repo` zachowuje zgodność i używa repozytorium domyślnego:
 
 ```text
 /members/module/lesson/?file=moja-lekcja.md
+/members/module/lesson/?repo=organiczna&file=moja-lekcja.md
 ```
 
 Do dashboardu można dodać ją jak każdy inny materiał:
@@ -509,7 +599,7 @@ Do dashboardu można dodać ją jak każdy inny materiał:
 - [Izotopy węgla](/members/module/lesson/?file=izotopy-wegla.md) — Lekcja interaktywna z krótkim zadaniem.
 ```
 
-Nazwa z parametru może zawierać litery ASCII, cyfry, kropki, myślniki i podkreślenia, musi kończyć się `.md` i nie może zawierać ścieżki do innego katalogu. Dzięki temu link nie może odczytać pliku spoza folderu modułu. Plik Markdown i sam moduł są objęte ochroną `/members/*`.
+Nazwa z parametru może zawierać litery ASCII, cyfry, kropki, myślniki i podkreślenia, musi kończyć się `.md` i nie może zawierać ścieżki do innego katalogu. Dzięki temu link nie może odczytać pliku spoza `lessons/`. Moduł i serwerowy endpoint wymagają aktywnego dostępu kursowego; bezpośredni adres prywatnego repo nie jest ujawniany jako publiczne źródło.
 
 Każda linia zawierająca wyłącznie `---` kończy slajd i zaczyna następny:
 
@@ -528,7 +618,7 @@ Wprowadzenie do tematu.
 > Ważna uwaga dla kursanta.
 ```
 
-Parser obsługuje nagłówki `#`, `##`, `###`, akapity, listy numerowane i punktowane, cytaty `>`, pogrubienie `**tekst**`, kursywę `*tekst*`, kod, bezpieczne linki oraz obrazy. Obraz można trzymać w podfolderze modułu i wstawić np. jako `![Opis](obrazy/schemat.png)`. Surowy HTML jest wyświetlany jako tekst i nie jest wykonywany.
+Parser obsługuje nagłówki `#`, `##`, `###`, akapity, listy numerowane i punktowane, cytaty `>`, pogrubienie `**tekst**`, kursywę `*tekst*`, kod, bezpieczne linki oraz obrazy. Dla obrazu z publicznego repozytorium wstaw jego pełny publiczny adres HTTPS, np. `![Opis](https://raw.githubusercontent.com/OWNER/REPO/main/images/schemat.png)`. Token do prywatnych lekcji nie jest używany do pobierania obrazów. Surowy HTML jest wyświetlany jako tekst i nie jest wykonywany.
 
 Dodatkowo zapis `^13^C` tworzy indeks górny (¹³C), a `H~2~O` — indeks dolny. Jest to wygodne przy zapisie izotopów i wzorów chemicznych.
 
@@ -702,7 +792,9 @@ Film musi pozwalać na osadzanie. Własne kontrolki i maski ograniczają przypad
 
 ### Prompty czatu
 
-Pliki promptów umieszczaj w prywatnym katalogu `netlify/functions/chat-prompts/`. Nie są publikowane jako pliki statyczne; `netlify.toml` dołącza je wyłącznie do paczki funkcji. Zmiana promptu wymaga nowego deployu.
+Pliki promptów umieszczaj w `prompts/` prywatnego repo materiałów. Funkcja `chat` pobiera wybrany plik z GitHuba po stronie serwera; token i treść promptu nie trafiają do przeglądarki kursanta. Administrator może odczytać treść w chronionym Prompt Builderze, aby ją świadomie edytować. Zmiana promptu wymaga tylko commitu w repo materiałów, bez deployu aplikacji.
+
+W **Studio treści → Prompt AI** można utworzyć `.json` z jedną instrukcją albo `.txt` z wieloma punktami `::punkt N`. Dostępne są: import pliku, edycja źródła, kopiowanie, pobranie na dysk, wczytanie z repo, zapis oraz usunięcie. Ręczny obieg jest równorzędny z przyciskami GitHub. Builder nie wysyła promptu do modelu AI i nie uruchamia czatu — przygotowuje oraz waliduje tylko plik instrukcji.
 
 Najprostsza zawartość:
 
@@ -725,7 +817,7 @@ Sprawdź równanie reakcji, jednostki i cyfry znaczące.
 Zakończ krótką modelową odpowiedzią.
 ```
 
-Link do drugiego punktu: `/members/module/chat/?plik=prompty-przyklad.txt&punkt=2`. Nagłówki `::punkt N` pozwalają umieszczać wewnątrz promptu zwykłe listy `1.`, `2.` bez przypadkowego podziału. Nazwa pliku, numer punktu i treść są ponownie walidowane po stronie funkcji; klient nie może przesłać własnego pola `system`.
+Link do drugiego punktu: `/members/module/chat/?plik=prompty-przyklad.txt&punkt=2`. Dla innego źródła dodaj np. `repo=organiczna`: `/members/module/chat/?repo=organiczna&plik=prompty-przyklad.txt&punkt=2`. Nagłówki `::punkt N` pozwalają umieszczać wewnątrz promptu zwykłe listy `1.`, `2.` bez przypadkowego podziału. Nazwa repozytorium, pliku, numer punktu i treść są ponownie walidowane po stronie funkcji; klient nie może przesłać własnego pola `system`.
 
 Obsługiwany jest też prostszy zapis zgodny ze zwykłą numerowaną listą:
 
@@ -768,7 +860,7 @@ npm test
 npm run build
 ```
 
-Oba skrypty uruchamiają `node --test`; projekt nie ma osobnego etapu bundlowania ani kompilowania zasobów. Testy obejmują między innymi hooki Identity, odporność sesji po uśpieniu i w wielu kartach, funkcje administracyjne, Stripe i księgi Blobs, parser dashboardu, natychmiastowe śledzenie sekcji, wspólny motyw, media, kalkulator klasyczny, parser chemiczny Atonom, odtwarzacz lekcji oraz oba modele Studio. Netlify wykonuje tę samą bramkę `npm run build` przed publikacją katalogu `public`.
+Oba skrypty uruchamiają `node --test`; projekt nie ma osobnego etapu bundlowania ani kompilowania zasobów. Testy obejmują między innymi hooki Identity, odporność sesji po uśpieniu i w wielu kartach, funkcje administracyjne, Stripe i księgi Blobs, bezpieczny odczyt i zapis prywatnego repo GitHub, parser dashboardu, natychmiastowe śledzenie sekcji, wspólny motyw, media, kalkulator klasyczny, parser chemiczny Atonom, odtwarzacz lekcji oraz trzy modele Studio. Netlify wykonuje tę samą bramkę `npm run build` przed publikacją katalogu `public`.
 
 Opcjonalna kontrola składni wszystkich plików JavaScript:
 
@@ -794,5 +886,10 @@ Przed publikacją wykonaj też krótki test ręczny:
 14. BitPaper importuje i eksportuje JSON, zapisuje PNG oraz respektuje limity planszy i obrazu;
 15. Atonom poprawnie buduje kilka rodzin związków, pokazuje błąd dla nieobsługiwanej nazwy i kopiuje link z `formula`;
 16. Studio wczytuje aktywny dashboard, zachowuje lokalny draft, wykrywa konflikt `etag` i publikuje poprawny układ;
-17. Lesson Builder importuje istniejącą lekcję, odtwarza jej bloki i quizy oraz generuje plik działający w module `lesson`;
-18. linki Google i YouTube działają na docelowej domenie i przy docelowych ustawieniach udostępniania.
+17. Lesson Builder importuje istniejącą lekcję, odtwarza jej bloki i quizy, pozwala pobrać `.md` ręcznie oraz generuje plik działający w module `lesson`;
+18. Prompt Builder importuje, waliduje i eksportuje pliki `.json` oraz wielopunktowe `.txt`;
+19. administrator tworzy testowy plik lekcji lub promptu w GitHubie, aktualizuje go po ponownym wczytaniu, a konflikt SHA nie nadpisuje nowszej wersji;
+20. usunięcie testowego pliku wymaga potwierdzenia i tworzy commit widoczny w historii repo;
+21. zakładka **Materiały** pokazuje poprawne repo i liczby plików, wyszukiwarka Studio widzi lekcje i prompty, a odtwarzacz otwiera lekcję z repo;
+22. po zmianie pliku w repo materiałów nowa wersja jest widoczna bez deployu aplikacji po wygaśnięciu 20-sekundowego cache’u;
+23. linki Google i YouTube działają na docelowej domenie i przy docelowych ustawieniach udostępniania.

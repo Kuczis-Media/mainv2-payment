@@ -53,6 +53,12 @@
     AUTH_REQUIRED: 'Zaloguj się ponownie, aby zarządzać kontami.',
     CANNOT_DELETE_SELF: 'Nie możesz usunąć własnego konta administratora.',
     CANNOT_REMOVE_OWN_ADMIN: 'Nie możesz odebrać roli administratora własnemu kontu.',
+    CONTENT_CATALOG_INVALID: 'Plik catalog.json w repozytorium materiałów jest nieprawidłowy.',
+    CONTENT_DIRECTORY_NOT_FOUND: 'W prywatnym repozytorium brakuje folderu lessons lub prompts.',
+    CONTENT_REPOSITORY_NOT_CONFIGURED: 'Dodaj zmienne GITHUB_CONTENT_* w Netlify.',
+    CONTENT_REPOSITORY_NOT_FOUND: 'Nie znaleziono repozytorium, katalogu lub wybranej gałęzi.',
+    CONTENT_REPOSITORY_UNAVAILABLE: 'GitHub jest chwilowo niedostępny.',
+    CONTENT_WRITE_CONFLICT: 'Plik został w międzyczasie zmieniony. Wczytaj najnowszą wersję i spróbuj ponownie.',
     DASHBOARD_CONFLICT: 'Dashboard został w międzyczasie zmieniony. Wczytaj najnowszą wersję i ponów edycję.',
     DASHBOARD_INVALID: 'Treść dashboardu jest nieprawidłowa.',
     DASHBOARD_STORAGE_INVALID: 'Zapisana wersja dashboardu jest uszkodzona. Aktywuj wersję z wdrożenia.',
@@ -65,6 +71,8 @@
     EXPECTED_ETAG_REQUIRED: 'Wczytaj dashboard ponownie przed zapisaniem zmian.',
     FIRST_AND_LAST_NAME_REQUIRED: 'Uzupełnij poprawne imię i nazwisko użytkownika.',
     FORM_NOT_FOUND: 'Nie znaleziono tego formularza.',
+    GITHUB_CONTENT_TOKEN_REJECTED: 'Token GitHub jest nieprawidłowy albo nie ma uprawnienia Contents: Read and write.',
+    GITHUB_CONTENT_WRITE_REJECTED: 'Token GitHub nie ma uprawnienia Contents: Read and write do wybranego repozytorium.',
     IDENTITY_ADMIN_UNAVAILABLE: 'Administracja kontami jest chwilowo niedostępna.',
     IDENTITY_DELETE_FAILED: 'Nie udało się usunąć konta z Identity.',
     IDENTITY_INVITE_FAILED: 'Nie udało się wysłać zaproszenia przez Identity.',
@@ -171,6 +179,15 @@
     adminDashboardSave: document.getElementById('admin-dashboard-save'),
     adminDashboardStatus: document.getElementById('admin-dashboard-status'),
     adminDashboardPreview: document.getElementById('admin-dashboard-preview'),
+    adminContentConnection: document.getElementById('admin-content-connection'),
+    adminContentRepositorySelect: document.getElementById('admin-content-repository-select'),
+    adminContentRepository: document.getElementById('admin-content-repository'),
+    adminContentLessons: document.getElementById('admin-content-lessons'),
+    adminContentPrompts: document.getElementById('admin-content-prompts'),
+    adminContentStatus: document.getElementById('admin-content-status'),
+    adminContentRefresh: document.getElementById('admin-content-refresh'),
+    adminContentCopyEnv: document.getElementById('admin-content-copy-env'),
+    adminContentEnvTemplate: document.getElementById('admin-content-env-template'),
     adminPricesForm: document.getElementById('admin-prices-form'),
     adminPaymentCurrency: document.getElementById('admin-payment-currency'),
     adminPaymentDisabled: document.getElementById('admin-payment-disabled'),
@@ -206,6 +223,7 @@
   let navigationIntentDeadline = 0;
   let navigationIntentTimeout = 0;
   let navigationInitialized = false;
+  let dashboardLoadId = 0;
   let adminUsers = [];
   let adminForms = [];
   let adminSubmissions = [];
@@ -215,6 +233,9 @@
   let adminDashboardEtag = null;
   let adminDashboardSourceKind = 'static';
   let adminDashboardBaseline = '';
+  let adminContentLoaded = false;
+  let adminContentRepositories = [];
+  let adminContentRepositoryId = '';
   let adminPricesLoaded = false;
   let adminPricesEtag = null;
 
@@ -352,6 +373,7 @@
     if (/\/(filmv1?|yt)\//.test(pathname)) return { kind: 'video', icon: '▶' };
     if (/\/slides\//.test(pathname)) return { kind: 'document', icon: '▤' };
     if (/\/pdf\//.test(pathname)) return { kind: 'document', icon: 'PDF' };
+    if (/\/lesson\//.test(pathname)) return { kind: 'exercise', icon: 'L' };
     if (/\/(forms|chat)\//.test(pathname)) return { kind: 'exercise', icon: pathname.includes('/chat/') ? '✦' : '✓' };
     if (/\/(kalkulator|classic)\//.test(pathname)) return { kind: 'calculator', icon: '±' };
     if (/\/(bitpaper|whiteboard)\//.test(pathname)) return { kind: 'exercise', icon: '✎' };
@@ -369,7 +391,9 @@
     const card = document.createElement('article');
     card.className = 'resource-card';
     card.dataset.kind = resource.kind;
-    card.dataset.search = normalizeText(`${sectionTitle} ${groupTitle || ''} ${item.title} ${item.description}`);
+    card.dataset.search = normalizeText(
+      `${sectionTitle} ${groupTitle || ''} ${item.title} ${item.description} ${item.searchText || ''}`
+    );
 
     const icon = document.createElement('span');
     icon.className = 'card-icon';
@@ -689,15 +713,81 @@
   }
 
   async function loadDashboard() {
+    const loadId = ++dashboardLoadId;
     elements.content.setAttribute('aria-busy', 'true');
+    const libraryLessonsPromise = fetchLibraryLessons();
     try {
       const markdown = await fetchActiveDashboard();
       const model = parseMarkdown(markdown);
       if (!model.sections.length) throw new Error('Plik materiałów nie zawiera jeszcze żadnego działu.');
       renderDashboard(model);
+      libraryLessonsPromise.then((libraryLessons) => {
+        if (loadId !== dashboardLoadId || !libraryLessons.length) return;
+        appendLibraryLessons(model, libraryLessons);
+        renderDashboard(model);
+      });
     } catch (error) {
+      if (loadId !== dashboardLoadId) return;
       showContentError(error);
     }
+  }
+
+  async function fetchLibraryLessons() {
+    const library = window.ChemContentLibrary;
+    if (!library || typeof library.list !== 'function') return [];
+    try {
+      return await library.list('lesson');
+    } catch (error) {
+      if (!['CONTENT_REPOSITORY_NOT_CONFIGURED', 'CONTENT_DIRECTORY_NOT_FOUND'].includes(error && error.code)) {
+        console.warn('Nie udało się dołączyć biblioteki lekcji', error && error.code);
+      }
+      return [];
+    }
+  }
+
+  function appendLibraryLessons(model, assets) {
+    if (!Array.isArray(assets) || !assets.length) return model;
+    const existingFiles = new Set();
+    const collectItems = (items) => {
+      (items || []).forEach((item) => {
+        try {
+          const url = new URL(item.href, window.location.origin);
+          if (!/\/members\/module\/lesson\/?$/.test(url.pathname)) return;
+          const filename = url.searchParams.get('file');
+          if (filename) existingFiles.add(filename.toLocaleLowerCase('pl'));
+        } catch (_) {}
+      });
+    };
+    const collectGroups = (groups) => {
+      (groups || []).forEach((group) => {
+        collectItems(group.items);
+        collectGroups(group.groups);
+      });
+    };
+    model.sections.forEach((section) => {
+      collectItems(section.items);
+      collectGroups(section.groups);
+    });
+    const items = assets
+      .filter((asset) => !existingFiles.has(String(asset.filename || '').toLocaleLowerCase('pl')))
+      .map((asset) => ({
+        title: asset.title || asset.filename,
+        description: asset.description || 'Interaktywna lekcja z prywatnej biblioteki kursu.',
+        href: window.ChemContentLibrary.lessonUrl(asset.filename, asset.repositoryId),
+        searchText: Array.isArray(asset.tags) ? asset.tags.join(' ') : ''
+      }));
+    if (!items.length) return model;
+    const helpIndex = model.sections.findIndex((section) => normalizeText(section.title) === 'pomoc i konto');
+    const section = {
+      title: 'Biblioteka lekcji',
+      description: ['Materiały pobierane na bieżąco z prywatnego repozytorium kursu.'],
+      notices: [],
+      items,
+      groups: []
+    };
+    if (helpIndex >= 0) model.sections.splice(helpIndex, 0, section);
+    else model.sections.push(section);
+    return model;
   }
 
   function updateResourceCount(visible, total, filtering) {
@@ -2299,6 +2389,101 @@
     }
   }
 
+  async function loadAdminContentStatus(force) {
+    const library = window.ChemContentLibrary;
+    if (!library || typeof library.status !== 'function') {
+      setPanelStatus(elements.adminContentStatus, 'Brakuje klienta biblioteki materiałów.', 'error');
+      return;
+    }
+    elements.adminContentRefresh.disabled = true;
+    setPanelStatus(elements.adminContentStatus, 'Sprawdzanie połączenia z prywatnym repozytorium…', 'loading');
+    try {
+      if (!adminContentRepositories.length) {
+        adminContentRepositories = await library.repositories();
+      }
+      if (!adminContentRepositories.length) throw new Error('Nie skonfigurowano żadnego repozytorium.');
+      if (!adminContentRepositories.some((repository) => repository.id === adminContentRepositoryId)) {
+        const fallback = adminContentRepositories.find((repository) => repository.default)
+          || adminContentRepositories[0];
+        adminContentRepositoryId = fallback.id;
+      }
+      elements.adminContentRepositorySelect.replaceChildren(
+        ...adminContentRepositories.map((repository) => {
+          const option = document.createElement('option');
+          option.value = repository.id;
+          option.textContent = repository.label || repository.repository;
+          return option;
+        })
+      );
+      elements.adminContentRepositorySelect.value = adminContentRepositoryId;
+      elements.adminContentRepositorySelect.disabled = adminContentRepositories.length < 2;
+      const payload = await library.status({
+        refresh: Boolean(force),
+        repositoryId: adminContentRepositoryId
+      });
+      const configuration = payload && payload.configuration ? payload.configuration : {};
+      const counts = payload && payload.counts ? payload.counts : {};
+      elements.adminContentLessons.textContent = String(Number(counts.lessons) || 0);
+      elements.adminContentPrompts.textContent = String(Number(counts.prompts) || 0);
+      if (configuration.repository) {
+        const suffix = [
+          configuration.ref ? `gałąź ${configuration.ref}` : '',
+          configuration.root ? `katalog ${configuration.root}` : ''
+        ].filter(Boolean).join(' · ');
+        elements.adminContentRepository.textContent = `${configuration.repository}${suffix ? ` · ${suffix}` : ''}`;
+      } else {
+        elements.adminContentRepository.textContent = 'Brak poprawnej konfiguracji wybranego repozytorium.';
+      }
+
+      if (payload.connection === 'ready') {
+        elements.adminContentConnection.textContent = 'Połączono — materiały są dostępne';
+        elements.adminContentConnection.dataset.state = 'ready';
+        setPanelStatus(
+          elements.adminContentStatus,
+          'Lista jest pobierana na bieżąco z GitHuba. Zmiana pliku nie wymaga deployu aplikacji.',
+          'info'
+        );
+      } else if (payload.connection === 'not_configured') {
+        elements.adminContentConnection.textContent = 'Wymaga konfiguracji';
+        elements.adminContentConnection.dataset.state = 'error';
+        setPanelStatus(
+          elements.adminContentStatus,
+          'Dodaj token i konfigurację repozytorium w zmiennych środowiskowych Netlify.',
+          'error'
+        );
+      } else {
+        const message = ADMIN_ERROR_MESSAGES[payload.error]
+          || library.ERROR_MESSAGES[payload.error]
+          || 'Nie udało się połączyć z prywatnym repozytorium.';
+        elements.adminContentConnection.textContent = 'Błąd połączenia';
+        elements.adminContentConnection.dataset.state = 'error';
+        setPanelStatus(elements.adminContentStatus, message, 'error');
+      }
+      adminContentLoaded = true;
+    } catch (error) {
+      adminContentLoaded = false;
+      elements.adminContentConnection.textContent = 'Błąd połączenia';
+      elements.adminContentConnection.dataset.state = 'error';
+      setPanelStatus(
+        elements.adminContentStatus,
+        error && error.message ? error.message : 'Nie udało się sprawdzić repozytorium.',
+        'error'
+      );
+    } finally {
+      elements.adminContentRefresh.disabled = false;
+    }
+  }
+
+  async function copyContentEnvironmentTemplate() {
+    const text = elements.adminContentEnvTemplate.textContent;
+    try {
+      await navigator.clipboard.writeText(text);
+      setPanelStatus(elements.adminContentStatus, 'Skopiowano szablon zmiennych. Wstaw właściwy token wyłącznie w Netlify.', 'info');
+    } catch (_) {
+      setPanelStatus(elements.adminContentStatus, 'Nie udało się skopiować. Zaznacz szablon i skopiuj go ręcznie.', 'error');
+    }
+  }
+
   function setAdminPricesBusy(busy) {
     if (elements.adminPricesReload) elements.adminPricesReload.disabled = Boolean(busy);
     if (elements.adminPricesSave) elements.adminPricesSave.disabled = Boolean(busy);
@@ -2443,7 +2628,7 @@
   }
 
   function activateAdminTab(name, focusTab) {
-    const allowed = new Set(['users', 'forms', 'dashboard', 'payments']);
+    const allowed = new Set(['users', 'forms', 'dashboard', 'content', 'payments']);
     const activeName = allowed.has(name) ? name : 'users';
     elements.adminTabs.forEach((tab) => {
       const active = tab.dataset.adminTab === activeName;
@@ -2455,6 +2640,7 @@
     elements.adminPanels.forEach((panel) => { panel.hidden = panel.dataset.adminPanel !== activeName; });
     if (activeName === 'forms' && !adminFormsLoaded) loadAdminForms();
     if (activeName === 'dashboard' && !adminDashboardLoaded) loadAdminDashboardEditor();
+    if (activeName === 'content' && !adminContentLoaded) loadAdminContentStatus(false);
     if (activeName === 'payments' && !adminPricesLoaded) loadAdminPrices();
   }
 
@@ -2600,6 +2786,13 @@
     elements.adminDashboardRestore.addEventListener('click', restoreStaticDashboard);
     elements.adminDashboardPreviewButton.addEventListener('click', previewAdminDashboard);
     elements.adminDashboardSave.addEventListener('click', saveAdminDashboard);
+    elements.adminContentRefresh.addEventListener('click', () => loadAdminContentStatus(true));
+    elements.adminContentRepositorySelect.addEventListener('change', () => {
+      adminContentRepositoryId = elements.adminContentRepositorySelect.value;
+      adminContentLoaded = false;
+      loadAdminContentStatus(false);
+    });
+    elements.adminContentCopyEnv.addEventListener('click', copyContentEnvironmentTemplate);
     elements.adminPricesForm.addEventListener('submit', saveAdminPrices);
     elements.adminPricesReload.addEventListener('click', loadAdminPrices);
     elements.adminDashboardSource.addEventListener('input', () => {

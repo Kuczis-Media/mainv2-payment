@@ -155,6 +155,7 @@ const MAX_HISTORY_CHARS = 36_000;
       AMBIGUOUS_QUERY: 'Parametry instrukcji w linku powtarzają się.',
       AMBIGUOUS_SOURCE: 'Link wskazuje więcej niż jeden plik instrukcji.',
       INVALID_FILENAME: 'Nazwa pliku instrukcji w linku jest nieprawidłowa.',
+      INVALID_REPOSITORY: 'Repozytorium instrukcji w linku jest nieprawidłowe.',
       INVALID_POINT: 'Numer punktu w linku jest nieprawidłowy.',
       POINT_NOT_ALLOWED: 'Parametr punkt można stosować tylko z plikiem TXT.',
       POINT_REQUIRED: 'Link do pliku TXT nie zawiera numeru punktu.'
@@ -165,6 +166,7 @@ const MAX_HISTORY_CHARS = 36_000;
   function enableMaturaMode(request){
     state.promptConfig = {
       filename: request.filename,
+      repositoryId: request.repositoryId,
       point: request.point
     };
     state.maturaAvailable = true;

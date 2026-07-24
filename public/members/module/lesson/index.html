@@ -12,6 +12,7 @@
     <script src="/members/module/theme.js"></script>
     <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
     <script src="/assets/js/auth.js"></script>
+    <script src="/assets/js/content-library.js"></script>
     <link rel="stylesheet" href="/members/module/theme.css">
     <link rel="stylesheet" href="./style.css">
   </head>
@@ -29,10 +30,15 @@
             <small id="lesson-position">Ładowanie…</small>
           </span>
         </div>
-        <button class="icon-button" id="theme-toggle" type="button" aria-label="Włącz ciemny motyw" aria-pressed="false">
-          <svg class="sun-icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>
-          <svg class="moon-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M20.2 15.2A8 8 0 1 1 8.8 3.8a6.5 6.5 0 0 0 11.4 11.4Z"/></svg>
-        </button>
+        <div class="topbar-actions">
+          <button class="icon-button" id="lesson-library-button" type="button" aria-label="Otwórz bibliotekę lekcji" title="Biblioteka lekcji">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5zM20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5z"/></svg>
+          </button>
+          <button class="icon-button" id="theme-toggle" type="button" aria-label="Włącz ciemny motyw" aria-pressed="false">
+            <svg class="sun-icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>
+            <svg class="moon-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M20.2 15.2A8 8 0 1 1 8.8 3.8a6.5 6.5 0 0 0 11.4 11.4Z"/></svg>
+          </button>
+        </div>
       </header>
 
       <div class="progress-track" aria-hidden="true">
@@ -103,6 +109,28 @@
         </section>
       </main>
     </div>
+
+    <dialog class="lesson-library-dialog" id="lesson-library-dialog" aria-labelledby="lesson-library-title">
+      <section class="lesson-library-panel">
+        <header>
+          <div>
+            <p class="eyebrow">Prywatne repozytorium</p>
+            <h2 id="lesson-library-title">Biblioteka lekcji</h2>
+          </div>
+          <button class="dialog-close" id="lesson-library-close" type="button" aria-label="Zamknij bibliotekę">×</button>
+        </header>
+        <label class="lesson-library-search">
+          <span>Wyszukaj lekcję</span>
+          <input id="lesson-library-search" type="search" placeholder="Nazwa, opis lub tag…" autocomplete="off">
+        </label>
+        <label class="lesson-library-search">
+          <span>Repozytorium</span>
+          <select id="lesson-library-repository" aria-label="Wybierz repozytorium lekcji"></select>
+        </label>
+        <p class="lesson-library-status" id="lesson-library-status" role="status" aria-live="polite"></p>
+        <div class="lesson-library-list" id="lesson-library-list"></div>
+      </section>
+    </dialog>
 
     <script src="./lesson-parser.js"></script>
     <script src="./script.js"></script>
