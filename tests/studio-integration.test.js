@@ -69,10 +69,20 @@ test('both visual editors expose drag-and-drop, previews and reversible source w
   assert.match(html, /id=["']lesson-copy-button["']/);
   assert.match(html, /id=["']source-dialog["']/);
   assert.match(html, /data-lesson-add=["']quote["']/);
+  assert.match(html, /data-lesson-add=["']youtube["']/);
+  assert.match(html, /data-lesson-add=["']atonom["']/);
+  assert.match(html, /data-lesson-add=["']flashcards["']/);
+  assert.match(html, /data-lesson-add=["']task-gaps["']/);
   assert.match(script, /addEventListener\(['"]dragstart['"]/);
   assert.match(script, /addEventListener\(['"]drop['"]/);
+  assert.match(script, /window\.open\(/);
+  assert.match(script, /data-full-preview/);
+  assert.match(script, /state\.lesson\.model\.slides\.forEach/);
   assert.match(script, /serializeLesson/);
   assert.match(script, /parseLesson/);
+  assert.match(styles, /\.studio-preview-window/);
+  assert.match(styles, /\.full-preview-main/);
+  assert.match(styles, /\.full-lesson-list/);
   assert.match(styles, /\.lesson-font-serif/);
   assert.match(styles, /\.lesson-align-center/);
   assert.match(styles, /\.drop-zone\.is-dragover/);
@@ -100,4 +110,7 @@ test('lesson authoring extensions are rendered through strict, non-HTML directiv
   assert.match(styles, /\.lesson-rich-style/);
   assert.match(styles, /\.lesson-font-rounded/);
   assert.match(styles, /\.lesson-accordion\[open\]/);
+  assert.match(styles, /\.lesson-flashcard/);
+  assert.match(styles, /\.lesson-embed/);
+  assert.match(styles, /\.gap-exercise/);
 });

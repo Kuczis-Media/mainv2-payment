@@ -59,11 +59,23 @@ test('module cards serialize to the exact URLs consumed by existing applications
     [{ module: 'whiteboards', variant: 'bitpaper' }, '/members/module/bitpaper/'],
     [{ module: 'whiteboard', variant: 'whiteboard' }, '/members/module/whiteboard/'],
     [{ module: 'contact', internal: 'Proszę o pomoc' }, '/members/module/contact/?internal=Prosz%C4%99%20o%20pomoc'],
-    [{ module: 'atonom' }, '/members/module/atonom/']
+    [{ module: 'atonom' }, '/members/module/atonom/'],
+    [
+      { module: 'atonom', formula: 'kwas octowy' },
+      '/members/module/atonom/?formula=kwas%20octowy'
+    ]
   ];
   for (const [input, expected] of cases) {
     assert.equal(studio.moduleHref(studio.createModule(input)), expected);
   }
+});
+
+test('ATONOM compound names survive dashboard Markdown import and export', () => {
+  const href = '/members/module/atonom/?formula=cis-but-2-en';
+  const parsed = studio.parseModuleHref(href);
+  assert.equal(parsed.module, 'atonom');
+  assert.equal(parsed.formula, 'cis-but-2-en');
+  assert.equal(studio.moduleHref(studio.createModule(parsed)), href);
 });
 
 test('studio parses the current dashboard without losing cards unsupported by the palette', () => {

@@ -9,11 +9,13 @@
   const QUESTION_START = /^\s*:::question\s*$/i;
   const STYLE_START = /^\s*:::style(?:\s+(.+?))?\s*$/i;
   const ACCORDION_START = /^\s*:::accordion(?:\s+(.+?))?\s*$/i;
+  const STRUCTURAL_CONTAINER_START = /^\s*:::(?:task|zadanie|question|style|accordion|youtube|atonom|flashcards)(?:\s+.*?)?\s*$/i;
   const RICH_CONTAINER_END = /^\s*:::\s*$/;
   const SAFE_STYLE_COLOR = /^#[0-9a-f]{6}$/i;
   const STYLE_FONTS = new Set(['sans', 'serif', 'rounded', 'mono']);
   const STYLE_SIZES = new Set(['small', 'normal', 'large', 'xlarge']);
   const STYLE_ALIGNS = new Set(['left', 'center', 'right']);
+  const INTERACTIVE_START = /^\s*:::(youtube|atonom|flashcards)\s*$/i;
 
   class LessonFormatError extends Error {
     constructor(code, message) {
@@ -52,6 +54,13 @@
 
   function checkAnswer(task, value) {
     if (!task || !Array.isArray(task.answers)) return false;
+    if (task.type === 'gaps') {
+      if (!Array.isArray(value) || value.length !== task.answers.length) return false;
+      return task.answers.every((answer, index) => (
+        normalizeAnswer(value[index], 'text', task.caseSensitive)
+        === normalizeAnswer(answer, 'text', task.caseSensitive)
+      ));
+    }
     const matchesExpected = (answerValue) => {
       const candidate = normalizeAnswer(answerValue, task.type, task.caseSensitive);
       if (task.type === 'number' && Number.isNaN(candidate)) return false;
@@ -92,6 +101,8 @@
       sukces: 'success',
       options: 'options',
       opcje: 'options',
+      text: 'text',
+      tekst: 'text',
       case_sensitive: 'caseSensitive',
       wielkosc_liter: 'caseSensitive'
     };
@@ -124,13 +135,15 @@
       text: 'text',
       wybor: 'choice',
       choice: 'choice',
-      abcd: 'abcd'
+      abcd: 'abcd',
+      gaps: 'gaps',
+      luki: 'gaps'
     };
     const requestedType = typeAliases[normalizeKey(values.type || 'text')];
     if (!requestedType) {
       throw new LessonFormatError(
         'INVALID_TASK_TYPE',
-        `Slajd ${slideNumber}: typ zadania może mieć wartość text, number, choice albo abcd.`
+        `Slajd ${slideNumber}: typ zadania może mieć wartość text, number, choice, abcd albo gaps.`
       );
     }
     const type = requestedType === 'abcd' ? 'choice' : requestedType;
@@ -140,10 +153,10 @@
       .split('|')
       .map((option) => option.trim())
       .filter(Boolean);
-    if (type === 'choice' && options.length < 2) {
+    if ((type === 'choice' || type === 'gaps') && options.length < 2) {
       throw new LessonFormatError(
         'MISSING_TASK_OPTIONS',
-        `Slajd ${slideNumber}: zadanie choice wymaga co najmniej dwóch opcji.`
+        `Slajd ${slideNumber}: zadanie wyboru wymaga co najmniej dwóch opcji.`
       );
     }
     if (choiceStyle === 'abcd' && options.length !== 4) {
@@ -177,20 +190,30 @@
       answers,
       options,
       caseSensitive,
-      label: values.label || (type === 'choice' ? 'Wybierz odpowiedź' : 'Twoja odpowiedź'),
+      label: values.label || (type === 'choice' || type === 'gaps' ? 'Wybierz odpowiedź' : 'Twoja odpowiedź'),
       placeholder: values.placeholder || '',
+      text: values.text || '',
       hint: values.hint || '',
       success: values.success || 'Dobrze! Możesz przejść dalej.'
     };
 
-    const answerMatchesOption = answers.some((answer) => options.some((option) => (
+    const allAnswersMatchOptions = answers.every((answer) => options.some((option) => (
       normalizeAnswer(answer, type, caseSensitive) === normalizeAnswer(option, type, caseSensitive)
     )));
-    if (type === 'choice' && !answerMatchesOption) {
+    if ((type === 'choice' || type === 'gaps') && !allAnswersMatchOptions) {
       throw new LessonFormatError(
         'ANSWER_NOT_IN_OPTIONS',
         `Slajd ${slideNumber}: poprawna odpowiedź nie występuje na liście options.`
       );
+    }
+    if (type === 'gaps') {
+      const gapCount = (task.text.match(/\{\{[^{}]*\}\}/g) || []).length;
+      if (!task.text || gapCount < 1 || gapCount !== answers.length) {
+        throw new LessonFormatError(
+          'INVALID_GAPS',
+          `Slajd ${slideNumber}: liczba znaczników {{luka}} musi odpowiadać liczbie poprawnych odpowiedzi.`
+        );
+      }
     }
     return task;
   }
@@ -259,11 +282,18 @@
     const parts = [];
     let current = [];
     let inCodeFence = false;
+    let containerDepth = 0;
     for (const line of text.split('\n')) {
       if (/^\s*```/.test(line)) {
         inCodeFence = !inCodeFence;
         current.push(line);
-      } else if (!inCodeFence && /^\s*---\s*$/.test(line)) {
+      } else if (!inCodeFence && STRUCTURAL_CONTAINER_START.test(line)) {
+        containerDepth += 1;
+        current.push(line);
+      } else if (!inCodeFence && TASK_END.test(line) && containerDepth > 0) {
+        containerDepth -= 1;
+        current.push(line);
+      } else if (!inCodeFence && containerDepth === 0 && /^\s*---\s*$/.test(line)) {
         if (!current.join('\n').trim()) {
           throw new LessonFormatError(
             'EMPTY_SLIDE',
@@ -337,7 +367,8 @@
     const size = STYLE_SIZES.has(values.size) ? values.size : 'normal';
     const align = STYLE_ALIGNS.has(values.align) ? values.align : 'left';
     const color = SAFE_STYLE_COLOR.test(values.color || '') ? values.color.toLowerCase() : '';
-    return { font, size, align, color };
+    const background = SAFE_STYLE_COLOR.test(values.background || '') ? values.background.toLowerCase() : '';
+    return { font, size, align, color, background };
   }
 
   function styleContainerHtml(options) {
@@ -347,8 +378,10 @@
       `lesson-size-${options.size}`,
       `lesson-align-${options.align}`
     ];
+    if (options.background) classes.push('has-background');
     const style = options.color
-      ? ` style="--lesson-rich-color:${escapeHtml(options.color)}"`
+      || options.background
+      ? ` style="${options.color ? `--lesson-rich-color:${escapeHtml(options.color)};` : ''}${options.background ? `--lesson-rich-background:${escapeHtml(options.background)};` : ''}"`
       : '';
     return `<div class="${classes.join(' ')}"${style}>`;
   }
@@ -358,6 +391,98 @@
     const open = /\s+open=(?:1|true|yes|tak)\s*$/i.test(raw);
     const title = raw.replace(/\s+open=(?:1|true|yes|tak)\s*$/i, '').trim();
     return { open, title: title || 'Więcej informacji' };
+  }
+
+  function youtubeVideoId(value) {
+    const raw = String(value || '').trim();
+    if (/^[A-Za-z0-9_-]{11}$/.test(raw)) return raw;
+    try {
+      const url = new URL(raw);
+      const host = url.hostname.toLowerCase().replace(/^www\./, '');
+      if (!['youtu.be', 'youtube.com', 'm.youtube.com', 'youtube-nocookie.com'].includes(host)) return '';
+      const candidate = host === 'youtu.be'
+        ? url.pathname.split('/').filter(Boolean)[0] || ''
+        : url.searchParams.get('v')
+          || (url.pathname.match(/^\/(?:embed|shorts|live)\/([A-Za-z0-9_-]{11})(?:\/|$)/) || [])[1]
+          || '';
+      return /^[A-Za-z0-9_-]{11}$/.test(candidate) ? candidate : '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function directiveFields(body) {
+    const values = {};
+    String(body || '').split('\n').forEach((line) => {
+      const match = /^\s*([a-z_]+):\s*(.*?)\s*$/i.exec(line);
+      if (match) values[match[1].toLowerCase()] = match[2];
+    });
+    return values;
+  }
+
+  function interactiveBlockHtml(type, body) {
+    const values = directiveFields(body);
+    if (type === 'youtube') {
+      const id = youtubeVideoId(values.id || values.url);
+      if (!id) return '<p class="lesson-interactive-error">Nieprawidłowy film YouTube.</p>';
+      const title = values.title || 'Film do lekcji';
+      return `<figure class="lesson-embed lesson-youtube"><iframe src="https://www.youtube-nocookie.com/embed/${escapeHtml(id)}" title="${escapeHtml(title)}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe><figcaption>${escapeHtml(title)}</figcaption></figure>`;
+    }
+    if (type === 'atonom') {
+      const formula = String(values.formula || '').trim();
+      if (!formula || formula.length > 140 || /[\u0000-\u001f<>\\]/.test(formula)) {
+        return '<p class="lesson-interactive-error">Nieprawidłowa nazwa związku dla ATONOM.</p>';
+      }
+      const title = values.title || `Model cząsteczki: ${formula}`;
+      const src = `/members/module/atonom/?formula=${encodeURIComponent(formula)}`;
+      return `<figure class="lesson-embed lesson-atonom"><iframe src="${escapeHtml(src)}" title="${escapeHtml(title)}" loading="lazy"></iframe><figcaption>${escapeHtml(title)}</figcaption></figure>`;
+    }
+
+    const color = SAFE_STYLE_COLOR.test(values.color || '') ? values.color.toLowerCase() : '#7c3aed';
+    const title = values.title || 'Fiszki do utrwalenia';
+    const cards = String(body || '').split('\n')
+      .filter((line) => !/^\s*(?:title|color):/i.test(line))
+      .map((line) => line.split(/\s*=>\s*/, 2))
+      .filter((parts) => parts.length === 2 && parts[0].trim() && parts[1].trim())
+      .slice(0, 20);
+    if (cards.length < 2) return '<p class="lesson-interactive-error">Dodaj co najmniej dwie kompletne fiszki.</p>';
+    const items = cards.map(([front, back], index) => (
+      `<button class="lesson-flashcard" type="button" aria-pressed="false" style="--flashcard-color:${escapeHtml(color)}"><span class="flashcard-face flashcard-front"><small>Fiszka ${index + 1}</small><strong>${escapeHtml(front.trim())}</strong><em>Kliknij, aby odsłonić</em></span><span class="flashcard-face flashcard-back"><small>Odpowiedź</small><strong>${escapeHtml(back.trim())}</strong><em>Kliknij, aby wrócić</em></span></button>`
+    )).join('');
+    return `<section class="lesson-flashcards" aria-label="${escapeHtml(title)}"><h3>${escapeHtml(title)}</h3><div class="lesson-flashcard-grid">${items}</div></section>`;
+  }
+
+  function extractInteractiveBlocks(source, interactiveBlocks) {
+    const lines = String(source || '').split('\n');
+    const prepared = [];
+    let inCode = false;
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index];
+      if (/^\s*```/.test(line)) {
+        inCode = !inCode;
+        prepared.push(line);
+        continue;
+      }
+      const start = !inCode ? INTERACTIVE_START.exec(line) : null;
+      if (!start) {
+        prepared.push(line);
+        continue;
+      }
+      const body = [];
+      let end = index + 1;
+      while (end < lines.length && !RICH_CONTAINER_END.test(lines[end])) {
+        body.push(lines[end]);
+        end += 1;
+      }
+      if (end >= lines.length) {
+        prepared.push(line);
+        continue;
+      }
+      const html = interactiveBlockHtml(start[1].toLowerCase(), body.join('\n'));
+      prepared.push(`CHEMLESSONBLOCK${interactiveBlocks.push(html) - 1}END`);
+      index = end;
+    }
+    return prepared.join('\n');
   }
 
   function renderInline(source) {
@@ -393,7 +518,9 @@
   }
 
   function renderMarkdown(source) {
-    const lines = String(source || '').split('\n');
+    const interactiveBlocks = [];
+    const preparedSource = extractInteractiveBlocks(source, interactiveBlocks);
+    const lines = preparedSource.split('\n');
     let html = '';
     let inCode = false;
     let listType = '';
@@ -423,6 +550,12 @@
 
     for (const rawLine of lines) {
       const line = rawLine || '';
+      const interactive = /^\s*CHEMLESSONBLOCK(\d+)END\s*$/.exec(line);
+      if (interactive) {
+        closeBlocks();
+        html += interactiveBlocks[Number(interactive[1])] || '';
+        continue;
+      }
       if (/^\s*```/.test(line)) {
         closeBlocks();
         if (inCode) {

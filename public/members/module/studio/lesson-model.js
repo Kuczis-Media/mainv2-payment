@@ -7,7 +7,7 @@
   const SAFE_FILENAME = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.md$/i;
   const TASK_START = /^\s*:::(?:task|zadanie)\s*$/i;
   const QUESTION_START = /^\s*:::question\s*$/i;
-  const CONTAINER_START = /^\s*:::(style|accordion)(?:\s+(.*?))?\s*$/i;
+  const CONTAINER_START = /^\s*:::(style|accordion|youtube|atonom|flashcards)(?:\s+(.*?))?\s*$/i;
   const CONTAINER_END = /^\s*:::\s*$/;
   const STYLE_FONTS = Object.freeze(['sans', 'serif', 'rounded', 'mono']);
   const STYLE_SIZES = Object.freeze(['small', 'normal', 'large', 'xlarge']);
@@ -22,9 +22,12 @@
     'callout',
     'code',
     'style',
-    'accordion'
+    'accordion',
+    'youtube',
+    'atonom',
+    'flashcards'
   ]);
-  const TASK_TYPES = Object.freeze(['text', 'number', 'choice', 'abcd']);
+  const TASK_TYPES = Object.freeze(['text', 'number', 'choice', 'abcd', 'gaps']);
 
   let idSequence = 0;
 
@@ -86,6 +89,35 @@
     return /^https:\/\/[^\s]+$/i.test(raw) ? raw : '';
   }
 
+  function youtubeVideoId(value) {
+    const raw = oneLine(value);
+    if (/^[A-Za-z0-9_-]{11}$/.test(raw)) return raw;
+    try {
+      const url = new URL(raw);
+      const host = url.hostname.toLowerCase().replace(/^www\./, '');
+      if (!['youtu.be', 'youtube.com', 'm.youtube.com', 'youtube-nocookie.com'].includes(host)) return '';
+      const candidate = host === 'youtu.be'
+        ? url.pathname.split('/').filter(Boolean)[0] || ''
+        : url.searchParams.get('v')
+          || (url.pathname.match(/^\/(?:embed|shorts|live)\/([A-Za-z0-9_-]{11})(?:\/|$)/) || [])[1]
+          || '';
+      return /^[A-Za-z0-9_-]{11}$/.test(candidate) ? candidate : '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function safeAtonomFormula(value) {
+    const formula = oneLine(value);
+    return formula && formula.length <= 140 && !/[\u0000-\u001f<>\\]/.test(formula)
+      ? formula
+      : '';
+  }
+
+  function cleanDirectiveValue(value) {
+    return oneLine(value).replace(/:::/g, '').slice(0, 500);
+  }
+
   function cleanInline(value) {
     return oneLine(value).replace(/\]/g, '').replace(/\r|\n/g, '');
   }
@@ -95,7 +127,7 @@
       .split('\n')
       .map((line) => {
         if (/^\s*---\s*$/.test(line)) return '`---`';
-        if (/^\s*:::(?:task|zadanie|question|style|accordion)?(?:\s+.*?)?\s*$/i.test(line)) {
+        if (/^\s*:::(?:task|zadanie|question|style|accordion|youtube|atonom|flashcards)?(?:\s+.*?)?\s*$/i.test(line)) {
           return `\`${line.trim()}\``;
         }
         return line.replace(/\s+$/g, '');
@@ -110,7 +142,10 @@
     const size = STYLE_SIZES.includes(source.size) ? source.size : 'normal';
     const align = STYLE_ALIGNS.includes(source.align) ? source.align : 'left';
     const color = STYLE_COLOR.test(String(source.color || '')) ? String(source.color).toLowerCase() : '';
-    return { font, color, size, align };
+    const background = STYLE_COLOR.test(String(source.background || ''))
+      ? String(source.background).toLowerCase()
+      : '';
+    return { font, color, background, size, align };
   }
 
   function createBlock(typeOrSeed, maybeSeed) {
@@ -162,6 +197,35 @@
         ...base,
         language: oneLine(source.language).replace(/[^a-z0-9_+-]/gi, '').slice(0, 24),
         code: normalizeNewlines(source.code).replace(/\n+$/g, '')
+      };
+    }
+    if (type === 'youtube') {
+      return {
+        ...base,
+        video: oneLine(source.video || source.url || source.videoId),
+        title: oneLine(source.title) || 'Film do lekcji'
+      };
+    }
+    if (type === 'atonom') {
+      return {
+        ...base,
+        formula: oneLine(source.formula) || 'fenol',
+        title: oneLine(source.title) || 'Model cząsteczki w ATONOM'
+      };
+    }
+    if (type === 'flashcards') {
+      const cards = (Array.isArray(source.cards) ? source.cards : [])
+        .map((card) => ({
+          front: oneLine(card && (card.front ?? card.question)),
+          back: oneLine(card && (card.back ?? card.answer))
+        }))
+        .filter((card) => card.front || card.back)
+        .slice(0, 20);
+      return {
+        ...base,
+        title: oneLine(source.title) || 'Fiszki do utrwalenia',
+        color: STYLE_COLOR.test(String(source.color || '')) ? String(source.color).toLowerCase() : '#7c3aed',
+        cards
       };
     }
     if (type === 'style') {
@@ -222,7 +286,8 @@
       id: oneLine(source.id) || nextId('task'),
       type,
       question: normalizeNewlines(source.question).trim(),
-      label: oneLine(source.label) || (type === 'choice' || type === 'abcd' ? 'Wybierz odpowiedź' : 'Twoja odpowiedź'),
+      text: oneLine(source.text || source.gapText),
+      label: oneLine(source.label) || (['choice', 'abcd', 'gaps'].includes(type) ? 'Wybierz odpowiedź' : 'Twoja odpowiedź'),
       placeholder: oneLine(source.placeholder),
       options,
       answers,
@@ -277,23 +342,33 @@
     if (task.type === 'abcd' && task.options.length !== 4) {
       errors.push({ code: 'INVALID_ABCD_OPTIONS', path: `${path}.options`, message: 'Quiz ABCD wymaga dokładnie czterech odpowiedzi.' });
     }
-    if (task.type === 'choice' && task.options.length < 2) {
+    if ((task.type === 'choice' || task.type === 'gaps') && task.options.length < 2) {
       errors.push({ code: 'MISSING_OPTIONS', path: `${path}.options`, message: 'Pytanie wyboru wymaga co najmniej dwóch odpowiedzi.' });
     }
     if (task.options.some((option) => option.includes('|'))) {
       errors.push({ code: 'INVALID_OPTION', path: `${path}.options`, message: 'Odpowiedź nie może zawierać znaku |.' });
     }
-    if ((task.type === 'choice' || task.type === 'abcd')) {
+    if ((task.type === 'choice' || task.type === 'abcd' || task.type === 'gaps')) {
       const expectedAnswers = task.type === 'abcd'
         ? task.answers.map((answer) => task.options[(answer || '').toUpperCase().charCodeAt(0) - 65])
         : task.answers;
-      const hasMatchingOption = expectedAnswers.some((answer) => task.options.some((option) => (
+      const allAnswersMatch = expectedAnswers.every((answer) => task.options.some((option) => (
         task.caseSensitive
           ? answer === option
           : String(answer).toLocaleLowerCase('pl') === String(option).toLocaleLowerCase('pl')
       )));
-      if (!hasMatchingOption) {
+      if (!allAnswersMatch) {
         errors.push({ code: 'ANSWER_NOT_IN_OPTIONS', path: `${path}.answers`, message: 'Poprawna odpowiedź musi występować na liście opcji.' });
+      }
+    }
+    if (task.type === 'gaps') {
+      const gapCount = (task.text.match(/\{\{[^{}]*\}\}/g) || []).length;
+      if (!task.text || gapCount < 1 || gapCount !== task.answers.length) {
+        errors.push({
+          code: 'INVALID_GAPS',
+          path: `${path}.text`,
+          message: 'Tekst luk musi zawierać po jednym znaczniku {{luka}} dla każdej poprawnej odpowiedzi.'
+        });
       }
     }
   }
@@ -305,6 +380,21 @@
     }
     if (block.type === 'image' && !safeImageUrl(block.url)) {
       errors.push({ code: 'UNSAFE_IMAGE_URL', path: `${path}.url`, message: 'Obraz musi używać pełnego adresu HTTPS.' });
+    }
+    if (block.type === 'youtube' && !youtubeVideoId(block.video)) {
+      errors.push({ code: 'INVALID_YOUTUBE', path: `${path}.video`, message: 'Podaj prawidłowy link lub ID filmu YouTube.' });
+    }
+    if (block.type === 'atonom' && !safeAtonomFormula(block.formula)) {
+      errors.push({ code: 'INVALID_ATONOM_FORMULA', path: `${path}.formula`, message: 'Podaj nazwę związku dla ATONOM.' });
+    }
+    if (
+      block.type === 'flashcards'
+      && (
+        block.cards.length < 2
+        || block.cards.some((card) => !card.front || !card.back || card.front.includes('=>') || card.back.includes('=>'))
+      )
+    ) {
+      errors.push({ code: 'INVALID_FLASHCARDS', path: `${path}.cards`, message: 'Dodaj co najmniej dwie kompletne fiszki bez znaku =>.' });
     }
     if (
       (block.type === 'heading' && !block.text)
@@ -380,9 +470,35 @@
     if (block.type === 'code') {
       return `\`\`\`${block.language}\n${block.code}\n\`\`\``;
     }
+    if (block.type === 'youtube') {
+      return [
+        ':::youtube',
+        `id: ${youtubeVideoId(block.video)}`,
+        `title: ${cleanDirectiveValue(block.title)}`,
+        ':::'
+      ].join('\n');
+    }
+    if (block.type === 'atonom') {
+      return [
+        ':::atonom',
+        `formula: ${cleanDirectiveValue(block.formula)}`,
+        `title: ${cleanDirectiveValue(block.title)}`,
+        ':::'
+      ].join('\n');
+    }
+    if (block.type === 'flashcards') {
+      return [
+        ':::flashcards',
+        `title: ${cleanDirectiveValue(block.title)}`,
+        `color: ${block.color}`,
+        ...block.cards.map((card) => `${cleanDirectiveValue(card.front)} => ${cleanDirectiveValue(card.back)}`),
+        ':::'
+      ].join('\n');
+    }
     if (block.type === 'style') {
       const attrs = [`font=${block.font}`];
       if (block.color) attrs.push(`color=${block.color}`);
+      if (block.background) attrs.push(`background=${block.background}`);
       attrs.push(`size=${block.size}`, `align=${block.align}`);
       return `:::style ${attrs.join(' ')}\n${block.blocks.map(serializeBlock).join('\n\n')}\n:::`;
     }
@@ -395,7 +511,10 @@
     const lines = [':::task', `type: ${task.type}`];
     if (task.label) lines.push(`label: ${task.label}`);
     if (task.placeholder) lines.push(`placeholder: ${task.placeholder}`);
-    if (task.type === 'choice' || task.type === 'abcd') lines.push(`options: ${task.options.join(' | ')}`);
+    if (task.type === 'choice' || task.type === 'abcd' || task.type === 'gaps') {
+      lines.push(`options: ${task.options.join(' | ')}`);
+    }
+    if (task.type === 'gaps') lines.push(`text: ${task.text}`);
     lines.push(`answer: ${task.answers.join(' | ')}`);
     if (task.caseSensitive && task.type === 'text') lines.push('case_sensitive: true');
     if (task.hint) lines.push(`hint: ${task.hint}`);
@@ -481,6 +600,8 @@
       sukces: 'feedback',
       options: 'options',
       opcje: 'options',
+      text: 'text',
+      tekst: 'text',
       case_sensitive: 'caseSensitive',
       wielkosc_liter: 'caseSensitive'
     };
@@ -510,6 +631,7 @@
       placeholder: values.placeholder,
       hint: values.hint,
       feedback: values.feedback,
+      text: values.text,
       options,
       answers,
       answer: answers[0],
@@ -524,6 +646,15 @@
       if (match) attrs[match[1].toLowerCase()] = match[2];
     });
     return normalizeStyle(attrs);
+  }
+
+  function parseDirectiveFields(lines) {
+    const values = {};
+    lines.forEach((line) => {
+      const match = /^\s*([a-z_]+):\s*(.*?)\s*$/i.exec(line);
+      if (match) values[match[1].toLowerCase()] = match[2];
+    });
+    return values;
   }
 
   function findContainerEnd(lines, startIndex) {
@@ -555,14 +686,22 @@
         continue;
       }
 
-      const container = allowContainers !== false ? CONTAINER_START.exec(line) : null;
+      const containerMatch = CONTAINER_START.exec(line);
+      const container = containerMatch && (
+        allowContainers !== false
+        || !['style', 'accordion'].includes(containerMatch[1].toLowerCase())
+      ) ? containerMatch : null;
       if (container) {
         const end = findContainerEnd(lines, index);
         if (end > index) {
-          const children = parseBlocks(lines.slice(index + 1, end).join('\n'), false);
-          if (container[1].toLowerCase() === 'style') {
+          const type = container[1].toLowerCase();
+          const bodyLines = lines.slice(index + 1, end);
+          const children = ['style', 'accordion'].includes(type)
+            ? parseBlocks(bodyLines.join('\n'), false)
+            : [];
+          if (type === 'style') {
             blocks.push(createBlock({ type: 'style', ...parseStyleAttributes(container[2]), blocks: children }));
-          } else {
+          } else if (type === 'accordion') {
             const rawTitle = oneLine(container[2]);
             blocks.push(createBlock({
               type: 'accordion',
@@ -570,6 +709,20 @@
               open: /\sopen=true$/i.test(rawTitle),
               blocks: children
             }));
+          } else if (type === 'youtube') {
+            const values = parseDirectiveFields(bodyLines);
+            blocks.push(createBlock({ type, video: values.id || values.url, title: values.title }));
+          } else if (type === 'atonom') {
+            const values = parseDirectiveFields(bodyLines);
+            blocks.push(createBlock({ type, formula: values.formula, title: values.title }));
+          } else {
+            const values = parseDirectiveFields(bodyLines);
+            const cards = bodyLines
+              .filter((bodyLine) => !/^\s*(?:title|color):/i.test(bodyLine))
+              .map((bodyLine) => bodyLine.split(/\s*=>\s*/, 2))
+              .filter((parts) => parts.length === 2)
+              .map(([front, back]) => ({ front, back }));
+            blocks.push(createBlock({ type: 'flashcards', title: values.title, color: values.color, cards }));
           }
           index = end + 1;
           continue;
@@ -645,7 +798,13 @@
         index < lines.length
         && lines[index].trim()
         && !/^(?:#{1,3}\s+|\s*```|\s*>\s?|\s*!\[|\s*[-*+]\s+|\s*\d+[.)]\s+)/.test(lines[index])
-        && !(allowContainers !== false && CONTAINER_START.test(lines[index]))
+        && !(
+          CONTAINER_START.test(lines[index])
+          && (
+            allowContainers !== false
+            || !/^\s*:::(?:style|accordion)\b/i.test(lines[index])
+          )
+        )
       ) {
         paragraph.push(lines[index]);
         index += 1;
@@ -798,8 +957,11 @@
   const capabilities = Object.freeze({
     markdown: true,
     imagesFromHttps: true,
-    tasks: Object.freeze(['text', 'number', 'choice', 'abcd']),
+    tasks: Object.freeze(['text', 'number', 'choice', 'abcd', 'gaps']),
     styledContainers: true,
+    youtube: true,
+    atonom: true,
+    flashcards: true,
     accordions: true,
     nestedContainers: false,
     styleFonts: STYLE_FONTS,

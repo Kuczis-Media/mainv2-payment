@@ -239,6 +239,72 @@ test('studio serializes code, callouts, safe style containers and accordions', (
   assert.match(lessonParser.parseLesson(markdown, 'materialy.md').slides[0].html, /<details class="lesson-accordion" open>/);
 });
 
+test('studio publishes backgrounds, YouTube, ATONOM, flashcards and selectable text gaps', () => {
+  const lesson = studio.createLesson({
+    title: 'Chemia angażująca',
+    filename: 'chemia-angazujaca.md',
+    slides: [{
+      blocks: [
+        {
+          type: 'style',
+          font: 'rounded',
+          color: '#173f35',
+          background: '#dff7ed',
+          size: 'large',
+          align: 'center',
+          blocks: [{ type: 'text', text: 'Zapamiętaj grupy funkcyjne.' }]
+        },
+        { type: 'youtube', video: 'https://youtu.be/M7lc1UVf-VE', title: 'Wprowadzenie' },
+        { type: 'atonom', formula: 'kwas octowy', title: 'Obejrzyj model 3D' },
+        {
+          type: 'flashcards',
+          title: 'Szybka powtórka',
+          color: '#7c3aed',
+          cards: [
+            { front: '–OH', back: 'grupa hydroksylowa' },
+            { front: '–COOH', back: 'grupa karboksylowa' }
+          ]
+        }
+      ],
+      task: {
+        type: 'gaps',
+        question: 'Uzupełnij opis.',
+        text: 'Etanol jest {{typ związku}}, a zawarta w nim grupa to {{nazwa grupy}}.',
+        options: ['alkoholem', 'aldehydem', 'hydroksylowa', 'karboksylowa'],
+        answers: ['alkoholem', 'hydroksylowa'],
+        feedback: 'Wszystkie luki są poprawne.'
+      }
+    }]
+  });
+
+  const markdown = studio.serializeLesson(lesson);
+  assert.match(markdown, /background=#dff7ed/);
+  assert.match(markdown, /:::youtube\nid: M7lc1UVf-VE\n/);
+  assert.match(markdown, /:::atonom\nformula: kwas octowy\n/);
+  assert.match(markdown, /–OH => grupa hydroksylowa/);
+  assert.match(markdown, /type: gaps/);
+  assert.match(markdown, /text: Etanol jest \{\{typ związku\}\}/);
+
+  const imported = studio.parseLesson(markdown, lesson.filename);
+  assert.deepEqual(
+    imported.slides[0].blocks.map((block) => block.type),
+    ['heading', 'style', 'youtube', 'atonom', 'flashcards']
+  );
+  assert.equal(imported.slides[0].blocks[1].background, '#dff7ed');
+  assert.equal(imported.slides[0].blocks[3].formula, 'kwas octowy');
+  assert.equal(imported.slides[0].blocks[4].cards.length, 2);
+  assert.equal(imported.slides[0].task.type, 'gaps');
+
+  const published = lessonParser.parseLesson(markdown, lesson.filename);
+  const slide = published.slides[0];
+  assert.match(slide.html, /youtube-nocookie\.com\/embed\/M7lc1UVf-VE/);
+  assert.match(slide.html, /\/members\/module\/atonom\/\?formula=kwas%20octowy/);
+  assert.match(slide.html, /class="lesson-flashcard"/);
+  assert.match(slide.html, /--lesson-rich-background:#dff7ed/);
+  assert.equal(lessonParser.checkAnswer(slide.task, ['alkoholem', 'hydroksylowa']), true);
+  assert.equal(lessonParser.checkAnswer(slide.task, ['aldehydem', 'hydroksylowa']), false);
+});
+
 test('studio rejects unsafe image URLs, malformed quizzes and ambiguous code fences', () => {
   const unsafeImage = studio.validateLesson({
     title: 'Obraz',
@@ -289,6 +355,10 @@ test('studio rejects unsafe image URLs, malformed quizzes and ambiguous code fen
 test('studio exposes renderer extension capabilities and a strict authoring filename policy', () => {
   assert.equal(studio.capabilities.styledContainers, true);
   assert.equal(studio.capabilities.accordions, true);
+  assert.equal(studio.capabilities.youtube, true);
+  assert.equal(studio.capabilities.atonom, true);
+  assert.equal(studio.capabilities.flashcards, true);
+  assert.ok(studio.capabilities.tasks.includes('gaps'));
   assert.equal(studio.capabilities.nestedContainers, false);
   assert.deepEqual(studio.capabilities.styleFonts, ['sans', 'serif', 'rounded', 'mono']);
   assert.equal(studio.validateFilename('dzial-1.md'), 'dzial-1.md');

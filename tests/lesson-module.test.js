@@ -160,6 +160,16 @@ test('lesson filename and Markdown rendering reject path traversal and active HT
     html,
     /<img src="https:\/\/example\.com\/schemat\.png" alt="bezpieczny obraz" loading="lazy" decoding="async" referrerpolicy="no-referrer">/
   );
+
+  const fencedDirective = parser.renderMarkdown([
+    '```text',
+    ':::youtube',
+    'id: M7lc1UVf-VE',
+    ':::',
+    '```'
+  ].join('\n'));
+  assert.doesNotMatch(fencedDirective, /<iframe/);
+  assert.match(fencedDirective, /:::youtube/);
 });
 
 test('lesson parser reports authoring errors instead of silently skipping tasks', () => {

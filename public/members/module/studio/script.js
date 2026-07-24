@@ -80,6 +80,7 @@
     currentUser: null,
     editSession: null,
     saveTimers: { dashboard: 0, lesson: 0 },
+    previewWindows: { dashboard: null, lesson: null },
     sourceMode: 'dashboard',
     dashboard: {
       model: null,
@@ -429,7 +430,8 @@
       module: type,
       title,
       description,
-      source: 'prompt'
+      source: 'prompt',
+      formula: type === 'atonom' ? 'fenol' : ''
     });
   }
 
@@ -809,6 +811,16 @@
           textareaInput(node.internal, 'internal', { rows: 4, maxLength: 240 })
         ));
       }
+      if (node.module === 'atonom') {
+        form.append(field(
+          definition.formulaLabel || 'Nazwa związku',
+          textInput(node.formula, 'formula', {
+            placeholder: 'np. kwas octowy, etanol, cis-but-2-en',
+            maxLength: 140
+          }),
+          'Nazwa trafi do adresu jako parametr ?formula=… i ATONOM od razu otworzy wybrany model.'
+        ));
+      }
       if (node.module === 'link') {
         form.append(field(
           'Adres linku',
@@ -842,8 +854,26 @@
     return wrapper;
   }
 
-  function renderDashboardPreview() {
-    elements.dashboardPreview.replaceChildren();
+  function previewToolbar(mode) {
+    const toolbar = create('div', 'preview-toolbar');
+    const copy = create('div');
+    copy.append(
+      create('strong', '', mode === 'dashboard' ? 'Podgląd dashboardu' : 'Podgląd slajdu'),
+      create('small', '', mode === 'dashboard'
+        ? 'Cały układ możesz otworzyć w osobnym oknie.'
+        : 'Osobne okno pokaże wszystkie slajdy lekcji.')
+    );
+    const button = create('button', 'button button-soft preview-open-button', 'Otwórz pełny podgląd');
+    button.type = 'button';
+    button.dataset.fullPreview = mode;
+    button.setAttribute('aria-label', mode === 'dashboard'
+      ? 'Otwórz pełny podgląd dashboardu w nowym oknie'
+      : 'Otwórz pełny podgląd lekcji w nowym oknie');
+    toolbar.append(copy, button);
+    return toolbar;
+  }
+
+  function buildDashboardPreviewShell() {
     const model = dashboardModelApi.toDashboardModel(state.dashboard.model);
     const shell = create('div', 'dashboard-preview-shell');
     const hero = create('div', 'preview-hero');
@@ -877,7 +907,15 @@
       section.groups.forEach((group) => card.append(dashboardPreviewGroup(group)));
       shell.append(card);
     });
-    elements.dashboardPreview.append(shell);
+    return shell;
+  }
+
+  function renderDashboardPreview() {
+    elements.dashboardPreview.replaceChildren(
+      previewToolbar('dashboard'),
+      buildDashboardPreviewShell()
+    );
+    syncFullPreview('dashboard');
   }
 
   function updateDashboardNodeSummary() {
@@ -1263,6 +1301,7 @@
       return lessonModelApi.createBlock('style', {
         font: 'sans',
         color: '',
+        background: '',
         size: 'normal',
         align: 'left',
         blocks: [lessonModelApi.createBlock('text', { text: 'Wpisz tekst i ustaw jego wygląd.' })]
@@ -1296,6 +1335,29 @@
       return lessonModelApi.createBlock('code', {
         language: '',
         code: 'Wpisz tutaj kod albo wzór tekstowy.'
+      });
+    }
+    if (type === 'youtube') {
+      return lessonModelApi.createBlock('youtube', {
+        video: 'M7lc1UVf-VE',
+        title: 'Film do lekcji'
+      });
+    }
+    if (type === 'atonom') {
+      return lessonModelApi.createBlock('atonom', {
+        formula: 'fenol',
+        title: 'Model cząsteczki w ATONOM'
+      });
+    }
+    if (type === 'flashcards') {
+      return lessonModelApi.createBlock('flashcards', {
+        title: 'Fiszki do utrwalenia',
+        color: '#7c3aed',
+        cards: [
+          { front: 'Alkohol', back: 'Związek zawierający grupę hydroksylową –OH.' },
+          { front: 'Aldehyd', back: 'Związek zawierający końcową grupę –CHO.' },
+          { front: 'Keton', back: 'Związek z grupą karbonylową wewnątrz łańcucha.' }
+        ]
       });
     }
     if (type === 'accordion') {
@@ -1338,6 +1400,17 @@
         placeholder: 'Wpisz liczbę',
         answers: ['0'],
         hint: 'Dodaj podpowiedź.'
+      });
+    }
+    if (taskType === 'gaps') {
+      return lessonModelApi.createTask({
+        type: 'gaps',
+        question: 'Uzupełnij zdanie, wybierając właściwe pojęcia.',
+        text: 'Etanol należy do {{grupy związków}}, a jego grupą funkcyjną jest {{grupa funkcyjna}}.',
+        label: 'Uzupełnij wszystkie luki',
+        options: ['alkoholi', 'aldehydów', 'hydroksylowa', 'karboksylowa'],
+        answers: ['alkoholi', 'hydroksylowa'],
+        hint: 'Sprawdź końcówkę nazwy i wzór grupy funkcyjnej.'
       });
     }
     return lessonModelApi.createTask({
@@ -1445,7 +1518,10 @@
       callout: '!',
       code: '</>',
       style: 'Aa',
-      accordion: '⌄'
+      accordion: '⌄',
+      youtube: 'YT',
+      atonom: '⚛',
+      flashcards: '↻'
     };
     return symbols[block.type] || 'T';
   }
@@ -1460,16 +1536,22 @@
     if (block.type === 'code') return block.language ? `Kod: ${block.language}` : 'Blok kodu';
     if (block.type === 'style') return 'Stylowany tekst';
     if (block.type === 'accordion') return block.title || 'Harmonijka';
+    if (block.type === 'youtube') return block.title || 'Film YouTube';
+    if (block.type === 'atonom') return block.title || `ATONOM: ${block.formula}`;
+    if (block.type === 'flashcards') return block.title || 'Fiszki';
     return 'Klocek';
   }
 
   function lessonBlockSubtitle(block) {
     if (block.type === 'style') {
-      return `${block.font} · ${block.size} · ${block.align}${block.color ? ` · ${block.color}` : ''}`;
+      return `${block.font} · ${block.size} · ${block.align}${block.color ? ` · tekst ${block.color}` : ''}${block.background ? ` · tło ${block.background}` : ''}`;
     }
     if (block.type === 'accordion') return `${block.blocks.length} elementów · ${block.open ? 'otwarta' : 'zamknięta'}`;
     if (block.type === 'list') return `${block.items.length} punktów`;
     if (block.type === 'image') return block.url || 'Uzupełnij adres HTTPS';
+    if (block.type === 'youtube') return block.video || 'Uzupełnij link lub ID filmu';
+    if (block.type === 'atonom') return `Związek: ${block.formula || 'nieustawiony'}`;
+    if (block.type === 'flashcards') return `${block.cards.length} fiszki · ${block.color}`;
     const labels = {
       heading: `Nagłówek H${block.level}`,
       text: 'Akapit',
@@ -1574,7 +1656,11 @@
     item.dataset.lessonSlideId = slide.id;
     item.dataset.blockType = `task-${task.type}`;
     item.classList.toggle('is-selected', state.lesson.selectedId === task.id);
-    const symbol = create('span', 'node-symbol', task.type === 'abcd' ? 'AB' : task.type === 'number' ? '#' : '✓');
+    const symbol = create(
+      'span',
+      'node-symbol',
+      task.type === 'abcd' ? 'AB' : task.type === 'number' ? '#' : task.type === 'gaps' ? '□' : '✓'
+    );
     const copy = create('span', 'node-copy');
     copy.append(
       create('strong', '', task.question || 'Pytanie bez treści'),
@@ -1697,16 +1783,41 @@
       lessonSelect(task.type, 'type', [
         { value: 'abcd', label: 'Quiz ABCD' },
         { value: 'choice', label: 'Wybór z listy' },
+        { value: 'gaps', label: 'Uzupełnianie luk z listy' },
         { value: 'text', label: 'Odpowiedź tekstowa' },
         { value: 'number', label: 'Odpowiedź liczbowa' }
       ])
     ));
     form.append(
       field('Treść pytania', lessonTextarea(task.question, 'question', { rows: 3, maxLength: 900 })),
-      field('Etykieta pola', lessonInput(task.label, 'label', { maxLength: 160 })),
-      field('Placeholder', lessonInput(task.placeholder, 'placeholder', { maxLength: 160 }))
+      field('Etykieta pola', lessonInput(task.label, 'label', { maxLength: 160 }))
     );
-    if (task.type === 'choice' || task.type === 'abcd') {
+    if (task.type !== 'gaps') {
+      form.append(field('Placeholder', lessonInput(task.placeholder, 'placeholder', { maxLength: 160 })));
+    }
+    if (task.type === 'gaps') {
+      form.append(
+        field(
+          'Tekst z lukami',
+          lessonTextarea(task.text, 'text', {
+            rows: 6,
+            maxLength: 1600,
+            placeholder: 'Etanol należy do {{grupy związków}}.'
+          }),
+          'Każdą lukę oznacz jako {{opis luki}}. Kolejność luk musi odpowiadać kolejności poprawnych odpowiedzi.'
+        ),
+        field(
+          'Opcje wspólne — jedna w wierszu',
+          lessonTextarea(task.options.join('\n'), 'options', { rows: 7 }),
+          'Uczeń zobaczy tę listę przy każdej luce.'
+        ),
+        field(
+          'Poprawne odpowiedzi — kolejno dla luk',
+          lessonTextarea(task.answers.join('\n'), 'answers', { rows: 5 }),
+          'Pierwszy wiersz odpowiada pierwszej luce, drugi — drugiej itd.'
+        )
+      );
+    } else if (task.type === 'choice' || task.type === 'abcd') {
       form.append(field(
         'Opcje — jedna w wierszu',
         lessonTextarea(task.options.join('\n'), 'options', {
@@ -1833,6 +1944,41 @@
         field('Język / etykieta', lessonInput(block.language, 'language', { placeholder: 'np. text, js', maxLength: 24 })),
         field('Kod albo wzór', lessonTextarea(block.code, 'code', { rows: 9, maxLength: 6000 }))
       );
+    } else if (block.type === 'youtube') {
+      form.append(
+        field(
+          'Link lub ID filmu YouTube',
+          lessonInput(block.video, 'video', { placeholder: 'https://youtu.be/… lub 11-znakowe ID', maxLength: 300 }),
+          'Film zostanie osadzony w bezpiecznym iframe z domeny youtube-nocookie.com.'
+        ),
+        field('Tytuł filmu', lessonInput(block.title, 'title', { maxLength: 180 }))
+      );
+    } else if (block.type === 'atonom') {
+      form.append(
+        field(
+          'Nazwa związku chemicznego',
+          lessonInput(block.formula, 'formula', {
+            placeholder: 'np. kwas octowy, etanol, cis-but-2-en',
+            maxLength: 140
+          }),
+          'Builder utworzy iframe /members/module/atonom/?formula=nazwa-związku.'
+        ),
+        field('Tytuł modelu', lessonInput(block.title, 'title', { maxLength: 180 }))
+      );
+    } else if (block.type === 'flashcards') {
+      form.append(
+        field('Tytuł zestawu', lessonInput(block.title, 'title', { maxLength: 180 })),
+        field(
+          'Fiszki — jedna w wierszu',
+          lessonTextarea(
+            block.cards.map((card) => `${card.front} => ${card.back}`).join('\n'),
+            'cards',
+            { rows: 10, maxLength: 6000, placeholder: 'Pojęcie => Wyjaśnienie' }
+          ),
+          'Rozdziel przód i tył znakiem =>. Dodaj co najmniej dwie fiszki.'
+        ),
+        field('Kolor fiszek', lessonInput(block.color, 'flashcardColor', { type: 'color' }))
+      );
     } else if (block.type === 'style') {
       const primaryText = block.blocks.find((child) => child.type === 'text');
       form.append(field(
@@ -1866,12 +2012,21 @@
         ])),
         field('Kolor tekstu', lessonInput(block.color || '#0e665a', 'color', { type: 'color' }))
       );
+      const backgroundRow = create('div', 'field-row');
+      backgroundRow.append(
+        field('Kolor tła', lessonInput(block.background || '#e8f5ef', 'background', { type: 'color' }))
+      );
       const useColor = create('label', 'check-field');
       useColor.append(
         lessonInput('', 'useColor', { type: 'checkbox', checked: Boolean(block.color) }),
         create('span', '', 'Użyj własnego koloru tekstu')
       );
-      form.append(row, alignRow, useColor);
+      const useBackground = create('label', 'check-field');
+      useBackground.append(
+        lessonInput('', 'useBackground', { type: 'checkbox', checked: Boolean(block.background) }),
+        create('span', '', 'Użyj kolorowego tła karty')
+      );
+      form.append(row, alignRow, useColor, backgroundRow, useBackground);
     } else if (block.type === 'accordion') {
       const open = create('label', 'check-field');
       open.append(
@@ -1893,12 +2048,17 @@
     return parts.join('\n\n');
   }
 
-  function renderLessonPreview() {
-    elements.lessonPreview.replaceChildren();
-    const slide = selectedLessonSlide();
-    if (!slide) return;
-    state.lesson.previewSlideId = slide.id;
-    const index = state.lesson.model.slides.indexOf(slide);
+  function bindPreviewFlashcards(root) {
+    all('.lesson-flashcard', root).forEach((card) => {
+      card.addEventListener('click', () => {
+        const flipped = card.getAttribute('aria-pressed') !== 'true';
+        card.setAttribute('aria-pressed', String(flipped));
+        card.classList.toggle('is-flipped', flipped);
+      });
+    });
+  }
+
+  function buildLessonPreviewShell(slide, index, includeValidation) {
     const shell = create('div', 'lesson-preview-shell');
     const meta = create('div', 'lesson-preview-meta');
     meta.append(
@@ -1920,13 +2080,15 @@
           ? `Quiz ABCD · ${slide.task.options.length} opcje`
           : slide.task.type === 'choice'
             ? `Wybór · ${slide.task.options.length} opcje`
+            : slide.task.type === 'gaps'
+              ? `Luki · ${slide.task.answers.length} pola · ${slide.task.options.length} opcji`
             : `Odpowiedź ${slide.task.type === 'number' ? 'liczbowa' : 'tekstowa'}`),
         create('span', '', slide.task.hint ? `Podpowiedź: ${slide.task.hint}` : 'Bez podpowiedzi')
       );
       shell.append(task);
     }
-    const validation = lessonModelApi.validateLesson(state.lesson.model);
-    if (!validation.valid) {
+    const validation = includeValidation ? lessonModelApi.validateLesson(state.lesson.model) : null;
+    if (validation && !validation.valid) {
       const warning = create('div', 'preview-task');
       warning.style.borderColor = 'var(--chem-danger)';
       warning.append(
@@ -1935,7 +2097,134 @@
       );
       shell.append(warning);
     }
-    elements.lessonPreview.append(shell);
+    return shell;
+  }
+
+  function renderLessonPreview() {
+    elements.lessonPreview.replaceChildren();
+    const slide = selectedLessonSlide();
+    if (!slide) return;
+    state.lesson.previewSlideId = slide.id;
+    const index = state.lesson.model.slides.indexOf(slide);
+    elements.lessonPreview.append(
+      previewToolbar('lesson'),
+      buildLessonPreviewShell(slide, index, true)
+    );
+    bindPreviewFlashcards(elements.lessonPreview);
+    syncFullPreview('lesson');
+  }
+
+  function addFullPreviewHead(doc, mode) {
+    const charset = doc.createElement('meta');
+    charset.setAttribute('charset', 'utf-8');
+    const viewport = doc.createElement('meta');
+    viewport.name = 'viewport';
+    viewport.content = 'width=device-width, initial-scale=1';
+    const theme = doc.createElement('meta');
+    theme.name = 'theme-color';
+    theme.content = '#edf2f7';
+    const baseStyles = doc.createElement('link');
+    baseStyles.rel = 'stylesheet';
+    baseStyles.href = '/members/module/theme.css';
+    const studioStyles = doc.createElement('link');
+    studioStyles.rel = 'stylesheet';
+    studioStyles.href = '/members/module/studio/style.css';
+    doc.head.replaceChildren(charset, viewport, theme, baseStyles, studioStyles);
+    doc.title = mode === 'dashboard'
+      ? 'Pełny podgląd dashboardu — ChemDisk'
+      : 'Pełny podgląd lekcji — ChemDisk';
+  }
+
+  function renderFullPreviewWindow(mode, popup) {
+    if (!popup || popup.closed) return;
+    const doc = popup.document;
+    const previousScroll = popup.scrollY;
+    addFullPreviewHead(doc, mode);
+    doc.documentElement.lang = 'pl';
+    const activeTheme = document.documentElement.getAttribute('data-theme');
+    if (activeTheme) doc.documentElement.setAttribute('data-theme', activeTheme);
+    else doc.documentElement.removeAttribute('data-theme');
+    doc.body.className = 'studio-preview-window';
+
+    const header = doc.createElement('header');
+    header.className = 'full-preview-header';
+    const copy = doc.createElement('div');
+    const eyebrow = doc.createElement('small');
+    eyebrow.textContent = mode === 'dashboard' ? 'Dashboard kursanta' : 'Lekcja kursanta';
+    const title = doc.createElement('strong');
+    title.textContent = mode === 'dashboard'
+      ? (state.dashboard.model.title || 'Podgląd dashboardu')
+      : (state.lesson.model.title || state.lesson.model.filename || 'Podgląd lekcji');
+    copy.append(eyebrow, title);
+    const actions = doc.createElement('div');
+    actions.className = 'full-preview-actions';
+    const refresh = doc.createElement('button');
+    refresh.type = 'button';
+    refresh.className = 'button button-soft';
+    refresh.textContent = 'Odśwież';
+    refresh.addEventListener('click', () => renderFullPreviewWindow(mode, popup));
+    const close = doc.createElement('button');
+    close.type = 'button';
+    close.className = 'button button-primary';
+    close.textContent = 'Zamknij';
+    close.addEventListener('click', () => popup.close());
+    actions.append(refresh, close);
+    header.append(copy, actions);
+
+    const main = doc.createElement('main');
+    main.className = `full-preview-main full-preview-${mode}`;
+    if (mode === 'dashboard') {
+      main.append(doc.importNode(buildDashboardPreviewShell(), true));
+    } else {
+      const validation = lessonModelApi.validateLesson(state.lesson.model);
+      if (!validation.valid) {
+        const warning = doc.createElement('div');
+        warning.className = 'full-preview-warning';
+        warning.textContent = `Podgląd roboczy — ${validation.errors[0].message}`;
+        main.append(warning);
+      }
+      const slides = doc.createElement('div');
+      slides.className = 'full-lesson-list';
+      state.lesson.model.slides.forEach((slide, index) => {
+        const article = doc.createElement('article');
+        article.className = 'full-lesson-slide';
+        article.id = `slide-${index + 1}`;
+        article.append(doc.importNode(buildLessonPreviewShell(slide, index, false), true));
+        slides.append(article);
+      });
+      main.append(slides);
+    }
+    doc.body.replaceChildren(header, main);
+    if (mode === 'lesson') bindPreviewFlashcards(main);
+    popup.requestAnimationFrame(() => popup.scrollTo(0, previousScroll));
+  }
+
+  function syncFullPreview(mode) {
+    const popup = state.previewWindows[mode];
+    if (!popup || popup.closed) {
+      state.previewWindows[mode] = null;
+      return;
+    }
+    renderFullPreviewWindow(mode, popup);
+  }
+
+  function openFullPreview(mode) {
+    const popup = window.open(
+      '',
+      `chemdisk-${mode}-preview`,
+      'width=1440,height=900,resizable=yes,scrollbars=yes'
+    );
+    if (!popup) {
+      toast(
+        'Przeglądarka zablokowała nowe okno',
+        'Zezwól tej stronie na wyskakujące okna i spróbuj ponownie.',
+        'error'
+      );
+      return;
+    }
+    state.previewWindows[mode] = popup;
+    renderFullPreviewWindow(mode, popup);
+    popup.focus();
   }
 
   function updateLessonNodeSummary() {
@@ -2168,7 +2457,16 @@
 
   function normalizeTaskForType(task, nextType) {
     task.type = nextType;
-    if (nextType === 'abcd') {
+    if (nextType === 'gaps') {
+      task.text = task.text || 'Uzupełnij {{pierwszą lukę}} i {{drugą lukę}}.';
+      task.options = task.options.length >= 2
+        ? task.options
+        : ['pierwsza odpowiedź', 'druga odpowiedź', 'inna odpowiedź'];
+      task.answers = task.answers.length === 2
+        ? task.answers
+        : [task.options[0], task.options[1]];
+      task.label = 'Uzupełnij wszystkie luki';
+    } else if (nextType === 'abcd') {
       const defaults = ['Odpowiedź A', 'Odpowiedź B', 'Odpowiedź C', 'Odpowiedź D'];
       task.options = defaults.map((fallback, index) => task.options[index] || fallback).slice(0, 4);
       task.answers = [/^[A-D]$/i.test(task.answers[0] || '') ? task.answers[0].toUpperCase() : 'A'];
@@ -2229,6 +2527,15 @@
       const block = found.node;
       if (fieldName === 'items') {
         block.items = String(raw).split('\n').map((item) => item.trim()).filter(Boolean);
+      } else if (fieldName === 'cards' && block.type === 'flashcards') {
+        block.cards = String(raw).split('\n')
+          .map((line) => line.split(/\s*=>\s*/, 2))
+          .filter((parts) => parts.length === 2)
+          .map(([front, back]) => ({ front: front.trim(), back: back.trim() }))
+          .filter((card) => card.front || card.back)
+          .slice(0, 20);
+      } else if (fieldName === 'flashcardColor' && block.type === 'flashcards') {
+        block.color = raw;
       } else if (fieldName === 'styledText' && block.type === 'style') {
         let primaryText = block.blocks.find((child) => child.type === 'text');
         if (!primaryText) {
@@ -2246,6 +2553,14 @@
           '[data-lesson-field="useColor"]'
         );
         if (colorToggle) colorToggle.checked = true;
+      } else if (fieldName === 'useBackground') {
+        block.background = checked ? (block.background || '#e8f5ef') : '';
+      } else if (fieldName === 'background') {
+        block.background = raw;
+        const backgroundToggle = elements.lessonInspector.querySelector(
+          '[data-lesson-field="useBackground"]'
+        );
+        if (backgroundToggle) backgroundToggle.checked = true;
       } else {
         block[fieldName] = raw;
       }
@@ -2635,6 +2950,12 @@
     });
     all('[data-lesson-panel]').forEach((button) => {
       button.addEventListener('click', () => activateInspectorPanel('lesson', button.dataset.lessonPanel));
+    });
+    [elements.dashboardPreview, elements.lessonPreview].forEach((preview) => {
+      preview.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-full-preview]');
+        if (button) openFullPreview(button.dataset.fullPreview);
+      });
     });
 
     elements.dashboardLoad.addEventListener('click', loadActiveDashboard);

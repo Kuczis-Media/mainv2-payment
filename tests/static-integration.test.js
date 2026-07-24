@@ -65,6 +65,8 @@ test('Atonom is published locally with protected assets and the shared theme', (
   assert.match(html, /<base href=["']\/members\/module\/atonom\/["']\s*\/?>/);
   assert.match(html, /<meta name=["']x-members["'] content=["']1["']\s*\/?>/);
   assert.match(script, /await window\.ChemAuth\.ready/);
+  assert.match(script, /new URLSearchParams\(window\.location\.search\)\.get\(["']formula["']\)/);
+  assert.match(script, /url\.searchParams\.set\(["']formula["'],\s*name\)/);
   assert.match(script, /writeStorage\(["']chem\.theme["']/);
   assert.doesNotMatch(script, /atonom-theme/);
   assert.match(styles, /--paper:\s*#edf2f7/);

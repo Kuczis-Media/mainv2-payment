@@ -145,7 +145,8 @@
     atonom: {
       label: 'ATONOM',
       icon: '⚛',
-      path: 'atonom'
+      path: 'atonom',
+      formulaLabel: 'Nazwa związku chemicznego'
     },
     link: {
       label: 'Własny link',
@@ -296,6 +297,7 @@
       file,
       point,
       internal: singleLine(source.internal),
+      formula: canonical.module === 'atonom' ? singleLine(source.formula) : '',
       href: singleLine(source.href),
       hash: singleLine(source.hash),
       params: copyParams(source.params)
@@ -427,6 +429,7 @@
       file: '',
       point: '',
       internal: '',
+      formula: '',
       hash: '',
       params: {}
     };
@@ -479,6 +482,7 @@
     }
     if (parsed.module === 'lesson') parsed.file = take('file');
     if (parsed.module === 'contact') parsed.internal = take('internal');
+    if (parsed.module === 'atonom') parsed.formula = take('formula');
 
     url.searchParams.forEach((value, key) => {
       if (knownKeys.has(key)) return;
@@ -522,6 +526,7 @@
     }
     if (card.module === 'lesson') add('file', card.file);
     if (card.module === 'contact') add('internal', card.internal);
+    if (card.module === 'atonom') add('formula', card.formula);
 
     Object.keys(card.params).forEach((key) => {
       if (reserved.has(key)) return;
@@ -872,6 +877,16 @@
         }
         if (block.module === 'contact' && block.internal.length > 240) {
           addError('CONTACT_TOO_LONG', 'Wstępna treść kontaktu może mieć maksymalnie 240 znaków.', block);
+        }
+        if (
+          block.module === 'atonom'
+          && block.formula
+          && (
+            block.formula.length > 140
+            || /[\u0000-\u001f<>\\]/.test(block.formula)
+          )
+        ) {
+          addError('ATONOM_FORMULA_INVALID', 'Nazwa związku dla modelu ATONOM jest nieprawidłowa.', block);
         }
         if (block.module === 'link' && !safeBuilderLink(block.href)) {
           addError('LINK_REQUIRED', 'Podaj ścieżkę wewnętrzną /… albo pełny adres HTTPS.', block);

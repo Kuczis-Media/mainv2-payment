@@ -225,6 +225,7 @@
     elements.lessonPosition.textContent = `Krok ${state.index + 1} z ${state.lesson.slides.length}`;
     elements.progressBar.style.width = `${progress}%`;
     elements.slideContent.innerHTML = slide.html;
+    initializeInteractiveBlocks(elements.slideContent);
     elements.slideStatus.textContent = slide.task
       ? (isSolved ? 'Zadanie rozwiązane' : 'Zadanie do wykonania')
       : 'Materiał';
@@ -241,6 +242,16 @@
     saveProgress();
     elements.slideCard.focus?.({ preventScroll: true });
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function initializeInteractiveBlocks(root) {
+    root.querySelectorAll('.lesson-flashcard').forEach((card) => {
+      card.addEventListener('click', () => {
+        const flipped = card.getAttribute('aria-pressed') !== 'true';
+        card.setAttribute('aria-pressed', String(flipped));
+        card.classList.toggle('is-flipped', flipped);
+      });
+    });
   }
 
   function renderTask(task, solved) {
@@ -272,7 +283,40 @@
     submit.disabled = solved;
 
     let readValue;
-    if (task.type === 'choice') {
+    if (task.type === 'gaps') {
+      const exercise = document.createElement('p');
+      const selects = [];
+      exercise.className = 'gap-exercise';
+      String(task.text || '').split(/(\{\{[^{}]*\}\})/).forEach((part) => {
+        const gap = /^\{\{([^{}]*)\}\}$/.exec(part);
+        if (!gap) {
+          exercise.appendChild(document.createTextNode(part));
+          return;
+        }
+        const select = document.createElement('select');
+        const blank = document.createElement('option');
+        const gapIndex = selects.length;
+        blank.value = '';
+        blank.textContent = gap[1].trim() || 'wybierz';
+        select.id = `${fieldId}-${gapIndex}`;
+        select.name = `${fieldId}-${gapIndex}`;
+        select.setAttribute('aria-label', `Luka ${gapIndex + 1}: ${blank.textContent}`);
+        select.disabled = solved;
+        select.appendChild(blank);
+        task.options.forEach((option) => {
+          const item = document.createElement('option');
+          item.value = option;
+          item.textContent = option;
+          select.appendChild(item);
+        });
+        selects.push(select);
+        exercise.appendChild(select);
+      });
+      controls.classList.add('gap-controls');
+      controls.appendChild(exercise);
+      label.hidden = true;
+      readValue = () => selects.map((select) => select.value);
+    } else if (task.type === 'choice') {
       const fieldset = document.createElement('fieldset');
       const legend = document.createElement('legend');
       legend.textContent = task.label;
@@ -338,7 +382,7 @@
         feedback.textContent = task.success;
         submit.disabled = true;
         submit.textContent = 'Odpowiedź zaliczona';
-        form.querySelectorAll('input, fieldset').forEach((field) => { field.disabled = true; });
+        form.querySelectorAll('input, select, fieldset').forEach((field) => { field.disabled = true; });
         elements.next.disabled = false;
         elements.navigationHint.textContent = '';
         elements.slideStatus.textContent = 'Zadanie rozwiązane';
@@ -351,7 +395,7 @@
         feedback.textContent = task.hint
           ? `Jeszcze nie. Podpowiedź: ${task.hint}`
           : 'Jeszcze nie — sprawdź obliczenia i spróbuj ponownie.';
-        const firstInput = form.querySelector('input:not([type="radio"]), input[type="radio"]:checked, input[type="radio"]');
+        const firstInput = form.querySelector('select:not([disabled]), input:not([type="radio"]), input[type="radio"]:checked, input[type="radio"]');
         firstInput?.setAttribute('aria-invalid', 'true');
         firstInput?.focus();
       }

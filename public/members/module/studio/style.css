@@ -1503,6 +1503,41 @@ button {
   background: color-mix(in srgb, var(--chem-danger) 14%, var(--chem-surface));
 }
 
+.preview-toolbar {
+  display: flex;
+  margin: -4px 0 15px;
+  padding: 11px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: color-mix(in srgb, var(--chem-primary-soft) 62%, var(--chem-surface));
+  border: 1px solid color-mix(in srgb, var(--chem-primary) 18%, var(--chem-line));
+  border-radius: 13px;
+}
+
+.preview-toolbar strong,
+.preview-toolbar small {
+  display: block;
+}
+
+.preview-toolbar strong {
+  font-size: 0.68rem;
+}
+
+.preview-toolbar small {
+  margin-top: 3px;
+  color: var(--chem-muted);
+  font-size: 0.54rem;
+  line-height: 1.4;
+}
+
+.preview-open-button {
+  min-height: 36px;
+  flex: 0 0 auto;
+  padding-inline: 11px;
+  font-size: 0.61rem;
+}
+
 .dashboard-preview-shell,
 .lesson-preview-shell {
   display: grid;
@@ -1707,6 +1742,12 @@ button {
   color: var(--lesson-rich-color, var(--chem-muted));
 }
 
+.lesson-preview-body .lesson-rich-style.has-background {
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--lesson-rich-background);
+}
+
 .lesson-preview-body .lesson-rich-style > :first-child {
   margin-top: 0;
 }
@@ -1762,6 +1803,87 @@ button {
   text-align: left;
 }
 
+.lesson-preview-body .lesson-embed {
+  margin: 14px 0;
+}
+
+.lesson-preview-body .lesson-embed iframe {
+  width: 100%;
+  min-height: 190px;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--chem-line);
+  border-radius: 12px;
+  background: var(--chem-surface-soft);
+}
+
+.lesson-preview-body .lesson-atonom iframe {
+  min-height: 340px;
+  aspect-ratio: 4 / 3;
+}
+
+.lesson-preview-body .lesson-embed figcaption {
+  margin-top: 6px;
+  color: var(--chem-subtle);
+  font-size: 0.58rem;
+  text-align: center;
+}
+
+.lesson-preview-body .lesson-flashcards {
+  margin: 14px 0;
+}
+
+.lesson-preview-body .lesson-flashcard-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.lesson-preview-body .lesson-flashcard {
+  position: relative;
+  min-height: 105px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--flashcard-color) 45%, var(--chem-line));
+  border-radius: 11px;
+  color: var(--chem-text);
+  background: var(--chem-surface);
+  cursor: pointer;
+}
+
+.lesson-preview-body .flashcard-face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  padding: 12px;
+  backface-visibility: hidden;
+  transition: transform 350ms ease;
+}
+
+.lesson-preview-body .flashcard-face small,
+.lesson-preview-body .flashcard-face em {
+  font-size: 0.5rem;
+  font-style: normal;
+}
+
+.lesson-preview-body .flashcard-face strong {
+  color: inherit;
+  font-size: 0.67rem;
+}
+
+.lesson-preview-body .flashcard-front {
+  background: color-mix(in srgb, var(--flashcard-color) 10%, var(--chem-surface));
+}
+
+.lesson-preview-body .flashcard-back {
+  color: #fff;
+  background: var(--flashcard-color);
+  transform: rotateY(180deg);
+}
+
+.lesson-preview-body .lesson-flashcard.is-flipped .flashcard-front { transform: rotateY(180deg); }
+.lesson-preview-body .lesson-flashcard.is-flipped .flashcard-back { transform: rotateY(360deg); }
+
 .preview-task {
   margin-top: 15px;
   padding: 13px;
@@ -1781,6 +1903,197 @@ button {
   color: var(--chem-muted);
   font-size: 0.6rem;
   line-height: 1.5;
+}
+
+.studio-preview-window {
+  min-height: 100vh;
+  padding: 0;
+  background:
+    radial-gradient(circle at 12% 5%, rgba(75, 188, 163, 0.12), transparent 30%),
+    linear-gradient(var(--studio-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--studio-grid) 1px, transparent 1px),
+    var(--chem-bg);
+  background-size: auto, 32px 32px, 32px 32px, auto;
+}
+
+.full-preview-header {
+  position: sticky;
+  z-index: 20;
+  top: 0;
+  display: flex;
+  min-height: 74px;
+  padding: 12px clamp(16px, 3vw, 42px);
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  background: color-mix(in srgb, var(--chem-surface) 90%, transparent);
+  border-bottom: 1px solid var(--chem-line);
+  box-shadow: var(--chem-shadow-sm);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.full-preview-header small,
+.full-preview-header strong {
+  display: block;
+}
+
+.full-preview-header small {
+  margin-bottom: 4px;
+  color: var(--chem-primary);
+  font-size: 0.62rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.full-preview-header strong {
+  font-size: clamp(0.9rem, 2vw, 1.15rem);
+  letter-spacing: -0.025em;
+}
+
+.full-preview-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.full-preview-main {
+  width: min(1320px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: clamp(22px, 4vw, 54px) 0 80px;
+}
+
+.full-preview-dashboard .dashboard-preview-shell {
+  gap: 24px;
+}
+
+.full-preview-dashboard .preview-hero {
+  padding: clamp(28px, 5vw, 58px);
+  border-radius: 24px;
+}
+
+.full-preview-dashboard .preview-hero h2 {
+  max-width: 850px;
+  margin-block: 12px;
+  font-size: clamp(1.8rem, 5vw, 3.6rem);
+}
+
+.full-preview-dashboard .preview-hero p {
+  max-width: 850px;
+  font-size: clamp(0.78rem, 1.5vw, 1rem);
+}
+
+.full-preview-dashboard .preview-section {
+  padding: clamp(18px, 3vw, 28px);
+  border-radius: 19px;
+}
+
+.full-preview-dashboard .preview-section h3 {
+  font-size: 1.05rem;
+}
+
+.full-preview-dashboard .preview-card-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.full-preview-dashboard .preview-card {
+  min-height: 96px;
+  padding: 15px;
+  border-radius: 14px;
+}
+
+.full-preview-dashboard .preview-card strong {
+  font-size: 0.78rem;
+}
+
+.full-preview-dashboard .preview-card small {
+  margin-top: 7px;
+  font-size: 0.64rem;
+}
+
+.full-preview-dashboard .preview-group {
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: 13px;
+}
+
+.full-preview-lesson {
+  max-width: 980px;
+}
+
+.full-preview-warning {
+  margin-bottom: 18px;
+  padding: 12px 15px;
+  color: var(--studio-red);
+  background: var(--studio-red-soft);
+  border: 1px solid color-mix(in srgb, var(--studio-red) 30%, var(--chem-line));
+  border-radius: 12px;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.full-lesson-list {
+  display: grid;
+  gap: 28px;
+}
+
+.full-lesson-slide {
+  scroll-margin-top: 95px;
+}
+
+.full-lesson-slide .lesson-preview-shell {
+  min-height: min(680px, calc(100vh - 130px));
+  padding: clamp(24px, 5vw, 54px);
+  border-radius: 24px;
+  box-shadow: var(--chem-shadow-lg);
+}
+
+.full-lesson-slide .lesson-preview-meta {
+  font-size: 0.68rem;
+}
+
+.full-lesson-slide .lesson-preview-body h1 { font-size: clamp(2rem, 5vw, 3.6rem); }
+.full-lesson-slide .lesson-preview-body h2 { font-size: clamp(1.65rem, 4vw, 2.6rem); }
+.full-lesson-slide .lesson-preview-body h3 { font-size: clamp(1.25rem, 3vw, 1.75rem); }
+
+.full-lesson-slide .lesson-preview-body p,
+.full-lesson-slide .lesson-preview-body li,
+.full-lesson-slide .lesson-preview-body blockquote {
+  font-size: clamp(0.82rem, 1.5vw, 1rem);
+}
+
+.full-lesson-slide .lesson-preview-body img {
+  max-height: 520px;
+}
+
+.full-lesson-slide .lesson-preview-body .lesson-embed iframe {
+  min-height: 360px;
+}
+
+.full-lesson-slide .lesson-preview-body .lesson-atonom iframe {
+  min-height: 620px;
+}
+
+.full-lesson-slide .lesson-preview-body .lesson-flashcard-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.full-lesson-slide .lesson-preview-body .lesson-flashcard {
+  min-height: 160px;
+}
+
+.full-lesson-slide .preview-task {
+  padding: 18px;
+}
+
+.full-lesson-slide .preview-task strong {
+  font-size: 0.86rem;
+}
+
+.full-lesson-slide .preview-task span {
+  font-size: 0.72rem;
 }
 
 .source-dialog,
@@ -2026,6 +2339,10 @@ button {
     padding-bottom: 72px;
   }
 
+  .studio-preview-window {
+    padding-bottom: 0;
+  }
+
   .studio-header {
     padding: 9px 12px;
   }
@@ -2109,6 +2426,40 @@ button {
     display: grid;
     grid-template-columns: repeat(2, auto);
   }
+
+  .full-preview-header {
+    min-height: 68px;
+    padding: 10px 12px;
+  }
+
+  .full-preview-header small {
+    display: none;
+  }
+
+  .full-preview-actions .button {
+    min-height: 38px;
+    padding-inline: 11px;
+  }
+
+  .full-preview-main {
+    width: min(100% - 20px, 1320px);
+    padding-top: 18px;
+  }
+
+  .full-preview-dashboard .preview-card-grid,
+  .full-lesson-slide .lesson-preview-body .lesson-flashcard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .full-lesson-slide .lesson-preview-shell {
+    min-height: 0;
+    padding: 22px 18px;
+  }
+
+  .full-lesson-slide .lesson-preview-body .lesson-embed iframe,
+  .full-lesson-slide .lesson-preview-body .lesson-atonom iframe {
+    min-height: 240px;
+  }
 }
 
 @media (max-width: 520px) {
@@ -2153,6 +2504,30 @@ button {
 
   .field-row {
     grid-template-columns: 1fr;
+  }
+
+  .preview-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .preview-open-button {
+    width: 100%;
+  }
+
+  .full-preview-header > div:first-child {
+    min-width: 0;
+  }
+
+  .full-preview-header strong {
+    overflow: hidden;
+    font-size: 0.78rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .full-preview-actions .button:first-child {
+    display: none;
   }
 
   .dialog-shell footer {
