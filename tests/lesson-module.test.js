@@ -259,6 +259,11 @@ test('lesson filename and Markdown rendering reject path traversal and active HT
     html,
     /<img src="https:\/\/example\.com\/schemat\.png" alt="bezpieczny obraz" loading="lazy" decoding="async" referrerpolicy="no-referrer">/
   );
+  const migratedFilmLink = parser.renderMarkdown(
+    '[Stare nagranie](/members/module/filmv1/?id=CH50zuS8DD0&type=1)'
+  );
+  assert.match(migratedFilmLink, /href="\/members\/module\/film\/\?id=CH50zuS8DD0&amp;type=1"/);
+  assert.doesNotMatch(migratedFilmLink, /filmv1/i);
 
   const fencedDirective = parser.renderMarkdown([
     '```text',

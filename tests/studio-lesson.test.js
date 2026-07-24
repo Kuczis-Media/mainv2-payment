@@ -452,3 +452,19 @@ test('studio exposes renderer extension capabilities and a strict authoring file
   assert.equal(studio.safeImageUrl('http://example.com/a.png'), '');
   assert.equal(studio.safeImageUrl('data:image/png;base64,AAA'), '');
 });
+
+test('lesson export migrates removed FilmV1 links to the supported Film module', () => {
+  const markdown = studio.serializeLesson({
+    title: 'Nagranie',
+    filename: 'nagranie.md',
+    slides: [{
+      blocks: [{
+        type: 'text',
+        text: '[Obejrzyj](/members/module/filmv1/?id=CH50zuS8DD0&type=1)'
+      }]
+    }]
+  });
+
+  assert.match(markdown, /\/members\/module\/film\/\?id=CH50zuS8DD0&type=1/);
+  assert.doesNotMatch(markdown, /filmv1/i);
+});

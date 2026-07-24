@@ -18,7 +18,6 @@
                 type=2 (wymuszone pobranie), type=3 (zwykły podgląd)
   - film:       ?id=ID&type=1 (YouTube chroniony), type=2 (Google Drive),
                 type=3 (YouTube bez ochrony)
-  - filmv1:     ?id=ID&type=1 (YouTube), type=2 (Drive), type=3 (YouTube pełny)
   - yt:         ?id=ID_LUB_ZAKODOWANY_LINK_YOUTUBE (własne kontrolki)
   - lesson:     ?file=nazwa-lekcji.md
 
@@ -102,12 +101,6 @@ Zestaw kontrolny wszystkich modułów i dostępnych trybów. Użyj go po wdroże
 - [Film testowy — type=1](/members/module/film/?id=p_5yt5IX38I&type=1) — YouTube w trybie chronionym.
 - [Film testowy — type=2](/members/module/film/?id=1qKkDarVM8qn1GHkNalt9f8n7IXNUawZF&type=2) — Test osadzenia pliku z Google Drive.
 - [Film testowy — type=3](/members/module/film/?id=p_5yt5IX38I&type=3) — YouTube z pełniejszym interfejsem.
-
-### FilmV1 — odtwarzacz Video.js
-
-- [FilmV1 — type=1](/members/module/filmv1/?id=p_5yt5IX38I&type=1) — YouTube w Video.js z ograniczonym interfejsem.
-- [FilmV1 — type=2](/members/module/filmv1/?id=1qKkDarVM8qn1GHkNalt9f8n7IXNUawZF&type=2) — Test osadzenia pliku z Google Drive.
-- [FilmV1 — type=3](/members/module/filmv1/?id=p_5yt5IX38I&type=3) — YouTube w Video.js z pełniejszymi kontrolkami.
 
 ### Odtwarzacz YT
 

@@ -145,6 +145,9 @@
             <button class="button button-primary" id="dashboard-publish-button" type="button">
               <span aria-hidden="true">●</span> Opublikuj
             </button>
+            <button class="panel-collapse-button workspace-toolbar-toggle" type="button" data-studio-toggle="toolbar" aria-label="Zwiń narzędzia" aria-expanded="true" title="Zwiń narzędzia">
+              <span aria-hidden="true">⌃</span>
+            </button>
           </div>
         </div>
 
@@ -152,7 +155,12 @@
           <aside class="palette-panel" aria-label="Klocki dashboardu">
             <div class="panel-heading">
               <div><small>Biblioteka</small><strong>Przeciągnij klocek</strong></div>
-              <span class="count-badge" id="dashboard-block-count">0</span>
+              <div class="panel-heading-actions">
+                <span class="count-badge" id="dashboard-block-count">0</span>
+                <button class="panel-collapse-button" type="button" data-studio-toggle="palette" aria-label="Zwiń bibliotekę" aria-expanded="true" title="Zwiń bibliotekę">
+                  <span aria-hidden="true">‹</span>
+                </button>
+              </div>
             </div>
             <label class="palette-search">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg>
@@ -204,9 +212,6 @@
                   </button>
                   <button class="palette-item" type="button" draggable="true" data-dashboard-add="film" data-search="film video youtube drive">
                     <span class="palette-symbol is-violet">▶</span><span><strong>Film</strong><small>YouTube lub Drive</small></span>
-                  </button>
-                  <button class="palette-item" type="button" draggable="true" data-dashboard-add="filmv1" data-search="film videojs">
-                    <span class="palette-symbol is-violet">V1</span><span><strong>Film V1</strong><small>Odtwarzacz Video.js</small></span>
                   </button>
                   <button class="palette-item" type="button" draggable="true" data-dashboard-add="yt" data-search="youtube yt">
                     <span class="palette-symbol is-red">YT</span><span><strong>Odtwarzacz YT</strong><small>Własne kontrolki</small></span>
@@ -276,6 +281,12 @@
           </section>
 
           <aside class="inspector-panel" aria-label="Ustawienia zaznaczonego elementu">
+            <div class="panel-heading inspector-panel-heading">
+              <div><small>Panel boczny</small><strong>Narzędzia i podgląd</strong></div>
+              <button class="panel-collapse-button" type="button" data-studio-toggle="inspector" aria-label="Zwiń panel narzędzi i podglądu" aria-expanded="true" title="Zwiń panel narzędzi i podglądu">
+                <span aria-hidden="true">›</span>
+              </button>
+            </div>
             <div class="inspector-tabs" role="tablist" aria-label="Panel boczny dashboardu">
               <button class="is-active" type="button" role="tab" aria-selected="true" data-dashboard-panel="inspector">Ustawienia</button>
               <button type="button" role="tab" aria-selected="false" data-dashboard-panel="preview">Podgląd</button>
@@ -311,6 +322,9 @@
             </button>
             <button class="button button-danger" id="lesson-repository-delete-button" type="button" disabled>Usuń z GitHuba</button>
             <button class="button button-primary" id="lesson-repository-save-button" type="button">Utwórz plik w GitHubie</button>
+            <button class="panel-collapse-button workspace-toolbar-toggle" type="button" data-studio-toggle="toolbar" aria-label="Zwiń narzędzia" aria-expanded="true" title="Zwiń narzędzia">
+              <span aria-hidden="true">⌃</span>
+            </button>
           </div>
         </div>
 
@@ -318,7 +332,12 @@
           <aside class="palette-panel" aria-label="Klocki lekcji">
             <div class="panel-heading">
               <div><small>Biblioteka</small><strong>Treść slajdu</strong></div>
-              <span class="count-badge" id="lesson-slide-count">1</span>
+              <div class="panel-heading-actions">
+                <span class="count-badge" id="lesson-slide-count">1</span>
+                <button class="panel-collapse-button" type="button" data-studio-toggle="palette" aria-label="Zwiń bibliotekę" aria-expanded="true" title="Zwiń bibliotekę">
+                  <span aria-hidden="true">‹</span>
+                </button>
+              </div>
             </div>
             <label class="palette-search">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg>
@@ -442,6 +461,12 @@
           </section>
 
           <aside class="inspector-panel" aria-label="Ustawienia lekcji">
+            <div class="panel-heading inspector-panel-heading">
+              <div><small>Panel boczny</small><strong>Narzędzia i podgląd</strong></div>
+              <button class="panel-collapse-button" type="button" data-studio-toggle="inspector" aria-label="Zwiń panel narzędzi i podglądu" aria-expanded="true" title="Zwiń panel narzędzi i podglądu">
+                <span aria-hidden="true">›</span>
+              </button>
+            </div>
             <div class="inspector-tabs" role="tablist" aria-label="Panel boczny lekcji">
               <button class="is-active" type="button" role="tab" aria-selected="true" data-lesson-panel="inspector">Ustawienia</button>
               <button type="button" role="tab" aria-selected="false" data-lesson-panel="preview">Podgląd</button>
@@ -472,6 +497,9 @@
             <button class="button button-soft" id="prompt-download-button" type="button">↓ Pobierz plik</button>
             <button class="button button-danger" id="prompt-repository-delete-button" type="button" disabled>Usuń z GitHuba</button>
             <button class="button button-primary" id="prompt-repository-save-button" type="button">Zapisz w GitHubie</button>
+            <button class="panel-collapse-button workspace-toolbar-toggle" type="button" data-studio-toggle="toolbar" aria-label="Zwiń narzędzia" aria-expanded="true" title="Zwiń narzędzia">
+              <span aria-hidden="true">⌃</span>
+            </button>
           </div>
         </div>
 
@@ -479,22 +507,29 @@
           <aside class="palette-panel" aria-label="Biblioteka promptów">
             <div class="panel-heading">
               <div><small>Prywatne repozytorium</small><strong>Gotowe prompty</strong></div>
-              <span class="count-badge" id="prompt-point-count">1</span>
+              <div class="panel-heading-actions">
+                <span class="count-badge" id="prompt-point-count">1</span>
+                <button class="panel-collapse-button" type="button" data-studio-toggle="palette" aria-label="Zwiń bibliotekę" aria-expanded="true" title="Zwiń bibliotekę">
+                  <span aria-hidden="true">‹</span>
+                </button>
+              </div>
             </div>
-            <label class="palette-search">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg>
-              <input id="prompt-asset-search" type="search" placeholder="Szukaj promptu…" autocomplete="off">
-            </label>
-            <label class="repository-picker repository-picker-prompt">
-              <span>Repozytorium</span>
-              <select id="prompt-repository-select" aria-label="Repozytorium promptów"></select>
-            </label>
-            <p class="prompt-repository-status" id="prompt-asset-status" role="status" aria-live="polite">Łączenie z repozytorium…</p>
-            <div class="repository-asset-list prompt-repository-list" id="prompt-asset-list"></div>
-            <div class="prompt-help-card">
-              <strong>JSON czy TXT?</strong>
-              <p>JSON zawiera jedną instrukcję. TXT może mieć wiele instrukcji wybieranych w linku parametrem <code>punkt</code>.</p>
-              <p>Każdy zapis w GitHubie tworzy osobny commit. Ręczne pobieranie i import pozostają dostępne.</p>
+            <div class="palette-scroll prompt-palette-scroll">
+              <label class="palette-search">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg>
+                <input id="prompt-asset-search" type="search" placeholder="Szukaj promptu…" autocomplete="off">
+              </label>
+              <label class="repository-picker repository-picker-prompt">
+                <span>Repozytorium</span>
+                <select id="prompt-repository-select" aria-label="Repozytorium promptów"></select>
+              </label>
+              <p class="prompt-repository-status" id="prompt-asset-status" role="status" aria-live="polite">Łączenie z repozytorium…</p>
+              <div class="repository-asset-list prompt-repository-list" id="prompt-asset-list"></div>
+              <div class="prompt-help-card">
+                <strong>JSON czy TXT?</strong>
+                <p>JSON zawiera jedną instrukcję. TXT może mieć wiele instrukcji wybieranych w linku parametrem <code>punkt</code>.</p>
+                <p>Każdy zapis w GitHubie tworzy osobny commit. Ręczne pobieranie i import pozostają dostępne.</p>
+              </div>
             </div>
           </aside>
 
@@ -531,6 +566,9 @@
           <aside class="inspector-panel prompt-preview-panel" aria-label="Podgląd promptu">
             <div class="panel-heading">
               <div><small>Walidacja na żywo</small><strong>Podgląd pliku</strong></div>
+              <button class="panel-collapse-button" type="button" data-studio-toggle="inspector" aria-label="Zwiń podgląd" aria-expanded="true" title="Zwiń podgląd">
+                <span aria-hidden="true">›</span>
+              </button>
             </div>
             <div class="prompt-validation-status" id="prompt-validation-status" role="status" aria-live="polite"></div>
             <pre class="prompt-source-preview" id="prompt-source-preview"></pre>

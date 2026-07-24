@@ -359,6 +359,9 @@
       const url = new URL(rawHref, window.location.origin);
       if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
       const external = url.origin !== window.location.origin;
+      if (!external && /^\/members\/module\/filmv1\/?$/i.test(url.pathname)) {
+        url.pathname = '/members/module/film/';
+      }
       return {
         href: external ? url.href : `${url.pathname}${url.search}${url.hash}`,
         pathname: url.pathname.toLocaleLowerCase('pl'),
@@ -370,7 +373,7 @@
   }
 
   function classifyResource(pathname) {
-    if (/\/(filmv1?|yt)\//.test(pathname)) return { kind: 'video', icon: '▶' };
+    if (/\/(?:film|yt)\//.test(pathname)) return { kind: 'video', icon: '▶' };
     if (/\/slides\//.test(pathname)) return { kind: 'document', icon: '▤' };
     if (/\/pdf\//.test(pathname)) return { kind: 'document', icon: 'PDF' };
     if (/\/lesson\//.test(pathname)) return { kind: 'exercise', icon: 'L' };

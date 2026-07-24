@@ -128,12 +128,17 @@
     return oneLine(value).replace(/:::/g, '').slice(0, 500);
   }
 
+  function migrateRemovedModuleLinks(value) {
+    return String(value || '')
+      .replace(/\/members\/module\/filmv1(?=\/(?:[?#]|$))/gi, '/members/module/film');
+  }
+
   function cleanInline(value) {
-    return oneLine(value).replace(/\]/g, '').replace(/\r|\n/g, '');
+    return oneLine(migrateRemovedModuleLinks(value)).replace(/\]/g, '').replace(/\r|\n/g, '');
   }
 
   function protectStructuralLines(value) {
-    return normalizeNewlines(value)
+    return normalizeNewlines(migrateRemovedModuleLinks(value))
       .split('\n')
       .map((line) => {
         if (/^\s*---\s*$/.test(line)) return '`---`';

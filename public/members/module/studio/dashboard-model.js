@@ -35,11 +35,6 @@
       { value: '1', label: '1 — YouTube chroniony' },
       { value: '2', label: '2 — Google Drive' },
       { value: '3', label: '3 — YouTube, pełny odtwarzacz' }
-    ],
-    filmv1: [
-      { value: '1', label: '1 — YouTube chroniony' },
-      { value: '2', label: '2 — Google Drive' },
-      { value: '3', label: '3 — YouTube, pełne kontrolki' }
     ]
   });
 
@@ -47,7 +42,6 @@
     'slides',
     'pdf',
     'film',
-    'filmv1',
     'yt',
     'forms',
     'chat',
@@ -81,14 +75,6 @@
       path: 'film',
       idLabel: 'ID lub link YouTube / Google Drive',
       protection: PROTECTION_OPTIONS.film,
-      defaultProtection: '1'
-    },
-    filmv1: {
-      label: 'Film Video.js',
-      icon: '▷',
-      path: 'filmv1',
-      idLabel: 'ID lub link YouTube / Google Drive',
-      protection: PROTECTION_OPTIONS.filmv1,
       defaultProtection: '1'
     },
     yt: {
@@ -213,6 +199,9 @@
 
   function canonicalModuleName(value, variant) {
     const name = singleLine(value).toLowerCase();
+    if (name === 'filmv1') {
+      return { module: 'film', variant: '' };
+    }
     if (['calculator', 'calculators', 'kalkulator', 'classic'].includes(name)) {
       return {
         module: 'calculator',
@@ -471,7 +460,7 @@
       hash: url.hash
     };
 
-    if (['slides', 'pdf', 'film', 'filmv1', 'yt', 'forms'].includes(parsed.module)) {
+    if (['slides', 'pdf', 'film', 'yt', 'forms'].includes(parsed.module)) {
       parsed.id = take('id');
     }
     if (PROTECTION_OPTIONS[parsed.module]) {
@@ -519,7 +508,7 @@
       if (value != null && singleLine(value)) parts.push(queryPart(key, value));
     };
 
-    if (['slides', 'pdf', 'film', 'filmv1', 'yt', 'forms'].includes(card.module)) {
+    if (['slides', 'pdf', 'film', 'yt', 'forms'].includes(card.module)) {
       add('id', card.id);
     }
     if (PROTECTION_OPTIONS[card.module]) add('type', card.protection);
@@ -765,7 +754,7 @@
     const module = singleLine(moduleName).toLowerCase();
     const idPattern = /^[A-Za-z0-9_-]{10,200}$/;
     const youtubeIdPattern = /^[A-Za-z0-9_-]{11}$/;
-    const expectsYouTube = ['yt', 'film', 'filmv1'].includes(module) && String(protection) !== '2';
+    const expectsYouTube = ['yt', 'film'].includes(module) && String(protection) !== '2';
     if (idPattern.test(reference)) {
       return expectsYouTube ? youtubeIdPattern.test(reference) : true;
     }
@@ -807,7 +796,7 @@
         );
       }
       if (module === 'pdf') return hasDriveId;
-      if (module === 'film' || module === 'filmv1') {
+      if (module === 'film') {
         return String(protection) === '2' ? hasDriveId : hasYouTubeId;
       }
       if (module === 'yt') return hasYouTubeId;
@@ -868,7 +857,7 @@
         moduleCount += 1;
         if (!singleLine(block.title)) addError('MODULE_TITLE_REQUIRED', 'Karta wymaga tytułu.', block);
         if (
-          ['slides', 'pdf', 'film', 'filmv1', 'yt', 'forms'].includes(block.module)
+          ['slides', 'pdf', 'film', 'yt', 'forms'].includes(block.module)
           && !safeResourceReference(block.id, block.module, block.protection)
         ) {
           addError('MODULE_ID_REQUIRED', 'Podaj prawidłowe ID albo pełny link HTTPS do materiału.', block);

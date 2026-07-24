@@ -13,7 +13,6 @@ test('studio exposes every requested dashboard block with the runtime protection
     'slides',
     'pdf',
     'film',
-    'filmv1',
     'yt',
     'forms',
     'chat',
@@ -27,7 +26,7 @@ test('studio exposes every requested dashboard block with the runtime protection
     studio.PROTECTION_OPTIONS.slides.map((option) => option.value),
     ['1', '2']
   );
-  for (const moduleName of ['pdf', 'film', 'filmv1']) {
+  for (const moduleName of ['pdf', 'film']) {
     assert.deepEqual(
       studio.PROTECTION_OPTIONS[moduleName].map((option) => option.value),
       ['1', '2', '3']
@@ -48,7 +47,6 @@ test('module cards serialize to the exact URLs consumed by existing applications
     [{ module: 'slides', id: 'slide id', protection: 2 }, '/members/module/slides/?id=slide%20id&type=2'],
     [{ module: 'pdf', id: 'drive', protection: 3 }, '/members/module/pdf/?id=drive&type=3'],
     [{ module: 'film', id: 'youtube', protection: 1 }, '/members/module/film/?id=youtube&type=1'],
-    [{ module: 'filmv1', id: 'drive', protection: 2 }, '/members/module/filmv1/?id=drive&type=2'],
     [{ module: 'yt', id: 'abc' }, '/members/module/yt/?id=abc'],
     [{ module: 'forms', id: 'form' }, '/members/module/forms/?id=form'],
     [{ module: 'chat', source: 'prompt', prompt: 'pomoc.json' }, '/members/module/chat/?prompt=pomoc.json'],
@@ -97,6 +95,18 @@ test('ATONOM compound names survive dashboard Markdown import and export', () =>
   assert.equal(studio.moduleHref(studio.createModule(parsed)), href);
 });
 
+test('removed FilmV1 cards migrate to the supported Film module', () => {
+  const legacyHref = '/members/module/filmv1/?id=CH50zuS8DD0&type=1';
+  const parsed = studio.parseModuleHref(legacyHref);
+  const direct = studio.createModule({ module: 'filmv1', id: 'CH50zuS8DD0', protection: 1 });
+
+  assert.equal(parsed.module, 'film');
+  assert.equal(direct.module, 'film');
+  assert.equal(studio.moduleHref(parsed), '/members/module/film/?id=CH50zuS8DD0&type=1');
+  assert.equal(studio.moduleHref(direct), '/members/module/film/?id=CH50zuS8DD0&type=1');
+  assert.equal(Object.hasOwn(studio.MODULE_DEFINITIONS, 'filmv1'), false);
+});
+
 test('studio parses the current dashboard without losing cards unsupported by the palette', () => {
   const source = fs.readFileSync(
     path.join(__dirname, '..', 'public', 'members', 'dashboard.md'),
@@ -118,7 +128,6 @@ test('studio parses the current dashboard without losing cards unsupported by th
     'slides',
     'pdf',
     'film',
-    'filmv1',
     'yt',
     'forms',
     'chat',

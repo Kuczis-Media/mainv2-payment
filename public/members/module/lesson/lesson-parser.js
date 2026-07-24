@@ -369,7 +369,9 @@
   }
 
   function safeUrl(value, image) {
-    const raw = String(value || '').trim();
+    const raw = String(value || '')
+      .trim()
+      .replace(/\/members\/module\/filmv1(?=\/(?:[?#]|$))/gi, '/members/module/film');
     if (!raw || raw.startsWith('//') || raw.includes('\\') || /[\u0000-\u001f]/.test(raw)) return '';
     if (raw.startsWith('#') && !image) return raw;
     const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(raw);

@@ -59,7 +59,7 @@ test('media parameter reader removes source IDs from the visible address immedia
 });
 
 test('media viewers are domain portable and strip query parameters before auth wait', () => {
-  for (const name of ['slides', 'pdf', 'film', 'filmv1']) {
+  for (const name of ['slides', 'pdf', 'film']) {
     const html = fs.readFileSync(path.join(moduleRoot, name, 'index.html'), 'utf8');
     const script = fs.readFileSync(path.join(moduleRoot, name, 'script.js'), 'utf8');
 
@@ -75,24 +75,11 @@ test('media viewers are domain portable and strip query parameters before auth w
   }
 });
 
-test('filmv1 uses Video.js for YouTube and a Drive embed fallback', () => {
-  const html = fs.readFileSync(path.join(moduleRoot, 'filmv1', 'index.html'), 'utf8');
-  const script = fs.readFileSync(path.join(moduleRoot, 'filmv1', 'script.js'), 'utf8');
-
-  assert.match(html, /id=["']video-host["']/);
-  assert.match(html, /id=["']drive-frame["']/);
-  assert.match(script, /VIDEOJS_VERSION\s*=\s*'8\.23\.4'/);
-  assert.match(script, /videojs-youtube@\$\{YOUTUBE_TECH_VERSION\}/);
-  assert.match(script, /type:\s*'video\/youtube'/);
-  assert.match(script, /drive\.google\.com\/file\/d\/\$\{encodedId\}\/preview/);
-  assert.match(script, /Google Drive · podgląd dostawcy/);
-});
-
 test('shared media viewers expose a persistent collapsible mobile toolbar', () => {
   const chrome = fs.readFileSync(path.join(moduleRoot, 'media-viewer.js'), 'utf8');
   const styles = fs.readFileSync(path.join(moduleRoot, 'media-viewer.css'), 'utf8');
 
-  for (const name of ['pdf', 'slides', 'film', 'filmv1']) {
+  for (const name of ['pdf', 'slides', 'film']) {
     const html = fs.readFileSync(path.join(moduleRoot, name, 'index.html'), 'utf8');
     assert.match(html, /src=["']\.\.\/media-viewer\.js["']/, `${name}: missing collapsible toolbar script`);
   }
@@ -116,8 +103,8 @@ test('custom YT player has mobile controls, filled ranges and deterministic mute
   assert.doesNotMatch(script, /const muted = player\.isMuted\(\);\s*if \(muted\)/);
 });
 
-test('protected Film and FilmV1 suppress provider links and sandbox YouTube frames without popups', () => {
-  for (const name of ['film', 'filmv1']) {
+test('protected Film suppresses provider links and sandboxes YouTube frames without popups', () => {
+  for (const name of ['film']) {
     const html = fs.readFileSync(path.join(moduleRoot, name, 'index.html'), 'utf8');
     const script = fs.readFileSync(path.join(moduleRoot, name, 'script.js'), 'utf8');
     const styles = fs.readFileSync(path.join(moduleRoot, name, 'style.css'), 'utf8');

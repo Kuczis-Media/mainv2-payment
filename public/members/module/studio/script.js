@@ -4,6 +4,7 @@
   const DASHBOARD_DRAFT_KEY = 'chemdisk.studio.dashboard.v1';
   const LESSON_DRAFT_KEY = 'chemdisk.studio.lesson.v1';
   const PROMPT_DRAFT_KEY = 'chemdisk.studio.prompt.v1';
+  const STUDIO_LAYOUT_KEY = 'chemdisk.studio.layout.v1';
   const THEME_KEY = 'chem.theme';
   const HISTORY_LIMIT = 60;
   const MAX_IMPORT_BYTES = 512 * 1024;
@@ -214,6 +215,55 @@
     } catch (_) {
       return false;
     }
+  }
+
+  const STUDIO_LAYOUT_LABELS = {
+    palette: ['Zwiń bibliotekę', 'Rozwiń bibliotekę'],
+    inspector: ['Zwiń panel narzędzi i podglądu', 'Rozwiń panel narzędzi i podglądu'],
+    toolbar: ['Zwiń narzędzia', 'Rozwiń narzędzia']
+  };
+
+  function applyStudioLayoutPart(workspace, part, collapsed) {
+    if (!workspace || !STUDIO_LAYOUT_LABELS[part]) return;
+    workspace.classList.toggle(`is-${part}-collapsed`, Boolean(collapsed));
+    const button = workspace.querySelector(`[data-studio-toggle="${part}"]`);
+    if (!button) return;
+    const label = STUDIO_LAYOUT_LABELS[part][collapsed ? 1 : 0];
+    button.setAttribute('aria-expanded', String(!collapsed));
+    button.setAttribute('aria-label', label);
+    button.title = label;
+  }
+
+  function saveStudioLayout() {
+    const preferences = {};
+    all('.workspace-view[data-workspace]').forEach((workspace) => {
+      preferences[workspace.dataset.workspace] = {
+        palette: workspace.classList.contains('is-palette-collapsed'),
+        inspector: workspace.classList.contains('is-inspector-collapsed'),
+        toolbar: workspace.classList.contains('is-toolbar-collapsed')
+      };
+    });
+    writeStorage(STUDIO_LAYOUT_KEY, preferences);
+  }
+
+  function loadStudioLayout() {
+    const preferences = readStorage(STUDIO_LAYOUT_KEY) || {};
+    all('.workspace-view[data-workspace]').forEach((workspace) => {
+      const saved = preferences[workspace.dataset.workspace] || {};
+      ['palette', 'inspector', 'toolbar'].forEach((part) => {
+        applyStudioLayoutPart(workspace, part, saved[part] === true);
+      });
+    });
+  }
+
+  function toggleStudioLayout(event) {
+    const button = event.currentTarget;
+    const workspace = button.closest('.workspace-view[data-workspace]');
+    const part = button.dataset.studioToggle;
+    if (!workspace || !STUDIO_LAYOUT_LABELS[part]) return;
+    const collapsed = !workspace.classList.contains(`is-${part}-collapsed`);
+    applyStudioLayoutPart(workspace, part, collapsed);
+    saveStudioLayout();
   }
 
   function scheduleDraftSave(mode) {
@@ -485,7 +535,6 @@
       slides: ['Nowa prezentacja', 'Otwórz prezentację do tego działu.'],
       pdf: ['Dokument PDF', 'Materiał do czytania lub pobrania.'],
       film: ['Nagranie lekcji', 'Obejrzyj nagranie w odtwarzaczu kursowym.'],
-      filmv1: ['Film Video.js', 'Nagranie w alternatywnym odtwarzaczu.'],
       yt: ['Film YouTube', 'Nagranie z własnymi kontrolkami ChemDisk.'],
       lesson: ['Lekcja interaktywna', 'Przejdź przez prezentację i zadania.'],
       forms: ['Test wiedzy', 'Sprawdź swoją wiedzę w formularzu.'],
@@ -941,11 +990,11 @@
         field('Krótki opis', textareaInput(node.description, 'description', { rows: 3, maxLength: 420 }))
       );
       const definition = dashboardModelApi.MODULE_DEFINITIONS[node.module] || dashboardModelApi.MODULE_DEFINITIONS.link;
-      if (['slides', 'pdf', 'film', 'filmv1', 'yt', 'forms'].includes(node.module)) {
+      if (['slides', 'pdf', 'film', 'yt', 'forms'].includes(node.module)) {
         form.append(field(
           definition.idLabel || 'ID materiału',
           textInput(node.id, 'id', { placeholder: 'Wklej ID albo pełny link' }),
-          node.module === 'film' || node.module === 'filmv1'
+          node.module === 'film'
             ? 'Dla type=2 podaj ID lub link Google Drive; pozostałe tryby korzystają z YouTube.'
             : 'Możesz wkleić samo ID lub obsługiwany link udostępniania.'
         ));
@@ -4189,6 +4238,9 @@
     elements.undo.addEventListener('click', undo);
     elements.redo.addEventListener('click', redo);
     bindPalette();
+    all('[data-studio-toggle]').forEach((button) => {
+      button.addEventListener('click', toggleStudioLayout);
+    });
 
     elements.dashboardPaletteSearch.addEventListener('input', () => {
       filterPalette(elements.dashboardPaletteSearch, 'data-search');
@@ -4459,6 +4511,7 @@
     }
     state.currentUser = user;
     loadDrafts();
+    loadStudioLayout();
     bindEvents();
     elements.accessState.hidden = true;
     elements.app.hidden = false;

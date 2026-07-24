@@ -26,6 +26,7 @@ test('Studio is an admin-only member application linked only for administrators'
 
   assert.match(dashboardHtml, /id=["']content-studio-link["'][^>]*hidden/);
   assert.match(dashboardScript, /contentStudioLink\.hidden\s*=\s*!visible/);
+  assert.match(dashboardScript, /filmv1[\s\S]*?url\.pathname\s*=\s*['"]\/members\/module\/film\/['"]/i);
 
   const studioRoleRule = redirects.indexOf('from = "/members/module/studio"');
   const generalMembersRule = redirects.indexOf('from = "/members/*"');
@@ -128,6 +129,15 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(styles, /\.preview-text-gap/);
   assert.match(styles, /\.drop-zone\.is-dragover/);
   assert.match(styles, /prefers-reduced-motion:\s*reduce/);
+  assert.match(html, /data-studio-toggle=["']palette["']/);
+  assert.match(html, /data-studio-toggle=["']inspector["']/);
+  assert.match(html, /data-studio-toggle=["']toolbar["']/);
+  assert.match(script, /function toggleStudioLayout\(/);
+  assert.match(styles, /\.workspace-view\.is-palette-collapsed/);
+  assert.match(styles, /\.workspace-view\.is-inspector-collapsed/);
+  assert.match(styles, /\.workspace-view\.is-toolbar-collapsed/);
+  assert.match(styles, /100dvh[\s\S]*?overflow:\s*auto/);
+  assert.doesNotMatch(html, /data-dashboard-add=["']filmv1["']/i);
   assert.doesNotMatch(script, /Wygenerowany adres|dashboard-url-preview|hrefPreview/);
 
   const dashboardClone = script.slice(
