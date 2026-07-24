@@ -2,6 +2,8 @@
 
 ChemDisk jest statyczną aplikacją wdrażaną na Netlify. Publiczna strona prowadzi do logowania przez Netlify Identity, a zalogowany kursant otrzymuje panel z materiałami zdefiniowanymi w Markdownzie dashboardu i prywatnych repozytoriach lekcji. Dostęp kontrolują role w `app_metadata`, nadawane automatycznie po płatności Stripe albo ręcznie przez administratora.
 
+Kompletna instrukcja wdrożenia i obsługi dla osoby nietechnicznej znajduje się w [`instrukcja.md`](instrukcja.md).
+
 ## Architektura
 
 ```text
