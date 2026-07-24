@@ -432,9 +432,11 @@
     submit.disabled = solved;
 
     let readValue;
-    if (task.type === 'gaps') {
+    let perGapMode = false;
+    const gapFields = [];
+    const checkedGaps = new Set();
+    if (task.type === 'gaps' || task.type === 'gaps-text') {
       const exercise = document.createElement('p');
-      const selects = [];
       exercise.className = 'gap-exercise';
       String(task.text || '').split(/(\{\{[^{}]*\}\})/).forEach((part) => {
         const gap = /^\{\{([^{}]*)\}\}$/.exec(part);
@@ -442,29 +444,61 @@
           exercise.appendChild(document.createTextNode(part));
           return;
         }
-        const select = document.createElement('select');
-        const blank = document.createElement('option');
-        const gapIndex = selects.length;
-        blank.value = '';
-        blank.textContent = gap[1].trim() || 'wybierz';
-        select.id = `${fieldId}-${gapIndex}`;
-        select.name = `${fieldId}-${gapIndex}`;
-        select.setAttribute('aria-label', `Luka ${gapIndex + 1}: ${blank.textContent}`);
-        select.disabled = solved;
-        select.appendChild(blank);
-        task.options.forEach((option) => {
-          const item = document.createElement('option');
-          item.value = option;
-          item.textContent = option;
-          select.appendChild(item);
-        });
-        selects.push(select);
-        exercise.appendChild(select);
+        const gapIndex = gapFields.length;
+        const gapLabel = gap[1].trim() || `luka ${gapIndex + 1}`;
+        if (task.type === 'gaps') {
+          const select = document.createElement('select');
+          const blank = document.createElement('option');
+          blank.value = '';
+          blank.textContent = gapLabel;
+          select.id = `${fieldId}-${gapIndex}`;
+          select.name = `${fieldId}-${gapIndex}`;
+          select.setAttribute('aria-label', `Luka ${gapIndex + 1}: ${gapLabel}`);
+          select.disabled = solved;
+          select.appendChild(blank);
+          task.options.forEach((option) => {
+            const item = document.createElement('option');
+            item.value = option;
+            item.textContent = option;
+            select.appendChild(item);
+          });
+          gapFields.push(select);
+          exercise.appendChild(select);
+          return;
+        }
+
+        const wrapper = document.createElement('span');
+        const input = document.createElement('input');
+        wrapper.className = 'text-gap-control';
+        wrapper.dataset.state = solved ? 'success' : '';
+        input.type = 'text';
+        input.id = `${fieldId}-${gapIndex}`;
+        input.name = `${fieldId}-${gapIndex}`;
+        input.autocomplete = 'off';
+        input.spellcheck = false;
+        input.placeholder = gapLabel;
+        input.setAttribute('aria-label', `Luka ${gapIndex + 1}: ${gapLabel}`);
+        input.setAttribute('aria-describedby', `${fieldId}-feedback`);
+        input.disabled = solved;
+        wrapper.appendChild(input);
+        if (task.checkMode === 'each') {
+          const check = document.createElement('button');
+          check.type = 'button';
+          check.className = 'gap-check-one';
+          check.dataset.gapIndex = String(gapIndex);
+          check.textContent = '✓';
+          check.setAttribute('aria-label', `Sprawdź lukę ${gapIndex + 1}`);
+          check.disabled = solved;
+          wrapper.appendChild(check);
+          perGapMode = true;
+        }
+        gapFields.push(input);
+        exercise.appendChild(wrapper);
       });
       controls.classList.add('gap-controls');
       controls.appendChild(exercise);
       label.hidden = true;
-      readValue = () => selects.map((select) => select.value);
+      readValue = () => gapFields.map((field) => field.value);
     } else if (task.type === 'choice') {
       const fieldset = document.createElement('fieldset');
       const legend = document.createElement('legend');
@@ -518,35 +552,73 @@
     }
 
     form.append(heading, label, controls, submit, feedback);
+    submit.hidden = perGapMode;
+
+    const completeTask = () => {
+      state.solved.add(state.index);
+      feedback.dataset.state = 'success';
+      feedback.textContent = task.success;
+      submit.disabled = true;
+      submit.textContent = 'Odpowiedź zaliczona';
+      form.querySelectorAll('input, select, fieldset, .gap-check-one').forEach((field) => {
+        field.disabled = true;
+      });
+      elements.next.disabled = false;
+      elements.navigationHint.textContent = '';
+      elements.slideStatus.textContent = 'Zadanie rozwiązane';
+      elements.slideStatus.dataset.state = 'complete';
+      updateOutline();
+      saveProgress();
+      elements.next.focus();
+    };
+
+    const showWrongAnswer = (field, prefix = 'Jeszcze nie') => {
+      feedback.dataset.state = 'error';
+      feedback.textContent = task.hint
+        ? `${prefix}. Podpowiedź: ${task.hint}`
+        : `${prefix} — popraw odpowiedź i spróbuj ponownie.`;
+      field?.setAttribute('aria-invalid', 'true');
+      field?.focus();
+    };
+
+    if (perGapMode) {
+      form.querySelectorAll('.gap-check-one').forEach((button) => {
+        button.addEventListener('click', () => {
+          if (state.solved.has(state.index)) return;
+          const gapIndex = Number(button.dataset.gapIndex);
+          const input = gapFields[gapIndex];
+          const attempts = (state.attempts.get(state.index) || 0) + 1;
+          state.attempts.set(state.index, attempts);
+          if (parser.checkGapAnswer(task, input.value, gapIndex)) {
+            checkedGaps.add(gapIndex);
+            input.removeAttribute('aria-invalid');
+            input.disabled = true;
+            button.disabled = true;
+            button.closest('.text-gap-control').dataset.state = 'success';
+            feedback.dataset.state = 'success';
+            feedback.textContent = `Luka ${gapIndex + 1} jest poprawna.`;
+            if (checkedGaps.size === gapFields.length) completeTask();
+            else gapFields.find((field, index) => !checkedGaps.has(index))?.focus();
+          } else {
+            button.closest('.text-gap-control').dataset.state = 'error';
+            showWrongAnswer(input, `Luka ${gapIndex + 1} jest niepoprawna`);
+          }
+        });
+      });
+    }
+
     form.addEventListener('submit', (event) => {
       event.preventDefault();
-      if (state.solved.has(state.index)) return;
+      if (state.solved.has(state.index) || perGapMode) return;
       const answer = readValue();
       const attempts = (state.attempts.get(state.index) || 0) + 1;
       state.attempts.set(state.index, attempts);
 
       if (parser.checkAnswer(task, answer)) {
-        state.solved.add(state.index);
-        feedback.dataset.state = 'success';
-        feedback.textContent = task.success;
-        submit.disabled = true;
-        submit.textContent = 'Odpowiedź zaliczona';
-        form.querySelectorAll('input, select, fieldset').forEach((field) => { field.disabled = true; });
-        elements.next.disabled = false;
-        elements.navigationHint.textContent = '';
-        elements.slideStatus.textContent = 'Zadanie rozwiązane';
-        elements.slideStatus.dataset.state = 'complete';
-        updateOutline();
-        saveProgress();
-        elements.next.focus();
+        completeTask();
       } else {
-        feedback.dataset.state = 'error';
-        feedback.textContent = task.hint
-          ? `Jeszcze nie. Podpowiedź: ${task.hint}`
-          : 'Jeszcze nie — sprawdź obliczenia i spróbuj ponownie.';
         const firstInput = form.querySelector('select:not([disabled]), input:not([type="radio"]), input[type="radio"]:checked, input[type="radio"]');
-        firstInput?.setAttribute('aria-invalid', 'true');
-        firstInput?.focus();
+        showWrongAnswer(firstInput);
       }
     });
     elements.taskHost.appendChild(form);

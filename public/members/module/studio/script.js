@@ -1594,6 +1594,17 @@
         hint: 'Sprawdź końcówkę nazwy i wzór grupy funkcyjnej.'
       });
     }
+    if (taskType === 'gaps-text') {
+      return lessonModelApi.createTask({
+        type: 'gaps-text',
+        question: 'Uzupełnij zdanie własnymi odpowiedziami.',
+        text: 'Woda ma wzór {{wzór sumaryczny}}, a jej masa molowa wynosi około {{masa molowa}} g/mol.',
+        label: 'Wpisz odpowiedzi w luki',
+        answers: ['H2O', '18'],
+        checkMode: 'each',
+        hint: 'Sprawdź symbole pierwiastków i obliczenie masy molowej.'
+      });
+    }
     return lessonModelApi.createTask({
       type: 'text',
       question: 'Wpisz poprawną odpowiedź.',
@@ -1840,12 +1851,24 @@
     const symbol = create(
       'span',
       'node-symbol',
-      task.type === 'abcd' ? 'AB' : task.type === 'number' ? '#' : task.type === 'gaps' ? '□' : '✓'
+      task.type === 'abcd'
+        ? 'AB'
+        : task.type === 'number'
+          ? '#'
+          : task.type === 'gaps'
+            ? '□'
+            : task.type === 'gaps-text' ? 'Aa' : '✓'
     );
     const copy = create('span', 'node-copy');
     copy.append(
       create('strong', '', task.question || 'Pytanie bez treści'),
-      create('small', '', task.type === 'abcd' ? 'Quiz ABCD' : `Pytanie: ${task.type}`)
+      create(
+        'small',
+        '',
+        task.type === 'abcd'
+          ? 'Quiz ABCD'
+          : task.type === 'gaps-text' ? 'Luki wpisywane ręcznie' : `Pytanie: ${task.type}`
+      )
     );
     const actions = create('span', 'node-actions');
     actions.append(
@@ -1854,6 +1877,32 @@
     );
     item.append(symbol, copy, actions);
     return item;
+  }
+
+  function renderQuestionStarter(slide) {
+    const starter = create('section', 'question-starter');
+    starter.dataset.lessonSlideId = slide.id;
+    const copy = create('div', 'question-starter-copy');
+    copy.append(
+      create('strong', '', 'Dodaj pytanie do tego slajdu'),
+      create('small', '', 'Wybierz gotowy typ — odpowiedzi ustawisz w prostym formularzu.')
+    );
+    const actions = create('div', 'question-starter-actions');
+    [
+      ['task-abcd', 'Quiz ABCD'],
+      ['task-choice', 'Wybór'],
+      ['task-gaps', 'Luki z listy'],
+      ['task-gaps-text', 'Luki tekstowe'],
+      ['task-text', 'Krótka odpowiedź']
+    ].forEach(([type, title]) => {
+      const button = create('button', 'mini-button', title);
+      button.type = 'button';
+      button.dataset.lessonQuickTask = type;
+      button.dataset.lessonSlideId = slide.id;
+      actions.append(button);
+    });
+    starter.append(copy, actions);
+    return starter;
   }
 
   function lessonSlideDropZone(index) {
@@ -1894,6 +1943,7 @@
     });
     blocks.append(lessonDropZone(slide.id, '', slide.blocks.length, 'Dodaj klocek do slajdu'));
     if (slide.task) blocks.append(renderLessonTask(slide.task, slide));
+    else blocks.append(renderQuestionStarter(slide));
     article.append(header, blocks);
     return article;
   }
@@ -1958,13 +2008,207 @@
     return footer;
   }
 
+  function taskCorrectOptionIndex(task) {
+    if (task.type === 'abcd') {
+      const answer = String(task.answers[0] || 'A').trim();
+      const letter = answer.toUpperCase();
+      if (/^[A-D]$/.test(letter)) return letter.charCodeAt(0) - 65;
+      return Math.max(0, task.options.indexOf(answer));
+    }
+    return Math.max(0, task.options.indexOf(task.answers[0]));
+  }
+
+  function taskOptionsEditor(task, withCorrectAnswer) {
+    const editor = create('section', 'task-answer-editor');
+    const header = create('header', 'task-answer-editor-header');
+    const heading = create('div');
+    heading.append(
+      create('strong', '', withCorrectAnswer ? 'Odpowiedzi' : 'Lista odpowiedzi do wyboru'),
+      create(
+        'small',
+        '',
+        withCorrectAnswer
+          ? 'Wpisz treść i zaznacz ptaszkiem jedną poprawną odpowiedź.'
+          : 'Te odpowiedzi pojawią się przy każdej luce.'
+      )
+    );
+    header.append(heading);
+    const list = create('div', 'task-option-editor-list');
+    const correctIndex = taskCorrectOptionIndex(task);
+    task.options.forEach((option, index) => {
+      const row = create('div', 'task-option-editor-row');
+      row.dataset.optionIndex = String(index);
+      if (withCorrectAnswer) {
+        const correct = create('label', 'task-correct-toggle');
+        correct.title = 'Oznacz jako poprawną odpowiedź';
+        const radio = lessonInput(String(index), 'correctOption', {
+          type: 'radio',
+          checked: index === correctIndex
+        });
+        radio.name = `task-correct-${task.id}`;
+        radio.setAttribute('aria-label', `Odpowiedź ${String.fromCharCode(65 + index)} jest poprawna`);
+        const mark = create('span', 'task-correct-mark', '✓');
+        mark.setAttribute('aria-hidden', 'true');
+        correct.append(radio, mark);
+        row.append(correct);
+      } else {
+        row.append(create('span', 'task-option-letter', String.fromCharCode(65 + index)));
+      }
+      const input = lessonInput(option, 'optionItem', {
+        maxLength: 240,
+        placeholder: `Odpowiedź ${String.fromCharCode(65 + index)}`
+      });
+      input.dataset.optionIndex = String(index);
+      row.append(input);
+      const remove = create('button', 'task-row-remove', '×');
+      remove.type = 'button';
+      remove.dataset.lessonTaskEditorAction = 'remove-option';
+      remove.dataset.optionIndex = String(index);
+      remove.setAttribute('aria-label', `Usuń odpowiedź ${String.fromCharCode(65 + index)}`);
+      remove.disabled = task.type === 'abcd' || task.options.length <= 2;
+      row.append(remove);
+      list.append(row);
+    });
+    const add = create('button', 'button button-soft task-editor-add', '＋ Dodaj odpowiedź');
+    add.type = 'button';
+    add.dataset.lessonTaskEditorAction = 'add-option';
+    add.disabled = task.type === 'abcd' || task.options.length >= 8;
+    editor.append(header, list, add);
+    return editor;
+  }
+
+  function taskGapLabels(task) {
+    return [...String(task.text || '').matchAll(/\{\{([^{}]*)\}\}/g)]
+      .map((match) => match[1].trim() || 'luka');
+  }
+
+  function replaceTaskGapLabel(task, targetIndex, value) {
+    let current = 0;
+    const label = String(value || '').replace(/[{}|]/g, '').trim() || `luka ${targetIndex + 1}`;
+    task.text = String(task.text || '').replace(/\{\{([^{}]*)\}\}/g, (match) => {
+      const replacement = current === targetIndex ? `{{${label}}}` : match;
+      current += 1;
+      return replacement;
+    });
+  }
+
+  function taskGapEditor(task) {
+    const editor = create('section', 'task-answer-editor task-gap-editor');
+    const header = create('header', 'task-answer-editor-header');
+    const heading = create('div');
+    heading.append(
+      create('strong', '', 'Luki i poprawne odpowiedzi'),
+      create('small', '', 'Dodaj lukę przyciskiem, nazwij ją i ustaw poprawną odpowiedź.')
+    );
+    const insert = create('button', 'mini-button', '＋ Wstaw lukę');
+    insert.type = 'button';
+    insert.dataset.lessonTaskEditorAction = 'insert-gap';
+    header.append(heading, insert);
+    const list = create('div', 'task-gap-editor-list');
+    const labels = taskGapLabels(task);
+    labels.forEach((gapLabel, index) => {
+      const row = create('div', 'task-gap-editor-row');
+      const number = create('span', 'task-gap-number', String(index + 1));
+      const labelInput = lessonInput(gapLabel, 'gapLabel', {
+        maxLength: 100,
+        placeholder: `Opis luki ${index + 1}`
+      });
+      labelInput.dataset.gapIndex = String(index);
+      let answerInput;
+      if (task.type === 'gaps') {
+        answerInput = lessonSelect(task.answers[index] || '', 'gapAnswer', task.options.map((option) => ({
+          value: option,
+          label: option
+        })));
+      } else {
+        answerInput = lessonInput(task.answers[index] || '', 'gapAnswer', {
+          maxLength: 160,
+          placeholder: 'Poprawna odpowiedź'
+        });
+      }
+      answerInput.dataset.gapIndex = String(index);
+      const remove = create('button', 'task-row-remove', '×');
+      remove.type = 'button';
+      remove.dataset.lessonTaskEditorAction = 'remove-gap';
+      remove.dataset.gapIndex = String(index);
+      remove.setAttribute('aria-label', `Usuń lukę ${index + 1}`);
+      row.append(
+        number,
+        field('Opis widoczny w luce', labelInput),
+        field('Poprawna odpowiedź', answerInput),
+        remove
+      );
+      list.append(row);
+    });
+    if (!labels.length) {
+      list.append(create('p', 'task-editor-empty', 'Nie ma jeszcze żadnej luki. Ustaw kursor w zdaniu i kliknij „Wstaw lukę”.'));
+    }
+    editor.append(header, list);
+    return editor;
+  }
+
+  function lessonTaskEditorAction(button) {
+    const found = findLessonNode(state.lesson.selectedId);
+    if (!found || found.kind !== 'task') return;
+    const task = found.node;
+    const action = button.dataset.lessonTaskEditorAction;
+    if (action === 'add-option') {
+      if (task.options.length >= 8 || task.type === 'abcd') return;
+      commitMutation('lesson', () => {
+        task.options.push(`Nowa odpowiedź ${task.options.length + 1}`);
+      });
+      return;
+    }
+    if (action === 'remove-option') {
+      const index = Number(button.dataset.optionIndex);
+      if (!Number.isSafeInteger(index) || task.options.length <= 2 || task.type === 'abcd') return;
+      commitMutation('lesson', () => {
+        const [removed] = task.options.splice(index, 1);
+        const fallback = task.options[0] || '';
+        if (task.type === 'choice') {
+          task.answers = [task.answers[0] === removed ? fallback : task.answers[0]];
+        } else if (task.type === 'gaps') {
+          task.answers = task.answers.map((answer) => answer === removed ? fallback : answer);
+        }
+      });
+      return;
+    }
+    if (action === 'insert-gap') {
+      const textarea = elements.lessonInspector.querySelector('[data-lesson-field="text"]');
+      const text = String(task.text || '');
+      const start = textarea && Number.isInteger(textarea.selectionStart) ? textarea.selectionStart : text.length;
+      const end = textarea && Number.isInteger(textarea.selectionEnd) ? textarea.selectionEnd : start;
+      const gapIndex = (text.slice(0, start).match(/\{\{[^{}]*\}\}/g) || []).length;
+      commitMutation('lesson', () => {
+        task.text = `${text.slice(0, start)}{{nowa luka}}${text.slice(end)}`;
+        const answer = task.type === 'gaps' ? task.options[0] || '' : 'odpowiedź';
+        task.answers.splice(gapIndex, 0, answer);
+      });
+      return;
+    }
+    if (action === 'remove-gap') {
+      const targetIndex = Number(button.dataset.gapIndex);
+      if (!Number.isSafeInteger(targetIndex)) return;
+      commitMutation('lesson', () => {
+        let current = 0;
+        task.text = String(task.text || '').replace(/\{\{([^{}]*)\}\}/g, (match, label) => {
+          const replacement = current === targetIndex ? String(label || '').trim() : match;
+          current += 1;
+          return replacement;
+        });
+        task.answers.splice(targetIndex, 1);
+      });
+    }
+  }
+
   function renderLessonTaskInspector(form, task) {
     form.append(field(
       'Rodzaj pytania',
       lessonSelect(task.type, 'type', [
         { value: 'abcd', label: 'Quiz ABCD' },
-        { value: 'choice', label: 'Wybór z listy' },
+        { value: 'choice', label: 'Jedna odpowiedź z listy' },
         { value: 'gaps', label: 'Uzupełnianie luk z listy' },
+        { value: 'gaps-text', label: 'Luki wpisywane ręcznie' },
         { value: 'text', label: 'Odpowiedź tekstowa' },
         { value: 'number', label: 'Odpowiedź liczbowa' }
       ])
@@ -1973,50 +2217,40 @@
       field('Treść pytania', lessonTextarea(task.question, 'question', { rows: 3, maxLength: 900 })),
       field('Etykieta pola', lessonInput(task.label, 'label', { maxLength: 160 }))
     );
-    if (task.type !== 'gaps') {
+    if (task.type !== 'gaps' && task.type !== 'gaps-text') {
       form.append(field('Placeholder', lessonInput(task.placeholder, 'placeholder', { maxLength: 160 })));
     }
-    if (task.type === 'gaps') {
-      form.append(
-        field(
-          'Tekst z lukami',
-          lessonTextarea(task.text, 'text', {
-            rows: 6,
-            maxLength: 1600,
-            placeholder: 'Etanol należy do {{grupy związków}}.'
-          }),
-          'Każdą lukę oznacz jako {{opis luki}}. Kolejność luk musi odpowiadać kolejności poprawnych odpowiedzi.'
-        ),
-        field(
-          'Opcje wspólne — jedna w wierszu',
-          lessonTextarea(task.options.join('\n'), 'options', { rows: 7 }),
-          'Uczeń zobaczy tę listę przy każdej luce.'
-        ),
-        field(
-          'Poprawne odpowiedzi — kolejno dla luk',
-          lessonTextarea(task.answers.join('\n'), 'answers', { rows: 5 }),
-          'Pierwszy wiersz odpowiada pierwszej luce, drugi — drugiej itd.'
-        )
-      );
-    } else if (task.type === 'choice' || task.type === 'abcd') {
+    if (task.type === 'gaps' || task.type === 'gaps-text') {
       form.append(field(
-        'Opcje — jedna w wierszu',
-        lessonTextarea(task.options.join('\n'), 'options', {
-          rows: task.type === 'abcd' ? 5 : 6,
-          placeholder: 'Pierwsza odpowiedź\nDruga odpowiedź'
+        'Zdanie z lukami',
+        lessonTextarea(task.text, 'text', {
+          rows: 6,
+          maxLength: 1600,
+          placeholder: 'Etanol należy do grupy związków.'
         }),
-        task.type === 'abcd' ? 'Quiz ABCD wymaga dokładnie czterech opcji.' : 'Dodaj od 2 do 8 opcji.'
+        'Ustaw kursor w wybranym miejscu i kliknij „Wstaw lukę”. Nie musisz ręcznie wpisywać specjalnej składni.'
       ));
-      const answerIndex = task.type === 'abcd'
-        ? Math.max(0, Math.min(3, String(task.answers[0] || 'A').toUpperCase().charCodeAt(0) - 65))
-        : Math.max(0, task.options.indexOf(task.answers[0]));
-      form.append(field(
-        'Poprawna opcja',
-        lessonSelect(String(answerIndex), 'correctOption', task.options.map((option, index) => ({
-          value: String(index),
-          label: `${String.fromCharCode(65 + index)} — ${option}`
-        })))
-      ));
+      if (task.type === 'gaps') form.append(taskOptionsEditor(task, false));
+      form.append(taskGapEditor(task));
+      if (task.type === 'gaps-text') {
+        form.append(field(
+          'Sposób sprawdzania',
+          lessonSelect(task.checkMode, 'checkMode', [
+            { value: 'each', label: 'Każda luka osobno' },
+            { value: 'all', label: 'Wszystkie luki naraz' }
+          ]),
+          'Uczeń może otrzymywać wynik po każdej luce albo dopiero po sprawdzeniu całego zadania.'
+        ));
+        const check = create('label', 'check-field');
+        const input = lessonInput('', 'caseSensitive', {
+          type: 'checkbox',
+          checked: task.caseSensitive
+        });
+        check.append(input, create('span', '', 'Rozróżniaj wielkość liter w odpowiedziach'));
+        form.append(check);
+      }
+    } else if (task.type === 'choice' || task.type === 'abcd') {
+      form.append(taskOptionsEditor(task, true));
     } else {
       form.append(field(
         task.type === 'number' ? 'Poprawny wynik' : 'Poprawne odpowiedzi / aliasy',
@@ -2239,6 +2473,204 @@
     });
   }
 
+  function previewTaskById(taskId) {
+    for (const slide of state.lesson.model.slides) {
+      if (slide.task && slide.task.id === taskId) return slide.task;
+    }
+    return null;
+  }
+
+  function appendPreviewGapExercise(container, task, fieldId) {
+    let gapIndex = 0;
+    String(task.text || '').split(/(\{\{[^{}]*\}\})/).forEach((part) => {
+      const gap = /^\{\{([^{}]*)\}\}$/.exec(part);
+      if (!gap) {
+        container.append(document.createTextNode(part));
+        return;
+      }
+      const currentIndex = gapIndex;
+      const gapLabel = gap[1].trim() || `luka ${currentIndex + 1}`;
+      gapIndex += 1;
+      if (task.type === 'gaps') {
+        const select = create('select', 'preview-gap-field');
+        select.name = `${fieldId}-${currentIndex}`;
+        select.dataset.previewGapIndex = String(currentIndex);
+        select.setAttribute('aria-label', `Luka ${currentIndex + 1}: ${gapLabel}`);
+        const blank = create('option', '', gapLabel);
+        blank.value = '';
+        select.append(blank);
+        task.options.forEach((option) => {
+          const item = create('option', '', option);
+          item.value = option;
+          select.append(item);
+        });
+        container.append(select);
+        return;
+      }
+
+      const wrapper = create('span', 'preview-text-gap');
+      const input = create('input', 'preview-gap-field');
+      input.type = 'text';
+      input.name = `${fieldId}-${currentIndex}`;
+      input.dataset.previewGapIndex = String(currentIndex);
+      input.autocomplete = 'off';
+      input.spellcheck = false;
+      input.placeholder = gapLabel;
+      input.setAttribute('aria-label', `Luka ${currentIndex + 1}: ${gapLabel}`);
+      wrapper.append(input);
+      if (task.checkMode === 'each') {
+        const check = create('button', 'preview-gap-check', '✓');
+        check.type = 'button';
+        check.dataset.previewGapCheck = String(currentIndex);
+        check.setAttribute('aria-label', `Sprawdź lukę ${currentIndex + 1}`);
+        wrapper.append(check);
+      }
+      container.append(wrapper);
+    });
+  }
+
+  function buildPreviewTask(task) {
+    const form = create('form', 'preview-task preview-quiz');
+    const fieldId = `preview-answer-${task.id}`;
+    form.dataset.previewTaskId = task.id;
+    form.noValidate = true;
+
+    const eyebrow = create('span', 'preview-quiz-eyebrow', 'Sprawdź, czy rozumiesz');
+    const heading = create('strong', 'preview-quiz-title', task.label || task.question || 'Odpowiedz na pytanie');
+    const controls = create('div', 'preview-quiz-controls');
+    if (task.type === 'choice' || task.type === 'abcd') {
+      const fieldset = create('fieldset', `preview-choice-grid${task.type === 'abcd' ? ' is-abcd' : ''}`);
+      const legend = create('legend', '', task.label || 'Wybierz odpowiedź');
+      task.options.forEach((option, optionIndex) => {
+        const optionLabel = create('label', 'preview-choice-option');
+        const input = create('input');
+        const marker = create('span', 'preview-choice-marker', String.fromCharCode(65 + optionIndex));
+        const copy = create('span', 'preview-choice-copy', option);
+        input.type = 'radio';
+        input.name = fieldId;
+        input.value = task.type === 'abcd' ? String.fromCharCode(65 + optionIndex) : option;
+        optionLabel.append(input);
+        if (task.type === 'abcd') optionLabel.append(marker);
+        optionLabel.append(copy);
+        fieldset.append(optionLabel);
+      });
+      fieldset.prepend(legend);
+      controls.append(fieldset);
+    } else if (task.type === 'gaps' || task.type === 'gaps-text') {
+      const exercise = create('p', 'preview-gap-exercise');
+      appendPreviewGapExercise(exercise, task, fieldId);
+      controls.append(exercise);
+    } else {
+      const input = create('input', 'preview-answer-field');
+      input.type = 'text';
+      input.name = fieldId;
+      input.autocomplete = 'off';
+      input.spellcheck = false;
+      input.placeholder = task.placeholder || (task.type === 'number' ? 'Wpisz wynik' : 'Wpisz odpowiedź');
+      input.inputMode = task.type === 'number' ? 'decimal' : 'text';
+      input.setAttribute('aria-label', task.label || 'Twoja odpowiedź');
+      controls.append(input);
+    }
+
+    const submit = create('button', 'button button-primary preview-quiz-submit', 'Sprawdź odpowiedź');
+    submit.type = 'submit';
+    submit.hidden = task.type === 'gaps-text' && task.checkMode === 'each';
+    const feedback = create('p', 'preview-quiz-feedback');
+    feedback.dataset.previewFeedback = '';
+    feedback.setAttribute('role', 'status');
+    feedback.setAttribute('aria-live', 'polite');
+    form.append(eyebrow, heading, controls, submit, feedback);
+    return form;
+  }
+
+  function bindPreviewTasks(root) {
+    all('.preview-quiz[data-preview-task-id]', root).forEach((form) => {
+      const task = previewTaskById(form.dataset.previewTaskId);
+      if (!task || !window.ChemLesson) return;
+      const feedback = form.querySelector('[data-preview-feedback]');
+      const submit = form.querySelector('.preview-quiz-submit');
+      const gapFields = Array.from(form.querySelectorAll('[data-preview-gap-index]'));
+      const checkedGaps = new Set();
+      const perGapMode = task.type === 'gaps-text' && task.checkMode === 'each';
+
+      const showFeedback = (stateName, message) => {
+        feedback.dataset.state = stateName;
+        feedback.textContent = message;
+      };
+      const finish = () => {
+        form.dataset.state = 'success';
+        showFeedback('success', task.feedback || 'Dobrze! Odpowiedź jest poprawna.');
+        all('input, select, button', form).forEach((control) => {
+          control.disabled = true;
+        });
+        submit.textContent = 'Odpowiedź poprawna ✓';
+      };
+      const showError = (field, prefix = 'Jeszcze nie') => {
+        form.dataset.state = 'error';
+        field?.setAttribute('aria-invalid', 'true');
+        showFeedback(
+          'error',
+          task.hint ? `${prefix}. Podpowiedź: ${task.hint}` : `${prefix} — popraw odpowiedź i spróbuj ponownie.`
+        );
+        field?.focus();
+      };
+      const readValue = () => {
+        if (task.type === 'gaps' || task.type === 'gaps-text') {
+          return gapFields.map((field) => field.value);
+        }
+        if (task.type === 'choice' || task.type === 'abcd') {
+          return form.querySelector('input[type="radio"]:checked')?.value || '';
+        }
+        return form.querySelector('.preview-answer-field')?.value || '';
+      };
+
+      all('input, select', form).forEach((field) => {
+        field.addEventListener('input', () => {
+          field.removeAttribute('aria-invalid');
+          field.closest('.preview-text-gap')?.removeAttribute('data-state');
+          if (form.dataset.state !== 'success') {
+            form.removeAttribute('data-state');
+            showFeedback('', '');
+          }
+        });
+      });
+
+      all('[data-preview-gap-check]', form).forEach((button) => {
+        button.addEventListener('click', () => {
+          const gapIndex = Number(button.dataset.previewGapCheck);
+          const input = gapFields[gapIndex];
+          const wrapper = button.closest('.preview-text-gap');
+          if (window.ChemLesson.checkGapAnswer(task, input.value, gapIndex)) {
+            checkedGaps.add(gapIndex);
+            input.removeAttribute('aria-invalid');
+            input.disabled = true;
+            button.disabled = true;
+            wrapper.dataset.state = 'success';
+            showFeedback('success', `Luka ${gapIndex + 1} jest poprawna.`);
+            if (checkedGaps.size === gapFields.length) finish();
+            else gapFields.find((field, index) => !checkedGaps.has(index))?.focus();
+          } else {
+            wrapper.dataset.state = 'error';
+            showError(input, `Luka ${gapIndex + 1} jest niepoprawna`);
+          }
+        });
+      });
+
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        if (form.dataset.state === 'success' || perGapMode) return;
+        if (window.ChemLesson.checkAnswer(task, readValue())) {
+          finish();
+          return;
+        }
+        const firstField = form.querySelector(
+          'select:not([disabled]), input:not([type="radio"]):not([disabled]), input[type="radio"]:checked, input[type="radio"]'
+        );
+        showError(firstField);
+      });
+    });
+  }
+
   function buildLessonPreviewShell(slide, index, includeValidation) {
     const shell = create('div', 'lesson-preview-shell');
     const meta = create('div', 'lesson-preview-meta');
@@ -2254,19 +2686,7 @@
     }
     shell.append(meta, body);
     if (slide.task) {
-      const task = create('div', 'preview-task');
-      task.append(
-        create('strong', '', slide.task.question || slide.task.label || 'Pytanie'),
-        create('span', '', slide.task.type === 'abcd'
-          ? `Quiz ABCD · ${slide.task.options.length} opcje`
-          : slide.task.type === 'choice'
-            ? `Wybór · ${slide.task.options.length} opcje`
-            : slide.task.type === 'gaps'
-              ? `Luki · ${slide.task.answers.length} pola · ${slide.task.options.length} opcji`
-            : `Odpowiedź ${slide.task.type === 'number' ? 'liczbowa' : 'tekstowa'}`),
-        create('span', '', slide.task.hint ? `Podpowiedź: ${slide.task.hint}` : 'Bez podpowiedzi')
-      );
-      shell.append(task);
+      shell.append(buildPreviewTask(slide.task));
     }
     const validation = includeValidation ? lessonModelApi.validateLesson(state.lesson.model) : null;
     if (validation && !validation.valid) {
@@ -2292,6 +2712,7 @@
       buildLessonPreviewShell(slide, index, true)
     );
     bindPreviewFlashcards(elements.lessonPreview);
+    bindPreviewTasks(elements.lessonPreview);
     syncFullPreview('lesson');
   }
 
@@ -2376,7 +2797,10 @@
       main.append(slides);
     }
     doc.body.replaceChildren(header, main);
-    if (mode === 'lesson') bindPreviewFlashcards(main);
+    if (mode === 'lesson') {
+      bindPreviewFlashcards(main);
+      bindPreviewTasks(main);
+    }
     popup.requestAnimationFrame(() => popup.scrollTo(0, previousScroll));
   }
 
@@ -2650,10 +3074,20 @@
       task.options = task.options.length >= 2
         ? task.options
         : ['pierwsza odpowiedź', 'druga odpowiedź', 'inna odpowiedź'];
-      task.answers = task.answers.length === 2
-        ? task.answers
-        : [task.options[0], task.options[1]];
+      const gapCount = (task.text.match(/\{\{[^{}]*\}\}/g) || []).length;
+      task.answers = task.answers.length === gapCount
+        ? task.answers.map((answer) => task.options.includes(answer) ? answer : task.options[0])
+        : Array.from({ length: gapCount }, (_, index) => task.options[index] || task.options[0]);
       task.label = 'Uzupełnij wszystkie luki';
+    } else if (nextType === 'gaps-text') {
+      task.text = task.text || 'Uzupełnij {{pierwszą lukę}} i {{drugą lukę}}.';
+      const gapCount = (task.text.match(/\{\{[^{}]*\}\}/g) || []).length;
+      task.answers = task.answers.length === gapCount
+        ? task.answers
+        : Array.from({ length: gapCount }, (_, index) => task.answers[index] || `odpowiedź ${index + 1}`);
+      task.options = [];
+      task.checkMode = task.checkMode === 'all' ? 'all' : 'each';
+      task.label = 'Wpisz odpowiedzi w luki';
     } else if (nextType === 'abcd') {
       const defaults = ['Odpowiedź A', 'Odpowiedź B', 'Odpowiedź C', 'Odpowiedź D'];
       task.options = defaults.map((fallback, index) => task.options[index] || fallback).slice(0, 4);
@@ -2695,6 +3129,16 @@
       const task = found.node;
       if (fieldName === 'type') {
         normalizeTaskForType(task, raw);
+      } else if (fieldName === 'optionItem') {
+        const index = Number(target.dataset.optionIndex);
+        if (!Number.isSafeInteger(index) || index < 0 || index >= task.options.length) return;
+        const previous = task.options[index];
+        task.options[index] = raw;
+        if (task.type === 'choice' && task.answers[0] === previous) {
+          task.answers[0] = raw;
+        } else if (task.type === 'gaps') {
+          task.answers = task.answers.map((answer) => answer === previous ? raw : answer);
+        }
       } else if (fieldName === 'options') {
         const previousOptions = [...task.options];
         const previousAnswer = task.answers[0] || '';
@@ -2706,6 +3150,14 @@
       } else if (fieldName === 'correctOption') {
         const index = Math.max(0, Math.min(task.options.length - 1, Number(raw) || 0));
         task.answers = [task.type === 'abcd' ? String.fromCharCode(65 + index) : task.options[index]];
+      } else if (fieldName === 'gapLabel') {
+        const index = Number(target.dataset.gapIndex);
+        if (Number.isSafeInteger(index)) replaceTaskGapLabel(task, index, raw);
+      } else if (fieldName === 'gapAnswer') {
+        const index = Number(target.dataset.gapIndex);
+        if (Number.isSafeInteger(index) && index >= 0 && index < task.answers.length) {
+          task.answers[index] = raw;
+        }
       } else if (fieldName === 'answers') {
         task.answers = String(raw).split('\n').map((item) => item.trim()).filter(Boolean);
       } else {
@@ -3342,6 +3794,14 @@
   }
 
   function handleLessonCanvasClick(event) {
+    const quickTask = event.target.closest('[data-lesson-quick-task]');
+    if (quickTask) {
+      addLessonNode(quickTask.dataset.lessonQuickTask, {
+        slideId: quickTask.dataset.lessonSlideId,
+        parentBlockId: ''
+      });
+      return;
+    }
     const action = event.target.closest('[data-lesson-action]');
     const task = event.target.closest('[data-lesson-task-id]');
     const block = event.target.closest('[data-lesson-block-id]');
@@ -3765,12 +4225,19 @@
     elements.lessonInspector.addEventListener('change', (event) => {
       handleLessonInspectorInput(event);
       finishEdit();
-      if (['type', 'options', 'useColor'].includes(event.target.dataset.lessonField)) renderLessonInspector();
+      if (['type', 'options', 'optionItem', 'useColor'].includes(event.target.dataset.lessonField)) {
+        renderLessonInspector();
+      }
     });
     elements.lessonInspector.addEventListener('focusout', (event) => {
       if (event.target.closest('[data-lesson-field]')) finishEdit();
     });
     elements.lessonInspector.addEventListener('click', (event) => {
+      const taskEditorAction = event.target.closest('[data-lesson-task-editor-action]');
+      if (taskEditorAction) {
+        lessonTaskEditorAction(taskEditorAction);
+        return;
+      }
       const action = event.target.closest('[data-lesson-inspector-action]');
       if (action && state.lesson.selectedId) {
         lessonNodeAction(action.dataset.lessonInspectorAction, state.lesson.selectedId);

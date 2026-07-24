@@ -52,14 +52,23 @@
     return normalized;
   }
 
+  function checkGapAnswer(task, value, index) {
+    if (
+      !task
+      || !Array.isArray(task.answers)
+      || !Number.isSafeInteger(index)
+      || index < 0
+      || index >= task.answers.length
+    ) return false;
+    return normalizeAnswer(value, 'text', task.caseSensitive)
+      === normalizeAnswer(task.answers[index], 'text', task.caseSensitive);
+  }
+
   function checkAnswer(task, value) {
     if (!task || !Array.isArray(task.answers)) return false;
-    if (task.type === 'gaps') {
+    if (task.type === 'gaps' || task.type === 'gaps-text') {
       if (!Array.isArray(value) || value.length !== task.answers.length) return false;
-      return task.answers.every((answer, index) => (
-        normalizeAnswer(value[index], 'text', task.caseSensitive)
-        === normalizeAnswer(answer, 'text', task.caseSensitive)
-      ));
+      return task.answers.every((_, index) => checkGapAnswer(task, value[index], index));
     }
     const matchesExpected = (answerValue) => {
       const candidate = normalizeAnswer(answerValue, task.type, task.caseSensitive);
@@ -103,6 +112,8 @@
       opcje: 'options',
       text: 'text',
       tekst: 'text',
+      check_mode: 'checkMode',
+      tryb_sprawdzania: 'checkMode',
       case_sensitive: 'caseSensitive',
       wielkosc_liter: 'caseSensitive'
     };
@@ -137,13 +148,15 @@
       choice: 'choice',
       abcd: 'abcd',
       gaps: 'gaps',
-      luki: 'gaps'
+      luki: 'gaps',
+      gaps_text: 'gaps-text',
+      luki_tekstowe: 'gaps-text'
     };
     const requestedType = typeAliases[normalizeKey(values.type || 'text')];
     if (!requestedType) {
       throw new LessonFormatError(
         'INVALID_TASK_TYPE',
-        `Slajd ${slideNumber}: typ zadania może mieć wartość text, number, choice, abcd albo gaps.`
+        `Slajd ${slideNumber}: typ zadania może mieć wartość text, number, choice, abcd, gaps albo gaps-text.`
       );
     }
     const type = requestedType === 'abcd' ? 'choice' : requestedType;
@@ -190,7 +203,12 @@
       answers,
       options,
       caseSensitive,
-      label: values.label || (type === 'choice' || type === 'gaps' ? 'Wybierz odpowiedź' : 'Twoja odpowiedź'),
+      checkMode: values.checkMode === 'each' ? 'each' : 'all',
+      label: values.label || (
+        type === 'choice' || type === 'gaps'
+          ? 'Wybierz odpowiedź'
+          : type === 'gaps-text' ? 'Wpisz odpowiedzi w luki' : 'Twoja odpowiedź'
+      ),
       placeholder: values.placeholder || '',
       text: values.text || '',
       hint: values.hint || '',
@@ -206,7 +224,7 @@
         `Slajd ${slideNumber}: poprawna odpowiedź nie występuje na liście options.`
       );
     }
-    if (type === 'gaps') {
+    if (type === 'gaps' || type === 'gaps-text') {
       const gapCount = (task.text.match(/\{\{[^{}]*\}\}/g) || []).length;
       if (!task.text || gapCount < 1 || gapCount !== answers.length) {
         throw new LessonFormatError(
@@ -656,6 +674,7 @@
 
   const api = {
     LessonFormatError,
+    checkGapAnswer,
     checkAnswer,
     parseLesson,
     renderMarkdown,

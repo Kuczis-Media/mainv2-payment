@@ -27,7 +27,7 @@
     'atonom',
     'flashcards'
   ]);
-  const TASK_TYPES = Object.freeze(['text', 'number', 'choice', 'abcd', 'gaps']);
+  const TASK_TYPES = Object.freeze(['text', 'number', 'choice', 'abcd', 'gaps', 'gaps-text']);
 
   let idSequence = 0;
 
@@ -287,11 +287,16 @@
       type,
       question: normalizeNewlines(source.question).trim(),
       text: oneLine(source.text || source.gapText),
-      label: oneLine(source.label) || (['choice', 'abcd', 'gaps'].includes(type) ? 'Wybierz odpowiedź' : 'Twoja odpowiedź'),
+      label: oneLine(source.label) || (
+        ['choice', 'abcd', 'gaps'].includes(type)
+          ? 'Wybierz odpowiedź'
+          : type === 'gaps-text' ? 'Wpisz odpowiedzi w luki' : 'Twoja odpowiedź'
+      ),
       placeholder: oneLine(source.placeholder),
       options,
       answers,
       caseSensitive: Boolean(source.caseSensitive),
+      checkMode: source.checkMode === 'each' ? 'each' : 'all',
       hint: oneLine(source.hint),
       feedback: oneLine(source.feedback ?? source.success) || 'Dobrze! Możesz przejść dalej.'
     };
@@ -361,7 +366,7 @@
         errors.push({ code: 'ANSWER_NOT_IN_OPTIONS', path: `${path}.answers`, message: 'Poprawna odpowiedź musi występować na liście opcji.' });
       }
     }
-    if (task.type === 'gaps') {
+    if (task.type === 'gaps' || task.type === 'gaps-text') {
       const gapCount = (task.text.match(/\{\{[^{}]*\}\}/g) || []).length;
       if (!task.text || gapCount < 1 || gapCount !== task.answers.length) {
         errors.push({
@@ -370,6 +375,9 @@
           message: 'Tekst luk musi zawierać po jednym znaczniku {{luka}} dla każdej poprawnej odpowiedzi.'
         });
       }
+    }
+    if (task.type === 'gaps-text' && !['each', 'all'].includes(task.checkMode)) {
+      errors.push({ code: 'INVALID_GAP_CHECK_MODE', path: `${path}.checkMode`, message: 'Wybierz sposób sprawdzania luk tekstowych.' });
     }
   }
 
@@ -514,9 +522,12 @@
     if (task.type === 'choice' || task.type === 'abcd' || task.type === 'gaps') {
       lines.push(`options: ${task.options.join(' | ')}`);
     }
-    if (task.type === 'gaps') lines.push(`text: ${task.text}`);
+    if (task.type === 'gaps' || task.type === 'gaps-text') lines.push(`text: ${task.text}`);
+    if (task.type === 'gaps-text') lines.push(`check_mode: ${task.checkMode}`);
     lines.push(`answer: ${task.answers.join(' | ')}`);
-    if (task.caseSensitive && task.type === 'text') lines.push('case_sensitive: true');
+    if (task.caseSensitive && (task.type === 'text' || task.type === 'gaps-text')) {
+      lines.push('case_sensitive: true');
+    }
     if (task.hint) lines.push(`hint: ${task.hint}`);
     if (task.feedback) lines.push(`success: ${task.feedback}`);
     lines.push(':::');
@@ -602,6 +613,8 @@
       opcje: 'options',
       text: 'text',
       tekst: 'text',
+      check_mode: 'checkMode',
+      tryb_sprawdzania: 'checkMode',
       case_sensitive: 'caseSensitive',
       wielkosc_liter: 'caseSensitive'
     };
@@ -622,7 +635,8 @@
     const type = rawType === 'liczba' ? 'number'
       : rawType === 'tekst' ? 'text'
         : rawType === 'wybor' ? 'choice'
-          : rawType;
+          : ['gaps_text', 'luki_tekstowe'].includes(rawType) ? 'gaps-text'
+            : rawType;
     const options = String(values.options || '').split('|').map(oneLine).filter(Boolean);
     const answers = String(values.answer || '').split('|').map(oneLine).filter(Boolean);
     return createTask({
@@ -632,6 +646,7 @@
       hint: values.hint,
       feedback: values.feedback,
       text: values.text,
+      checkMode: values.checkMode,
       options,
       answers,
       answer: answers[0],
@@ -957,7 +972,7 @@
   const capabilities = Object.freeze({
     markdown: true,
     imagesFromHttps: true,
-    tasks: Object.freeze(['text', 'number', 'choice', 'abcd', 'gaps']),
+    tasks: Object.freeze(['text', 'number', 'choice', 'abcd', 'gaps', 'gaps-text']),
     styledContainers: true,
     youtube: true,
     atonom: true,

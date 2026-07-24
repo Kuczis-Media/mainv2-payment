@@ -305,6 +305,55 @@ test('studio publishes backgrounds, YouTube, ATONOM, flashcards and selectable t
   assert.equal(lessonParser.checkAnswer(slide.task, ['aldehydem', 'hydroksylowa']), false);
 });
 
+test('studio round-trips manually typed gaps and their checking mode', () => {
+  const lesson = studio.createLesson({
+    title: 'Luki wpisywane przez ucznia',
+    filename: 'luki-wpisywane.md',
+    slides: [{
+      blocks: [{ type: 'heading', level: 2, text: 'Wzór i masa molowa' }],
+      task: {
+        type: 'gaps-text',
+        question: 'Uzupełnij zdanie bez korzystania z listy.',
+        text: 'Woda ma wzór {{wzór}}, a jej masa molowa wynosi około {{masa}} g/mol.',
+        answers: ['H2O', '18'],
+        checkMode: 'each',
+        caseSensitive: true,
+        hint: 'Sprawdź indeks dolny i masy atomowe.',
+        feedback: 'Obie luki są poprawne.'
+      }
+    }]
+  });
+
+  const markdown = studio.serializeLesson(lesson);
+  assert.match(markdown, /type: gaps-text/);
+  assert.match(markdown, /check_mode: each/);
+  assert.match(markdown, /case_sensitive: true/);
+  assert.match(markdown, /answer: H2O \| 18/);
+
+  const imported = studio.parseLesson(markdown, lesson.filename);
+  assert.equal(imported.slides[0].task.type, 'gaps-text');
+  assert.equal(imported.slides[0].task.checkMode, 'each');
+  assert.deepEqual(imported.slides[0].task.answers, ['H2O', '18']);
+
+  const published = lessonParser.parseLesson(markdown, lesson.filename);
+  assert.equal(lessonParser.checkGapAnswer(published.slides[0].task, 'H2O', 0), true);
+  assert.equal(lessonParser.checkGapAnswer(published.slides[0].task, 'h2o', 0), false);
+  assert.equal(lessonParser.checkAnswer(published.slides[0].task, ['H2O', '18']), true);
+
+  const invalid = studio.validateLesson({
+    title: 'Błędne luki',
+    slides: [{
+      task: {
+        type: 'gaps-text',
+        text: 'Tylko {{jedna luka}}.',
+        answers: ['pierwsza', 'druga']
+      }
+    }]
+  });
+  assert.equal(invalid.valid, false);
+  assert.equal(invalid.errors.some((error) => error.code === 'INVALID_GAPS'), true);
+});
+
 test('studio rejects unsafe image URLs, malformed quizzes and ambiguous code fences', () => {
   const unsafeImage = studio.validateLesson({
     title: 'Obraz',
@@ -359,6 +408,7 @@ test('studio exposes renderer extension capabilities and a strict authoring file
   assert.equal(studio.capabilities.atonom, true);
   assert.equal(studio.capabilities.flashcards, true);
   assert.ok(studio.capabilities.tasks.includes('gaps'));
+  assert.ok(studio.capabilities.tasks.includes('gaps-text'));
   assert.equal(studio.capabilities.nestedContainers, false);
   assert.deepEqual(studio.capabilities.styleFonts, ['sans', 'serif', 'rounded', 'mono']);
   assert.equal(studio.validateFilename('dzial-1.md'), 'dzial-1.md');

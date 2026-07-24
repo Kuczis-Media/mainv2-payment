@@ -1674,6 +1674,44 @@ button {
   background: color-mix(in srgb, var(--chem-primary-soft) 50%, var(--chem-surface));
 }
 
+.question-starter {
+  display: grid;
+  margin-top: 10px;
+  padding: 13px;
+  gap: 11px;
+  background: color-mix(in srgb, var(--studio-violet-soft) 36%, var(--chem-surface));
+  border: 1px dashed color-mix(in srgb, var(--studio-violet) 35%, var(--chem-line));
+  border-radius: 12px;
+}
+
+.question-starter-copy strong,
+.question-starter-copy small {
+  display: block;
+}
+
+.question-starter-copy strong {
+  color: var(--chem-text);
+  font-size: 0.72rem;
+}
+
+.question-starter-copy small {
+  margin-top: 3px;
+  color: var(--chem-muted);
+  font-size: 0.58rem;
+  line-height: 1.45;
+}
+
+.question-starter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.question-starter-actions .mini-button {
+  min-height: 31px;
+  padding-inline: 9px;
+}
+
 .inspector-tabs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1860,6 +1898,162 @@ button {
 .option-row button:hover {
   color: var(--chem-danger);
   background: color-mix(in srgb, var(--chem-danger) 9%, transparent);
+}
+
+.task-answer-editor {
+  display: grid;
+  padding: 11px;
+  gap: 10px;
+  background: color-mix(in srgb, var(--studio-violet-soft) 34%, var(--chem-surface));
+  border: 1px solid color-mix(in srgb, var(--studio-violet) 22%, var(--chem-line));
+  border-radius: 12px;
+}
+
+.task-answer-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.task-answer-editor-header strong,
+.task-answer-editor-header small {
+  display: block;
+}
+
+.task-answer-editor-header strong {
+  color: var(--chem-text);
+  font-size: 0.69rem;
+}
+
+.task-answer-editor-header small {
+  margin-top: 3px;
+  color: var(--chem-muted);
+  font-size: 0.55rem;
+  line-height: 1.4;
+}
+
+.task-option-editor-list,
+.task-gap-editor-list {
+  display: grid;
+  gap: 7px;
+}
+
+.task-option-editor-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 29px;
+  align-items: center;
+  gap: 7px;
+}
+
+.task-option-editor-row > input {
+  min-width: 0;
+}
+
+.task-correct-toggle {
+  position: relative;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--studio-violet) 30%, var(--chem-line));
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.inspector-form .task-correct-toggle input {
+  position: absolute;
+  width: 1px;
+  min-height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.task-correct-mark {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  color: var(--chem-subtle);
+  border-radius: 9px;
+  font-size: 0.85rem;
+  font-weight: 900;
+  transition: color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+
+.task-correct-toggle input:checked + .task-correct-mark {
+  color: #fff;
+  background: var(--chem-primary);
+  transform: scale(1.04);
+}
+
+.task-correct-toggle:focus-within {
+  box-shadow: 0 0 0 3px var(--studio-focus);
+}
+
+.task-option-letter,
+.task-gap-number {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  color: var(--studio-violet);
+  background: color-mix(in srgb, var(--studio-violet-soft) 75%, var(--chem-surface));
+  border-radius: 10px;
+  font-size: 0.62rem;
+  font-weight: 850;
+}
+
+.task-row-remove {
+  display: grid;
+  width: 29px !important;
+  min-height: 29px !important;
+  padding: 0 !important;
+  place-items: center;
+  color: var(--chem-subtle);
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  cursor: pointer;
+  font-size: 0.86rem;
+}
+
+.task-row-remove:hover:not(:disabled) {
+  color: var(--chem-danger);
+  background: color-mix(in srgb, var(--chem-danger) 10%, transparent) !important;
+}
+
+.task-row-remove:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.task-editor-add {
+  width: 100%;
+  min-height: 35px;
+  font-size: 0.61rem;
+}
+
+.task-gap-editor-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 0.9fr) minmax(0, 1.1fr) 29px;
+  align-items: end;
+  gap: 7px;
+}
+
+.task-gap-editor-row .field > span {
+  font-size: 0.52rem;
+}
+
+.task-editor-empty {
+  margin: 0;
+  padding: 10px;
+  color: var(--chem-muted);
+  background: var(--chem-surface);
+  border: 1px dashed var(--chem-line);
+  border-radius: 9px;
+  font-size: 0.58rem;
+  line-height: 1.5;
 }
 
 .inspector-actions {
@@ -2286,6 +2480,199 @@ button {
   line-height: 1.5;
 }
 
+.preview-quiz {
+  display: grid;
+  gap: 10px;
+}
+
+.preview-quiz[data-state="success"] {
+  background: color-mix(in srgb, var(--chem-primary-soft) 72%, var(--chem-surface));
+  border-color: color-mix(in srgb, var(--chem-primary) 38%, var(--chem-line));
+}
+
+.preview-quiz[data-state="error"] {
+  border-color: color-mix(in srgb, var(--chem-danger) 38%, var(--chem-line));
+}
+
+.preview-task .preview-quiz-eyebrow {
+  color: var(--studio-violet);
+  font-size: 0.54rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.preview-task .preview-quiz-title {
+  margin: 0;
+  font-size: 0.75rem;
+}
+
+.preview-quiz-controls {
+  min-width: 0;
+}
+
+.preview-choice-grid {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  gap: 7px;
+  border: 0;
+}
+
+.preview-choice-grid legend {
+  position: absolute;
+  overflow: hidden;
+  width: 1px;
+  height: 1px;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.preview-choice-option {
+  display: flex;
+  min-height: 39px;
+  padding: 7px 9px;
+  align-items: center;
+  gap: 8px;
+  color: var(--chem-text);
+  background: var(--chem-surface);
+  border: 1px solid color-mix(in srgb, var(--studio-violet) 18%, var(--chem-line));
+  border-radius: 9px;
+  cursor: pointer;
+  font-size: 0.64rem;
+  line-height: 1.4;
+}
+
+.preview-choice-option:hover,
+.preview-choice-option:has(input:checked) {
+  border-color: var(--studio-violet);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--studio-violet) 13%, transparent);
+}
+
+.preview-choice-option input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin: 0;
+  accent-color: var(--studio-violet);
+}
+
+.preview-task .preview-choice-marker {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--studio-violet);
+  background: var(--studio-violet-soft);
+  border-radius: 7px;
+  font-size: 0.58rem;
+  font-weight: 900;
+}
+
+.preview-task .preview-choice-copy {
+  color: var(--chem-text);
+  font-size: inherit;
+}
+
+.preview-gap-exercise {
+  margin: 0;
+  color: var(--chem-text);
+  font-size: 0.69rem;
+  line-height: 2.4;
+}
+
+.preview-gap-field,
+.preview-answer-field {
+  min-height: 38px;
+  color: var(--chem-text);
+  background: var(--chem-surface);
+  border: 1px solid color-mix(in srgb, var(--studio-violet) 25%, var(--chem-line));
+  border-radius: 9px;
+  outline: 0;
+}
+
+.preview-gap-field:focus,
+.preview-answer-field:focus {
+  border-color: var(--studio-violet);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--studio-violet) 16%, transparent);
+}
+
+.preview-gap-field[aria-invalid="true"],
+.preview-answer-field[aria-invalid="true"] {
+  border-color: var(--chem-danger);
+}
+
+.preview-gap-exercise > select {
+  width: auto;
+  max-width: min(100%, 210px);
+  margin: 0 4px;
+  padding: 0 28px 0 9px;
+}
+
+.preview-text-gap {
+  display: inline-flex !important;
+  margin: 0 4px;
+  vertical-align: middle;
+}
+
+.preview-text-gap input {
+  width: clamp(100px, 16vw, 180px);
+  padding: 0 9px;
+}
+
+.preview-gap-check {
+  width: 38px;
+  min-height: 38px;
+  margin-left: -1px;
+  color: var(--studio-violet);
+  background: var(--chem-surface);
+  border: 1px solid color-mix(in srgb, var(--studio-violet) 25%, var(--chem-line));
+  border-radius: 0 9px 9px 0;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.preview-text-gap:has(.preview-gap-check) input {
+  border-radius: 9px 0 0 9px;
+}
+
+.preview-text-gap[data-state="success"] input,
+.preview-text-gap[data-state="success"] .preview-gap-check {
+  border-color: var(--chem-primary);
+}
+
+.preview-text-gap[data-state="error"] input,
+.preview-text-gap[data-state="error"] .preview-gap-check {
+  border-color: var(--chem-danger);
+}
+
+.preview-answer-field {
+  width: 100%;
+  padding: 0 10px;
+}
+
+.preview-quiz-submit {
+  min-height: 38px;
+  justify-self: start;
+  padding-inline: 14px;
+  font-size: 0.62rem;
+}
+
+.preview-task .preview-quiz-feedback {
+  min-height: 18px;
+  margin: 0;
+  font-weight: 700;
+}
+
+.preview-task .preview-quiz-feedback[data-state="success"] {
+  color: var(--chem-primary);
+}
+
+.preview-task .preview-quiz-feedback[data-state="error"] {
+  color: var(--chem-danger);
+}
+
 .studio-preview-window {
   min-height: 100vh;
   padding: 0;
@@ -2474,6 +2861,26 @@ button {
 }
 
 .full-lesson-slide .preview-task span {
+  font-size: 0.72rem;
+}
+
+.full-lesson-slide .preview-task .preview-quiz-title {
+  font-size: 1rem;
+}
+
+.full-lesson-slide .preview-choice-option,
+.full-lesson-slide .preview-gap-exercise,
+.full-lesson-slide .preview-answer-field {
+  font-size: 0.86rem;
+}
+
+.full-lesson-slide .preview-choice-option {
+  min-height: 50px;
+  padding: 10px 12px;
+}
+
+.full-lesson-slide .preview-quiz-submit {
+  min-height: 44px;
   font-size: 0.72rem;
 }
 

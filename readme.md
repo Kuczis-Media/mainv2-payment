@@ -469,7 +469,7 @@ Administrator widzi w bocznym menu dodatkowy skrót **Studio treści** prowadzą
 Studio ma trzy tryby:
 
 - **Dashboard Builder** — przeciąganie sekcji, harmonijek poziomów 3–6, tekstów, komunikatów i kart modułów. Inspektor konfiguruje ID lub link materiału, wariant kalkulatora/tablicy, tryb ochrony `type`, plik lekcji, prompt czatu, notatkę kontaktową albo bezpieczny własny link. Selektor przełącza przeszukiwane repozytorium, a karta zapamiętuje jego `id`, więc identyczne nazwy plików nie kolidują;
-- **Lesson Builder** — układanie slajdów oraz bloków nagłówka, tekstu, obrazu HTTPS, wideo YouTube, listy, cytatu, calloutu, kodu, stylowanej sekcji i harmonijki. Do slajdu można dodać pytanie tekstowe, liczbowe, wyboru, ABCD lub uzupełnianie luk wraz z wariantami odpowiedzi, podpowiedzią i komunikatem sukcesu. Lekcję można wyszukać, wczytać, zapisać, zaktualizować albo usunąć w repozytorium wybranym z listy;
+- **Lesson Builder** — układanie slajdów oraz bloków nagłówka, tekstu, obrazu HTTPS, wideo YouTube, listy, cytatu, calloutu, kodu, stylowanej sekcji i harmonijki. Do slajdu można dodać pytanie tekstowe, liczbowe, wyboru, ABCD, luki z listą albo luki wpisywane ręcznie. Opcje quizu mają osobne pola i znacznik ✓ poprawnej odpowiedzi, a luki tworzy się przyciskiem bez ręcznego wpisywania składni. Lekcję można wyszukać, wczytać, zapisać, zaktualizować albo usunąć w repozytorium wybranym z listy;
 - **Prompt Builder** — tworzenie pojedynczego promptu `.json` lub zestawu ponumerowanych instrukcji `.txt`. Builder waliduje numery punktów, limity treści i format, pokazuje gotowe źródło oraz obsługuje ten sam ręczny, repozytoryjny i wielorepozytoryjny obieg co lekcje.
 
 #### Przepływ Dashboard Buildera
@@ -493,13 +493,13 @@ Studio nie wykonuje cichego automatycznego zapisu do GitHuba. Autosave zapisuje 
 
 Odtwarzacz lekcji odrzuca plik większy niż 512 KiB lub zawierający ponad 100 slajdów. Builder pilnuje liczby slajdów, lecz obecnie nie blokuje pobrania tylko dlatego, że wynikowy Markdown przekroczył limit bajtów odtwarzacza. Przed wysłaniem bardzo dużej lekcji sprawdź rozmiar, np. `wc -c lessons/nazwa.md`, i utrzymaj go poniżej 524 288 bajtów.
 
-Na jednym slajdzie może znajdować się najwyżej jedno zadanie. Quiz ABCD wymaga czterech opcji; pytanie `choice` co najmniej dwóch, a graficzne pole Studio zachowuje maksymalnie osiem. Opcje i aliasy odpowiedzi nie mogą zawierać separatora `|`. Kontenery `:::style` i `:::accordion` muszą mieć treść i nie mogą zawierać kolejnego kontenera tego typu. Studio nie kopiuje obrazów do repozytorium ani Blobs; użyj pełnego publicznego adresu HTTPS do obrazu, także gdy sam plik obrazu leży w innym publicznym repozytorium GitHub.
+Na jednym slajdzie może znajdować się najwyżej jedno zadanie. Pytanie można dodać bezpośrednio z pustego slajdu, a następnie wpisać każdą opcję osobno i wskazać poprawną znakiem ✓. Quiz ABCD wymaga czterech opcji; pytanie `choice` co najmniej dwóch, a graficzne pole Studio zachowuje maksymalnie osiem. Przy lukach przycisk **Wstaw lukę** dodaje znacznik w miejscu kursora oraz osobny wiersz poprawnej odpowiedzi. Dla luk tekstowych można ustawić sprawdzanie każdej luki osobno albo wszystkich naraz. Opcje i aliasy odpowiedzi nie mogą zawierać separatora `|`. Kontenery `:::style` i `:::accordion` muszą mieć treść i nie mogą zawierać kolejnego kontenera tego typu. Studio nie kopiuje obrazów do repozytorium ani Blobs; użyj pełnego publicznego adresu HTTPS do obrazu, także gdy sam plik obrazu leży w innym publicznym repozytorium GitHub.
 
 Eksport zawsze synchronizuje nagłówek `#` pierwszego slajdu z globalnym tytułem lekcji. Ton calloutu nie ma osobnego pola w Markdownzie i po ponownym imporcie jest rozpoznawany z jego tytułu. Tak jak przy dashboardzie, dla ważnego ręcznie pisanego źródła zachowaj kopię przed round-tripem przez graficzne klocki.
 
 Robocze modele są automatycznie zapisywane w `localStorage` jako `chemdisk.studio.dashboard.v1`, `chemdisk.studio.lesson.v1` i `chemdisk.studio.prompt.v1`; autosave nie wysyła requestu, nie zapisuje Bloba i nie synchronizuje danych między urządzeniami. Draft nie jest przypisany do ID administratora, dlatego inny administrator korzystający z tego samego profilu przeglądarki zobaczy ten sam lokalny stan. Historia obejmuje do 60 operacji osobno dla każdego trybu, ale istnieje tylko do przeładowania strony i nie jest odtwarzana razem z draftem. `Ctrl/Cmd+Z` cofa, `Ctrl/Cmd+Shift+Z` lub `Ctrl/Cmd+Y` ponawia, a `Ctrl/Cmd+S` otwiera publikację dashboardu albo pobiera lekcję lub prompt na dysk — nie zapisuje go automatycznie w GitHubie. JWT jest pobierany dopiero do operacji serwerowej i nie trafia do trwałej pamięci Studio.
 
-Podglądy w Studio są celowo uproszczone: dashboard pokazuje strukturę i wygląd kart bez całej logiki właściwego panelu, podgląd lekcji pokazuje wybrany slajd i opis zadania, nie w pełni działający formularz odpowiedzi, a Prompt Builder pokazuje dokładne źródło, które zostanie zapisane. Dashboard i lekcję można otworzyć także jako pełny podgląd w osobnym oknie. Ostateczny test wykonuj w `/members/` oraz w rzeczywistym module `/members/module/lesson/`.
+Podgląd dashboardu w Studio pokazuje strukturę i wygląd kart bez całej logiki właściwego panelu, a Prompt Builder pokazuje dokładne źródło, które zostanie zapisane. Podgląd lekcji jest interaktywny: pozwala zaznaczać odpowiedzi, wpisywać tekst, uzupełniać luki oraz zobaczyć podpowiedź i wynik. Działa zarówno po prawej stronie Studio, jak i w pełnym osobnym oknie. Ostateczny test całego postępu i nawigacji wykonuj w rzeczywistym module `/members/module/lesson/`.
 
 Obsługiwana składnia:
 
@@ -662,15 +662,17 @@ Pola bloku zadania:
 | Pole | Wymagane | Znaczenie |
 | --- | --- | --- |
 | `answer` | tak | Poprawna odpowiedź. Kilka wariantów rozdziel znakiem `|`, np. `atom \| ATOM`. |
-| `type` | nie | `text` (domyślnie), `number`, `choice` albo `abcd`. |
+| `type` | nie | `text` (domyślnie), `number`, `choice`, `abcd`, `gaps` albo `gaps-text`. |
 | `label` | nie | Podpis pola lub polecenie nad odpowiedziami. |
 | `placeholder` | nie | Przykład wyświetlany w pustym polu. |
 | `hint` | nie | Podpowiedź pokazywana po błędnej próbie. |
 | `success` | nie | Komunikat po poprawnej odpowiedzi. |
-| `options` | dla `choice` i `abcd` | Opcje rozdzielone `|`. `choice` wymaga co najmniej dwóch, a `abcd` dokładnie czterech opcji. |
+| `options` | dla `choice`, `abcd` i `gaps` | Opcje rozdzielone `|`. `choice` i `gaps` wymagają co najmniej dwóch, a `abcd` dokładnie czterech opcji. |
+| `text` | dla `gaps` i `gaps-text` | Zdanie z lukami zapisanymi jako `{{opis luki}}`; kolejność znaczników odpowiada kolejności wartości w `answer`. |
+| `check_mode` | nie | Dla `gaps-text`: `each` sprawdza każdą lukę osobno, a `all` wszystkie naraz (domyślnie). |
 | `case_sensitive` | nie | `true`/`tak`, jeśli wielkość liter ma mieć znaczenie. Domyślnie tekst jest sprawdzany bez rozróżniania wielkości liter. |
 
-Można również używać polskich nazw pól bez znaków diakrytycznych lub z nimi: `typ`, `odpowiedź`, `etykieta`, `przykład`, `podpowiedź`, `sukces`, `opcje`, `wielkość liter`.
+Można również używać polskich nazw pól bez znaków diakrytycznych lub z nimi: `typ`, `odpowiedź`, `etykieta`, `przykład`, `podpowiedź`, `sukces`, `opcje`, `tekst`, `tryb sprawdzania`, `wielkość liter`.
 
 Odpowiedź tekstowa jest normalizowana Unicode NFKC, przycinana i ma łączone wielokrotne odstępy. Odpowiedź liczbowa akceptuje przecinek albo kropkę dziesiętną, ale porównanie jest dokładne — bez tolerancji i bez automatycznego rozpoznawania jednostek. Liczbę akceptowanych aliasów zwiększa się separatorem `|`. Liczba prób nie jest ograniczona; błędna próba pokazuje podpowiedź, a dopiero poprawna odpowiedź odblokowuje następny slajd.
 
@@ -696,6 +698,21 @@ options: 4 | 6 | 12 | 13
 answer: B
 hint: Liczba atomowa jest równa liczbie protonów.
 success: Dobrze — węgiel ma liczbę atomową 6.
+:::
+```
+
+Luki z `type: gaps` pokazują listy wyboru. Jeśli uczeń ma sam wpisać tekst, użyj `type: gaps-text`; liczba odpowiedzi rozdzielonych `|` musi być taka sama jak liczba znaczników:
+
+```md
+:::task
+type: gaps-text
+label: Uzupełnij wzór i masę molową
+text: Woda ma wzór {{wzór}}, a jej masa molowa wynosi około {{masa}} g/mol.
+answer: H2O | 18
+check_mode: each
+case_sensitive: true
+hint: Sprawdź symbole pierwiastków i dodaj ich masy atomowe.
+success: Wszystkie luki są poprawne.
 :::
 ```
 

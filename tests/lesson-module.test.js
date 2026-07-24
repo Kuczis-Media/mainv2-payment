@@ -146,6 +146,45 @@ test('lesson tasks support an ABCD quiz with a letter or option as the answer', 
   );
 });
 
+test('lesson tasks support manually typed gaps checked separately or together', () => {
+  const lesson = parser.parseLesson([
+    '# Luki tekstowe',
+    '',
+    'Uzupełnij zdanie.',
+    '',
+    ':::task',
+    'type: gaps-text',
+    'text: Woda ma wzór {{wzór}}, a jej masa molowa wynosi {{masa}} g/mol.',
+    'answer: H2O | 18',
+    'check_mode: each',
+    'case_sensitive: true',
+    'hint: Sprawdź zapis wzoru i masę molową.',
+    ':::'
+  ].join('\n'), 'luki-tekstowe.md');
+  const task = lesson.slides[0].task;
+
+  assert.equal(task.type, 'gaps-text');
+  assert.equal(task.checkMode, 'each');
+  assert.equal(task.caseSensitive, true);
+  assert.equal(parser.checkGapAnswer(task, 'H2O', 0), true);
+  assert.equal(parser.checkGapAnswer(task, 'h2o', 0), false);
+  assert.equal(parser.checkGapAnswer(task, '18', 1), true);
+  assert.equal(parser.checkAnswer(task, ['H2O', '18']), true);
+  assert.equal(parser.checkAnswer(task, ['H2O', '16']), false);
+
+  const together = parser.parseLesson([
+    '# Bez wielkości liter',
+    ':::task',
+    'type: luki_tekstowe',
+    'tekst: Symbol tlenu to {{symbol}}.',
+    'odpowiedź: O',
+    'tryb sprawdzania: all',
+    ':::'
+  ].join('\n'), 'luki-razem.md').slides[0].task;
+  assert.equal(together.checkMode, 'all');
+  assert.equal(parser.checkGapAnswer(together, 'o', 0), true);
+});
+
 test('lesson renderer supports allowlisted typography, colors and accordions without executing HTML', () => {
   const lesson = parser.parseLesson([
     '# Stylowana lekcja',

@@ -81,6 +81,7 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(html, /data-lesson-add=["']atonom["']/);
   assert.match(html, /data-lesson-add=["']flashcards["']/);
   assert.match(html, /data-lesson-add=["']task-gaps["']/);
+  assert.match(html, /data-lesson-add=["']task-gaps-text["']/);
   assert.match(html, /\/assets\/js\/content-library\.js/);
   assert.match(html, /id=["']dashboard-asset-search["']/);
   assert.match(html, /id=["']dashboard-repository-select["']/);
@@ -94,6 +95,10 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(script, /window\.open\(/);
   assert.match(script, /data-full-preview/);
   assert.match(script, /state\.lesson\.model\.slides\.forEach/);
+  assert.match(script, /function bindPreviewTasks/);
+  assert.match(script, /ChemLesson\.checkAnswer/);
+  assert.match(script, /ChemLesson\.checkGapAnswer/);
+  assert.match(script, /data-lesson-task-editor-action/);
   assert.match(script, /serializeLesson/);
   assert.match(script, /parseLesson/);
   assert.match(script, /library\.list\(['"]lesson['"]/);
@@ -109,6 +114,9 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(styles, /\.full-lesson-list/);
   assert.match(styles, /\.lesson-font-serif/);
   assert.match(styles, /\.lesson-align-center/);
+  assert.match(styles, /\.task-correct-toggle/);
+  assert.match(styles, /\.preview-quiz/);
+  assert.match(styles, /\.preview-text-gap/);
   assert.match(styles, /\.drop-zone\.is-dragover/);
   assert.match(styles, /prefers-reduced-motion:\s*reduce/);
 
