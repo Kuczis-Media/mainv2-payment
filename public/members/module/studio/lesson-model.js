@@ -7,7 +7,8 @@
   const SAFE_FILENAME = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.md$/i;
   const TASK_START = /^\s*:::(?:task|zadanie)\s*$/i;
   const QUESTION_START = /^\s*:::question\s*$/i;
-  const CONTAINER_START = /^\s*:::(style|accordion|youtube|atonom|flashcards)(?:\s+(.*?))?\s*$/i;
+  const SLIDE_SETTINGS_START = /^\s*:::slide\s*$/i;
+  const CONTAINER_START = /^\s*:::(style|accordion|youtube|atonom|formula|linkcard|flashcards)(?:\s+(.*?))?\s*$/i;
   const CONTAINER_END = /^\s*:::\s*$/;
   const STYLE_FONTS = Object.freeze([
     'sans',
@@ -23,6 +24,16 @@
   const STYLE_SIZES = Object.freeze(['small', 'normal', 'large', 'xlarge']);
   const STYLE_ALIGNS = Object.freeze(['left', 'center', 'right']);
   const STYLE_COLOR = /^#[0-9a-f]{6}$/i;
+  const LINK_ICONS = Object.freeze(['link', 'book', 'video', 'chemistry', 'math', 'file', 'external']);
+  const SLIDE_TRANSITIONS = Object.freeze(['none', 'fade', 'rise', 'slide', 'zoom']);
+  const FORMULA_ARROWS = Object.freeze(['', '->', '<-', '<->', '<=>', '<=>>', '<<=>']);
+  const SAFE_MATH_COMMANDS = new Set([
+    'alpha', 'beta', 'gamma', 'delta', 'Delta', 'theta', 'lambda', 'mu', 'pi', 'rho', 'sigma',
+    'omega', 'Omega', 'cdot', 'times', 'div', 'pm', 'mp', 'approx', 'neq', 'le', 'leq', 'ge',
+    'geq', 'infty', 'frac', 'sqrt', 'sum', 'prod', 'int', 'oint', 'lim', 'min', 'max',
+    'sin', 'cos', 'tan', 'log', 'ln', 'partial', 'nabla', 'rightarrow', 'leftarrow',
+    'leftrightarrow', 'text', 'mathrm', 'mathbf', 'overline', 'vec', 'left', 'right'
+  ]);
   const BLOCK_TYPES = Object.freeze([
     'heading',
     'text',
@@ -35,6 +46,8 @@
     'accordion',
     'youtube',
     'atonom',
+    'formula',
+    'link',
     'flashcards'
   ]);
   const TASK_TYPES = Object.freeze(['text', 'number', 'choice', 'abcd', 'gaps', 'gaps-text']);
@@ -99,6 +112,18 @@
     return /^https:\/\/[^\s]+$/i.test(raw) ? raw : '';
   }
 
+  function safeLinkUrl(value) {
+    const raw = oneLine(value);
+    if (
+      !raw
+      || raw.startsWith('//')
+      || raw.includes('\\')
+      || /[\u0000-\u0020<>"'`]/.test(raw)
+    ) return '';
+    if (raw.startsWith('/') || raw.startsWith('#')) return raw;
+    return /^(?:https?:\/\/|mailto:)[^\s]+$/i.test(raw) ? raw : '';
+  }
+
   function youtubeVideoId(value) {
     const raw = oneLine(value);
     if (/^[A-Za-z0-9_-]{11}$/.test(raw)) return raw;
@@ -142,7 +167,7 @@
       .split('\n')
       .map((line) => {
         if (/^\s*---\s*$/.test(line)) return '`---`';
-        if (/^\s*:::(?:task|zadanie|question|style|accordion|youtube|atonom|flashcards)?(?:\s+.*?)?\s*$/i.test(line)) {
+        if (/^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|atonom|formula|linkcard|flashcards)?(?:\s+.*?)?\s*$/i.test(line)) {
           return `\`${line.trim()}\``;
         }
         return line.replace(/\s+$/g, '');
@@ -165,6 +190,38 @@
       ? String(source.background).toLowerCase()
       : '';
     return { font, color, background, size, align, bold };
+  }
+
+  function safeChemistryText(value, condition) {
+    const text = oneLine(value);
+    if (!text || text.length > (condition ? 120 : 300)) return '';
+    const forbidden = condition ? /[\\{}[\]$%#&<>]/ : /[\\$%#&<>]/;
+    if (forbidden.test(text)) return '';
+    if (!condition) {
+      let depth = 0;
+      for (const character of text) {
+        if (character === '{') depth += 1;
+        else if (character === '}') depth -= 1;
+        if (depth < 0 || depth > 6) return '';
+      }
+      if (depth !== 0) return '';
+    }
+    return text;
+  }
+
+  function safeMathExpression(value) {
+    const expression = oneLine(value);
+    if (!expression || expression.length > 500 || /[$%#&<>]/.test(expression)) return '';
+    let depth = 0;
+    for (const character of expression) {
+      if (character === '{') depth += 1;
+      else if (character === '}') depth -= 1;
+      if (depth < 0 || depth > 12) return '';
+    }
+    if (depth !== 0) return '';
+    const commands = expression.match(/\\[A-Za-z]+/g) || [];
+    if (commands.some((command) => !SAFE_MATH_COMMANDS.has(command.slice(1)))) return '';
+    return expression;
   }
 
   function createBlock(typeOrSeed, maybeSeed) {
@@ -230,6 +287,37 @@
         ...base,
         formula: oneLine(source.formula) || 'fenol',
         title: oneLine(source.title) || 'Model cząsteczki w ATONOM'
+      };
+    }
+    if (type === 'formula') {
+      const mode = ['math', 'matematyka'].includes(oneLine(source.mode).toLowerCase())
+        ? 'math'
+        : 'chemistry';
+      const requestedArrow = Object.prototype.hasOwnProperty.call(source, 'arrow')
+        ? oneLine(source.arrow)
+        : '->';
+      return {
+        ...base,
+        mode,
+        title: oneLine(source.title) || (mode === 'math' ? 'Wzór matematyczny' : 'Równanie reakcji'),
+        expression: oneLine(source.expression),
+        left: oneLine(source.left),
+        right: oneLine(source.right),
+        arrow: FORMULA_ARROWS.includes(requestedArrow) ? requestedArrow : '->',
+        above: oneLine(source.above),
+        below: oneLine(source.below)
+      };
+    }
+    if (type === 'link') {
+      const icon = oneLine(source.icon).toLowerCase();
+      return {
+        ...base,
+        title: oneLine(source.title) || 'Otwórz materiał',
+        description: oneLine(source.description) || 'Przejdź do dodatkowego materiału.',
+        url: oneLine(source.url) || '/members/',
+        icon: LINK_ICONS.includes(icon) ? icon : 'link',
+        color: STYLE_COLOR.test(String(source.color || '')) ? String(source.color).toLowerCase() : '#0e665a',
+        newTab: source.newTab === true || /^(?:1|true|yes|tak|new)$/i.test(oneLine(source.newTab))
       };
     }
     if (type === 'flashcards') {
@@ -329,6 +417,9 @@
     }
     return {
       id: oneLine(source.id) || nextId('slide'),
+      transition: SLIDE_TRANSITIONS.includes(oneLine(source.transition).toLowerCase())
+        ? oneLine(source.transition).toLowerCase()
+        : 'fade',
       blocks,
       task: createTask(source.task)
     };
@@ -440,6 +531,57 @@
     if (block.type === 'atonom' && !safeAtonomFormula(block.formula)) {
       errors.push({ code: 'INVALID_ATONOM_FORMULA', path: `${path}.formula`, message: 'Podaj nazwę związku dla ATONOM.' });
     }
+    if (block.type === 'link') {
+      if (!block.title || !safeLinkUrl(block.url)) {
+        errors.push({
+          code: 'INVALID_LINK_CARD',
+          path: `${path}.url`,
+          message: 'Kafelek wymaga tytułu i bezpiecznego adresu http/https, mailto:, /ścieżki albo #kotwicy.'
+        });
+      }
+      if (!LINK_ICONS.includes(block.icon) || !STYLE_COLOR.test(block.color)) {
+        errors.push({ code: 'INVALID_LINK_STYLE', path, message: 'Wybierz obsługiwaną ikonę i kolor kafelka.' });
+      }
+    }
+    if (block.type === 'formula') {
+      if (block.mode === 'math') {
+        if (!safeMathExpression(block.expression)) {
+          errors.push({
+            code: 'INVALID_MATH_FORMULA',
+            path: `${path}.expression`,
+            message: 'Wpisz poprawny wzór matematyczny, używając dostępnych symboli.'
+          });
+        }
+      } else {
+        if (!safeChemistryText(block.left, false)) {
+          errors.push({
+            code: 'INVALID_CHEMISTRY_FORMULA',
+            path: `${path}.left`,
+            message: 'Wpisz wzór związku albo substraty reakcji.'
+          });
+        }
+        if (!FORMULA_ARROWS.includes(block.arrow)) {
+          errors.push({ code: 'INVALID_FORMULA_ARROW', path: `${path}.arrow`, message: 'Wybierz obsługiwany typ strzałki.' });
+        }
+        if (block.arrow && !safeChemistryText(block.right, false)) {
+          errors.push({
+            code: 'MISSING_REACTION_PRODUCTS',
+            path: `${path}.right`,
+            message: 'Reakcja ze strzałką wymaga produktów po prawej stronie.'
+          });
+        }
+        if (
+          (block.above && !safeChemistryText(block.above, true))
+          || (block.below && !safeChemistryText(block.below, true))
+        ) {
+          errors.push({
+            code: 'INVALID_REACTION_CONDITION',
+            path: `${path}.above`,
+            message: 'Warunki reakcji zawierają niedozwolone znaki.'
+          });
+        }
+      }
+    }
     if (
       block.type === 'flashcards'
       && (
@@ -539,6 +681,38 @@
         ':::'
       ].join('\n');
     }
+    if (block.type === 'formula') {
+      const lines = [
+        ':::formula',
+        `mode: ${block.mode}`,
+        `title: ${cleanDirectiveValue(block.title)}`
+      ];
+      if (block.mode === 'math') {
+        lines.push(`expression: ${cleanDirectiveValue(block.expression)}`);
+      } else {
+        lines.push(
+          `left: ${cleanDirectiveValue(block.left)}`,
+          `arrow: ${block.arrow}`,
+          `above: ${cleanDirectiveValue(block.above)}`,
+          `below: ${cleanDirectiveValue(block.below)}`,
+          `right: ${cleanDirectiveValue(block.right)}`
+        );
+      }
+      lines.push(':::');
+      return lines.join('\n');
+    }
+    if (block.type === 'link') {
+      return [
+        ':::linkcard',
+        `title: ${cleanDirectiveValue(block.title)}`,
+        `description: ${cleanDirectiveValue(block.description)}`,
+        `url: ${cleanDirectiveValue(safeLinkUrl(block.url))}`,
+        `icon: ${block.icon}`,
+        `color: ${block.color}`,
+        `new_tab: ${block.newTab ? 'true' : 'false'}`,
+        ':::'
+      ].join('\n');
+    }
     if (block.type === 'flashcards') {
       return [
         ':::flashcards',
@@ -604,6 +778,9 @@
         else blocks.unshift(createBlock('heading', { level: 1, text: lesson.title }));
       }
       const parts = blocks.map(serializeBlock).filter(Boolean);
+      if (slide.transition !== 'fade') {
+        parts.unshift([':::slide', `transition: ${slide.transition}`, ':::'].join('\n'));
+      }
       if (slide.task) {
         if (slide.task.question) parts.push(serializeQuestion(slide.task.question));
         parts.push(serializeTask(slide.task));
@@ -625,7 +802,7 @@
         continue;
       }
       if (!inCode) {
-        if (TASK_START.test(line) || CONTAINER_START.test(line)) containerDepth += 1;
+        if (TASK_START.test(line) || SLIDE_SETTINGS_START.test(line) || CONTAINER_START.test(line)) containerDepth += 1;
         else if (CONTAINER_END.test(line) && containerDepth > 0) containerDepth -= 1;
         if (containerDepth === 0 && /^\s*---\s*$/.test(line)) {
           parts.push(current.join('\n').trim());
@@ -776,6 +953,30 @@
           } else if (type === 'atonom') {
             const values = parseDirectiveFields(bodyLines);
             blocks.push(createBlock({ type, formula: values.formula, title: values.title }));
+          } else if (type === 'formula') {
+            const values = parseDirectiveFields(bodyLines);
+            blocks.push(createBlock({
+              type,
+              mode: values.mode,
+              title: values.title,
+              expression: values.expression,
+              left: values.left,
+              arrow: values.arrow,
+              above: values.above,
+              below: values.below,
+              right: values.right
+            }));
+          } else if (type === 'linkcard') {
+            const values = parseDirectiveFields(bodyLines);
+            blocks.push(createBlock({
+              type: 'link',
+              title: values.title,
+              description: values.description,
+              url: values.url,
+              icon: values.icon,
+              color: values.color,
+              newTab: values.new_tab
+            }));
           } else {
             const values = parseDirectiveFields(bodyLines);
             const cards = bodyLines
@@ -884,19 +1085,39 @@
     let explicitQuestion = '';
     let questionLines = null;
     let questionSeen = false;
+    let slideSettingsLines = null;
+    let slideSettingsSeen = false;
+    let transition = 'fade';
     let containerDepth = 0;
     let inCode = false;
     lines.forEach((line, index) => {
       if (/^\s*```/.test(line)) inCode = !inCode;
-      if (!inCode && !taskLines && !questionLines && CONTAINER_START.test(line)) containerDepth += 1;
       if (
         !inCode
         && !taskLines
         && !questionLines
+        && !slideSettingsLines
+        && CONTAINER_START.test(line)
+      ) containerDepth += 1;
+      if (
+        !inCode
+        && !taskLines
+        && !questionLines
+        && !slideSettingsLines
         && CONTAINER_END.test(line)
         && containerDepth > 0
       ) containerDepth -= 1;
 
+      if (slideSettingsLines) {
+        if (CONTAINER_END.test(line)) {
+          const values = parseDirectiveFields(slideSettingsLines);
+          transition = SLIDE_TRANSITIONS.includes(oneLine(values.transition).toLowerCase())
+            ? oneLine(values.transition).toLowerCase()
+            : 'fade';
+          slideSettingsLines = null;
+        } else slideSettingsLines.push(line);
+        return;
+      }
       if (taskLines) {
         if (CONTAINER_END.test(line)) {
           task = parseTaskLines(taskLines);
@@ -924,6 +1145,18 @@
         questionLines = [];
         return;
       }
+      if (!inCode && containerDepth === 0 && SLIDE_SETTINGS_START.test(line)) {
+        if (slideSettingsSeen) {
+          throw new StudioLessonError(
+            'MULTIPLE_SLIDE_SETTINGS',
+            'Slajd może zawierać tylko jeden blok ustawień przejścia.',
+            'slide.transition'
+          );
+        }
+        slideSettingsSeen = true;
+        slideSettingsLines = [];
+        return;
+      }
       if (!inCode && containerDepth === 0 && TASK_START.test(line)) {
         if (task) {
           throw new StudioLessonError('MULTIPLE_TASKS', 'Slajd może zawierać tylko jedno zadanie.', 'task');
@@ -941,6 +1174,13 @@
         'UNCLOSED_QUESTION',
         'Blok pytania musi kończyć się linią :::.',
         'task.question'
+      );
+    }
+    if (slideSettingsLines) {
+      throw new StudioLessonError(
+        'UNCLOSED_SLIDE_SETTINGS',
+        'Blok ustawień slajdu musi kończyć się linią :::.',
+        'slide.transition'
       );
     }
     if (questionSeen && !explicitQuestion) {
@@ -977,7 +1217,7 @@
         blocks.pop();
       }
     }
-    return createSlide({ blocks, task });
+    return createSlide({ blocks, task, transition });
   }
 
   function stripMarkdown(value) {
@@ -1028,12 +1268,15 @@
     styledContainers: true,
     youtube: true,
     atonom: true,
+    formulas: true,
+    linkCards: true,
     flashcards: true,
     accordions: true,
     nestedContainers: false,
     styleFonts: STYLE_FONTS,
     styleSizes: STYLE_SIZES,
     styleAligns: STYLE_ALIGNS,
+    slideTransitions: SLIDE_TRANSITIONS,
     styleColorFormat: '#RRGGBB',
     requiresLessonParserContainers: true
   });
@@ -1044,6 +1287,9 @@
     STYLE_ALIGNS,
     STYLE_FONTS,
     STYLE_SIZES,
+    FORMULA_ARROWS,
+    LINK_ICONS,
+    SLIDE_TRANSITIONS,
     TASK_TYPES,
     StudioLessonError,
     capabilities,
@@ -1054,7 +1300,10 @@
     createTask,
     parseEditableLesson,
     parseLesson,
+    safeChemistryText,
     safeImageUrl,
+    safeLinkUrl,
+    safeMathExpression,
     serializeBlock,
     serializeLesson,
     serializeTask,

@@ -7,11 +7,14 @@
   const TASK_START = /^\s*:::(?:task|zadanie)\s*$/i;
   const TASK_END = /^\s*:::\s*$/;
   const QUESTION_START = /^\s*:::question\s*$/i;
+  const SLIDE_SETTINGS_START = /^\s*:::slide\s*$/i;
   const STYLE_START = /^\s*:::style(?:\s+(.+?))?\s*$/i;
   const ACCORDION_START = /^\s*:::accordion(?:\s+(.+?))?\s*$/i;
-  const STRUCTURAL_CONTAINER_START = /^\s*:::(?:task|zadanie|question|style|accordion|youtube|atonom|flashcards)(?:\s+.*?)?\s*$/i;
+  const STRUCTURAL_CONTAINER_START = /^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|atonom|formula|linkcard|flashcards)(?:\s+.*?)?\s*$/i;
   const RICH_CONTAINER_END = /^\s*:::\s*$/;
   const SAFE_STYLE_COLOR = /^#[0-9a-f]{6}$/i;
+  const LINK_ICONS = new Set(['link', 'book', 'video', 'chemistry', 'math', 'file', 'external']);
+  const SLIDE_TRANSITIONS = new Set(['none', 'fade', 'rise', 'slide', 'zoom']);
   const STYLE_FONTS = new Set([
     'sans',
     'arial',
@@ -25,7 +28,15 @@
   ]);
   const STYLE_SIZES = new Set(['small', 'normal', 'large', 'xlarge']);
   const STYLE_ALIGNS = new Set(['left', 'center', 'right']);
-  const INTERACTIVE_START = /^\s*:::(youtube|atonom|flashcards)\s*$/i;
+  const FORMULA_ARROWS = new Set(['', '->', '<-', '<->', '<=>', '<=>>', '<<=>']);
+  const SAFE_MATH_COMMANDS = new Set([
+    'alpha', 'beta', 'gamma', 'delta', 'Delta', 'theta', 'lambda', 'mu', 'pi', 'rho', 'sigma',
+    'omega', 'Omega', 'cdot', 'times', 'div', 'pm', 'mp', 'approx', 'neq', 'le', 'leq', 'ge',
+    'geq', 'infty', 'frac', 'sqrt', 'sum', 'prod', 'int', 'oint', 'lim', 'min', 'max',
+    'sin', 'cos', 'tan', 'log', 'ln', 'partial', 'nabla', 'rightarrow', 'leftarrow',
+    'leftrightarrow', 'text', 'mathrm', 'mathbf', 'overline', 'vec', 'left', 'right'
+  ]);
+  const INTERACTIVE_START = /^\s*:::(youtube|atonom|formula|linkcard|flashcards)\s*$/i;
 
   class LessonFormatError extends Error {
     constructor(code, message) {
@@ -251,8 +262,22 @@
     const content = [];
     let task = null;
     let taskLines = null;
+    let slideSettingsLines = null;
+    let slideSettingsSeen = false;
+    let transition = 'fade';
 
     for (const line of lines) {
+      if (slideSettingsLines) {
+        if (TASK_END.test(line)) {
+          const values = directiveFields(slideSettingsLines.join('\n'));
+          const requested = String(values.transition || '').trim().toLowerCase();
+          transition = SLIDE_TRANSITIONS.has(requested) ? requested : 'fade';
+          slideSettingsLines = null;
+        } else {
+          slideSettingsLines.push(line);
+        }
+        continue;
+      }
       if (taskLines) {
         if (TASK_END.test(line)) {
           task = parseTask(taskLines, index + 1);
@@ -272,6 +297,17 @@
         taskLines = [];
         continue;
       }
+      if (SLIDE_SETTINGS_START.test(line)) {
+        if (slideSettingsSeen) {
+          throw new LessonFormatError(
+            'MULTIPLE_SLIDE_SETTINGS',
+            `Slajd ${index + 1}: dozwolony jest tylko jeden blok ustawień przejścia.`
+          );
+        }
+        slideSettingsSeen = true;
+        slideSettingsLines = [];
+        continue;
+      }
       content.push(line);
     }
 
@@ -279,6 +315,12 @@
       throw new LessonFormatError(
         'UNCLOSED_TASK',
         `Slajd ${index + 1}: blok zadania nie został zamknięty linią :::.`
+      );
+    }
+    if (slideSettingsLines) {
+      throw new LessonFormatError(
+        'UNCLOSED_SLIDE_SETTINGS',
+        `Slajd ${index + 1}: blok ustawień slajdu nie został zamknięty linią :::.`
       );
     }
 
@@ -291,6 +333,7 @@
       markdown,
       html: renderMarkdown(markdown),
       title: heading ? stripMarkdown(heading[1]) : `Krok ${index + 1}`,
+      transition,
       task
     };
   }
@@ -382,6 +425,18 @@
     return '';
   }
 
+  function safeLinkCardUrl(value) {
+    const raw = String(value || '').trim();
+    if (
+      !raw
+      || raw.startsWith('//')
+      || raw.includes('\\')
+      || /[\u0000-\u0020<>"'`]/.test(raw)
+    ) return '';
+    if (raw.startsWith('/') || raw.startsWith('#')) return raw;
+    return /^(?:https?:\/\/|mailto:)[^\s]+$/i.test(raw) ? raw : '';
+  }
+
   function parseStyleOptions(source) {
     const values = {};
     String(source || '').replace(
@@ -452,6 +507,73 @@
     return values;
   }
 
+  function safeChemistryText(value, condition) {
+    const text = String(value || '').trim().replace(/\s+/g, ' ');
+    if (!text || text.length > (condition ? 120 : 300)) return '';
+    const forbidden = condition ? /[\\{}[\]$%#&<>]/ : /[\\$%#&<>]/;
+    if (forbidden.test(text)) return '';
+    if (!condition) {
+      let depth = 0;
+      for (const character of text) {
+        if (character === '{') depth += 1;
+        else if (character === '}') depth -= 1;
+        if (depth < 0 || depth > 6) return '';
+      }
+      if (depth !== 0) return '';
+    }
+    return text;
+  }
+
+  function safeMathExpression(value) {
+    const expression = String(value || '').trim().replace(/\s+/g, ' ');
+    if (!expression || expression.length > 500 || /[$%#&<>]/.test(expression)) return '';
+    let depth = 0;
+    for (const character of expression) {
+      if (character === '{') depth += 1;
+      else if (character === '}') depth -= 1;
+      if (depth < 0 || depth > 12) return '';
+    }
+    if (depth !== 0) return '';
+    const commands = expression.match(/\\[A-Za-z]+/g) || [];
+    if (commands.some((command) => !SAFE_MATH_COMMANDS.has(command.slice(1)))) return '';
+    return expression;
+  }
+
+  function formulaBlockHtml(values) {
+    const mode = /^(?:math|matematyka)$/i.test(values.mode || '') ? 'math' : 'chemistry';
+    const title = values.title || (mode === 'math' ? 'Wzór matematyczny' : 'Równanie reakcji');
+    if (mode === 'math') {
+      const expression = safeMathExpression(values.expression);
+      if (!expression) {
+        return '<p class="lesson-interactive-error">Nieprawidłowy wzór matematyczny.</p>';
+      }
+      return `<figure class="lesson-formula lesson-formula-math"><div class="lesson-formula-display" aria-label="${escapeHtml(title)}">\\(\\displaystyle ${escapeHtml(expression)}\\)</div><figcaption>${escapeHtml(title)}</figcaption></figure>`;
+    }
+
+    const left = safeChemistryText(values.left, false);
+    const requestedArrow = Object.prototype.hasOwnProperty.call(values, 'arrow')
+      ? String(values.arrow || '').trim()
+      : '->';
+    const arrow = FORMULA_ARROWS.has(requestedArrow)
+      ? requestedArrow
+      : '->';
+    const right = String(values.right || '').trim()
+      ? safeChemistryText(values.right, false)
+      : '';
+    const above = String(values.above || '').trim()
+      ? safeChemistryText(values.above, true)
+      : '';
+    const below = String(values.below || '').trim()
+      ? safeChemistryText(values.below, true)
+      : '';
+    if (!left || (arrow && !right) || (values.above && !above) || (values.below && !below)) {
+      return '<p class="lesson-interactive-error">Nieprawidłowy wzór lub warunki reakcji chemicznej.</p>';
+    }
+    const labels = `${above ? `[${above}]` : ''}${below ? `[${below}]` : ''}`;
+    const reaction = `${left}${arrow ? ` ${arrow}${labels} ${right}` : ''}`;
+    return `<figure class="lesson-formula lesson-formula-chemistry"><div class="lesson-formula-display" aria-label="${escapeHtml(title)}">\\(\\ce{${escapeHtml(reaction)}}\\)</div><figcaption>${escapeHtml(title)}</figcaption></figure>`;
+  }
+
   function interactiveBlockHtml(type, body) {
     const values = directiveFields(body);
     if (type === 'youtube') {
@@ -468,6 +590,29 @@
       const title = values.title || `Model cząsteczki: ${formula}`;
       const src = `/members/module/atonom/?formula=${encodeURIComponent(formula)}`;
       return `<figure class="lesson-embed lesson-atonom" data-atonom-formula="${escapeHtml(formula)}"><div class="lesson-atonom-card"><span class="lesson-atonom-symbol" aria-hidden="true">⚛</span><span class="lesson-atonom-copy"><small>Interaktywny model 3D</small><strong>${escapeHtml(formula)}</strong><span>Model zostanie uruchomiony dopiero po kliknięciu.</span></span><button class="lesson-atonom-open" type="button" data-atonom-src="${escapeHtml(src)}" data-atonom-title="${escapeHtml(title)}" aria-expanded="false">Pokaż związek</button></div><div class="lesson-atonom-frame" hidden></div><figcaption>${escapeHtml(title)}</figcaption></figure>`;
+    }
+    if (type === 'formula') return formulaBlockHtml(values);
+    if (type === 'linkcard') {
+      const url = safeLinkCardUrl(values.url);
+      const title = String(values.title || '').trim();
+      if (!url || !title) {
+        return '<p class="lesson-interactive-error">Nieprawidłowy kafelek z linkiem.</p>';
+      }
+      const description = String(values.description || '').trim();
+      const iconName = LINK_ICONS.has(values.icon) ? values.icon : 'link';
+      const icons = {
+        link: '↗',
+        book: '▤',
+        video: '▶',
+        chemistry: '⚗',
+        math: '∑',
+        file: '▧',
+        external: '⤴'
+      };
+      const color = SAFE_STYLE_COLOR.test(values.color || '') ? values.color.toLowerCase() : '#0e665a';
+      const newTab = /^(?:1|true|yes|tak|new)$/i.test(values.new_tab || '');
+      const target = newTab ? ' target="_blank" rel="noopener noreferrer"' : '';
+      return `<a class="lesson-link-card" href="${escapeHtml(url)}"${target} style="--link-card-color:${escapeHtml(color)}"><span class="lesson-link-icon" aria-hidden="true">${icons[iconName]}</span><span class="lesson-link-copy"><small>Materiał dodatkowy</small><strong>${escapeHtml(title)}</strong>${description ? `<span>${escapeHtml(description)}</span>` : ''}</span><span class="lesson-link-action">${newTab ? 'Otwórz w nowej karcie' : 'Otwórz'} <b aria-hidden="true">→</b></span></a>`;
     }
 
     const color = SAFE_STYLE_COLOR.test(values.color || '') ? values.color.toLowerCase() : '#7c3aed';

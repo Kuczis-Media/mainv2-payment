@@ -261,6 +261,62 @@ test('studio serializes code, callouts, safe style containers and accordions', (
   assert.match(lessonParser.parseLesson(markdown, 'materialy.md').slides[0].html, /<details class="lesson-accordion" open>/);
 });
 
+test('studio round-trips chemistry reactions and safe mathematical formulas', () => {
+  const lesson = studio.createLesson({
+    title: 'Wzory i reakcje',
+    filename: 'wzory.md',
+    slides: [{
+      blocks: [
+        {
+          type: 'formula',
+          mode: 'chemistry',
+          title: 'Spalanie wodoru',
+          left: '2 H2 + O2',
+          arrow: '->',
+          above: '450 °C',
+          below: 'kat. Pt',
+          right: '2 H2O'
+        },
+        {
+          type: 'formula',
+          mode: 'math',
+          title: 'Stężenie molowe',
+          expression: 'c = \\frac{n}{V}'
+        }
+      ]
+    }]
+  });
+
+  assert.equal(studio.validateLesson(lesson).valid, true);
+  const markdown = studio.serializeLesson(lesson);
+  assert.match(markdown, /:::formula\nmode: chemistry/);
+  assert.match(markdown, /above: 450 °C/);
+  assert.match(markdown, /below: kat\. Pt/);
+  assert.match(markdown, /expression: c = \\frac\{n\}\{V\}/);
+
+  const imported = studio.parseLesson(markdown, lesson.filename);
+  const chemistry = imported.slides[0].blocks.find((block) => block.type === 'formula' && block.mode === 'chemistry');
+  const math = imported.slides[0].blocks.find((block) => block.type === 'formula' && block.mode === 'math');
+  assert.equal(chemistry.arrow, '->');
+  assert.equal(chemistry.above, '450 °C');
+  assert.equal(math.expression, 'c = \\frac{n}{V}');
+
+  const published = lessonParser.parseLesson(markdown, lesson.filename);
+  assert.match(published.slides[0].html, /lesson-formula-chemistry/);
+  assert.match(published.slides[0].html, /lesson-formula-math/);
+  assert.ok(published.slides[0].html.includes('\\(\\ce{2 H2 + O2 -&gt;[450 °C][kat. Pt] 2 H2O}\\)'));
+  assert.ok(published.slides[0].html.includes('\\(\\displaystyle c = \\frac{n}{V}\\)'));
+
+  const unsafe = studio.createLesson({
+    title: 'Niebezpieczny wzór',
+    slides: [{
+      blocks: [{ type: 'formula', mode: 'math', expression: '\\href{javascript:alert(1)}{kliknij}' }]
+    }]
+  });
+  assert.equal(studio.validateLesson(unsafe).valid, false);
+  assert.equal(studio.validateLesson(unsafe).errors[0].code, 'INVALID_MATH_FORMULA');
+});
+
 test('studio publishes backgrounds, YouTube, ATONOM, flashcards and selectable text gaps', () => {
   const lesson = studio.createLesson({
     title: 'Chemia angażująca',
@@ -379,6 +435,58 @@ test('studio round-trips manually typed gaps and their checking mode', () => {
   assert.equal(invalid.errors.some((error) => error.code === 'INVALID_GAPS'), true);
 });
 
+test('studio round-trips link tiles and a separate transition for every slide', () => {
+  const lesson = studio.createLesson({
+    title: 'Materiały dodatkowe',
+    filename: 'materialy-dodatkowe.md',
+    slides: [
+      {
+        transition: 'rise',
+        blocks: [
+          { type: 'heading', level: 2, text: 'Czytaj dalej' },
+          {
+            type: 'link',
+            title: 'Tablica wzorów',
+            description: 'Otwórz pomocniczy materiał w nowej karcie.',
+            url: 'https://example.com/wzory',
+            icon: 'math',
+            color: '#2563eb',
+            newTab: true
+          }
+        ]
+      },
+      {
+        transition: 'none',
+        blocks: [{ type: 'text', text: 'Ten slajd pojawia się bez animacji.' }]
+      }
+    ]
+  });
+
+  const markdown = studio.serializeLesson(lesson);
+  assert.match(markdown, /:::slide\ntransition: rise\n:::/);
+  assert.match(markdown, /:::slide\ntransition: none\n:::/);
+  assert.match(markdown, /:::linkcard\n[\s\S]*title: Tablica wzorów/);
+  assert.match(markdown, /url: https:\/\/example\.com\/wzory/);
+  assert.match(markdown, /icon: math/);
+  assert.match(markdown, /new_tab: true/);
+
+  const imported = studio.parseLesson(markdown, lesson.filename);
+  assert.equal(imported.slides[0].transition, 'rise');
+  assert.equal(imported.slides[1].transition, 'none');
+  const link = imported.slides[0].blocks.find((block) => block.type === 'link');
+  assert.equal(link.title, 'Tablica wzorów');
+  assert.equal(link.icon, 'math');
+  assert.equal(link.color, '#2563eb');
+  assert.equal(link.newTab, true);
+
+  const published = lessonParser.parseLesson(markdown, lesson.filename);
+  assert.equal(published.slides[0].transition, 'rise');
+  assert.equal(published.slides[1].transition, 'none');
+  assert.match(published.slides[0].html, /class="lesson-link-card"/);
+  assert.match(published.slides[0].html, /target="_blank" rel="noopener noreferrer"/);
+  assert.match(published.slides[0].html, /--link-card-color:#2563eb/);
+});
+
 test('studio rejects unsafe image URLs, malformed quizzes and ambiguous code fences', () => {
   const unsafeImage = studio.validateLesson({
     title: 'Obraz',
@@ -424,6 +532,21 @@ test('studio rejects unsafe image URLs, malformed quizzes and ambiguous code fen
   });
   assert.equal(filename.valid, false);
   assert.equal(filename.errors.some((error) => error.code === 'INVALID_FILENAME'), true);
+
+  const unsafeLink = studio.validateLesson({
+    title: 'Link',
+    slides: [{
+      blocks: [{
+        type: 'link',
+        title: 'Nie otwieraj',
+        url: 'javascript:alert(1)',
+        icon: 'link',
+        color: '#0e665a'
+      }]
+    }]
+  });
+  assert.equal(unsafeLink.valid, false);
+  assert.equal(unsafeLink.errors.some((error) => error.code === 'INVALID_LINK_CARD'), true);
 });
 
 test('studio exposes renderer extension capabilities and a strict authoring filename policy', () => {
@@ -431,7 +554,9 @@ test('studio exposes renderer extension capabilities and a strict authoring file
   assert.equal(studio.capabilities.accordions, true);
   assert.equal(studio.capabilities.youtube, true);
   assert.equal(studio.capabilities.atonom, true);
+  assert.equal(studio.capabilities.linkCards, true);
   assert.equal(studio.capabilities.flashcards, true);
+  assert.deepEqual(studio.capabilities.slideTransitions, ['none', 'fade', 'rise', 'slide', 'zoom']);
   assert.ok(studio.capabilities.tasks.includes('gaps'));
   assert.ok(studio.capabilities.tasks.includes('gaps-text'));
   assert.equal(studio.capabilities.nestedContainers, false);
@@ -451,6 +576,9 @@ test('studio exposes renderer extension capabilities and a strict authoring file
   assert.equal(studio.safeImageUrl('https://example.com/a.png'), 'https://example.com/a.png');
   assert.equal(studio.safeImageUrl('http://example.com/a.png'), '');
   assert.equal(studio.safeImageUrl('data:image/png;base64,AAA'), '');
+  assert.equal(studio.safeLinkUrl('/members/module/lesson/'), '/members/module/lesson/');
+  assert.equal(studio.safeLinkUrl('mailto:nauczyciel@example.com'), 'mailto:nauczyciel@example.com');
+  assert.equal(studio.safeLinkUrl('javascript:alert(1)'), '');
 });
 
 test('lesson export migrates removed FilmV1 links to the supported Film module', () => {

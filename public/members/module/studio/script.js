@@ -143,6 +143,7 @@
       model: null,
       selectedId: '',
       previewSlideId: '',
+      previewTransitionKey: '',
       remoteFilename: '',
       remoteSha: '',
       remoteRepositoryId: '',
@@ -1589,6 +1590,27 @@
         title: 'Model cząsteczki w ATONOM'
       });
     }
+    if (type === 'formula') {
+      return lessonModelApi.createBlock('formula', {
+        mode: 'chemistry',
+        title: 'Spalanie wodoru',
+        left: '2 H2 + O2',
+        arrow: '->',
+        above: '450 °C',
+        below: 'kat. Pt',
+        right: '2 H2O'
+      });
+    }
+    if (type === 'link') {
+      return lessonModelApi.createBlock('link', {
+        title: 'Otwórz materiał dodatkowy',
+        description: 'Kliknij kafelek, aby przejść do wybranej strony lub modułu.',
+        url: '/members/',
+        icon: 'link',
+        color: '#0e665a',
+        newTab: false
+      });
+    }
     if (type === 'flashcards') {
       return lessonModelApi.createBlock('flashcards', {
         title: 'Fiszki do utrwalenia',
@@ -1772,6 +1794,8 @@
       accordion: '⌄',
       youtube: 'YT',
       atonom: '⚛',
+      formula: '∑',
+      link: '↗',
       flashcards: '↻'
     };
     return symbols[block.type] || 'T';
@@ -1789,6 +1813,8 @@
     if (block.type === 'accordion') return block.title || 'Harmonijka';
     if (block.type === 'youtube') return block.title || 'Film YouTube';
     if (block.type === 'atonom') return block.title || `ATONOM: ${block.formula}`;
+    if (block.type === 'formula') return block.title || (block.mode === 'math' ? 'Wzór matematyczny' : 'Równanie reakcji');
+    if (block.type === 'link') return block.title || 'Kafelek z linkiem';
     if (block.type === 'flashcards') return block.title || 'Fiszki';
     return 'Klocek';
   }
@@ -1802,6 +1828,12 @@
     if (block.type === 'image') return block.url || 'Uzupełnij adres HTTPS';
     if (block.type === 'youtube') return block.video || 'Uzupełnij link lub ID filmu';
     if (block.type === 'atonom') return `Związek: ${block.formula || 'nieustawiony'}`;
+    if (block.type === 'formula') {
+      return block.mode === 'math'
+        ? (block.expression || 'Uzupełnij wzór matematyczny')
+        : `${block.left || '…'}${block.arrow ? ` ${block.arrow} ${block.right || '…'}` : ''}`;
+    }
+    if (block.type === 'link') return block.url || 'Uzupełnij adres linku';
     if (block.type === 'flashcards') return `${block.cards.length} fiszki · ${block.color}`;
     const labels = {
       heading: `Nagłówek H${block.level}`,
@@ -1901,6 +1933,21 @@
     return heading && heading.text ? heading.text : `Slajd ${index + 1}`;
   }
 
+  function slideTransitionLabel(value) {
+    const labels = {
+      none: 'bez przejścia',
+      fade: 'łagodne zanikanie',
+      rise: 'subtelnie w górę',
+      slide: 'delikatnie z boku',
+      zoom: 'miękkie przybliżenie'
+    };
+    return labels[value] || labels.fade;
+  }
+
+  function slideSummary(slide) {
+    return `${slide.blocks.length} klocków${slide.task ? ' · 1 pytanie' : ''} · ${slideTransitionLabel(slide.transition)}`;
+  }
+
   function renderLessonTask(task, slide) {
     const item = create('article', 'lesson-block task-block');
     item.dataset.lessonTaskId = task.id;
@@ -1985,7 +2032,7 @@
     const copy = create('span', 'node-copy');
     copy.append(
       create('strong', '', slideTitle(slide, index)),
-      create('small', '', `${slide.blocks.length} klocków${slide.task ? ' · 1 pytanie' : ''}`)
+      create('small', '', slideSummary(slide))
     );
     const actions = create('span', 'node-actions');
     actions.append(
@@ -2353,6 +2400,17 @@
         'Nazwa slajdu',
         lessonInput(slideTitle(found.node, found.index), 'slideTitle', { maxLength: 140 })
       ));
+      form.append(field(
+        'Przejście przy otwieraniu slajdu',
+        lessonSelect(found.node.transition, 'transition', [
+          { value: 'none', label: 'Brak przejścia' },
+          { value: 'fade', label: 'Łagodne zanikanie' },
+          { value: 'rise', label: 'Subtelnie w górę' },
+          { value: 'slide', label: 'Delikatnie z boku' },
+          { value: 'zoom', label: 'Miękkie przybliżenie' }
+        ]),
+        'Ustawienie dotyczy tylko tego slajdu. Systemowe ograniczenie animacji ma zawsze pierwszeństwo.'
+      ));
       form.append(lessonInspectorActions('slide'));
       elements.lessonInspector.append(form);
       return;
@@ -2438,6 +2496,116 @@
           'W lekcji pojawi się kafelek. Model /members/module/atonom/?formula=nazwa-związku zostanie załadowany dopiero po kliknięciu.'
         ),
         field('Tytuł modelu', lessonInput(block.title, 'title', { maxLength: 180 }))
+      );
+    } else if (block.type === 'formula') {
+      form.append(
+        field('Rodzaj zapisu', lessonSelect(block.mode, 'mode', [
+          { value: 'chemistry', label: 'Chemia — wzór lub reakcja' },
+          { value: 'math', label: 'Matematyka — równanie i symbole' }
+        ])),
+        field('Podpis pod wzorem', lessonInput(block.title, 'title', { maxLength: 180 }))
+      );
+      if (block.mode === 'math') {
+        const symbols = create('div', 'formula-symbol-toolbar');
+        [
+          ['x²', '^{2}'],
+          ['xₙ', '_{n}'],
+          ['a⁄b', '\\frac{a}{b}'],
+          ['√x', '\\sqrt{x}'],
+          ['Σ', '\\sum_{i=1}^{n}'],
+          ['∫', '\\int_{a}^{b}'],
+          ['v⃗', '\\vec{v}'],
+          ['∂', '\\partial'],
+          ['→', '\\rightarrow'],
+          ['π', '\\pi'],
+          ['Δ', '\\Delta'],
+          ['×', '\\times'],
+          ['±', '\\pm'],
+          ['≈', '\\approx'],
+          ['≤', '\\le'],
+          ['≥', '\\ge'],
+          ['∞', '\\infty']
+        ].forEach(([label, snippet]) => {
+          const button = create('button', 'formula-symbol-button', label);
+          button.type = 'button';
+          button.dataset.formulaSnippet = snippet;
+          button.title = `Wstaw ${snippet}`;
+          symbols.append(button);
+        });
+        form.append(
+          field(
+            'Wzór matematyczny',
+            lessonTextarea(block.expression, 'expression', {
+              rows: 6,
+              maxLength: 500,
+              placeholder: 'np. E = mc^{2} albo \\frac{n}{V}'
+            }),
+            'Używaj przycisków poniżej lub zapisu: ^{2} — potęga, _{n} — indeks, \\frac{a}{b} — ułamek, \\sqrt{x} — pierwiastek.'
+          ),
+          symbols
+        );
+      } else {
+        const chemistryRow = create('div', 'field-row');
+        chemistryRow.append(
+          field(
+            'Wzór lub substraty',
+            lessonInput(block.left, 'left', { placeholder: 'np. 2 H2 + O2 albo SO4^2-', maxLength: 300 })
+          ),
+          field(
+            'Produkty',
+            lessonInput(block.right, 'right', { placeholder: 'np. 2 H2O', maxLength: 300 })
+          )
+        );
+        form.append(
+          chemistryRow,
+          field('Strzałka reakcji', lessonSelect(block.arrow, 'arrow', [
+            { value: '', label: 'Bez strzałki — pojedynczy wzór' },
+            { value: '->', label: '→ reakcja w prawo' },
+            { value: '<-', label: '← reakcja w lewo' },
+            { value: '<->', label: '↔ reakcja odwracalna' },
+            { value: '<=>', label: '⇌ równowaga' },
+            { value: '<=>>', label: '⇌ równowaga przesunięta w prawo' },
+            { value: '<<=>', label: '⇌ równowaga przesunięta w lewo' }
+          ])),
+          field(
+            'Warunek nad strzałką',
+            lessonInput(block.above, 'above', { placeholder: 'np. 450 °C, Δ albo hν', maxLength: 120 })
+          ),
+          field(
+            'Warunek pod strzałką',
+            lessonInput(block.below, 'below', { placeholder: 'np. kat. Pt albo 2 atm', maxLength: 120 }),
+            'Cyfry we wzorach stają się indeksami automatycznie. Ładunki: SO4^2-, izotopy: ^14C, stopnie utlenienia: Fe^{III}, stany: (s), (l), (g), (aq).'
+          )
+        );
+      }
+    } else if (block.type === 'link') {
+      const newTab = create('label', 'check-field');
+      newTab.append(
+        lessonInput('', 'newTab', { type: 'checkbox', checked: block.newTab }),
+        create('span', '', 'Otwieraj w nowej karcie')
+      );
+      form.append(
+        field('Tytuł kafelka', lessonInput(block.title, 'title', { maxLength: 180 })),
+        field('Krótki opis', lessonTextarea(block.description, 'description', { rows: 4, maxLength: 500 })),
+        field(
+          'Adres linku',
+          lessonInput(block.url, 'url', {
+            placeholder: 'https://… albo /members/module/…',
+            maxLength: 500
+          }),
+          'Dozwolone są adresy http/https, mailto:, kotwice # oraz wewnętrzne ścieżki zaczynające się od /.'
+        ),
+        field('Ikona', lessonSelect(block.icon, 'icon', [
+          { value: 'link', label: '↗ Link' },
+          { value: 'book', label: '▤ Książka / lekcja' },
+          { value: 'video', label: '▶ Film' },
+          { value: 'chemistry', label: '⚗ Chemia' },
+          { value: 'math', label: '∑ Matematyka' },
+          { value: 'file', label: '▧ Plik' },
+          { value: 'external', label: '⤴ Strona zewnętrzna' }
+        ])),
+        field('Kolor akcentu', lessonInput(block.color, 'color', { type: 'color' })),
+        newTab
       );
     } else if (block.type === 'flashcards') {
       form.append(
@@ -2573,6 +2741,34 @@
         button.textContent = 'Ukryj model';
       });
     });
+  }
+
+  function clearTypesetMath(root, scope) {
+    const targetWindow = scope || window;
+    const formulas = root
+      ? Array.from(root.querySelectorAll('.lesson-formula-display'))
+      : [];
+    if (!formulas.length) return;
+    try {
+      targetWindow.MathJax?.typesetClear?.(formulas);
+    } catch (_) {
+      // Brak MathJax nie może blokować podglądu pozostałej treści.
+    }
+  }
+
+  function typesetMath(root, scope) {
+    const targetWindow = scope || window;
+    const mathJax = targetWindow.MathJax;
+    const formulas = root
+      ? Array.from(root.querySelectorAll('.lesson-formula-display'))
+      : [];
+    if (!formulas.length || !mathJax || typeof mathJax.typesetPromise !== 'function') return;
+    const startup = mathJax.startup?.promise || Promise.resolve();
+    const previous = targetWindow.__chemDiskMathPromise || startup;
+    targetWindow.__chemDiskMathPromise = previous
+      .catch(() => undefined)
+      .then(() => mathJax.typesetPromise(formulas))
+      .catch(() => undefined);
   }
 
   function previewTaskById(taskId) {
@@ -2773,8 +2969,13 @@
     });
   }
 
-  function buildLessonPreviewShell(slide, index, includeValidation) {
+  function buildLessonPreviewShell(slide, index, includeValidation, animateTransition) {
     const shell = create('div', 'lesson-preview-shell');
+    const transition = lessonModelApi.SLIDE_TRANSITIONS.includes(slide.transition)
+      ? slide.transition
+      : 'fade';
+    shell.dataset.transition = transition;
+    shell.classList.toggle('is-entering', Boolean(animateTransition) && transition !== 'none');
     const meta = create('div', 'lesson-preview-meta');
     meta.append(
       create('span', '', `Krok ${index + 1} z ${state.lesson.model.slides.length}`),
@@ -2804,22 +3005,28 @@
   }
 
   function renderLessonPreview() {
+    clearTypesetMath(elements.lessonPreview);
     elements.lessonPreview.replaceChildren();
     const slide = selectedLessonSlide();
     if (!slide) return;
     state.lesson.previewSlideId = slide.id;
     const index = state.lesson.model.slides.indexOf(slide);
+    const transitionKey = `${slide.id}:${slide.transition || 'fade'}`;
+    const animateTransition = state.lesson.previewTransitionKey !== transitionKey;
+    state.lesson.previewTransitionKey = transitionKey;
     elements.lessonPreview.append(
       previewToolbar('lesson'),
-      buildLessonPreviewShell(slide, index, true)
+      buildLessonPreviewShell(slide, index, true, animateTransition)
     );
     bindPreviewFlashcards(elements.lessonPreview);
     bindPreviewAtonom(elements.lessonPreview);
     bindPreviewTasks(elements.lessonPreview);
+    typesetMath(elements.lessonPreview);
     syncFullPreview('lesson');
   }
 
   function addFullPreviewHead(doc, mode) {
+    const existingMathJax = doc.getElementById('studio-preview-mathjax');
     const charset = doc.createElement('meta');
     charset.setAttribute('charset', 'utf-8');
     const viewport = doc.createElement('meta');
@@ -2834,7 +3041,30 @@
     const studioStyles = doc.createElement('link');
     studioStyles.rel = 'stylesheet';
     studioStyles.href = '/members/module/studio/style.css';
-    doc.head.replaceChildren(charset, viewport, theme, baseStyles, studioStyles);
+    doc.head.replaceChildren(
+      charset,
+      viewport,
+      theme,
+      baseStyles,
+      studioStyles,
+      ...(mode === 'lesson' && existingMathJax ? [existingMathJax] : [])
+    );
+    if (
+      mode === 'lesson'
+      && !existingMathJax
+      && typeof doc.defaultView.MathJax?.typesetPromise !== 'function'
+    ) {
+      doc.defaultView.MathJax = {
+        loader: { load: ['[tex]/mhchem'] },
+        tex: { packages: { '[+]': ['mhchem'] } },
+        startup: { typeset: false }
+      };
+      const mathJax = doc.createElement('script');
+      mathJax.id = 'studio-preview-mathjax';
+      mathJax.src = 'https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js';
+      mathJax.addEventListener('load', () => typesetMath(doc.body, doc.defaultView), { once: true });
+      doc.head.append(mathJax);
+    }
     doc.title = mode === 'dashboard'
       ? 'Pełny podgląd dashboardu — ChemDisk'
       : 'Pełny podgląd lekcji — ChemDisk';
@@ -2844,6 +3074,7 @@
     if (!popup || popup.closed) return;
     const doc = popup.document;
     const previousScroll = popup.scrollY;
+    clearTypesetMath(doc.body, popup);
     addFullPreviewHead(doc, mode);
     doc.documentElement.lang = 'pl';
     const activeTheme = document.documentElement.getAttribute('data-theme');
@@ -2894,7 +3125,7 @@
         const article = doc.createElement('article');
         article.className = 'full-lesson-slide';
         article.id = `slide-${index + 1}`;
-        article.append(doc.importNode(buildLessonPreviewShell(slide, index, false), true));
+        article.append(doc.importNode(buildLessonPreviewShell(slide, index, false, true), true));
         slides.append(article);
       });
       main.append(slides);
@@ -2904,6 +3135,7 @@
       bindPreviewFlashcards(main);
       bindPreviewAtonom(main);
       bindPreviewTasks(main);
+      typesetMath(main, popup);
     }
     popup.requestAnimationFrame(() => popup.scrollTo(0, previousScroll));
   }
@@ -2944,7 +3176,9 @@
         .find((node) => node.dataset.lessonSlideId === found.node.id && node.classList.contains('lesson-slide'));
       if (target) {
         const title = target.querySelector('.slide-header .node-copy strong');
+        const subtitle = target.querySelector('.slide-header .node-copy small');
         if (title) title.textContent = slideTitle(found.node, found.index);
+        if (subtitle) subtitle.textContent = slideSummary(found.node);
       }
     } else if (found.kind === 'block') {
       const target = all('[data-lesson-block-id]', elements.lessonCanvas)
@@ -3217,6 +3451,17 @@
     else slide.blocks.unshift(lessonModelApi.createBlock('heading', { level: 2, text: value }));
   }
 
+  function insertLessonFormulaSnippet(button) {
+    const textarea = elements.lessonInspector.querySelector('[data-lesson-field="expression"]');
+    if (!textarea) return;
+    const snippet = button.dataset.formulaSnippet || '';
+    const start = Number.isSafeInteger(textarea.selectionStart) ? textarea.selectionStart : textarea.value.length;
+    const end = Number.isSafeInteger(textarea.selectionEnd) ? textarea.selectionEnd : start;
+    textarea.setRangeText(snippet, start, end, 'end');
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    textarea.focus();
+  }
+
   function handleLessonInspectorInput(event) {
     const target = event.target.closest('[data-lesson-field]');
     if (!target) return;
@@ -3229,6 +3474,8 @@
 
     if (found.kind === 'slide' && fieldName === 'slideTitle') {
       setSlideTitle(found.node, raw);
+    } else if (found.kind === 'slide' && fieldName === 'transition') {
+      found.node.transition = lessonModelApi.SLIDE_TRANSITIONS.includes(raw) ? raw : 'fade';
     } else if (found.kind === 'task') {
       const task = found.node;
       if (fieldName === 'type') {
@@ -3269,7 +3516,23 @@
       }
     } else if (found.kind === 'block') {
       const block = found.node;
-      if (fieldName === 'items') {
+      if (fieldName === 'mode' && block.type === 'formula') {
+        const previousMode = block.mode;
+        block.mode = raw === 'math' ? 'math' : 'chemistry';
+        if (block.mode === 'math' && !block.expression) block.expression = 'E = mc^{2}';
+        if (block.mode === 'chemistry' && !block.left) {
+          block.left = '2 H2 + O2';
+          block.arrow = '->';
+          block.right = '2 H2O';
+        }
+        if (
+          !block.title
+          || (previousMode === 'chemistry' && block.title === 'Spalanie wodoru')
+          || block.title === (previousMode === 'math' ? 'Wzór matematyczny' : 'Równanie reakcji')
+        ) {
+          block.title = block.mode === 'math' ? 'Wzór matematyczny' : 'Równanie reakcji';
+        }
+      } else if (fieldName === 'items') {
         block.items = String(raw).split('\n').map((item) => item.trim()).filter(Boolean);
       } else if (fieldName === 'cards' && block.type === 'flashcards') {
         block.cards = String(raw).split('\n')
@@ -4235,6 +4498,7 @@
       button.addEventListener('click', () => switchMode(button.dataset.switchMode));
     });
     elements.themeToggle.addEventListener('click', toggleTheme);
+    document.addEventListener('chemdisk-mathjax-ready', () => typesetMath(elements.lessonPreview));
     elements.undo.addEventListener('click', undo);
     elements.redo.addEventListener('click', redo);
     bindPalette();
@@ -4354,7 +4618,7 @@
     elements.lessonInspector.addEventListener('change', (event) => {
       handleLessonInspectorInput(event);
       finishEdit();
-      if (['type', 'options', 'optionItem', 'useColor'].includes(event.target.dataset.lessonField)) {
+      if (['type', 'mode', 'options', 'optionItem', 'useColor'].includes(event.target.dataset.lessonField)) {
         renderLessonInspector();
       }
     });
@@ -4362,6 +4626,11 @@
       if (event.target.closest('[data-lesson-field]')) finishEdit();
     });
     elements.lessonInspector.addEventListener('click', (event) => {
+      const formulaSnippet = event.target.closest('[data-formula-snippet]');
+      if (formulaSnippet) {
+        insertLessonFormulaSnippet(formulaSnippet);
+        return;
+      }
       const taskEditorAction = event.target.closest('[data-lesson-task-editor-action]');
       if (taskEditorAction) {
         lessonTaskEditorAction(taskEditorAction);

@@ -373,8 +373,12 @@ fieldset:focus-within {
 
 .slide-card {
   padding: clamp(32px, 5vw, 72px);
-  animation: slide-in 260ms ease both;
 }
+
+.slide-card.is-entering[data-transition="fade"] { animation: lesson-fade 260ms ease-out both; }
+.slide-card.is-entering[data-transition="rise"] { animation: lesson-rise 320ms cubic-bezier(.22, .72, .25, 1) both; }
+.slide-card.is-entering[data-transition="slide"] { animation: lesson-slide 320ms cubic-bezier(.22, .72, .25, 1) both; }
+.slide-card.is-entering[data-transition="zoom"] { animation: lesson-zoom 290ms cubic-bezier(.22, .72, .25, 1) both; }
 
 .slide-card:focus { outline: none; }
 
@@ -627,6 +631,118 @@ fieldset:focus-within {
 
 .lesson-embed {
   margin: 30px 0;
+}
+
+.lesson-formula {
+  margin: 30px 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 10% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 44%),
+    var(--surface);
+  box-shadow: 0 14px 36px rgba(20, 28, 24, 0.09);
+}
+
+.lesson-formula-display {
+  min-height: 112px;
+  padding: clamp(24px, 5vw, 42px);
+  overflow-x: auto;
+  color: var(--text);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.2rem, 3.2vw, 2rem);
+  line-height: 1.5;
+  text-align: center;
+  scrollbar-width: thin;
+}
+
+.lesson-formula-display mjx-container {
+  margin: 0 !important;
+  max-width: none;
+}
+
+.lesson-formula figcaption {
+  padding: 11px 18px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface-soft) 78%, transparent);
+  font-size: 0.78rem;
+  font-weight: 750;
+  text-align: center;
+}
+
+.lesson-link-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  margin: 28px 0;
+  padding: clamp(17px, 3vw, 23px);
+  color: var(--text);
+  text-decoration: none;
+  background:
+    radial-gradient(circle at 92% 8%, color-mix(in srgb, var(--link-card-color) 14%, transparent), transparent 42%),
+    linear-gradient(145deg, var(--surface), color-mix(in srgb, var(--link-card-color) 7%, var(--surface)));
+  border: 1px solid color-mix(in srgb, var(--link-card-color) 32%, var(--line));
+  border-radius: 20px;
+  box-shadow: 0 13px 34px color-mix(in srgb, var(--link-card-color) 10%, transparent);
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.lesson-link-card:hover,
+.lesson-link-card:focus-visible {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--link-card-color) 58%, var(--line));
+  box-shadow: 0 17px 38px color-mix(in srgb, var(--link-card-color) 16%, transparent);
+  outline: none;
+  transform: translateY(-2px);
+}
+
+.lesson-link-icon {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  color: #fff;
+  background: var(--link-card-color);
+  border-radius: 16px;
+  font-size: 1.35rem;
+  font-weight: 850;
+}
+
+.lesson-link-copy,
+.lesson-link-copy small,
+.lesson-link-copy strong,
+.lesson-link-copy span {
+  display: block;
+}
+
+.lesson-link-copy small {
+  color: var(--link-card-color);
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.lesson-link-copy strong {
+  margin-top: 3px;
+  color: var(--text);
+  font-size: clamp(1rem, 2.2vw, 1.3rem);
+}
+
+.lesson-link-copy span {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.lesson-link-action {
+  color: var(--link-card-color);
+  font-size: 0.75rem;
+  font-weight: 850;
+  white-space: nowrap;
 }
 
 .lesson-atonom-card {
@@ -1169,9 +1285,21 @@ fieldset:focus-within {
 [hidden] { display: none !important; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
-@keyframes slide-in {
-  from { opacity: 0; transform: translateY(10px); }
+@keyframes lesson-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes lesson-rise {
+  from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
+}
+@keyframes lesson-slide {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes lesson-zoom {
+  from { opacity: 0; transform: scale(.985); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 @media (max-width: 860px) {
@@ -1231,6 +1359,14 @@ fieldset:focus-within {
   .task-controls,
   .task-label { grid-column: 1; }
   .choice-grid { grid-template-columns: 1fr; }
+  .lesson-link-card {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 12px;
+  }
+  .lesson-link-action {
+    grid-column: 2;
+    white-space: normal;
+  }
   .lesson-navigation {
     grid-template-columns: 1fr 1.35fr;
     gap: 10px;
@@ -1467,7 +1603,9 @@ fieldset:focus-within {
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .loader { animation: none; }
-  .slide-card { animation: none; }
+  .slide-card,
+  .slide-card.is-entering { animation: none !important; }
   .progress-track span { transition: none; }
   .flashcard-face { transition: none; }
+  .lesson-link-card { transition: none; }
 }

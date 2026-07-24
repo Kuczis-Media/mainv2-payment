@@ -448,14 +448,17 @@
     elements.slideNumber.textContent = `Krok ${state.index + 1} z ${state.lesson.slides.length}`;
     elements.lessonPosition.textContent = `Krok ${state.index + 1} z ${state.lesson.slides.length}`;
     elements.progressBar.style.width = `${progress}%`;
+    clearTypesetMath(elements.slideContent);
     elements.slideContent.innerHTML = slide.html;
     initializeInteractiveBlocks(elements.slideContent);
+    typesetMath(elements.slideContent);
     elements.slideStatus.textContent = slide.task
       ? (isSolved ? 'Zadanie rozwiązane' : 'Zadanie do wykonania')
       : 'Materiał';
     elements.slideStatus.dataset.state = isSolved ? 'complete' : (slide.task ? 'task' : 'content');
 
     renderTask(slide.task, isSolved);
+    playSlideTransition(slide.transition);
     elements.previous.disabled = state.index === 0;
     elements.next.disabled = Boolean(slide.task && !isSolved);
     elements.next.querySelector('span').textContent =
@@ -466,6 +469,43 @@
     saveProgress();
     elements.slideCard.focus?.({ preventScroll: true });
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function playSlideTransition(value) {
+    const transition = ['none', 'fade', 'rise', 'slide', 'zoom'].includes(value)
+      ? value
+      : 'fade';
+    elements.slideCard.dataset.transition = transition;
+    elements.slideCard.classList.remove('is-entering');
+    if (transition === 'none') return;
+    void elements.slideCard.offsetWidth;
+    elements.slideCard.classList.add('is-entering');
+  }
+
+  function clearTypesetMath(root) {
+    const formulas = root
+      ? Array.from(root.querySelectorAll('.lesson-formula-display'))
+      : [];
+    if (!formulas.length) return;
+    try {
+      window.MathJax?.typesetClear?.(formulas);
+    } catch (_) {
+      // Wzory są dodatkiem i nie mogą zablokować całej lekcji.
+    }
+  }
+
+  function typesetMath(root) {
+    const mathJax = window.MathJax;
+    const formulas = root
+      ? Array.from(root.querySelectorAll('.lesson-formula-display'))
+      : [];
+    if (!formulas.length || !mathJax || typeof mathJax.typesetPromise !== 'function') return;
+    const startup = mathJax.startup?.promise || Promise.resolve();
+    const previous = window.__chemDiskMathPromise || startup;
+    window.__chemDiskMathPromise = previous
+      .catch(() => undefined)
+      .then(() => mathJax.typesetPromise(formulas))
+      .catch(() => undefined);
   }
 
   function initializeInteractiveBlocks(root) {
@@ -785,6 +825,7 @@
   elements.previous.addEventListener('click', goPrevious);
   elements.next.addEventListener('click', goNext);
   elements.restart.addEventListener('click', restartLesson);
+  document.addEventListener('chemdisk-mathjax-ready', () => typesetMath(elements.slideContent));
   document.addEventListener('keydown', (event) => {
     if (elements.navigation.hidden || event.altKey || event.ctrlKey || event.metaKey) return;
     const target = event.target;

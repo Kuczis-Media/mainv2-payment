@@ -48,6 +48,8 @@ test('lesson application exposes a repository selector for the live library', ()
   const script = fs.readFileSync(path.join(lessonRoot, 'script.js'), 'utf8');
 
   assert.match(html, /id=["']lesson-library-repository["']/);
+  assert.match(html, /\[tex\]\/mhchem/);
+  assert.match(html, /mathjax@3\.2\.2/);
   assert.match(script, /ChemContentLibrary\.repositories\(\)/);
   assert.match(script, /readLesson\(filename,\s*\{\s*repositoryId\s*\}\)/);
   assert.match(script, /searchParams\.set\(['"]repo['"],\s*asset\.repositoryId\)/);
@@ -238,6 +240,88 @@ test('lesson renderer supports allowlisted typography, colors and accordions wit
   assert.doesNotMatch(html, /color:red|font-evil|size-huge|align-justify/);
   assert.doesNotMatch(html, /<script>/);
   assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
+});
+
+test('lesson renderer supports chemistry arrows, reaction conditions and mathematical notation', () => {
+  const lesson = parser.parseLesson([
+    '# Wzory',
+    '',
+    ':::formula',
+    'mode: chemistry',
+    'title: Synteza amoniaku',
+    'left: N2 + 3 H2',
+    'arrow: <=>',
+    'above: 450 °C',
+    'below: kat. Fe',
+    'right: 2 NH3',
+    ':::',
+    '',
+    ':::formula',
+    'mode: math',
+    'title: Równanie kwadratowe',
+    'expression: x = \\frac{-b \\pm \\sqrt{b^{2} - 4ac}}{2a}',
+    ':::'
+  ].join('\n'), 'wzory.md');
+
+  assert.equal(lesson.slides.length, 1);
+  assert.match(lesson.slides[0].html, /lesson-formula-chemistry/);
+  assert.match(lesson.slides[0].html, /lesson-formula-math/);
+  assert.ok(lesson.slides[0].html.includes('\\(\\ce{N2 + 3 H2 &lt;=>[450 °C][kat. Fe] 2 NH3}\\)'));
+  assert.ok(lesson.slides[0].html.includes('\\(\\displaystyle x = \\frac{-b \\pm \\sqrt{b^{2} - 4ac}}{2a}\\)'));
+
+  const unsafe = parser.renderMarkdown([
+    ':::formula',
+    'mode: math',
+    'expression: \\href{javascript:alert(1)}{kliknij}',
+    ':::'
+  ].join('\n'));
+  assert.match(unsafe, /Nieprawidłowy wzór matematyczny/);
+  assert.doesNotMatch(unsafe, /javascript:/);
+});
+
+test('lesson renderer shows safe link tiles and preserves per-slide transitions', () => {
+  const lesson = parser.parseLesson([
+    '# Linki',
+    '',
+    ':::slide',
+    'transition: zoom',
+    ':::',
+    '',
+    ':::linkcard',
+    'title: Otwórz tablicę wzorów',
+    'description: Materiał pomocniczy do zadania.',
+    'url: /members/module/board/',
+    'icon: chemistry',
+    'color: #7c3aed',
+    'new_tab: false',
+    ':::',
+    '',
+    '---',
+    '',
+    '## Bez ruchu',
+    '',
+    ':::slide',
+    'transition: none',
+    ':::',
+    '',
+    'Treść drugiego slajdu.'
+  ].join('\n'), 'linki.md');
+
+  assert.equal(lesson.slides[0].transition, 'zoom');
+  assert.equal(lesson.slides[1].transition, 'none');
+  assert.match(lesson.slides[0].html, /class="lesson-link-card"/);
+  assert.match(lesson.slides[0].html, /href="\/members\/module\/board\/"/);
+  assert.match(lesson.slides[0].html, /--link-card-color:#7c3aed/);
+  assert.doesNotMatch(lesson.slides[0].html, /target="_blank"/);
+
+  const unsafe = parser.renderMarkdown([
+    ':::linkcard',
+    'title: Zły link',
+    'url: javascript:alert(1)',
+    ':::'
+  ].join('\n'));
+  assert.match(unsafe, /Nieprawidłowy kafelek z linkiem/);
+  assert.doesNotMatch(unsafe, /javascript:/);
 });
 
 test('lesson filename and Markdown rendering reject path traversal and active HTML', () => {

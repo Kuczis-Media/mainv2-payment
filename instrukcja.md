@@ -58,7 +58,7 @@ Pozostałe połączenia techniczne, które nie wymagają własnego klucza:
 - `cdn.jsdelivr.net` dostarcza część ikon i publicznych grafik;
 - `cdnjs.cloudflare.com` dostarcza Font Awesome na stronie publicznej;
 - `fonts.googleapis.com` dostarcza używane kroje pisma;
-- MathJax z jsDelivr wyświetla wzory matematyczne w czacie;
+- MathJax z jsDelivr wyświetla wzory matematyczne i reakcje chemiczne w czacie, kreatorze oraz lekcjach;
 - `raw.githubusercontent.com` może dostarczać publiczne obrazy użyte w lekcjach;
 - publiczna strona ATONOM jest osobnym odnośnikiem na stronie głównej, a chroniony moduł ATONOM znajduje się również lokalnie w ChemDisk.
 
@@ -1036,6 +1036,16 @@ Na jednym slajdzie można umieścić wiele klocków treści i najwyżej jedno za
 
 Tworzy kolejny krok lekcji. Kursant przechodzi między slajdami przyciskami i planem lekcji.
 
+Po kliknięciu całego slajdu wybierz w prawym panelu jego przejście:
+
+- **Brak przejścia** — slajd pojawia się natychmiast;
+- **Łagodne zanikanie** — spokojne pojawienie się;
+- **Subtelnie w górę** — niewielki ruch ku górze;
+- **Delikatnie z boku** — krótki ruch poziomy;
+- **Miękkie przybliżenie** — bardzo lekkie powiększenie.
+
+Każdy slajd ma własne ustawienie. Domyślne jest łagodne zanikanie. Jeśli użytkownik w systemie włączy ograniczenie animacji, ChemDisk wyłączy ruch niezależnie od wybranej opcji.
+
 ### Nagłówek
 
 Wybierz H1, H2 lub H3 i wpisz tytuł fragmentu.
@@ -1079,7 +1089,71 @@ Wybierz: informacja, wskazówka, uwaga lub „zapamiętaj”. Dodaj tytuł i tre
 
 ### Blok kodu
 
-Służy do kodu, wzoru tekstowego albo fragmentu, który ma zachować odstępy i czcionkę monospace.
+Służy do kodu albo fragmentu, który ma zachować odstępy i czcionkę monospace. Do estetycznych wzorów użyj osobnego klocka **Wzór chemiczny / matematyczny**.
+
+### Wzór chemiczny / matematyczny
+
+Ten klocek tworzy estetyczny, skalowalny zapis wzoru. Wybierz jeden z dwóch trybów.
+
+#### Chemia — wzór lub reakcja
+
+1. W polu **Wzór lub substraty** wpisz np. `2 H2 + O2`.
+2. W polu **Produkty** wpisz np. `2 H2O`.
+3. Wybierz strzałkę: w prawo, w lewo, odwracalną, równowagi albo podwójną.
+4. W polu **Warunek nad strzałką** możesz wpisać np. `450 °C`, `Δ` albo `hν`.
+5. W polu **Warunek pod strzałką** możesz wpisać np. `kat. Pt` albo `2 atm`.
+6. Dodaj podpis pod wzorem, np. „Spalanie wodoru”.
+
+Cyfry we wzorach są zamieniane na indeksy dolne automatycznie. Przydatne przykłady:
+
+```text
+H2O
+Ca(OH)2
+SO4^2-
+^14C
+Fe^{III}
+NaCl (aq)
+AgCl v
+```
+
+Jeśli chcesz pokazać tylko jeden wzór bez reakcji, wybierz **Bez strzałki — pojedynczy wzór** i pozostaw pole produktów puste.
+
+#### Matematyka — równanie i symbole
+
+Po przełączeniu trybu wpisz wzór albo użyj przycisków pod polem. Dostępne są między innymi:
+
+- potęga: `x^{2}`;
+- indeks dolny: `a_{n}`;
+- ułamek: `\frac{a}{b}`;
+- pierwiastek: `\sqrt{x}`;
+- suma: `\sum_{i=1}^{n}`;
+- całka: `\int_{a}^{b}`;
+- wektor: `\vec{v}`;
+- symbole `π`, `Δ`, `∂`, `→`, `×`, `±`, `≈`, `≤`, `≥` i `∞`.
+
+Przykłady:
+
+```text
+E = mc^{2}
+c = \frac{n}{V}
+x_{1,2} = \frac{-b \pm \sqrt{b^{2} - 4ac}}{2a}
+\sum_{i=1}^{n} i = \frac{n(n+1)}{2}
+```
+
+Kreator przyjmuje tylko bezpieczny zestaw poleceń matematycznych. Nie wklejaj całego dokumentu LaTeX ani kodu HTML.
+
+### Kafelek z linkiem
+
+Tworzy estetyczną kartę prowadzącą do dodatkowego materiału zamiast pokazywania zwykłego, długiego adresu.
+
+1. Wpisz tytuł, np. „Tablica wzorów”.
+2. Dodaj krótki opis.
+3. Wklej adres strony albo modułu.
+4. Wybierz ikonę: link, książka, film, chemia, matematyka, plik lub strona zewnętrzna.
+5. Wybierz kolor akcentu.
+6. Zaznacz **Otwieraj w nowej karcie**, jeżeli kursant nie powinien opuszczać lekcji.
+
+Możesz użyć pełnego adresu `https://...`, adresu `http://...`, poczty `mailto:...`, kotwicy `#...` albo wewnętrznej ścieżki zaczynającej się od `/`, np. `/members/module/board/`. Adresy skryptowe, takie jak `javascript:...`, są odrzucane.
 
 ### Harmonijka
 
@@ -1408,19 +1482,22 @@ Przed przyjęciem prawdziwej płatności sprawdź:
 15. Quiz ABCD sprawdza zaznaczoną odpowiedź.
 16. Luki z listy działają.
 17. Luki tekstowe działają osobno i wszystkie naraz.
-18. ATONOM pokazuje kafelek, a model dopiero po kliknięciu.
-19. Prompt JSON i wskazany punkt TXT działają w czacie.
-20. Obraz można załączyć do czatu.
-21. Formularz kontaktowy trafia do Netlify Forms.
-22. Administrator widzi i może usunąć testowe zgłoszenie.
-23. Prezentacja, PDF, film, YouTube i Google Forms działają przy docelowym udostępnianiu.
-24. Kalkulatory i obie tablice się otwierają.
-25. Stripe pokazuje tryb testowy.
-26. Płatność `4242 4242 4242 4242` kończy się sukcesem.
-27. Webhook ma odpowiedź `200`.
-28. Płatność nadaje prawidłową rolę i termin.
-29. Odebranie dostępu nie wykonuje przypadkowego refundu.
-30. `npm test` i `npm run build` kończą się bez błędów.
+18. Klocek wzoru pokazuje poprawne indeksy, reakcję ze strzałką i temperaturą oraz wzór matematyczny z ułamkiem i pierwiastkiem.
+19. Kafelek z linkiem otwiera bezpieczny adres i nie pokazuje użytkownikowi surowego długiego linku.
+20. Każdy slajd używa wybranego przejścia, a opcja **Brak przejścia** wyłącza animację.
+21. ATONOM pokazuje kafelek, a model dopiero po kliknięciu.
+22. Prompt JSON i wskazany punkt TXT działają w czacie.
+23. Obraz można załączyć do czatu.
+24. Formularz kontaktowy trafia do Netlify Forms.
+25. Administrator widzi i może usunąć testowe zgłoszenie.
+26. Prezentacja, PDF, film, YouTube i Google Forms działają przy docelowym udostępnianiu.
+27. Kalkulatory i obie tablice się otwierają.
+28. Stripe pokazuje tryb testowy.
+27. Płatność `4242 4242 4242 4242` kończy się sukcesem.
+28. Webhook ma odpowiedź `200`.
+29. Płatność nadaje prawidłową rolę i termin.
+30. Odebranie dostępu nie wykonuje przypadkowego refundu.
+31. `npm test` i `npm run build` kończą się bez błędów.
 
 ## 31. Co można usuwać i jak to odzyskać
 

@@ -16,6 +16,14 @@
   <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
   <script src="/assets/js/auth.js"></script>
   <script src="/assets/js/content-library.js"></script>
+  <script>
+    window.MathJax = {
+      loader: { load: ['[tex]/mhchem'] },
+      tex: { packages: { '[+]': ['mhchem'] } },
+      startup: { typeset: false }
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" onload="document.dispatchEvent(new Event('chemdisk-mathjax-ready'))"></script>
   <script src="/members/dashboard-parser.js"></script>
   <script src="/members/module/lesson/lesson-parser.js"></script>
   <script src="dashboard-model.js"></script>
@@ -391,6 +399,12 @@
                   </button>
                   <button class="palette-item" type="button" draggable="true" data-lesson-add="code" data-search="kod wzór blok">
                     <span class="palette-symbol is-navy">&lt;/&gt;</span><span><strong>Blok kodu</strong><small>Monospace</small></span>
+                  </button>
+                  <button class="palette-item palette-item-wide" type="button" draggable="true" data-lesson-add="formula" data-search="wzór równanie reakcja chemia matematyka indeks potęga ułamek pierwiastek strzałka temperatura">
+                    <span class="palette-symbol is-teal">∑</span><span><strong>Wzór chemiczny / matematyczny</strong><small>Indeksy, reakcje, warunki, ułamki i symbole</small></span>
+                  </button>
+                  <button class="palette-item palette-item-wide" type="button" draggable="true" data-lesson-add="link" data-search="link odnośnik adres url kafelek materiał strona">
+                    <span class="palette-symbol is-blue">↗</span><span><strong>Kafelek z linkiem</strong><small>Tytuł, opis, ikona i bezpieczny adres</small></span>
                   </button>
                   <button class="palette-item palette-item-wide" type="button" draggable="true" data-lesson-add="accordion" data-search="harmonijka szczegóły rozwijane">
                     <span class="palette-symbol is-teal">⌄</span><span><strong>Harmonijka</strong><small>Rozwijane dodatkowe wyjaśnienie</small></span>

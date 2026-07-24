@@ -471,7 +471,7 @@ Administrator widzi w bocznym menu dodatkowy skrót **Studio treści** prowadzą
 Studio ma trzy tryby:
 
 - **Dashboard Builder** — przeciąganie sekcji, harmonijek poziomów 3–6, tekstów, komunikatów i kart modułów. Inspektor konfiguruje ID lub link materiału, wariant kalkulatora/tablicy, tryb ochrony `type`, plik lekcji, prompt czatu, notatkę kontaktową albo bezpieczny własny link. Selektor przełącza przeszukiwane repozytorium, a karta zapamiętuje jego `id`, więc identyczne nazwy plików nie kolidują;
-- **Lesson Builder** — układanie slajdów oraz bloków nagłówka, tekstu, obrazu HTTPS, wideo YouTube, listy, cytatu, calloutu, kodu, stylowanej sekcji i harmonijki. Do slajdu można dodać pytanie tekstowe, liczbowe, wyboru, ABCD, luki z listą albo luki wpisywane ręcznie. Opcje quizu mają osobne pola i znacznik ✓ poprawnej odpowiedzi, a luki tworzy się przyciskiem bez ręcznego wpisywania składni. Lekcję można wyszukać, wczytać, zapisać, zaktualizować albo usunąć w repozytorium wybranym z listy;
+- **Lesson Builder** — układanie slajdów oraz bloków nagłówka, tekstu, obrazu HTTPS, wideo YouTube, listy, cytatu, calloutu, kodu, stylowanej sekcji, harmonijki, wzorów i estetycznych kafelków z linkiem. Dedykowany klocek renderuje matematykę oraz reakcje chemiczne z indeksami, strzałkami i warunkami nad lub pod strzałką. Każdy slajd może osobno wyłączyć animację albo użyć zanikania, ruchu w górę, ruchu z boku lub miękkiego przybliżenia. Do slajdu można dodać pytanie tekstowe, liczbowe, wyboru, ABCD, luki z listą albo luki wpisywane ręcznie. Opcje quizu mają osobne pola i znacznik ✓ poprawnej odpowiedzi, a luki tworzy się przyciskiem bez ręcznego wpisywania składni. Lekcję można wyszukać, wczytać, zapisać, zaktualizować albo usunąć w repozytorium wybranym z listy;
 - **Prompt Builder** — tworzenie pojedynczego promptu `.json` lub zestawu ponumerowanych instrukcji `.txt`. Builder waliduje numery punktów, limity treści i format, pokazuje gotowe źródło oraz obsługuje ten sam ręczny, repozytoryjny i wielorepozytoryjny obieg co lekcje.
 
 Na większym ekranie biblioteka po lewej, obszar roboczy pośrodku oraz ustawienia/podgląd po prawej mają niezależne przewijanie. Każdą bibliotekę, prawy panel i górny pasek narzędzi można zwinąć osobno; ustawienia są zapamiętywane osobno dla Dashboard Buildera, Lesson Buildera i Prompt Buildera w `chemdisk.studio.layout.v1`.
@@ -499,7 +499,7 @@ Studio nie wykonuje cichego automatycznego zapisu do GitHuba. Autosave zapisuje 
 
 Odtwarzacz lekcji odrzuca plik większy niż 512 KiB lub zawierający ponad 100 slajdów. Builder pilnuje liczby slajdów, lecz obecnie nie blokuje pobrania tylko dlatego, że wynikowy Markdown przekroczył limit bajtów odtwarzacza. Przed wysłaniem bardzo dużej lekcji sprawdź rozmiar, np. `wc -c lessons/nazwa.md`, i utrzymaj go poniżej 524 288 bajtów.
 
-Na jednym slajdzie może znajdować się najwyżej jedno zadanie. Pytanie można dodać bezpośrednio z pustego slajdu, a następnie wpisać każdą opcję osobno i wskazać poprawną znakiem ✓. Quiz ABCD wymaga czterech opcji; pytanie `choice` co najmniej dwóch, a graficzne pole Studio zachowuje maksymalnie osiem. Przy lukach przycisk **Wstaw lukę** dodaje znacznik w miejscu kursora oraz osobny wiersz poprawnej odpowiedzi. Dla luk tekstowych można ustawić sprawdzanie każdej luki osobno albo wszystkich naraz. Opcje i aliasy odpowiedzi nie mogą zawierać separatora `|`. Kontenery `:::style` i `:::accordion` muszą mieć treść i nie mogą zawierać kolejnego kontenera tego typu. Studio nie kopiuje obrazów do repozytorium ani Blobs; użyj pełnego publicznego adresu HTTPS do obrazu, także gdy sam plik obrazu leży w innym publicznym repozytorium GitHub.
+Na jednym slajdzie może znajdować się najwyżej jedno zadanie. Pytanie można dodać bezpośrednio z pustego slajdu, a następnie wpisać każdą opcję osobno i wskazać poprawną znakiem ✓. Quiz ABCD wymaga czterech opcji; pytanie `choice` co najmniej dwóch, a graficzne pole Studio zachowuje maksymalnie osiem. Przy lukach przycisk **Wstaw lukę** dodaje znacznik w miejscu kursora oraz osobny wiersz poprawnej odpowiedzi. Dla luk tekstowych można ustawić sprawdzanie każdej luki osobno albo wszystkich naraz. Opcje i aliasy odpowiedzi nie mogą zawierać separatora `|`. Kontenery `:::style` i `:::accordion` muszą mieć treść i nie mogą zawierać kolejnego kontenera tego typu. Studio nie kopiuje obrazów do repozytorium ani Blobs; użyj pełnego publicznego adresu HTTPS do obrazu, także gdy sam plik obrazu leży w innym publicznym repozytorium GitHub. Kafelek z linkiem przyjmuje adresy `http`, `https`, `mailto`, kotwice i wewnętrzne ścieżki `/...`; niebezpieczne protokoły są odrzucane. Przejście jest zapisywane osobno w każdym slajdzie, a systemowe `prefers-reduced-motion` wyłącza animację.
 
 Eksport zawsze synchronizuje nagłówek `#` pierwszego slajdu z globalnym tytułem lekcji. Ton calloutu nie ma osobnego pola w Markdownzie i po ponownym imporcie jest rozpoznawany z jego tytułu. Tak jak przy dashboardzie, dla ważnego ręcznie pisanego źródła zachowaj kopię przed round-tripem przez graficzne klocki.
 
@@ -623,9 +623,64 @@ Wprowadzenie do tematu.
 > Ważna uwaga dla kursanta.
 ```
 
+Opcjonalny blok ustawień na początku treści danego slajdu wybiera jego subtelne przejście:
+
+```md
+:::slide
+transition: rise
+:::
+```
+
+Dozwolone wartości to `none`, `fade`, `rise`, `slide` i `zoom`. Domyślne `fade` nie musi być zapisywane. Ustawienie dotyczy tylko bieżącego slajdu; `none` całkowicie wyłącza jego przejście.
+
 Parser obsługuje nagłówki `#`, `##`, `###`, akapity, listy numerowane i punktowane, cytaty `>`, pogrubienie `**tekst**`, kursywę `*tekst*`, kod, bezpieczne linki oraz obrazy. Dla obrazu z publicznego repozytorium wstaw jego pełny publiczny adres HTTPS, np. `![Opis](https://raw.githubusercontent.com/OWNER/REPO/main/images/schemat.png)`. Token do prywatnych lekcji nie jest używany do pobierania obrazów. Surowy HTML jest wyświetlany jako tekst i nie jest wykonywany.
 
 Dodatkowo zapis `^13^C` tworzy indeks górny (¹³C), a `H~2~O` — indeks dolny. Jest to wygodne przy zapisie izotopów i wzorów chemicznych.
+
+Do rozbudowanych wzorów służy bezpieczny blok `:::formula`. Odtwarzacz i oba podglądy Studio renderują go przez MathJax z rozszerzeniem `mhchem`.
+
+Reakcja chemiczna:
+
+```md
+:::formula
+mode: chemistry
+title: Spalanie wodoru
+left: 2 H2 + O2
+arrow: ->
+above: 450 °C
+below: kat. Pt
+right: 2 H2O
+:::
+```
+
+Dozwolone strzałki to pusty zapis (pojedynczy wzór), `->`, `<-`, `<->`, `<=>`, `<=>>` i `<<=>`. Dwie ostatnie pokazują równowagę przesuniętą odpowiednio w prawo albo w lewo. `above` umieszcza temperaturę, światło lub inny warunek nad strzałką, a `below` — katalizator, ciśnienie albo dodatkowy warunek pod nią. Rozszerzenie chemiczne rozpoznaje m.in. indeksy w `H2O`, ładunki w `SO4^2-`, izotopy w `^14C`, stopnie utlenienia w `Fe^{III}` oraz oznaczenia faz `(s)`, `(l)`, `(g)` i `(aq)`.
+
+Wzór matematyczny:
+
+```md
+:::formula
+mode: math
+title: Stężenie molowe
+expression: c = \frac{n}{V}
+:::
+```
+
+Obsługiwany jest ograniczony, bezpieczny podzbiór zapisu matematycznego: potęgi `x^{2}`, indeksy `a_{n}`, ułamki `\frac{a}{b}`, pierwiastki `\sqrt{x}`, sumy, iloczyny, całki, granice, pochodne cząstkowe, wektory, strzałki, podstawowe funkcje, greckie litery i symbole porównania. Nie są przyjmowane dowolne polecenia LaTeX, HTML, adresy ani makra ładujące zasoby.
+
+Estetyczny kafelek z linkiem:
+
+```md
+:::linkcard
+title: Tablica wzorów
+description: Otwórz materiał pomocniczy do zadania.
+url: https://example.com/wzory
+icon: math
+color: #2563eb
+new_tab: true
+:::
+```
+
+Ikony: `link`, `book`, `video`, `chemistry`, `math`, `file` i `external`. Kolor ma format `#RRGGBB`. `new_tab: true` dodaje bezpieczne otwieranie w nowej karcie. Adres może używać `http`, `https`, `mailto`, `#kotwicy` albo wewnętrznej ścieżki `/...`; protokoły skryptowe są odrzucane.
 
 Stylowany fragment i harmonijkę można zapisać bez wykonywania HTML lub dowolnego CSS:
 
@@ -902,9 +957,12 @@ Przed publikacją wykonaj też krótki test ręczny:
 15. Atonom poprawnie buduje kilka rodzin związków, pokazuje błąd dla nieobsługiwanej nazwy i kopiuje link z `formula`;
 16. Studio wczytuje aktywny dashboard, zachowuje lokalny draft, wykrywa konflikt `etag` i publikuje poprawny układ;
 17. Lesson Builder importuje istniejącą lekcję, odtwarza jej bloki i quizy, pozwala pobrać `.md` ręcznie oraz generuje plik działający w module `lesson`;
-18. Prompt Builder importuje, waliduje i eksportuje pliki `.json` oraz wielopunktowe `.txt`;
-19. administrator tworzy testowy plik lekcji lub promptu w GitHubie, aktualizuje go po ponownym wczytaniu, a konflikt SHA nie nadpisuje nowszej wersji;
-20. usunięcie testowego pliku wymaga potwierdzenia i tworzy commit widoczny w historii repo;
-21. zakładka **Materiały** pokazuje poprawne repo i liczby plików, wyszukiwarka Studio widzi lekcje i prompty, a odtwarzacz otwiera lekcję z repo;
-22. po zmianie pliku w repo materiałów nowa wersja jest widoczna bez deployu aplikacji po wygaśnięciu 20-sekundowego cache’u;
-23. linki Google i YouTube działają na docelowej domenie i przy docelowych ustawieniach udostępniania.
+18. blok wzoru zachowuje reakcję ze strzałką, temperaturą i katalizatorem oraz renderuje potęgi, indeksy, ułamki i pierwiastki w Studio i odtwarzaczu;
+19. kafelek z linkiem zachowuje tytuł, opis, ikonę, kolor i ustawienie nowej karty, a niebezpieczny protokół jest odrzucany;
+20. każdy wariant przejścia slajdu działa w Studio i odtwarzaczu, `none` wyłącza animację, a ograniczenie ruchu z systemu jest respektowane;
+21. Prompt Builder importuje, waliduje i eksportuje pliki `.json` oraz wielopunktowe `.txt`;
+22. administrator tworzy testowy plik lekcji lub promptu w GitHubie, aktualizuje go po ponownym wczytaniu, a konflikt SHA nie nadpisuje nowszej wersji;
+23. usunięcie testowego pliku wymaga potwierdzenia i tworzy commit widoczny w historii repo;
+24. zakładka **Materiały** pokazuje poprawne repo i liczby plików, wyszukiwarka Studio widzi lekcje i prompty, a odtwarzacz otwiera lekcję z repo;
+25. po zmianie pliku w repo materiałów nowa wersja jest widoczna bez deployu aplikacji po wygaśnięciu 20-sekundowego cache’u;
+26. linki Google i YouTube działają na docelowej domenie i przy docelowych ustawieniach udostępniania.

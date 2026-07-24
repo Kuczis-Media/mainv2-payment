@@ -2589,6 +2589,146 @@ button {
   margin: 14px 0;
 }
 
+.formula-symbol-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.formula-symbol-button {
+  min-width: 42px;
+  min-height: 38px;
+  padding: 5px 9px;
+  color: var(--chem-primary);
+  background: var(--chem-primary-soft);
+  border: 1px solid color-mix(in srgb, var(--chem-primary) 28%, var(--chem-line));
+  border-radius: 9px;
+  cursor: pointer;
+  font: 750 0.82rem Georgia, "Times New Roman", serif;
+}
+
+.formula-symbol-button:hover,
+.formula-symbol-button:focus-visible {
+  color: #fff;
+  background: var(--chem-primary);
+  outline: none;
+}
+
+.lesson-preview-body .lesson-formula {
+  margin: 14px 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--chem-primary) 28%, var(--chem-line));
+  border-radius: 13px;
+  background:
+    radial-gradient(circle at 10% 0%, color-mix(in srgb, var(--chem-primary) 12%, transparent), transparent 46%),
+    var(--chem-surface);
+}
+
+.lesson-preview-body .lesson-formula-display {
+  min-height: 74px;
+  padding: 18px 14px;
+  overflow-x: auto;
+  color: var(--chem-text);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1rem;
+  line-height: 1.5;
+  text-align: center;
+  scrollbar-width: thin;
+}
+
+.lesson-preview-body .lesson-formula-display mjx-container {
+  margin: 0 !important;
+  max-width: none;
+}
+
+.lesson-preview-body .lesson-formula figcaption {
+  padding: 7px 12px;
+  border-top: 1px solid var(--chem-line);
+  color: var(--chem-muted);
+  background: var(--chem-surface-soft);
+  font-size: 0.56rem;
+  font-weight: 750;
+  text-align: center;
+}
+
+.lesson-preview-shell.is-entering[data-transition="fade"] { animation: studio-lesson-fade 260ms ease-out both; }
+.lesson-preview-shell.is-entering[data-transition="rise"] { animation: studio-lesson-rise 320ms cubic-bezier(.22, .72, .25, 1) both; }
+.lesson-preview-shell.is-entering[data-transition="slide"] { animation: studio-lesson-slide 320ms cubic-bezier(.22, .72, .25, 1) both; }
+.lesson-preview-shell.is-entering[data-transition="zoom"] { animation: studio-lesson-zoom 290ms cubic-bezier(.22, .72, .25, 1) both; }
+
+.lesson-preview-body .lesson-link-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0;
+  padding: 13px;
+  color: var(--chem-text);
+  text-decoration: none;
+  background:
+    radial-gradient(circle at 92% 8%, color-mix(in srgb, var(--link-card-color) 13%, transparent), transparent 44%),
+    var(--chem-surface);
+  border: 1px solid color-mix(in srgb, var(--link-card-color) 32%, var(--chem-line));
+  border-radius: 13px;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.lesson-preview-body .lesson-link-card:hover,
+.lesson-preview-body .lesson-link-card:focus-visible {
+  color: var(--chem-text);
+  border-color: color-mix(in srgb, var(--link-card-color) 60%, var(--chem-line));
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--link-card-color) 13%, transparent);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.lesson-preview-body .lesson-link-icon {
+  display: grid;
+  width: 39px;
+  height: 39px;
+  place-items: center;
+  color: #fff;
+  background: var(--link-card-color);
+  border-radius: 11px;
+  font-size: 1rem;
+  font-weight: 850;
+}
+
+.lesson-preview-body .lesson-link-copy,
+.lesson-preview-body .lesson-link-copy small,
+.lesson-preview-body .lesson-link-copy strong,
+.lesson-preview-body .lesson-link-copy span {
+  display: block;
+}
+
+.lesson-preview-body .lesson-link-copy small {
+  color: var(--link-card-color);
+  font-size: 0.46rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.lesson-preview-body .lesson-link-copy strong {
+  margin-top: 2px;
+  color: var(--chem-text);
+  font-size: 0.7rem;
+}
+
+.lesson-preview-body .lesson-link-copy span {
+  margin-top: 3px;
+  color: var(--chem-muted);
+  font-size: 0.53rem;
+  line-height: 1.4;
+}
+
+.lesson-preview-body .lesson-link-action {
+  color: var(--link-card-color);
+  font-size: 0.5rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
 .lesson-preview-body .lesson-atonom-card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -3141,6 +3281,45 @@ button {
   min-height: 620px;
 }
 
+.full-lesson-slide .lesson-preview-body .lesson-formula-display {
+  min-height: 120px;
+  padding: 34px 24px;
+  font-size: clamp(1.35rem, 3vw, 2.2rem);
+}
+
+.full-lesson-slide .lesson-preview-body .lesson-formula figcaption {
+  padding: 11px 16px;
+  font-size: 0.72rem;
+}
+
+.full-lesson-slide .lesson-preview-body .lesson-link-card {
+  gap: 14px;
+  padding: 18px;
+}
+
+.full-lesson-slide .lesson-preview-body .lesson-link-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  font-size: 1.2rem;
+}
+
+.full-lesson-slide .lesson-preview-body .lesson-link-copy small {
+  font-size: 0.62rem;
+}
+
+.full-lesson-slide .lesson-preview-body .lesson-link-copy strong {
+  font-size: 1rem;
+}
+
+.full-lesson-slide .lesson-preview-body .lesson-link-copy span {
+  font-size: 0.76rem;
+}
+
+.full-lesson-slide .lesson-preview-body .lesson-link-action {
+  font-size: 0.72rem;
+}
+
 .full-lesson-slide .lesson-preview-body .lesson-atonom-card {
   padding: 18px;
   gap: 14px;
@@ -3392,6 +3571,26 @@ button {
   from { opacity: 0; transform: translateY(10px); }
 }
 
+@keyframes studio-lesson-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes studio-lesson-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes studio-lesson-slide {
+  from { opacity: 0; transform: translateX(14px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes studio-lesson-zoom {
+  from { opacity: 0; transform: scale(.988); }
+  to { opacity: 1; transform: scale(1); }
+}
+
 @media (max-width: 1240px) {
   .builder-layout {
     grid-template-columns: 235px minmax(400px, 1fr) 300px;
@@ -3584,6 +3783,15 @@ button {
   .full-lesson-slide .lesson-preview-body .lesson-embed iframe,
   .full-lesson-slide .lesson-preview-body .lesson-atonom iframe {
     min-height: 240px;
+  }
+
+  .full-lesson-slide .lesson-preview-body .lesson-link-card {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .full-lesson-slide .lesson-preview-body .lesson-link-action {
+    grid-column: 2;
+    white-space: normal;
   }
 
   .lesson-preview-body .lesson-atonom-card {
