@@ -64,6 +64,7 @@ a { -webkit-tap-highlight-color: transparent; }
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
+.outline-toggle:focus-visible,
 fieldset:focus-within {
   outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent);
   outline-offset: 3px;
@@ -179,6 +180,11 @@ fieldset:focus-within {
   stroke-width: 1.8;
 }
 
+.topbar-toggle svg,
+.outline-toggle svg {
+  transition: transform 180ms ease;
+}
+
 .moon-icon,
 :root[data-theme="dark"] .sun-icon { display: none; }
 :root[data-theme="dark"] .moon-icon { display: block; }
@@ -201,18 +207,56 @@ fieldset:focus-within {
 
 .lesson-layout {
   display: grid;
-  grid-template-columns: 250px minmax(0, 780px);
-  justify-content: center;
-  gap: clamp(32px, 6vw, 82px);
-  width: min(1180px, calc(100% - 40px));
+  grid-template-columns: 210px minmax(0, 1fr);
+  justify-content: stretch;
+  gap: clamp(18px, 3vw, 42px);
+  width: min(1480px, calc(100% - 32px));
   margin: 0 auto;
-  padding: clamp(38px, 7vw, 84px) 0 72px;
+  padding: clamp(28px, 4vw, 56px) 0 72px;
+  transition: grid-template-columns 180ms ease, gap 180ms ease;
 }
 
 .lesson-outline {
   position: sticky;
-  top: 118px;
+  top: 102px;
   align-self: start;
+}
+
+.outline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 34px;
+  gap: 10px;
+}
+
+.outline-toggle {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.outline-toggle:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+}
+
+.outline-toggle svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
 }
 
 .outline-kicker,
@@ -227,19 +271,19 @@ fieldset:focus-within {
 
 .lesson-outline ol {
   display: grid;
-  gap: 5px;
-  margin: 16px 0 22px;
+  gap: 3px;
+  margin: 10px 0 16px;
   padding: 0;
   list-style: none;
 }
 
 .lesson-outline button {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
+  grid-template-columns: 27px minmax(0, 1fr);
   align-items: center;
-  gap: 11px;
+  gap: 8px;
   width: 100%;
-  padding: 9px;
+  padding: 6px;
   border: 0;
   border-radius: 12px;
   color: var(--muted);
@@ -260,8 +304,8 @@ fieldset:focus-within {
 .outline-marker {
   display: grid;
   place-items: center;
-  width: 29px;
-  height: 29px;
+  width: 27px;
+  height: 27px;
   border: 1px solid var(--line);
   border-radius: 50%;
   color: var(--muted);
@@ -286,7 +330,7 @@ fieldset:focus-within {
 
 .outline-label {
   overflow: hidden;
-  font-size: 0.84rem;
+  font-size: 0.78rem;
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -295,12 +339,12 @@ fieldset:focus-within {
 .outline-tip {
   display: flex;
   gap: 10px;
-  padding: 14px;
+  padding: 11px;
   border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line));
   border-radius: 14px;
   color: var(--muted);
   background: color-mix(in srgb, var(--accent-soft) 38%, transparent);
-  font-size: 0.76rem;
+  font-size: 0.71rem;
   line-height: 1.5;
 }
 
@@ -320,7 +364,7 @@ fieldset:focus-within {
 
 .slide-card,
 .state-card {
-  min-height: 480px;
+  min-height: 540px;
   border: 1px solid var(--line);
   border-radius: 28px;
   background: color-mix(in srgb, var(--surface) 96%, transparent);
@@ -328,7 +372,7 @@ fieldset:focus-within {
 }
 
 .slide-card {
-  padding: clamp(28px, 6vw, 62px);
+  padding: clamp(32px, 5vw, 72px);
   animation: slide-in 260ms ease both;
 }
 
@@ -440,6 +484,7 @@ fieldset:focus-within {
 .lesson-rich-style {
   margin: 24px 0;
   color: var(--lesson-rich-color, var(--muted));
+  font-size: clamp(1rem, 1.8vw, 1.12rem);
 }
 
 .lesson-rich-style.has-background {
@@ -471,30 +516,63 @@ fieldset:focus-within {
   color: var(--lesson-rich-color, inherit);
 }
 
+.lesson-rich-style p,
+.lesson-rich-style li,
+.lesson-rich-style blockquote {
+  font-size: inherit;
+}
+
 .lesson-font-sans,
 .lesson-font-sans * {
-  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+}
+
+.lesson-font-arial,
+.lesson-font-arial * {
+  font-family: Arial, Helvetica, sans-serif !important;
+}
+
+.lesson-font-verdana,
+.lesson-font-verdana * {
+  font-family: Verdana, Geneva, sans-serif !important;
 }
 
 .lesson-font-serif,
 .lesson-font-serif * {
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: Georgia, "Times New Roman", serif !important;
+}
+
+.lesson-font-georgia,
+.lesson-font-georgia * {
+  font-family: Georgia, "Times New Roman", serif !important;
+}
+
+.lesson-font-times,
+.lesson-font-times * {
+  font-family: "Times New Roman", Times, serif !important;
 }
 
 .lesson-font-rounded,
 .lesson-font-rounded * {
-  font-family: ui-rounded, "SF Pro Rounded", "Nunito", Inter, ui-sans-serif, sans-serif;
+  font-family: ui-rounded, "SF Pro Rounded", "Nunito", Inter, ui-sans-serif, sans-serif !important;
 }
 
 .lesson-font-mono,
 .lesson-font-mono * {
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace !important;
 }
 
-.lesson-size-small { font-size: 0.84em; }
-.lesson-size-normal { font-size: 1em; }
-.lesson-size-large { font-size: 1.16em; }
-.lesson-size-xlarge { font-size: 1.34em; }
+.lesson-font-courier,
+.lesson-font-courier * {
+  font-family: "Courier New", Courier, monospace !important;
+}
+
+.lesson-size-small { font-size: 0.88rem; }
+.lesson-size-normal { font-size: clamp(1rem, 1.8vw, 1.12rem); }
+.lesson-size-large { font-size: clamp(1.2rem, 2.2vw, 1.42rem); }
+.lesson-size-xlarge { font-size: clamp(1.45rem, 2.8vw, 1.82rem); }
+.lesson-weight-bold,
+.lesson-weight-bold * { font-weight: 800 !important; }
 .lesson-align-left { text-align: left; }
 .lesson-align-center { text-align: center; }
 .lesson-align-right { text-align: right; }
@@ -549,6 +627,88 @@ fieldset:focus-within {
 
 .lesson-embed {
   margin: 30px 0;
+}
+
+.lesson-atonom-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: clamp(16px, 3vw, 22px);
+  align-items: center;
+  gap: 15px;
+  background:
+    radial-gradient(circle at 92% 8%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 42%),
+    linear-gradient(145deg, var(--surface), color-mix(in srgb, var(--accent-soft) 54%, var(--surface)));
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  border-radius: 20px;
+  box-shadow: 0 14px 36px rgba(20, 28, 24, 0.1);
+}
+
+.lesson-atonom-symbol {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  color: #fff;
+  background: var(--accent-strong);
+  border-radius: 17px;
+  font-size: 1.7rem;
+}
+
+:root[data-theme="dark"] .lesson-atonom-symbol {
+  color: #102018;
+}
+
+.lesson-atonom-copy,
+.lesson-atonom-copy small,
+.lesson-atonom-copy strong,
+.lesson-atonom-copy span {
+  display: block;
+}
+
+.lesson-atonom-copy small {
+  color: var(--accent-strong);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.lesson-atonom-copy strong {
+  margin-top: 4px;
+  color: var(--text);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.15rem, 2.4vw, 1.55rem);
+}
+
+.lesson-atonom-copy span {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.lesson-atonom-open {
+  min-height: 44px;
+  padding: 0 16px;
+  color: #fff;
+  background: var(--accent-strong);
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+:root[data-theme="dark"] .lesson-atonom-open {
+  color: #102018;
+}
+
+.lesson-atonom-open:hover {
+  background: var(--accent);
+}
+
+.lesson-atonom-frame {
+  margin-top: 14px;
 }
 
 .lesson-embed iframe {
@@ -883,6 +1043,13 @@ fieldset:focus-within {
 @media (max-width: 680px) {
   .lesson-flashcard-grid { grid-template-columns: 1fr; }
   .lesson-atonom iframe { min-height: 520px; }
+  .lesson-atonom-card {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .lesson-atonom-open {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
 }
 
 :root[data-theme="dark"] .choice-grid label:has(input:checked) .choice-letter {
@@ -1045,10 +1212,12 @@ fieldset:focus-within {
     padding-right: 14px;
     padding-left: 14px;
   }
+  .topbar-actions { gap: 4px; }
+  .icon-button { width: 38px; height: 38px; }
   .progress-track { top: 68px; }
   .back-link span,
   .brand-mark { display: none; }
-  .brand-copy strong { max-width: 48vw; }
+  .brand-copy strong { max-width: 34vw; }
   .slide-card,
   .state-card { min-height: 430px; border-radius: 22px; }
   .slide-card { padding: 25px 21px 30px; }
@@ -1068,6 +1237,91 @@ fieldset:focus-within {
   }
   .lesson-navigation p { display: none; }
   .lesson-navigation .button { min-width: 0; padding: 0 12px; }
+}
+
+.app-shell.is-topbar-collapsed .topbar {
+  grid-template-columns: 1fr;
+  min-height: 48px;
+  padding: max(4px, env(safe-area-inset-top)) clamp(14px, 3vw, 32px) 4px;
+}
+
+.app-shell.is-topbar-collapsed .topbar .back-link,
+.app-shell.is-topbar-collapsed .topbar .brand,
+.app-shell.is-topbar-collapsed .topbar-actions > :not(.topbar-toggle) {
+  display: none;
+}
+
+.app-shell.is-topbar-collapsed .topbar-actions {
+  grid-column: 1;
+  justify-self: end;
+}
+
+.app-shell.is-topbar-collapsed .topbar-toggle {
+  width: 38px;
+  height: 38px;
+}
+
+.app-shell.is-topbar-collapsed .topbar-toggle svg {
+  transform: rotate(180deg);
+}
+
+.app-shell.is-topbar-collapsed .progress-track {
+  top: 48px;
+}
+
+.app-shell.is-topbar-collapsed .lesson-outline {
+  top: 70px;
+}
+
+@media (min-width: 861px) {
+  .app-shell.is-outline-collapsed .lesson-layout {
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .app-shell.is-outline-collapsed .outline-header {
+    justify-content: center;
+  }
+
+  .app-shell.is-outline-collapsed .outline-kicker,
+  .app-shell.is-outline-collapsed .outline-label,
+  .app-shell.is-outline-collapsed .outline-tip {
+    display: none;
+  }
+
+  .app-shell.is-outline-collapsed .outline-toggle svg {
+    transform: rotate(180deg);
+  }
+
+  .app-shell.is-outline-collapsed .lesson-outline ol {
+    margin-top: 8px;
+  }
+
+  .app-shell.is-outline-collapsed .lesson-outline button {
+    display: grid;
+    grid-template-columns: 1fr;
+    justify-items: center;
+    padding: 5px;
+  }
+}
+
+@media (max-width: 860px) {
+  .outline-header {
+    justify-content: flex-end;
+    margin-bottom: 8px;
+  }
+
+  .app-shell.is-outline-collapsed .lesson-outline {
+    margin-bottom: 10px;
+  }
+
+  .app-shell.is-outline-collapsed .lesson-outline ol {
+    display: none;
+  }
+
+  .app-shell.is-outline-collapsed .outline-toggle svg {
+    transform: rotate(-90deg);
+  }
 }
 
 .lesson-library-dialog {

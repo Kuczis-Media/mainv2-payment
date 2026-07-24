@@ -12,7 +12,17 @@
   const STRUCTURAL_CONTAINER_START = /^\s*:::(?:task|zadanie|question|style|accordion|youtube|atonom|flashcards)(?:\s+.*?)?\s*$/i;
   const RICH_CONTAINER_END = /^\s*:::\s*$/;
   const SAFE_STYLE_COLOR = /^#[0-9a-f]{6}$/i;
-  const STYLE_FONTS = new Set(['sans', 'serif', 'rounded', 'mono']);
+  const STYLE_FONTS = new Set([
+    'sans',
+    'arial',
+    'verdana',
+    'serif',
+    'georgia',
+    'times',
+    'rounded',
+    'mono',
+    'courier'
+  ]);
   const STYLE_SIZES = new Set(['small', 'normal', 'large', 'xlarge']);
   const STYLE_ALIGNS = new Set(['left', 'center', 'right']);
   const INTERACTIVE_START = /^\s*:::(youtube|atonom|flashcards)\s*$/i;
@@ -384,9 +394,10 @@
     const font = STYLE_FONTS.has(values.font) ? values.font : 'sans';
     const size = STYLE_SIZES.has(values.size) ? values.size : 'normal';
     const align = STYLE_ALIGNS.has(values.align) ? values.align : 'left';
+    const bold = /^(?:1|true|yes|tak|bold|700)$/i.test(values.bold || values.weight || '');
     const color = SAFE_STYLE_COLOR.test(values.color || '') ? values.color.toLowerCase() : '';
     const background = SAFE_STYLE_COLOR.test(values.background || '') ? values.background.toLowerCase() : '';
-    return { font, size, align, color, background };
+    return { font, size, align, bold, color, background };
   }
 
   function styleContainerHtml(options) {
@@ -396,6 +407,7 @@
       `lesson-size-${options.size}`,
       `lesson-align-${options.align}`
     ];
+    if (options.bold) classes.push('lesson-weight-bold');
     if (options.background) classes.push('has-background');
     const style = options.color
       || options.background
@@ -453,7 +465,7 @@
       }
       const title = values.title || `Model cząsteczki: ${formula}`;
       const src = `/members/module/atonom/?formula=${encodeURIComponent(formula)}`;
-      return `<figure class="lesson-embed lesson-atonom"><iframe src="${escapeHtml(src)}" title="${escapeHtml(title)}" loading="lazy"></iframe><figcaption>${escapeHtml(title)}</figcaption></figure>`;
+      return `<figure class="lesson-embed lesson-atonom" data-atonom-formula="${escapeHtml(formula)}"><div class="lesson-atonom-card"><span class="lesson-atonom-symbol" aria-hidden="true">⚛</span><span class="lesson-atonom-copy"><small>Interaktywny model 3D</small><strong>${escapeHtml(formula)}</strong><span>Model zostanie uruchomiony dopiero po kliknięciu.</span></span><button class="lesson-atonom-open" type="button" data-atonom-src="${escapeHtml(src)}" data-atonom-title="${escapeHtml(title)}" aria-expanded="false">Pokaż związek</button></div><div class="lesson-atonom-frame" hidden></div><figcaption>${escapeHtml(title)}</figcaption></figure>`;
     }
 
     const color = SAFE_STYLE_COLOR.test(values.color || '') ? values.color.toLowerCase() : '#7c3aed';

@@ -1009,9 +1009,6 @@
           'Dozwolony jest pełny adres HTTPS albo wewnętrzna ścieżka zaczynająca się od /.'
         ));
       }
-      const previewUrl = textInput(dashboardModelApi.moduleHref(node), 'hrefPreview', { readOnly: true });
-      previewUrl.id = 'dashboard-url-preview';
-      form.append(field('Wygenerowany adres', previewUrl));
     }
 
     form.append(inspectorActions());
@@ -1113,10 +1110,6 @@
       if (subtitle) subtitle.textContent = dashboardNodeSubtitle(found.node);
       const chip = target.querySelector('.module-chip');
       if (chip && found.node.kind === 'module') chip.textContent = dashboardModelApi.moduleHref(found.node);
-    }
-    const urlPreview = byId('dashboard-url-preview');
-    if (urlPreview && found.node.kind === 'module') {
-      urlPreview.value = dashboardModelApi.moduleHref(found.node);
     }
   }
 
@@ -1485,6 +1478,7 @@
         background: '',
         size: 'normal',
         align: 'left',
+        bold: false,
         blocks: [lessonModelApi.createBlock('text', { text: 'Wpisz tekst i ustaw jego wygląd.' })]
       });
     }
@@ -1736,7 +1730,7 @@
 
   function lessonBlockSubtitle(block) {
     if (block.type === 'style') {
-      return `${block.font} · ${block.size} · ${block.align}${block.color ? ` · tekst ${block.color}` : ''}${block.background ? ` · tło ${block.background}` : ''}`;
+      return `${block.font} · ${block.size} · ${block.align}${block.bold ? ' · pogrubiony' : ''}${block.color ? ` · tekst ${block.color}` : ''}${block.background ? ` · tło ${block.background}` : ''}`;
     }
     if (block.type === 'accordion') return `${block.blocks.length} elementów · ${block.open ? 'otwarta' : 'zamknięta'}`;
     if (block.type === 'list') return `${block.items.length} punktów`;
@@ -2376,7 +2370,7 @@
             placeholder: 'np. kwas octowy, etanol, cis-but-2-en',
             maxLength: 140
           }),
-          'Builder utworzy iframe /members/module/atonom/?formula=nazwa-związku.'
+          'W lekcji pojawi się kafelek. Model /members/module/atonom/?formula=nazwa-związku zostanie załadowany dopiero po kliknięciu.'
         ),
         field('Tytuł modelu', lessonInput(block.title, 'title', { maxLength: 180 }))
       );
@@ -2406,10 +2400,21 @@
         'Możesz też przeciągnąć do tego kontenera nagłówek, listę, obraz lub callout.'
       ));
       const row = create('div', 'field-row');
+      const fontLabels = {
+        sans: 'Systemowa (Inter)',
+        arial: 'Arial',
+        verdana: 'Verdana',
+        serif: 'Szeryfowa',
+        georgia: 'Georgia',
+        times: 'Times New Roman',
+        rounded: 'Zaokrąglona',
+        mono: 'Monospace',
+        courier: 'Courier New'
+      };
       row.append(
         field('Czcionka', lessonSelect(block.font, 'font', lessonModelApi.STYLE_FONTS.map((value) => ({
           value,
-          label: value === 'sans' ? 'Bezszeryfowa' : value === 'serif' ? 'Szeryfowa' : value === 'rounded' ? 'Zaokrąglona' : 'Monospace'
+          label: fontLabels[value] || value
         })))),
         field('Rozmiar', lessonSelect(block.size, 'size', [
           { value: 'small', label: 'Mały' },
@@ -2436,12 +2441,17 @@
         lessonInput('', 'useColor', { type: 'checkbox', checked: Boolean(block.color) }),
         create('span', '', 'Użyj własnego koloru tekstu')
       );
+      const useBold = create('label', 'check-field');
+      useBold.append(
+        lessonInput('', 'bold', { type: 'checkbox', checked: Boolean(block.bold) }),
+        create('span', '', 'Pogrub cały tekst w tym bloku')
+      );
       const useBackground = create('label', 'check-field');
       useBackground.append(
         lessonInput('', 'useBackground', { type: 'checkbox', checked: Boolean(block.background) }),
         create('span', '', 'Użyj kolorowego tła karty')
       );
-      form.append(row, alignRow, useColor, backgroundRow, useBackground);
+      form.append(row, useBold, alignRow, useColor, backgroundRow, useBackground);
     } else if (block.type === 'accordion') {
       const open = create('label', 'check-field');
       open.append(
@@ -2469,6 +2479,33 @@
         const flipped = card.getAttribute('aria-pressed') !== 'true';
         card.setAttribute('aria-pressed', String(flipped));
         card.classList.toggle('is-flipped', flipped);
+      });
+    });
+  }
+
+  function bindPreviewAtonom(root) {
+    all('.lesson-atonom-open', root).forEach((button) => {
+      button.addEventListener('click', () => {
+        const figure = button.closest('.lesson-atonom');
+        const frameHost = figure?.querySelector('.lesson-atonom-frame');
+        if (!frameHost) return;
+        const expanded = button.getAttribute('aria-expanded') === 'true';
+        if (expanded) {
+          frameHost.replaceChildren();
+          frameHost.hidden = true;
+          button.setAttribute('aria-expanded', 'false');
+          button.textContent = 'Pokaż związek';
+          return;
+        }
+        const iframe = frameHost.ownerDocument.createElement('iframe');
+        iframe.src = button.dataset.atonomSrc;
+        iframe.title = button.dataset.atonomTitle || 'Interaktywny model cząsteczki';
+        iframe.loading = 'lazy';
+        iframe.setAttribute('allow', 'fullscreen');
+        frameHost.replaceChildren(iframe);
+        frameHost.hidden = false;
+        button.setAttribute('aria-expanded', 'true');
+        button.textContent = 'Ukryj model';
       });
     });
   }
@@ -2712,6 +2749,7 @@
       buildLessonPreviewShell(slide, index, true)
     );
     bindPreviewFlashcards(elements.lessonPreview);
+    bindPreviewAtonom(elements.lessonPreview);
     bindPreviewTasks(elements.lessonPreview);
     syncFullPreview('lesson');
   }
@@ -2799,6 +2837,7 @@
     doc.body.replaceChildren(header, main);
     if (mode === 'lesson') {
       bindPreviewFlashcards(main);
+      bindPreviewAtonom(main);
       bindPreviewTasks(main);
     }
     popup.requestAnimationFrame(() => popup.scrollTo(0, previousScroll));

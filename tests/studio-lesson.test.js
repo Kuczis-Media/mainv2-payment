@@ -205,7 +205,8 @@ test('studio serializes code, callouts, safe style containers and accordions', (
         { type: 'code', language: 'js', code: 'const mol = 6.022e23;' },
         {
           type: 'style',
-          font: 'serif',
+          font: 'arial',
+          bold: true,
           color: '#0F766E',
           size: 'large',
           align: 'center',
@@ -227,12 +228,13 @@ test('studio serializes code, callouts, safe style containers and accordions', (
   const markdown = studio.serializeLesson(lesson);
   assert.match(markdown, /> \*\*Wskazówka:\*\* Zapisz jednostkę\./);
   assert.match(markdown, /```js\nconst mol = 6\.022e23;\n```/);
-  assert.match(markdown, /:::style font=serif color=#0f766e size=large align=center\nWyróżniona definicja\.\n:::/);
+  assert.match(markdown, /:::style font=arial color=#0f766e bold=true size=large align=center\nWyróżniona definicja\.\n:::/);
   assert.match(markdown, /:::accordion Pokaż rozwiązanie open=true\n### Rozwiązanie\n\nNajpierw oblicz liczbę moli\.\n:::/);
 
   const imported = studio.parseLesson(markdown, 'materialy.md');
   assert.equal(imported.slides[0].blocks.find((block) => block.type === 'callout').title, 'Wskazówka');
-  assert.equal(imported.slides[0].blocks.find((block) => block.type === 'style').font, 'serif');
+  assert.equal(imported.slides[0].blocks.find((block) => block.type === 'style').font, 'arial');
+  assert.equal(imported.slides[0].blocks.find((block) => block.type === 'style').bold, true);
   assert.equal(imported.slides[0].blocks.find((block) => block.type === 'style').color, '#0f766e');
   assert.equal(imported.slides[0].blocks.find((block) => block.type === 'accordion').blocks.length, 2);
   assert.equal(imported.slides[0].blocks.find((block) => block.type === 'accordion').open, true);
@@ -299,6 +301,9 @@ test('studio publishes backgrounds, YouTube, ATONOM, flashcards and selectable t
   const slide = published.slides[0];
   assert.match(slide.html, /youtube-nocookie\.com\/embed\/M7lc1UVf-VE/);
   assert.match(slide.html, /\/members\/module\/atonom\/\?formula=kwas%20octowy/);
+  assert.match(slide.html, /class="lesson-atonom-card"/);
+  assert.match(slide.html, /class="lesson-atonom-open"/);
+  assert.doesNotMatch(slide.html, /<figure class="lesson-embed lesson-atonom"[^>]*><iframe/);
   assert.match(slide.html, /class="lesson-flashcard"/);
   assert.match(slide.html, /--lesson-rich-background:#dff7ed/);
   assert.equal(lessonParser.checkAnswer(slide.task, ['alkoholem', 'hydroksylowa']), true);
@@ -410,7 +415,17 @@ test('studio exposes renderer extension capabilities and a strict authoring file
   assert.ok(studio.capabilities.tasks.includes('gaps'));
   assert.ok(studio.capabilities.tasks.includes('gaps-text'));
   assert.equal(studio.capabilities.nestedContainers, false);
-  assert.deepEqual(studio.capabilities.styleFonts, ['sans', 'serif', 'rounded', 'mono']);
+  assert.deepEqual(studio.capabilities.styleFonts, [
+    'sans',
+    'arial',
+    'verdana',
+    'serif',
+    'georgia',
+    'times',
+    'rounded',
+    'mono',
+    'courier'
+  ]);
   assert.equal(studio.validateFilename('dzial-1.md'), 'dzial-1.md');
   assert.equal(studio.validateFilename('../sekret.md'), '');
   assert.equal(studio.safeImageUrl('https://example.com/a.png'), 'https://example.com/a.png');

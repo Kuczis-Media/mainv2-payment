@@ -9,7 +9,17 @@
   const QUESTION_START = /^\s*:::question\s*$/i;
   const CONTAINER_START = /^\s*:::(style|accordion|youtube|atonom|flashcards)(?:\s+(.*?))?\s*$/i;
   const CONTAINER_END = /^\s*:::\s*$/;
-  const STYLE_FONTS = Object.freeze(['sans', 'serif', 'rounded', 'mono']);
+  const STYLE_FONTS = Object.freeze([
+    'sans',
+    'arial',
+    'verdana',
+    'serif',
+    'georgia',
+    'times',
+    'rounded',
+    'mono',
+    'courier'
+  ]);
   const STYLE_SIZES = Object.freeze(['small', 'normal', 'large', 'xlarge']);
   const STYLE_ALIGNS = Object.freeze(['left', 'center', 'right']);
   const STYLE_COLOR = /^#[0-9a-f]{6}$/i;
@@ -138,14 +148,18 @@
 
   function normalizeStyle(value) {
     const source = value && typeof value === 'object' ? value : {};
-    const font = STYLE_FONTS.includes(source.font) ? source.font : 'sans';
-    const size = STYLE_SIZES.includes(source.size) ? source.size : 'normal';
-    const align = STYLE_ALIGNS.includes(source.align) ? source.align : 'left';
+    const requestedFont = oneLine(source.font).toLowerCase();
+    const requestedSize = oneLine(source.size).toLowerCase();
+    const requestedAlign = oneLine(source.align).toLowerCase();
+    const font = STYLE_FONTS.includes(requestedFont) ? requestedFont : 'sans';
+    const size = STYLE_SIZES.includes(requestedSize) ? requestedSize : 'normal';
+    const align = STYLE_ALIGNS.includes(requestedAlign) ? requestedAlign : 'left';
+    const bold = source.bold === true || /^(?:1|true|yes|tak|bold|700)$/i.test(oneLine(source.bold));
     const color = STYLE_COLOR.test(String(source.color || '')) ? String(source.color).toLowerCase() : '';
     const background = STYLE_COLOR.test(String(source.background || ''))
       ? String(source.background).toLowerCase()
       : '';
-    return { font, color, background, size, align };
+    return { font, color, background, size, align, bold };
   }
 
   function createBlock(typeOrSeed, maybeSeed) {
@@ -507,6 +521,7 @@
       const attrs = [`font=${block.font}`];
       if (block.color) attrs.push(`color=${block.color}`);
       if (block.background) attrs.push(`background=${block.background}`);
+      if (block.bold) attrs.push('bold=true');
       attrs.push(`size=${block.size}`, `align=${block.align}`);
       return `:::style ${attrs.join(' ')}\n${block.blocks.map(serializeBlock).join('\n\n')}\n:::`;
     }

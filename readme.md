@@ -625,8 +625,8 @@ Dodatkowo zapis `^13^C` tworzy indeks górny (¹³C), a `H~2~O` — indeks dolny
 Stylowany fragment i harmonijkę można zapisać bez wykonywania HTML lub dowolnego CSS:
 
 ```md
-:::style font=serif color=#0e665a size=large align=center
-Treść z wybraną czcionką, kolorem, rozmiarem i wyrównaniem.
+:::style font=georgia color=#0e665a bold=true size=large align=center
+Treść z wybraną czcionką, pogrubieniem, rozmiarem i wyrównaniem.
 :::
 
 :::accordion Dodatkowe wyjaśnienie open=true
@@ -634,7 +634,7 @@ Treść widoczna po rozwinięciu. Parametr `open=true` jest opcjonalny.
 :::
 ```
 
-Dozwolone czcionki to `sans`, `serif`, `rounded` i `mono`; rozmiary: `small`, `normal`, `large`, `xlarge`; wyrównanie: `left`, `center`, `right`. Kolor musi mieć format `#RRGGBB`. Inne wartości wracają do bezpiecznych ustawień domyślnych.
+Dozwolone czcionki to `sans`, `arial`, `verdana`, `serif`, `georgia`, `times`, `rounded`, `mono` i `courier`; rozmiary: `small`, `normal`, `large`, `xlarge`; wyrównanie: `left`, `center`, `right`. `bold=true` pogrubia cały stylowany blok. Kolor musi mieć format `#RRGGBB`. Inne wartości wracają do bezpiecznych ustawień domyślnych.
 
 Gdy pytanie utworzone w Studio zawiera kilka akapitów albo element Markdown, builder otacza je blokiem `:::question … :::` bezpośrednio przed `:::task`. Dzięki temu ponowny import jednoznacznie odróżnia treść pytania od pozostałej zawartości slajdu; moduł lekcji renderuje wnętrze tego bloku jak zwykły, bezpieczny Markdown.
 
@@ -721,6 +721,8 @@ Postęp, rozwiązane zadania i ukończenie są zachowywane w `sessionStorage`, c
 ### Atonom — modele cząsteczek
 
 Moduł `/members/module/atonom/` buduje edukacyjny, interaktywny model cząsteczki na podstawie polskiej nazwy związku. Pokazuje wzór sumaryczny, rodzinę związku, liczbę atomów i wiązań, przybliżoną masę molową oraz krótką wskazówkę dotyczącą budowy. Canvas można obracać i powiększać; dostępne są pauza animacji, reset widoku oraz suwaki energii ruchu, rozmiaru atomów i odległości kamery.
+
+Blok ATONOM umieszczony w lekcji nie ładuje modelu automatycznie. Odtwarzacz i podgląd Studio pokazują najpierw kafelek z nazwą związku; iframe powstaje dopiero po kliknięciu **Pokaż związek** i jest usuwany po wybraniu **Ukryj model**.
 
 Obsługiwany zakres obejmuje między innymi:
 

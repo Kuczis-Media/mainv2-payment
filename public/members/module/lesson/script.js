@@ -28,6 +28,8 @@
     next: document.getElementById('next-button'),
     restart: document.getElementById('restart-button'),
     themeToggle: document.getElementById('theme-toggle'),
+    topbarToggle: document.getElementById('topbar-toggle'),
+    outlineToggle: document.getElementById('outline-toggle'),
     libraryButton: document.getElementById('lesson-library-button'),
     libraryDialog: document.getElementById('lesson-library-dialog'),
     libraryClose: document.getElementById('lesson-library-close'),
@@ -47,8 +49,72 @@
     completed: false,
     attempts: new Map(),
     libraryAssets: [],
-    repositories: []
+    repositories: [],
+    isAdmin: false,
+    topbarCollapsed: false,
+    outlineCollapsed: false
   };
+
+  const UI_PREFERENCES_KEY = 'chemdisk.lesson.ui.v1';
+
+  function isAdminUser(user) {
+    const roles = user?.app_metadata?.roles;
+    return Array.isArray(roles) && roles.includes('admin');
+  }
+
+  function initializePermissions() {
+    const user = typeof window.ChemAuth.getUser === 'function'
+      ? window.ChemAuth.getUser()
+      : null;
+    state.isAdmin = isAdminUser(user);
+    elements.libraryButton.hidden = !state.isAdmin;
+    elements.libraryDialog.setAttribute('aria-hidden', String(!state.isAdmin));
+  }
+
+  function loadUiPreferences() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(UI_PREFERENCES_KEY) || 'null');
+      if (!saved || typeof saved !== 'object') return;
+      state.topbarCollapsed = saved.topbarCollapsed === true;
+      state.outlineCollapsed = saved.outlineCollapsed === true;
+    } catch {}
+  }
+
+  function saveUiPreferences() {
+    try {
+      localStorage.setItem(UI_PREFERENCES_KEY, JSON.stringify({
+        topbarCollapsed: state.topbarCollapsed,
+        outlineCollapsed: state.outlineCollapsed
+      }));
+    } catch {}
+  }
+
+  function applyUiState() {
+    elements.app.classList.toggle('is-topbar-collapsed', state.topbarCollapsed);
+    elements.app.classList.toggle('is-outline-collapsed', state.outlineCollapsed);
+
+    const topbarLabel = state.topbarCollapsed ? 'Rozwiń górny pasek' : 'Zwiń górny pasek';
+    elements.topbarToggle.setAttribute('aria-expanded', String(!state.topbarCollapsed));
+    elements.topbarToggle.setAttribute('aria-label', topbarLabel);
+    elements.topbarToggle.title = topbarLabel;
+
+    const outlineLabel = state.outlineCollapsed ? 'Rozwiń plan lekcji' : 'Zwiń plan lekcji';
+    elements.outlineToggle.setAttribute('aria-expanded', String(!state.outlineCollapsed));
+    elements.outlineToggle.setAttribute('aria-label', outlineLabel);
+    elements.outlineToggle.title = outlineLabel;
+  }
+
+  function toggleTopbar() {
+    state.topbarCollapsed = !state.topbarCollapsed;
+    applyUiState();
+    saveUiPreferences();
+  }
+
+  function toggleOutline() {
+    state.outlineCollapsed = !state.outlineCollapsed;
+    applyUiState();
+    saveUiPreferences();
+  }
 
   function readFilename() {
     const params = new URLSearchParams(window.location.search);
@@ -151,12 +217,20 @@
     state.filename = readFilename();
     state.repositoryId = readRepositoryId();
     if (!state.filename) {
-      showError(
-        'Wybierz lekcję z biblioteki',
-        'Otwórz bibliotekę u góry i wybierz materiał z prywatnego repozytorium.',
-        false
-      );
-      openLessonLibrary();
+      if (state.isAdmin) {
+        showError(
+          'Wybierz lekcję z biblioteki',
+          'Otwórz bibliotekę u góry i wybierz materiał z prywatnego repozytorium.',
+          false
+        );
+        openLessonLibrary();
+      } else {
+        showError(
+          'Nie wskazano lekcji',
+          'Wróć do panelu kursu i otwórz przypisaną lekcję.',
+          false
+        );
+      }
       return;
     }
 
@@ -212,6 +286,7 @@
   }
 
   async function openLessonLibrary() {
+    if (!state.isAdmin) return;
     if (!elements.libraryDialog.open) {
       if (typeof elements.libraryDialog.showModal === 'function') elements.libraryDialog.showModal();
       else elements.libraryDialog.setAttribute('open', '');
@@ -399,6 +474,30 @@
         const flipped = card.getAttribute('aria-pressed') !== 'true';
         card.setAttribute('aria-pressed', String(flipped));
         card.classList.toggle('is-flipped', flipped);
+      });
+    });
+    root.querySelectorAll('.lesson-atonom-open').forEach((button) => {
+      button.addEventListener('click', () => {
+        const figure = button.closest('.lesson-atonom');
+        const frameHost = figure?.querySelector('.lesson-atonom-frame');
+        if (!frameHost) return;
+        const expanded = button.getAttribute('aria-expanded') === 'true';
+        if (expanded) {
+          frameHost.replaceChildren();
+          frameHost.hidden = true;
+          button.setAttribute('aria-expanded', 'false');
+          button.textContent = 'Pokaż związek';
+          return;
+        }
+        const iframe = frameHost.ownerDocument.createElement('iframe');
+        iframe.src = button.dataset.atonomSrc;
+        iframe.title = button.dataset.atonomTitle || 'Interaktywny model cząsteczki';
+        iframe.loading = 'lazy';
+        iframe.setAttribute('allow', 'fullscreen');
+        frameHost.replaceChildren(iframe);
+        frameHost.hidden = false;
+        button.setAttribute('aria-expanded', 'true');
+        button.textContent = 'Ukryj model';
       });
     });
   }
@@ -668,6 +767,8 @@
   }
 
   elements.themeToggle.addEventListener('click', toggleTheme);
+  elements.topbarToggle.addEventListener('click', toggleTopbar);
+  elements.outlineToggle.addEventListener('click', toggleOutline);
   elements.libraryButton.addEventListener('click', openLessonLibrary);
   elements.libraryClose.addEventListener('click', closeLessonLibrary);
   elements.librarySearch.addEventListener('input', renderLessonLibrary);
@@ -692,6 +793,9 @@
     if (event.key === 'ArrowRight' && !elements.next.disabled) goNext();
   });
 
+  initializePermissions();
   initializeTheme();
+  loadUiPreferences();
+  applyUiState();
   await loadLesson();
 })();

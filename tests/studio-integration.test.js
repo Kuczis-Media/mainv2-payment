@@ -96,6 +96,7 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(script, /data-full-preview/);
   assert.match(script, /state\.lesson\.model\.slides\.forEach/);
   assert.match(script, /function bindPreviewTasks/);
+  assert.match(script, /function bindPreviewAtonom/);
   assert.match(script, /ChemLesson\.checkAnswer/);
   assert.match(script, /ChemLesson\.checkGapAnswer/);
   assert.match(script, /data-lesson-task-editor-action/);
@@ -114,11 +115,16 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(styles, /\.full-lesson-list/);
   assert.match(styles, /\.lesson-font-serif/);
   assert.match(styles, /\.lesson-align-center/);
+  assert.match(styles, /\.lesson-font-arial/);
+  assert.match(styles, /\.lesson-weight-bold/);
+  assert.match(styles, /\.lesson-rich-style p[\s\S]*?font-size:\s*inherit/);
+  assert.match(styles, /\.lesson-atonom-card/);
   assert.match(styles, /\.task-correct-toggle/);
   assert.match(styles, /\.preview-quiz/);
   assert.match(styles, /\.preview-text-gap/);
   assert.match(styles, /\.drop-zone\.is-dragover/);
   assert.match(styles, /prefers-reduced-motion:\s*reduce/);
+  assert.doesNotMatch(script, /Wygenerowany adres|dashboard-url-preview|hrefPreview/);
 
   const dashboardClone = script.slice(
     script.indexOf('function cloneDashboardNode'),
@@ -137,9 +143,15 @@ test('lesson authoring extensions are rendered through strict, non-HTML directiv
   assert.match(parser, /STYLE_FONTS\s*=\s*new Set/);
   assert.match(parser, /SAFE_STYLE_COLOR/);
   assert.match(parser, /lesson-accordion/);
+  assert.match(parser, /lesson-atonom-card/);
+  assert.match(parser, /lesson-atonom-open/);
   assert.match(parser, /decoding=["']async["']/);
   assert.match(parser, /referrerpolicy=["']no-referrer["']/);
   assert.match(styles, /\.lesson-rich-style/);
+  assert.match(styles, /\.lesson-font-arial/);
+  assert.match(styles, /\.lesson-weight-bold/);
+  assert.match(styles, /\.lesson-rich-style p[\s\S]*?font-size:\s*inherit/);
+  assert.match(styles, /\.lesson-atonom-card/);
   assert.match(styles, /\.lesson-font-rounded/);
   assert.match(styles, /\.lesson-accordion\[open\]/);
   assert.match(styles, /\.lesson-flashcard/);

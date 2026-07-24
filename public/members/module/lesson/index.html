@@ -31,12 +31,15 @@
           </span>
         </div>
         <div class="topbar-actions">
-          <button class="icon-button" id="lesson-library-button" type="button" aria-label="Otwórz bibliotekę lekcji" title="Biblioteka lekcji">
+          <button class="icon-button" id="lesson-library-button" type="button" aria-label="Otwórz bibliotekę lekcji" title="Biblioteka lekcji" hidden>
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5zM20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5z"/></svg>
           </button>
           <button class="icon-button" id="theme-toggle" type="button" aria-label="Włącz ciemny motyw" aria-pressed="false">
             <svg class="sun-icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>
             <svg class="moon-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M20.2 15.2A8 8 0 1 1 8.8 3.8a6.5 6.5 0 0 0 11.4 11.4Z"/></svg>
+          </button>
+          <button class="icon-button topbar-toggle" id="topbar-toggle" type="button" aria-label="Zwiń górny pasek" aria-expanded="true" title="Zwiń górny pasek">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg>
           </button>
         </div>
       </header>
@@ -47,7 +50,12 @@
 
       <main class="lesson-layout">
         <aside class="lesson-outline" aria-label="Plan lekcji">
-          <p class="outline-kicker">Plan lekcji</p>
+          <div class="outline-header">
+            <p class="outline-kicker">Plan lekcji</p>
+            <button class="outline-toggle" id="outline-toggle" type="button" aria-label="Zwiń plan lekcji" aria-expanded="true" title="Zwiń plan lekcji">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
+          </div>
           <ol id="outline-list"></ol>
           <div class="outline-tip">
             <span aria-hidden="true">✓</span>

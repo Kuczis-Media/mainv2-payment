@@ -53,6 +53,26 @@ test('lesson application exposes a repository selector for the live library', ()
   assert.match(script, /searchParams\.set\(['"]repo['"],\s*asset\.repositoryId\)/);
 });
 
+test('lesson library is admin-only and the player layout can be collapsed', () => {
+  const html = fs.readFileSync(path.join(lessonRoot, 'index.html'), 'utf8');
+  const script = fs.readFileSync(path.join(lessonRoot, 'script.js'), 'utf8');
+  const styles = fs.readFileSync(path.join(lessonRoot, 'style.css'), 'utf8');
+
+  assert.match(html, /id=["']lesson-library-button["'][^>]*\shidden(?:\s|>)/);
+  assert.match(script, /roles\.includes\(['"]admin['"]\)/);
+  assert.match(script, /elements\.libraryButton\.hidden\s*=\s*!state\.isAdmin/);
+  assert.match(script, /async function openLessonLibrary\(\)\s*\{\s*if\s*\(!state\.isAdmin\)\s*return;/);
+
+  assert.match(html, /id=["']topbar-toggle["']/);
+  assert.match(html, /id=["']outline-toggle["']/);
+  assert.match(script, /classList\.toggle\(['"]is-topbar-collapsed['"]/);
+  assert.match(script, /classList\.toggle\(['"]is-outline-collapsed['"]/);
+  assert.match(styles, /\.app-shell\.is-topbar-collapsed \.topbar/);
+  assert.match(styles, /\.app-shell\.is-outline-collapsed \.lesson-layout/);
+  assert.match(styles, /grid-template-columns:\s*210px minmax\(0,\s*1fr\)/);
+  assert.match(styles, /width:\s*min\(1480px,\s*calc\(100% - 32px\)\)/);
+});
+
 test('lesson parser builds a wizard from repository Markdown', () => {
   const lesson = parser.parseLesson(exampleMarkdown, 'izotopy-wegla.md');
 
@@ -189,7 +209,7 @@ test('lesson renderer supports allowlisted typography, colors and accordions wit
   const lesson = parser.parseLesson([
     '# Stylowana lekcja',
     '',
-    ':::style font=serif color=#0e665a size=large align=center',
+    ':::style font=georgia color=#0e665a bold=true size=large align=center',
     '## Kolorowy nagłówek',
     '',
     'Tekst zapisany bez surowego HTML.',
@@ -205,7 +225,9 @@ test('lesson renderer supports allowlisted typography, colors and accordions wit
   ].join('\n'), 'style.md');
 
   const html = lesson.slides[0].html;
-  assert.match(html, /lesson-font-serif/);
+  assert.match(html, /lesson-font-georgia/);
+  assert.match(html, /lesson-weight-bold/);
+  assert.match(html, /lesson-size-large/);
   assert.match(html, /lesson-size-large/);
   assert.match(html, /lesson-align-center/);
   assert.match(html, /--lesson-rich-color:#0e665a/);
