@@ -64,6 +64,7 @@
     lessonSource: byId('lesson-source-button'),
     lessonCopy: byId('lesson-copy-button'),
     lessonDownload: byId('lesson-download-button'),
+    lessonNew: byId('lesson-new-button'),
     lessonImport: byId('lesson-import-button'),
     lessonFile: byId('lesson-file-input'),
     lessonRepositorySave: byId('lesson-repository-save-button'),
@@ -370,22 +371,37 @@
   }
 
   function defaultLesson() {
-    return lessonModelApi.createLesson({
-      title: 'Nowa lekcja',
-      filename: 'nowa-lekcja.md',
-      slides: [{
-        blocks: [
-          lessonModelApi.createBlock('heading', { level: 2, text: 'Wprowadzenie' }),
-          lessonModelApi.createBlock('style', {
-            font: 'sans',
-            size: 'normal',
-            align: 'left',
-            blocks: [
-              lessonModelApi.createBlock('text', { text: 'Wpisz tutaj treść pierwszego slajdu.' })
-            ]
-          })
-        ]
-      }]
+    return lessonModelApi.createStarterLesson('nowa-lekcja.md');
+  }
+
+  function lessonModelFromSource(source, filename) {
+    return lessonModelApi.parseEditableLesson(source, filename);
+  }
+
+  function createNewLessonDraft() {
+    if (!window.confirm('Rozpocząć nową lekcję? Bieżący szkic w builderze zostanie zastąpiony.')) {
+      return;
+    }
+    finishEdit();
+    const model = defaultLesson();
+    state.lesson.model = model;
+    state.lesson.selectedId = model.slides[0] ? model.slides[0].id : '';
+    state.lesson.previewSlideId = model.slides[0] ? model.slides[0].id : '';
+    state.lesson.remoteFilename = '';
+    state.lesson.remoteSha = '';
+    state.lesson.remoteRepositoryId = '';
+    history.lesson.undo = [];
+    history.lesson.redo = [];
+    scheduleDraftSave('lesson');
+    renderLesson();
+    updateHistoryButtons();
+    toast(
+      'Nowa lekcja jest gotowa',
+      'Nadaj nazwę pliku i kliknij „Utwórz plik w GitHubie”.'
+    );
+    window.requestAnimationFrame(() => {
+      elements.lessonFilename.focus();
+      elements.lessonFilename.select();
     });
   }
 
@@ -3256,6 +3272,7 @@
       state.lesson.model.filename = event.target.value.trim();
     }
     renderLessonPreview();
+    updateRepositoryButtons();
     scheduleDraftSave('lesson');
   }
 
@@ -3329,7 +3346,7 @@
           state.dashboard.selectedUid = '';
         });
       } else if (state.sourceMode === 'lesson') {
-        const model = lessonModelApi.parseLesson(source, state.lesson.model.filename);
+        const model = lessonModelFromSource(source, state.lesson.model.filename);
         commitMutation('lesson', () => {
           state.lesson.model = model;
           state.lesson.selectedId = '';
@@ -3408,7 +3425,7 @@
         const filename = lessonModelApi.validateFilename(file.name)
           ? file.name
           : state.lesson.model.filename;
-        const model = lessonModelApi.parseLesson(source, filename);
+        const model = lessonModelFromSource(source, filename);
         commitMutation('lesson', () => {
           state.lesson.model = model;
           state.lesson.selectedId = '';
@@ -3634,6 +3651,18 @@
     const selectedRepositoryId = state.contentLibrary.selectedRepositoryId;
     if (elements.lessonRepositorySave) {
       elements.lessonRepositorySave.disabled = state.lesson.saving;
+      const updatesCurrentFile = Boolean(
+        state.lesson.remoteFilename
+        && state.lesson.remoteSha
+        && state.lesson.remoteFilename === state.lesson.model.filename
+        && state.lesson.remoteRepositoryId === selectedRepositoryId
+      );
+      elements.lessonRepositorySave.textContent = updatesCurrentFile
+        ? 'Zapisz zmiany w GitHubie'
+        : 'Utwórz plik w GitHubie';
+      elements.lessonRepositorySave.title = updatesCurrentFile
+        ? `Zaktualizuj ${state.lesson.remoteFilename}`
+        : 'Utwórz nowy plik .md w wybranym repozytorium';
       elements.lessonRepositoryDelete.disabled = state.lesson.saving
         || !state.lesson.remoteFilename
         || !state.lesson.remoteSha
@@ -4056,10 +4085,11 @@
       const result = await window.ChemContentLibrary.readLesson(asset.filename, {
         repositoryId: asset.repositoryId
       });
-      const model = lessonModelApi.parseLesson(result.content, asset.filename);
+      const sourceWasEmpty = !String(result.content || '').trim();
+      const model = lessonModelFromSource(result.content, asset.filename);
       finishEdit();
       state.lesson.model = model;
-      state.lesson.selectedId = '';
+      state.lesson.selectedId = sourceWasEmpty && model.slides[0] ? model.slides[0].id : '';
       state.lesson.previewSlideId = model.slides[0] ? model.slides[0].id : '';
       history.lesson.undo = [];
       history.lesson.redo = [];
@@ -4070,8 +4100,15 @@
       renderLesson();
       updateHistoryButtons();
       updateRepositoryButtons();
-      elements.lessonAssetStatus.textContent = `Wczytano ${asset.filename}.`;
-      toast('Lekcja wczytana z GitHuba', 'Możesz ją edytować, podejrzeć i pobrać jako Markdown.');
+      elements.lessonAssetStatus.textContent = sourceWasEmpty
+        ? `${asset.filename} był pusty — dodano edytowalny szablon.`
+        : `Wczytano ${asset.filename}.`;
+      toast(
+        sourceWasEmpty ? 'Pusty plik jest gotowy do edycji' : 'Lekcja wczytana z GitHuba',
+        sourceWasEmpty
+          ? 'Uzupełnij szablon i kliknij „Zapisz zmiany w GitHubie”.'
+          : 'Możesz ją edytować, podejrzeć i pobrać jako Markdown.'
+      );
     } catch (error) {
       elements.lessonAssetStatus.className = 'is-error';
       elements.lessonAssetStatus.textContent = error && error.message
@@ -4211,6 +4248,7 @@
         if (input === elements.lessonFilename && !lessonModelApi.validateFilename(input.value)) {
           toast('Nieprawidłowa nazwa pliku', 'Użyj liter ASCII, cyfr, kropki, myślnika lub podkreślenia i zakończ nazwę przez .md.', 'error');
         }
+        updateRepositoryButtons();
       });
     });
     [elements.promptFilename, elements.promptInstruction].forEach((input) => {
@@ -4306,6 +4344,7 @@
       elements.dashboardFile.value = '';
     });
 
+    elements.lessonNew.addEventListener('click', createNewLessonDraft);
     elements.lessonSource.addEventListener('click', () => openSourceDialog('lesson'));
     elements.lessonImport.addEventListener('click', () => elements.lessonFile.click());
     elements.lessonFile.addEventListener('change', () => {

@@ -343,6 +343,32 @@
     };
   }
 
+  function createStarterLesson(filename) {
+    const safeFilename = validateFilename(filename) || 'nowa-lekcja.md';
+    const baseTitle = safeFilename
+      .replace(/\.md$/i, '')
+      .replace(/[._-]+/g, ' ')
+      .trim() || 'nowa lekcja';
+    const title = `${baseTitle.charAt(0).toLocaleUpperCase('pl')}${baseTitle.slice(1)}`;
+    return createLesson({
+      title,
+      filename: safeFilename,
+      slides: [{
+        blocks: [
+          createBlock('heading', { level: 2, text: 'Wprowadzenie' }),
+          createBlock('style', {
+            font: 'sans',
+            size: 'normal',
+            align: 'left',
+            blocks: [
+              createBlock('text', { text: 'Wpisz tutaj treść pierwszego slajdu.' })
+            ]
+          })
+        ]
+      }]
+    });
+  }
+
   function validateTask(task, path, errors) {
     if (!task) return;
     if (!TASK_TYPES.includes(task.type)) {
@@ -984,6 +1010,12 @@
     });
   }
 
+  function parseEditableLesson(markdown, filename) {
+    return String(markdown ?? '').trim()
+      ? parseLesson(markdown, filename)
+      : createStarterLesson(filename);
+  }
+
   const capabilities = Object.freeze({
     markdown: true,
     imagesFromHttps: true,
@@ -1012,8 +1044,10 @@
     capabilities,
     createBlock,
     createLesson,
+    createStarterLesson,
     createSlide,
     createTask,
+    parseEditableLesson,
     parseLesson,
     safeImageUrl,
     serializeBlock,

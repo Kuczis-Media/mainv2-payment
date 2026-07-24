@@ -68,6 +68,7 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(html, /draggable=["']true["']/);
   assert.match(html, /id=["']lesson-download-button["']/);
   assert.match(html, /id=["']lesson-copy-button["']/);
+  assert.match(html, /id=["']lesson-new-button["']/);
   assert.match(html, /id=["']lesson-repository-save-button["']/);
   assert.match(html, /id=["']lesson-repository-delete-button["']/);
   assert.match(html, /id=["']prompt-workspace["']/);
@@ -101,11 +102,14 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(script, /ChemLesson\.checkGapAnswer/);
   assert.match(script, /data-lesson-task-editor-action/);
   assert.match(script, /serializeLesson/);
-  assert.match(script, /parseLesson/);
+  assert.match(script, /parseEditableLesson/);
   assert.match(script, /library\.list\(['"]lesson['"]/);
   assert.match(script, /library\.list\(['"]prompt['"]/);
   assert.match(script, /library\.repositories\(\)/);
   assert.match(script, /ChemContentLibrary\.readLesson/);
+  assert.match(script, /function createNewLessonDraft\(\)/);
+  assert.match(script, /lessonModelApi\.parseEditableLesson\(source,\s*filename\)/);
+  assert.match(script, /sourceWasEmpty/);
   assert.match(script, /ChemContentLibrary\.readPrompt/);
   assert.match(script, /ChemContentLibrary\.save/);
   assert.match(script, /ChemContentLibrary\.remove/);

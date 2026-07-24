@@ -6,6 +6,26 @@ const root = path.join(__dirname, '..');
 const studio = require(path.join(root, 'public', 'members', 'module', 'studio', 'lesson-model.js'));
 const lessonParser = require(path.join(root, 'public', 'members', 'module', 'lesson', 'lesson-parser.js'));
 
+test('studio creates an editable starter lesson for a new or empty GitHub file', () => {
+  const lesson = studio.parseEditableLesson('', 'lekcja.md');
+  const markdown = studio.serializeLesson(lesson);
+
+  assert.equal(lesson.filename, 'lekcja.md');
+  assert.equal(lesson.title, 'Lekcja');
+  assert.equal(lesson.slides.length, 1);
+  assert.ok(lesson.slides[0].blocks.length >= 2);
+  assert.equal(studio.validateLesson(lesson).valid, true);
+  assert.match(markdown, /^# Lekcja/m);
+  assert.match(markdown, /## Wprowadzenie/);
+  assert.match(markdown, /Wpisz tutaj treść pierwszego slajdu\./);
+  assert.doesNotThrow(() => lessonParser.parseLesson(markdown, lesson.filename));
+  assert.equal(
+    studio.parseEditableLesson('# Istniejąca\n\nTreść.', 'istniejaca.md').title,
+    'Istniejąca'
+  );
+  assert.throws(() => studio.parseLesson('', 'lekcja.md'), /plik lekcji jest pusty/i);
+});
+
 test('studio serializes visual blocks and an ABCD quiz to deterministic lesson Markdown', () => {
   const lesson = studio.createLesson({
     title: 'Wiązania chemiczne',
