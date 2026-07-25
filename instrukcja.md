@@ -1093,16 +1093,20 @@ Służy do kodu albo fragmentu, który ma zachować odstępy i czcionkę monospa
 
 ### Wzór chemiczny / matematyczny
 
-Ten klocek tworzy estetyczny, skalowalny zapis wzoru. Wybierz jeden z dwóch trybów.
+Ten klocek działa jak uproszczony edytor równań z Worda: ma gotowe szablony, klikalne symbole, osobne części równania i podgląd wyniku bezpośrednio w prawym panelu. Wybierz jeden z dwóch trybów.
 
 #### Chemia — wzór lub reakcja
 
-1. W polu **Wzór lub substraty** wpisz np. `2 H2 + O2`.
-2. W polu **Produkty** wpisz np. `2 H2O`.
-3. Wybierz strzałkę: w prawo, w lewo, odwracalną, równowagi albo podwójną.
-4. W polu **Warunek nad strzałką** możesz wpisać np. `450 °C`, `Δ` albo `hν`.
-5. W polu **Warunek pod strzałką** możesz wpisać np. `kat. Pt` albo `2 atm`.
-6. Dodaj podpis pod wzorem, np. „Spalanie wodoru”.
+1. Możesz zacząć od gotowego szablonu: woda, spalanie, równowaga, dysocjacja, reakcja strąceniowa albo izotop.
+2. W wizualnym układzie wpisz **Substraty / wzór** po lewej i **Produkty** po prawej.
+3. Pośrodku wybierz strzałkę.
+4. Nad strzałką wpisz lub wstaw przyciskiem temperaturę, `Δ` albo `hν`.
+5. Pod strzałką wpisz lub wstaw katalizator albo ciśnienie.
+6. Kliknij pole substratów albo produktów, a następnie użyj palety, aby dodać jon, izotop, stopień utlenienia, stan skupienia lub osad.
+7. Obserwuj kartę **Podgląd równania**.
+8. Dodaj podpis pod wzorem, np. „Spalanie wodoru”.
+
+Dostępne są klikalne strzałki: brak strzałki, `→`, `←`, `↔`, równowaga `⇌` oraz równowaga przesunięta w jedną stronę. Nie trzeba pamiętać ich zapisu tekstowego.
 
 Cyfry we wzorach są zamieniane na indeksy dolne automatycznie. Przydatne przykłady:
 
@@ -1120,7 +1124,7 @@ Jeśli chcesz pokazać tylko jeden wzór bez reakcji, wybierz **Bez strzałki �
 
 #### Matematyka — równanie i symbole
 
-Po przełączeniu trybu wpisz wzór albo użyj przycisków pod polem. Dostępne są między innymi:
+Po przełączeniu trybu wybierz gotowy szablon albo kliknij miejsce w równaniu i użyj palety struktur, działań oraz liter greckich. Podgląd aktualizuje się podczas pisania. Dostępne są między innymi:
 
 - potęga: `x^{2}`;
 - indeks dolny: `a_{n}`;

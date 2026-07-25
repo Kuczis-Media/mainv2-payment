@@ -2589,6 +2589,186 @@ button {
   margin: 14px 0;
 }
 
+.formula-builder-section,
+.formula-builder-preview,
+.formula-chemistry-composer,
+.formula-symbol-group {
+  display: grid;
+  padding: 11px;
+  gap: 9px;
+  background: color-mix(in srgb, var(--chem-primary-soft) 42%, var(--chem-surface));
+  border: 1px solid color-mix(in srgb, var(--chem-primary) 22%, var(--chem-line));
+  border-radius: 13px;
+}
+
+.formula-builder-section > header,
+.formula-builder-preview > header,
+.formula-chemistry-composer > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.formula-builder-section > header strong,
+.formula-builder-section > header small,
+.formula-builder-preview > header strong,
+.formula-builder-preview > header small,
+.formula-chemistry-composer > header strong,
+.formula-chemistry-composer > header small {
+  display: block;
+}
+
+.formula-builder-section > header strong,
+.formula-builder-preview > header strong,
+.formula-chemistry-composer > header strong,
+.formula-symbol-group > strong {
+  color: var(--chem-text);
+  font-size: 0.66rem;
+}
+
+.formula-builder-section > header small,
+.formula-builder-preview > header small,
+.formula-chemistry-composer > header small {
+  max-width: 190px;
+  color: var(--chem-muted);
+  font-size: 0.52rem;
+  line-height: 1.4;
+  text-align: right;
+}
+
+.formula-preset-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.formula-preset-button {
+  min-height: 34px;
+  padding: 5px 9px;
+  color: var(--chem-primary);
+  background: var(--chem-surface);
+  border: 1px solid color-mix(in srgb, var(--chem-primary) 28%, var(--chem-line));
+  border-radius: 9px;
+  cursor: pointer;
+  font: 750 0.58rem/1.2 inherit;
+}
+
+.formula-preset-button:hover,
+.formula-preset-button:focus-visible {
+  color: #fff;
+  background: var(--chem-primary);
+  outline: none;
+}
+
+.formula-builder-preview {
+  padding: 0;
+  overflow: hidden;
+  background: var(--chem-surface);
+}
+
+.formula-builder-preview > header {
+  padding: 10px 11px;
+  background: color-mix(in srgb, var(--chem-primary-soft) 55%, var(--chem-surface));
+  border-bottom: 1px solid var(--chem-line);
+}
+
+.formula-builder-preview-canvas {
+  min-height: 118px;
+  padding: 12px;
+}
+
+.formula-builder-preview-canvas .lesson-formula {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--chem-primary) 28%, var(--chem-line));
+  border-radius: 11px;
+  background:
+    radial-gradient(circle at 10% 0%, color-mix(in srgb, var(--chem-primary) 12%, transparent), transparent 46%),
+    var(--chem-surface);
+}
+
+.formula-builder-preview-canvas .lesson-formula-display {
+  min-height: 72px;
+  padding: 16px 10px;
+  overflow-x: auto;
+  color: var(--chem-text);
+  font: 1rem/1.5 Georgia, "Times New Roman", serif;
+  text-align: center;
+}
+
+.formula-builder-preview-canvas .lesson-formula-display mjx-container {
+  margin: 0 !important;
+}
+
+.formula-builder-preview-canvas .lesson-formula figcaption {
+  padding: 6px 10px;
+  color: var(--chem-muted);
+  background: var(--chem-surface-soft);
+  border-top: 1px solid var(--chem-line);
+  font-size: 0.52rem;
+  font-weight: 750;
+  text-align: center;
+}
+
+.formula-builder-preview-canvas .lesson-interactive-error {
+  margin: 0;
+  padding: 20px 12px;
+  color: var(--chem-danger);
+  font-size: 0.6rem;
+  text-align: center;
+}
+
+.formula-chemistry-equation {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 100px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+}
+
+.formula-chemistry-equation .field > span,
+.formula-chemistry-arrow-fields .field > span {
+  margin-bottom: 4px;
+  font-size: 0.52rem;
+  text-align: center;
+}
+
+.formula-chemistry-equation .field-help {
+  font-size: 0.48rem;
+  text-align: center;
+}
+
+.formula-chemistry-equation input,
+.formula-chemistry-arrow-fields select {
+  padding-inline: 8px;
+  text-align: center;
+}
+
+.formula-chemistry-equation > .field input {
+  min-height: 54px;
+  font: 750 0.7rem/1.2 Georgia, "Times New Roman", serif;
+}
+
+.formula-chemistry-arrow-fields {
+  display: grid;
+  gap: 5px;
+}
+
+.formula-chemistry-arrow-fields input,
+.formula-chemistry-arrow-fields select {
+  min-height: 35px;
+  font-size: 0.56rem;
+}
+
+.formula-chemistry-arrow-fields select {
+  color: var(--chem-primary);
+  font: 850 1rem/1 Georgia, "Times New Roman", serif;
+}
+
+.formula-symbol-group {
+  background: var(--chem-surface-soft);
+}
+
 .formula-symbol-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -2612,6 +2792,65 @@ button {
   color: #fff;
   background: var(--chem-primary);
   outline: none;
+}
+
+.formula-arrow-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.formula-arrow-button {
+  display: grid;
+  min-height: 52px;
+  padding: 6px;
+  place-items: center;
+  color: var(--chem-text);
+  background: var(--chem-surface);
+  border: 1px solid var(--chem-line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.formula-arrow-button strong,
+.formula-arrow-button small {
+  display: block;
+}
+
+.formula-arrow-button strong {
+  color: var(--chem-primary);
+  font: 850 1.08rem/1 Georgia, "Times New Roman", serif;
+}
+
+.formula-arrow-button small {
+  margin-top: 4px;
+  color: var(--chem-muted);
+  font-size: 0.45rem;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.formula-arrow-button:hover,
+.formula-arrow-button:focus-visible,
+.formula-arrow-button.is-active {
+  background: var(--chem-primary-soft);
+  border-color: color-mix(in srgb, var(--chem-primary) 52%, var(--chem-line));
+  outline: none;
+}
+
+.formula-arrow-button.is-active {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--chem-primary) 16%, transparent);
+}
+
+.formula-builder-tip {
+  margin: 0;
+  padding: 9px 10px;
+  color: var(--chem-muted);
+  background: var(--chem-surface-soft);
+  border-left: 3px solid var(--chem-primary);
+  border-radius: 8px;
+  font-size: 0.54rem;
+  line-height: 1.5;
 }
 
 .lesson-preview-body .lesson-formula {
@@ -3845,6 +4084,18 @@ button {
   }
 
   .field-row {
+    grid-template-columns: 1fr;
+  }
+
+  .formula-chemistry-equation {
+    grid-template-columns: 1fr;
+  }
+
+  .formula-chemistry-arrow-fields {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .formula-arrow-list {
     grid-template-columns: 1fr;
   }
 

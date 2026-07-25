@@ -105,6 +105,11 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(script, /function bindPreviewAtonom/);
   assert.match(script, /function typesetMath/);
   assert.match(script, /data-formula-snippet/);
+  assert.match(script, /LESSON_FORMULA_PRESETS/);
+  assert.match(script, /data-formula-preset/);
+  assert.match(script, /data-formula-arrow/);
+  assert.match(script, /formulaComposerPreview/);
+  assert.match(script, /updateFormulaComposerPreview/);
   assert.match(script, /SLIDE_TRANSITIONS/);
   assert.match(script, /previewTransitionKey/);
   assert.match(script, /ChemLesson\.checkAnswer/);
@@ -134,6 +139,9 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(styles, /\.lesson-atonom-card/);
   assert.match(styles, /\.lesson-formula-display/);
   assert.match(styles, /\.lesson-link-card/);
+  assert.match(styles, /\.formula-chemistry-equation/);
+  assert.match(styles, /\.formula-builder-preview/);
+  assert.match(styles, /\.formula-arrow-button/);
   assert.match(styles, /\[data-transition=["']rise["']\]/);
   assert.match(styles, /\.formula-symbol-toolbar/);
   assert.match(styles, /\.task-correct-toggle/);

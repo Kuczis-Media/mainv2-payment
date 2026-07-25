@@ -144,6 +144,7 @@
       selectedId: '',
       previewSlideId: '',
       previewTransitionKey: '',
+      formulaField: 'left',
       remoteFilename: '',
       remoteSha: '',
       remoteRepositoryId: '',
@@ -2379,6 +2380,192 @@
     );
   }
 
+  const LESSON_FORMULA_PRESETS = Object.freeze({
+    'chem-water': {
+      mode: 'chemistry',
+      title: 'Wzór wody',
+      left: 'H2O',
+      arrow: '',
+      above: '',
+      below: '',
+      right: ''
+    },
+    'chem-combustion': {
+      mode: 'chemistry',
+      title: 'Spalanie wodoru',
+      left: '2 H2 + O2',
+      arrow: '->',
+      above: 'Δ',
+      below: '',
+      right: '2 H2O'
+    },
+    'chem-equilibrium': {
+      mode: 'chemistry',
+      title: 'Synteza amoniaku',
+      left: 'N2 + 3 H2',
+      arrow: '<=>',
+      above: '450 °C',
+      below: 'kat. Fe',
+      right: '2 NH3'
+    },
+    'chem-dissociation': {
+      mode: 'chemistry',
+      title: 'Dysocjacja kwasu siarkowego(VI)',
+      left: 'H2SO4',
+      arrow: '->',
+      above: 'H2O',
+      below: '',
+      right: '2 H+ + SO4^2-'
+    },
+    'chem-precipitate': {
+      mode: 'chemistry',
+      title: 'Reakcja strąceniowa',
+      left: 'Ag+ + Cl-',
+      arrow: '->',
+      above: '',
+      below: '',
+      right: 'AgCl v'
+    },
+    'chem-isotope': {
+      mode: 'chemistry',
+      title: 'Izotop węgla',
+      left: '^14C',
+      arrow: '',
+      above: '',
+      below: '',
+      right: ''
+    },
+    'math-energy': {
+      mode: 'math',
+      title: 'Równoważność masy i energii',
+      expression: 'E = mc^{2}'
+    },
+    'math-quadratic': {
+      mode: 'math',
+      title: 'Wzór kwadratowy',
+      expression: 'x_{1,2} = \\frac{-b \\pm \\sqrt{b^{2} - 4ac}}{2a}'
+    },
+    'math-concentration': {
+      mode: 'math',
+      title: 'Stężenie molowe',
+      expression: 'c = \\frac{n}{V}'
+    },
+    'math-sum': {
+      mode: 'math',
+      title: 'Suma ciągu',
+      expression: '\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}'
+    },
+    'math-integral': {
+      mode: 'math',
+      title: 'Całka oznaczona',
+      expression: '\\int_{a}^{b} x^{2}'
+    }
+  });
+
+  function formulaPresetPicker(mode) {
+    const section = create('section', 'formula-builder-section formula-preset-section');
+    const header = create('header');
+    header.append(
+      create('strong', '', 'Gotowe szablony'),
+      create('small', '', 'Kliknij, aby wstawić kompletny wzór i dalej go edytować.')
+    );
+    const presets = mode === 'math'
+      ? [
+          ['math-energy', 'E = mc²'],
+          ['math-quadratic', 'Wzór kwadratowy'],
+          ['math-concentration', 'c = n/V'],
+          ['math-sum', 'Suma Σ'],
+          ['math-integral', 'Całka ∫']
+        ]
+      : [
+          ['chem-water', 'H₂O'],
+          ['chem-combustion', 'Spalanie'],
+          ['chem-equilibrium', 'Równowaga'],
+          ['chem-dissociation', 'Dysocjacja'],
+          ['chem-precipitate', 'Osad ↓'],
+          ['chem-isotope', 'Izotop ¹⁴C']
+        ];
+    const list = create('div', 'formula-preset-list');
+    presets.forEach(([value, label]) => {
+      const button = create('button', 'formula-preset-button', label);
+      button.type = 'button';
+      button.dataset.formulaPreset = value;
+      list.append(button);
+    });
+    section.append(header, list);
+    return section;
+  }
+
+  function formulaSymbolGroup(title, symbols) {
+    const group = create('section', 'formula-symbol-group');
+    group.append(create('strong', '', title));
+    const toolbar = create('div', 'formula-symbol-toolbar');
+    symbols.forEach(([label, snippet, target, help]) => {
+      const button = create('button', 'formula-symbol-button', label);
+      button.type = 'button';
+      button.dataset.formulaSnippet = snippet;
+      if (target) button.dataset.formulaTarget = target;
+      button.title = help || `Wstaw ${snippet}`;
+      toolbar.append(button);
+    });
+    group.append(toolbar);
+    return group;
+  }
+
+  function formulaArrowPicker(value) {
+    const section = create('section', 'formula-symbol-group formula-arrow-group');
+    section.append(create('strong', '', 'Strzałka reakcji'));
+    const list = create('div', 'formula-arrow-list');
+    [
+      ['', '∅', 'Bez strzałki — pojedynczy wzór'],
+      ['->', '→', 'Reakcja w prawo'],
+      ['<-', '←', 'Reakcja w lewo'],
+      ['<->', '↔', 'Reakcja odwracalna'],
+      ['<=>', '⇌', 'Równowaga'],
+      ['<=>>', '⇌→', 'Równowaga przesunięta w prawo'],
+      ['<<=>', '←⇌', 'Równowaga przesunięta w lewo']
+    ].forEach(([arrow, symbol, label]) => {
+      const button = create('button', 'formula-arrow-button');
+      button.type = 'button';
+      button.dataset.formulaArrow = arrow;
+      button.classList.toggle('is-active', value === arrow);
+      button.setAttribute('aria-pressed', String(value === arrow));
+      button.title = label;
+      button.append(create('strong', '', symbol), create('small', '', label));
+      list.append(button);
+    });
+    section.append(list);
+    return section;
+  }
+
+  function formulaComposerPreview() {
+    const section = create('section', 'formula-builder-preview');
+    const header = create('header');
+    header.append(
+      create('strong', '', 'Podgląd równania'),
+      create('small', '', 'Tak wzór będzie wyglądał w lekcji.')
+    );
+    const canvas = create('div', 'formula-builder-preview-canvas');
+    canvas.dataset.formulaComposerPreview = 'true';
+    canvas.setAttribute('aria-live', 'polite');
+    section.append(header, canvas);
+    return section;
+  }
+
+  function updateFormulaComposerPreview(block) {
+    const canvas = elements.lessonInspector.querySelector('[data-formula-composer-preview]');
+    if (!canvas || !block || block.type !== 'formula') return;
+    clearTypesetMath(canvas);
+    try {
+      canvas.innerHTML = window.ChemLesson.renderMarkdown(lessonModelApi.serializeBlock(block));
+      canvas.dataset.state = canvas.querySelector('.lesson-interactive-error') ? 'error' : 'ready';
+    } catch (_) {
+      canvas.replaceChildren(create('p', 'lesson-interactive-error', 'Uzupełnij wzór, aby zobaczyć podgląd.'));
+      canvas.dataset.state = 'error';
+    }
+    typesetMath(canvas);
+  }
+
   function renderLessonInspector() {
     elements.lessonInspector.replaceChildren();
     const found = findLessonNode(state.lesson.selectedId);
@@ -2503,78 +2690,131 @@
           { value: 'chemistry', label: 'Chemia — wzór lub reakcja' },
           { value: 'math', label: 'Matematyka — równanie i symbole' }
         ])),
+        formulaComposerPreview(),
+        formulaPresetPicker(block.mode),
         field('Podpis pod wzorem', lessonInput(block.title, 'title', { maxLength: 180 }))
       );
       if (block.mode === 'math') {
-        const symbols = create('div', 'formula-symbol-toolbar');
-        [
-          ['x²', '^{2}'],
-          ['xₙ', '_{n}'],
-          ['a⁄b', '\\frac{a}{b}'],
-          ['√x', '\\sqrt{x}'],
-          ['Σ', '\\sum_{i=1}^{n}'],
-          ['∫', '\\int_{a}^{b}'],
-          ['v⃗', '\\vec{v}'],
-          ['∂', '\\partial'],
-          ['→', '\\rightarrow'],
-          ['π', '\\pi'],
-          ['Δ', '\\Delta'],
-          ['×', '\\times'],
-          ['±', '\\pm'],
-          ['≈', '\\approx'],
-          ['≤', '\\le'],
-          ['≥', '\\ge'],
-          ['∞', '\\infty']
-        ].forEach(([label, snippet]) => {
-          const button = create('button', 'formula-symbol-button', label);
-          button.type = 'button';
-          button.dataset.formulaSnippet = snippet;
-          button.title = `Wstaw ${snippet}`;
-          symbols.append(button);
-        });
         form.append(
           field(
-            'Wzór matematyczny',
+            'Edytowane równanie',
             lessonTextarea(block.expression, 'expression', {
               rows: 6,
               maxLength: 500,
               placeholder: 'np. E = mc^{2} albo \\frac{n}{V}'
             }),
-            'Używaj przycisków poniżej lub zapisu: ^{2} — potęga, _{n} — indeks, \\frac{a}{b} — ułamek, \\sqrt{x} — pierwiastek.'
+            'Kliknij miejsce w równaniu, a następnie wybierz strukturę lub symbol z palety.'
           ),
-          symbols
+          formulaSymbolGroup('Struktury', [
+            ['x²', '^{2}', 'expression', 'Potęga'],
+            ['xₙ', '_{n}', 'expression', 'Indeks dolny'],
+            ['a⁄b', '\\frac{a}{b}', 'expression', 'Ułamek'],
+            ['√x', '\\sqrt{x}', 'expression', 'Pierwiastek'],
+            ['Σ', '\\sum_{i=1}^{n}', 'expression', 'Suma'],
+            ['∏', '\\prod_{i=1}^{n}', 'expression', 'Iloczyn'],
+            ['∫', '\\int_{a}^{b}', 'expression', 'Całka'],
+            ['lim', '\\lim_{x \\rightarrow 0}', 'expression', 'Granica'],
+            ['v⃗', '\\vec{v}', 'expression', 'Wektor']
+          ]),
+          formulaSymbolGroup('Działania i relacje', [
+            ['×', '\\times', 'expression'],
+            ['÷', '\\div', 'expression'],
+            ['±', '\\pm', 'expression'],
+            ['≈', '\\approx', 'expression'],
+            ['≠', '\\neq', 'expression'],
+            ['≤', '\\le', 'expression'],
+            ['≥', '\\ge', 'expression'],
+            ['→', '\\rightarrow', 'expression'],
+            ['↔', '\\leftrightarrow', 'expression'],
+            ['∞', '\\infty', 'expression']
+          ]),
+          formulaSymbolGroup('Litery greckie i funkcje', [
+            ['α', '\\alpha', 'expression'],
+            ['β', '\\beta', 'expression'],
+            ['γ', '\\gamma', 'expression'],
+            ['Δ', '\\Delta', 'expression'],
+            ['θ', '\\theta', 'expression'],
+            ['λ', '\\lambda', 'expression'],
+            ['μ', '\\mu', 'expression'],
+            ['π', '\\pi', 'expression'],
+            ['σ', '\\sigma', 'expression'],
+            ['Ω', '\\Omega', 'expression'],
+            ['∂', '\\partial', 'expression'],
+            ['ln', '\\ln', 'expression']
+          ])
         );
       } else {
-        const chemistryRow = create('div', 'field-row');
-        chemistryRow.append(
-          field(
-            'Wzór lub substraty',
-            lessonInput(block.left, 'left', { placeholder: 'np. 2 H2 + O2 albo SO4^2-', maxLength: 300 })
-          ),
-          field(
-            'Produkty',
-            lessonInput(block.right, 'right', { placeholder: 'np. 2 H2O', maxLength: 300 })
-          )
+        const composer = create('section', 'formula-chemistry-composer');
+        const composerHeader = create('header');
+        composerHeader.append(
+          create('strong', '', 'Wizualny układ reakcji'),
+          create('small', '', 'Edytuj równanie od lewej do prawej — jak w edytorze równań.')
         );
-        form.append(
-          chemistryRow,
-          field('Strzałka reakcji', lessonSelect(block.arrow, 'arrow', [
-            { value: '', label: 'Bez strzałki — pojedynczy wzór' },
-            { value: '->', label: '→ reakcja w prawo' },
-            { value: '<-', label: '← reakcja w lewo' },
-            { value: '<->', label: '↔ reakcja odwracalna' },
-            { value: '<=>', label: '⇌ równowaga' },
-            { value: '<=>>', label: '⇌ równowaga przesunięta w prawo' },
-            { value: '<<=>', label: '⇌ równowaga przesunięta w lewo' }
+        const equation = create('div', 'formula-chemistry-equation');
+        const arrowColumn = create('div', 'formula-chemistry-arrow-fields');
+        arrowColumn.append(
+          field(
+            'Nad strzałką',
+            lessonInput(block.above, 'above', { placeholder: '450 °C, Δ, hν', maxLength: 120 })
+          ),
+          field('Strzałka', lessonSelect(block.arrow, 'arrow', [
+            { value: '', label: '∅' },
+            { value: '->', label: '→' },
+            { value: '<-', label: '←' },
+            { value: '<->', label: '↔' },
+            { value: '<=>', label: '⇌' },
+            { value: '<=>>', label: '⇌→' },
+            { value: '<<=>', label: '←⇌' }
           ])),
           field(
-            'Warunek nad strzałką',
-            lessonInput(block.above, 'above', { placeholder: 'np. 450 °C, Δ albo hν', maxLength: 120 })
-          ),
+            'Pod strzałką',
+            lessonInput(block.below, 'below', { placeholder: 'kat. Pt, 2 atm', maxLength: 120 })
+          )
+        );
+        equation.append(
           field(
-            'Warunek pod strzałką',
-            lessonInput(block.below, 'below', { placeholder: 'np. kat. Pt albo 2 atm', maxLength: 120 }),
-            'Cyfry we wzorach stają się indeksami automatycznie. Ładunki: SO4^2-, izotopy: ^14C, stopnie utlenienia: Fe^{III}, stany: (s), (l), (g), (aq).'
+            'Substraty / wzór',
+            lessonInput(block.left, 'left', { placeholder: '2 H2 + O2', maxLength: 300 }),
+            'Kliknij to pole, a symbole z palety trafią tutaj.'
+          ),
+          arrowColumn,
+          field(
+            'Produkty',
+            lessonInput(block.right, 'right', { placeholder: '2 H2O', maxLength: 300 }),
+            'Kliknij to pole, aby wstawiać symbole po prawej stronie.'
+          )
+        );
+        composer.append(composerHeader, equation);
+        form.append(
+          composer,
+          formulaArrowPicker(block.arrow),
+          formulaSymbolGroup('Wstaw do ostatnio wybranego pola substratów lub produktów', [
+            ['＋', ' + ', 'active', 'Znak plus'],
+            ['H₂O', 'H2O', 'active', 'Wzór wody'],
+            ['CO₂', 'CO2', 'active', 'Tlenek węgla(IV)'],
+            ['SO₄²⁻', 'SO4^2-', 'active', 'Jon siarczanowy(VI)'],
+            ['NH₄⁺', 'NH4+', 'active', 'Jon amonowy'],
+            ['¹⁴C', '^14C', 'active', 'Izotop'],
+            ['Feᴵᴵᴵ', 'Fe^{III}', 'active', 'Stopień utlenienia'],
+            ['(s)', '(s)', 'active', 'Ciało stałe'],
+            ['(l)', '(l)', 'active', 'Ciecz'],
+            ['(g)', '(g)', 'active', 'Gaz'],
+            ['(aq)', '(aq)', 'active', 'Roztwór wodny'],
+            ['↓ osad', ' v', 'active', 'Osad']
+          ]),
+          formulaSymbolGroup('Warunki reakcji', [
+            ['Δ', 'Δ', 'above', 'Ogrzewanie nad strzałką'],
+            ['hν', 'hν', 'above', 'Światło nad strzałką'],
+            ['25 °C', '25 °C', 'above', 'Temperatura nad strzałką'],
+            ['450 °C', '450 °C', 'above', 'Temperatura nad strzałką'],
+            ['kat. Pt', 'kat. Pt', 'below', 'Katalizator pod strzałką'],
+            ['kat. Fe', 'kat. Fe', 'below', 'Katalizator pod strzałką'],
+            ['2 atm', '2 atm', 'below', 'Ciśnienie pod strzałką']
+          ]),
+          create(
+            'p',
+            'formula-builder-tip',
+            'Cyfry są zamieniane na indeksy automatycznie. Ładunek zapisuj np. SO4^2-, izotop jako ^14C, a stopień utlenienia jako Fe^{III}.'
           )
         );
       }
@@ -2698,6 +2938,7 @@
     }
     form.append(lessonInspectorActions('block'));
     elements.lessonInspector.append(form);
+    if (block.type === 'formula') updateFormulaComposerPreview(block);
   }
 
   function lessonPreviewMarkdown(slide) {
@@ -3451,15 +3692,49 @@
     else slide.blocks.unshift(lessonModelApi.createBlock('heading', { level: 2, text: value }));
   }
 
+  function applyLessonFormulaPreset(button) {
+    const preset = LESSON_FORMULA_PRESETS[button.dataset.formulaPreset];
+    const found = findLessonNode(state.lesson.selectedId);
+    if (!preset || !found || found.kind !== 'block' || found.node.type !== 'formula') return;
+    commitMutation('lesson', () => {
+      found.node.mode = preset.mode;
+      found.node.title = preset.title;
+      if (preset.mode === 'math') {
+        found.node.expression = preset.expression;
+      } else {
+        found.node.left = preset.left;
+        found.node.arrow = preset.arrow;
+        found.node.above = preset.above;
+        found.node.below = preset.below;
+        found.node.right = preset.right;
+        state.lesson.formulaField = 'left';
+      }
+    });
+  }
+
+  function applyLessonFormulaArrow(button) {
+    const found = findLessonNode(state.lesson.selectedId);
+    if (!found || found.kind !== 'block' || found.node.type !== 'formula') return;
+    const arrow = button.dataset.formulaArrow || '';
+    commitMutation('lesson', () => {
+      found.node.arrow = lessonModelApi.FORMULA_ARROWS.includes(arrow) ? arrow : '';
+      if (found.node.arrow && !found.node.right) found.node.right = 'H2O';
+    });
+  }
+
   function insertLessonFormulaSnippet(button) {
-    const textarea = elements.lessonInspector.querySelector('[data-lesson-field="expression"]');
-    if (!textarea) return;
+    const requestedTarget = button.dataset.formulaTarget || 'expression';
+    const targetName = requestedTarget === 'active'
+      ? (['left', 'right'].includes(state.lesson.formulaField) ? state.lesson.formulaField : 'left')
+      : requestedTarget;
+    const input = elements.lessonInspector.querySelector(`[data-lesson-field="${targetName}"]`);
+    if (!input || typeof input.setRangeText !== 'function') return;
     const snippet = button.dataset.formulaSnippet || '';
-    const start = Number.isSafeInteger(textarea.selectionStart) ? textarea.selectionStart : textarea.value.length;
-    const end = Number.isSafeInteger(textarea.selectionEnd) ? textarea.selectionEnd : start;
-    textarea.setRangeText(snippet, start, end, 'end');
-    textarea.dispatchEvent(new Event('input', { bubbles: true }));
-    textarea.focus();
+    const start = Number.isSafeInteger(input.selectionStart) ? input.selectionStart : input.value.length;
+    const end = Number.isSafeInteger(input.selectionEnd) ? input.selectionEnd : start;
+    input.setRangeText(snippet, start, end, 'end');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.focus();
   }
 
   function handleLessonInspectorInput(event) {
@@ -3571,6 +3846,9 @@
       } else {
         block[fieldName] = raw;
       }
+    }
+    if (found.kind === 'block' && found.node.type === 'formula') {
+      updateFormulaComposerPreview(found.node);
     }
     updateLessonNodeSummary();
     scheduleDraftSave('lesson');
@@ -4612,13 +4890,18 @@
     });
 
     elements.lessonInspector.addEventListener('focusin', (event) => {
-      if (event.target.closest('[data-lesson-field]')) beginEdit('lesson');
+      const target = event.target.closest('[data-lesson-field]');
+      if (!target) return;
+      beginEdit('lesson');
+      if (['left', 'right'].includes(target.dataset.lessonField)) {
+        state.lesson.formulaField = target.dataset.lessonField;
+      }
     });
     elements.lessonInspector.addEventListener('input', handleLessonInspectorInput);
     elements.lessonInspector.addEventListener('change', (event) => {
       handleLessonInspectorInput(event);
       finishEdit();
-      if (['type', 'mode', 'options', 'optionItem', 'useColor'].includes(event.target.dataset.lessonField)) {
+      if (['type', 'mode', 'arrow', 'options', 'optionItem', 'useColor'].includes(event.target.dataset.lessonField)) {
         renderLessonInspector();
       }
     });
@@ -4626,6 +4909,16 @@
       if (event.target.closest('[data-lesson-field]')) finishEdit();
     });
     elements.lessonInspector.addEventListener('click', (event) => {
+      const formulaPreset = event.target.closest('[data-formula-preset]');
+      if (formulaPreset) {
+        applyLessonFormulaPreset(formulaPreset);
+        return;
+      }
+      const formulaArrow = event.target.closest('[data-formula-arrow]');
+      if (formulaArrow) {
+        applyLessonFormulaArrow(formulaArrow);
+        return;
+      }
       const formulaSnippet = event.target.closest('[data-formula-snippet]');
       if (formulaSnippet) {
         insertLessonFormulaSnippet(formulaSnippet);
