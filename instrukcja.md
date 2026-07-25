@@ -1032,7 +1032,7 @@ GitHub tworzy commit usuwający plik, dlatego zawartość można odzyskać z his
 
 Na jednym slajdzie można umieścić wiele klocków treści i najwyżej jedno zadanie sprawdzające.
 
-Pod wyszukiwarką, poza przewijaną listą zwykłych klocków, znajduje się przypięta sekcja **Narzędzia lekcji**. Są w niej zawsze widoczne: **Kreator równań**, **Zapytaj AI** i **Tablica**. Kliknięcie działa tak samo jak przeciągnięcie. Studio automatycznie zaznacza dodany klocek, rozwija panel **Narzędzia i podgląd** oraz pokazuje jego ustawienia; na wąskim ekranie przewija widok bezpośrednio do tego panelu.
+Na dole przewijanej biblioteki klocków znajduje się sekcja **Narzędzia lekcji**. Są w niej: **Kreator równań**, **Zapytaj AI** i **Tablica**. Kliknięcie działa tak samo jak przeciągnięcie. Studio automatycznie zaznacza dodany klocek, rozwija panel **Narzędzia i podgląd** oraz pokazuje jego ustawienia; na wąskim ekranie przewija widok bezpośrednio do tego panelu.
 
 ### Nowy slajd
 
