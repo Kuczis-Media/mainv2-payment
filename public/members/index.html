@@ -208,7 +208,7 @@
   </div>
 
   <dialog class="profile-dialog" id="profile-dialog" aria-labelledby="profile-dialog-title">
-    <form class="profile-panel" id="profile-form" method="dialog">
+    <section class="profile-panel">
       <div class="profile-heading">
         <div>
           <span class="eyebrow">Ustawienia konta</span>
@@ -225,30 +225,60 @@
         </div>
       </div>
 
-      <div class="profile-name-grid">
+      <form id="profile-form">
+        <div class="profile-name-grid">
+          <label>
+            <span class="field-label">Imię</span>
+            <input class="text-field" id="profile-first-name" name="first_name" type="text" maxlength="80" autocomplete="given-name" required />
+          </label>
+          <label>
+            <span class="field-label">Nazwisko</span>
+            <input class="text-field" id="profile-last-name" name="last_name" type="text" maxlength="80" autocomplete="family-name" required />
+          </label>
+        </div>
+        <p class="field-hint">Imię i nazwisko będą widoczne w Twoim panelu kursanta.</p>
+
+        <div class="profile-access">
+          <span>Status dostępu</span>
+          <strong data-access-label>Konto aktywne</strong>
+        </div>
+
+        <p class="form-message" id="profile-message" role="status" aria-live="polite"></p>
+
+        <div class="dialog-actions">
+          <button class="button button-secondary" id="profile-cancel" type="button">Anuluj</button>
+          <button class="button button-primary" id="profile-save" type="submit">Zapisz profil</button>
+        </div>
+      </form>
+
+      <form class="profile-password-form" id="profile-password-form">
+        <div class="profile-password-heading">
+          <span class="eyebrow">Bezpieczeństwo</span>
+          <h3>Zmień hasło</h3>
+          <p>Najpierw potwierdź obecne hasło, a następnie ustaw nowe.</p>
+        </div>
+        <input id="profile-password-email" name="username" type="email" autocomplete="username" hidden>
         <label>
-          <span class="field-label">Imię</span>
-          <input class="text-field" id="profile-first-name" name="first_name" type="text" maxlength="80" autocomplete="given-name" required />
+          <span class="field-label">Obecne hasło</span>
+          <input class="text-field" id="profile-current-password" name="current_password" type="password" autocomplete="current-password" required />
         </label>
         <label>
-          <span class="field-label">Nazwisko</span>
-          <input class="text-field" id="profile-last-name" name="last_name" type="text" maxlength="80" autocomplete="family-name" required />
+          <span class="field-label">Nowe hasło</span>
+          <input class="text-field" id="profile-new-password" name="new_password" type="password" minlength="10" autocomplete="new-password" aria-describedby="profile-password-rules" required />
         </label>
-      </div>
-      <p class="field-hint">Imię i nazwisko będą widoczne w Twoim panelu kursanta.</p>
-
-      <div class="profile-access">
-        <span>Status dostępu</span>
-        <strong data-access-label>Konto aktywne</strong>
-      </div>
-
-      <p class="form-message" id="profile-message" role="status" aria-live="polite"></p>
-
-      <div class="dialog-actions">
-        <button class="button button-secondary" id="profile-cancel" type="button">Anuluj</button>
-        <button class="button button-primary" id="profile-save" type="submit">Zapisz zmiany</button>
-      </div>
-    </form>
+        <label>
+          <span class="field-label">Powtórz nowe hasło</span>
+          <input class="text-field" id="profile-confirm-password" name="confirm_password" type="password" minlength="10" autocomplete="new-password" required />
+        </label>
+        <ul class="profile-password-rules" id="profile-password-rules">
+          <li>Co najmniej 10 znaków.</li>
+          <li>Nowe hasło musi różnić się od obecnego.</li>
+          <li>Oba pola nowego hasła muszą być identyczne.</li>
+        </ul>
+        <p class="form-message" id="profile-password-message" role="status" aria-live="polite"></p>
+        <button class="button button-primary profile-password-submit" id="profile-password-submit" type="submit">Zmień hasło</button>
+      </form>
+    </section>
   </dialog>
 
   <dialog class="admin-dialog" id="admin-dialog" aria-labelledby="admin-dialog-title">
@@ -341,6 +371,20 @@
             </span>
           </label>
           <button class="button button-secondary admin-refresh" id="admin-refresh" type="button">Odśwież listę</button>
+        </div>
+
+        <div class="admin-contact-export">
+          <div class="admin-contact-export-copy">
+            <span class="admin-contact-export-icon" aria-hidden="true">⇩</span>
+            <span>
+              <strong>Eksport kontaktów</strong>
+              <small>Pobiera wszystkie konta: tylko adres e-mail, imię i nazwisko. Plik zawiera dane osobowe — przechowuj go bezpiecznie i usuń po wykorzystaniu.</small>
+            </span>
+          </div>
+          <div class="admin-contact-export-actions" aria-label="Format eksportu kontaktów">
+            <button class="button button-secondary" id="admin-export-json" type="button" disabled>Pobierz JSON</button>
+            <button class="button button-secondary" id="admin-export-xml" type="button" disabled>Pobierz XML</button>
+          </div>
         </div>
 
         <div class="admin-status" id="admin-status" role="status" aria-live="polite"></div>

@@ -199,6 +199,26 @@ test('members dashboard has a persistent accessible light and dark theme', () =>
   assert.match(styles, /color-scheme:\s*dark/);
 });
 
+test('profile lets an authenticated user verify the current password and set a new one', () => {
+  const html = fs.readFileSync(path.join(root, 'public', 'members', 'index.html'), 'utf8');
+  const script = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.js'), 'utf8');
+  const auth = fs.readFileSync(path.join(root, 'public', 'assets', 'js', 'auth.js'), 'utf8');
+  const styles = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.css'), 'utf8');
+
+  assert.match(html, /id=["']profile-password-form["']/);
+  assert.match(html, /id=["']profile-current-password["'][^>]*autocomplete=["']current-password["']/);
+  assert.match(html, /id=["']profile-new-password["'][^>]*minlength=["']10["'][^>]*autocomplete=["']new-password["']/);
+  assert.match(html, /id=["']profile-confirm-password["'][^>]*autocomplete=["']new-password["']/);
+  assert.match(script, /function changeProfilePassword/);
+  assert.match(script, /newPassword\.length\s*<\s*10/);
+  assert.match(script, /newPassword\s*!==\s*confirmPassword/);
+  assert.match(script, /auth\.changePassword\(\{\s*currentPassword,\s*newPassword\s*\}\)/);
+  assert.match(auth, /ID\.gotrue\.login\(user\.email,\s*currentPassword,\s*true\)/);
+  assert.match(auth, /verifiedUser\.update\(\{\s*password:\s*newPassword\s*\}\)/);
+  assert.match(styles, /\.profile-password-form/);
+  assert.doesNotMatch(script, /localStorage\.setItem\([^)]*password/i);
+});
+
 test('members dashboard has a persistent accessible collapsible sidebar', () => {
   const html = fs.readFileSync(path.join(root, 'public', 'members', 'index.html'), 'utf8');
   const script = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.js'), 'utf8');
@@ -235,10 +255,19 @@ test('dashboard exposes user management only through the guarded admin workflow'
 
   assert.match(html, /id=["']admin-panel-button["'][^>]*\bhidden\b/);
   assert.match(html, /id=["']admin-dialog["']/);
+  assert.match(html, /id=["']admin-export-json["'][^>]*\bdisabled\b/);
+  assert.match(html, /id=["']admin-export-xml["'][^>]*\bdisabled\b/);
   assert.match(script, /appMetadata\.roles\.includes\('admin'\)/);
   assert.match(script, /\/\.netlify\/functions\/admin-users/);
   assert.match(script, /Authorization:\s*`Bearer \$\{token\}`/);
   assert.match(script, /perPage=100/);
+  assert.match(script, /function downloadAdminContacts\(format\)/);
+  assert.match(script, /application\/json;charset=utf-8/);
+  assert.match(script, /application\/xml;charset=utf-8/);
+  assert.match(script, /URL\.createObjectURL\(new Blob/);
+  assert.match(script, /email:\s*clean\(user && user\.email\)/);
+  assert.match(script, /firstName:\s*clean\(user && user\.firstName\)/);
+  assert.match(script, /lastName:\s*clean\(user && user\.lastName\)/);
   assert.doesNotMatch(script, /operator[-_ ]token/i);
 });
 

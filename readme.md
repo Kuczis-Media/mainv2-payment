@@ -366,7 +366,7 @@ Jeśli każdy pojedynczy zasób ma wymagać natychmiastowej, serwerowej weryfika
 
 Interfejs rejestracji, przyjmowania zaproszenia i resetowania hasła w ChemDisk wymaga co najmniej 10 znaków. Jest to walidacja po stronie tej aplikacji; niezależną, serwerową politykę haseł konfiguruje Netlify Identity. Hook `identity-signup` nie ocenia siły hasła — normalizuje imię i nazwisko trafiające do `user_metadata` oraz usuwa z tych metadanych pola wyglądające jak uprawnienia.
 
-W Identity zapisywane są zgodne pola `first_name`, `last_name`, `full_name` i `name`. Dashboard pokazuje nazwę oraz inicjały konta. Zalogowany użytkownik może kliknąć swoją kartę konta i zmienić imię oraz nazwisko. Zmiana własnego profilu nie zmienia roli, czasu dostępu ani aktywnej sesji.
+W Identity zapisywane są zgodne pola `first_name`, `last_name`, `full_name` i `name`. Dashboard pokazuje nazwę oraz inicjały konta. Zalogowany użytkownik może kliknąć swoją kartę konta i zmienić imię, nazwisko albo hasło. Zmiana hasła wymaga ponownego uwierzytelnienia obecnym hasłem, co najmniej 10 znaków w nowym haśle oraz identycznego powtórzenia. Hasła trafiają bezpośrednio do Netlify Identity i nie są zapisywane w `localStorage`, profilu ani funkcjach ChemDisk. Zmiana własnego profilu nie zmienia roli ani czasu dostępu.
 
 ## Panel administratora
 
@@ -374,6 +374,7 @@ Przycisk **Panel administratora** pojawia się w bocznym menu wyłącznie dla ko
 
 - zaprosić konto przez e-mail bez ustawiania lub poznawania hasła użytkownika;
 - wyszukać użytkownika po imieniu, nazwisku albo e-mailu;
+- pobrać pełną listę kontaktów jako JSON albo XML; eksport zawiera wyłącznie e-mail, imię i nazwisko, niezależnie od aktywnego filtra wyszukiwania;
 - poprawić imię i nazwisko zapisane w `user_metadata`;
 - wybrać brak dostępu, stały dostęp albo dokładnie jeden okres czasowy;
 - dodatkowo przyznać rolę `admin`;
@@ -389,6 +390,8 @@ Przycisk **Panel administratora** pojawia się w bocznym menu wyłącznie dla ko
 - obsłużyć całą listę użytkowników dzięki stronicowaniu.
 
 Interfejs wysyła JWT zalogowanego administratora do `/.netlify/functions/admin-users`. Funkcja ponownie pobiera aktualny rekord administratora z Identity, dopiero wtedy używa dostarczonego przez środowisko Netlify krótkotrwałego tokena operatora do listowania lub aktualizacji kont. Token operatora nigdy nie jest zwracany do przeglądarki. Funkcja blokuje odebranie sobie własnej roli administratora i zachowuje `session_id` oraz niezwiązane metadane konta.
+
+Przyciski **Pobierz JSON** i **Pobierz XML** są aktywowane dopiero po poprawnym pobraniu całej, stronicowanej listy kont. Plik powstaje lokalnie w przeglądarce i nie zawiera identyfikatorów, ról, terminów dostępu ani danych Stripe. Jest jednak zbiorem danych osobowych, dlatego należy ograniczyć jego udostępnianie i usunąć go, gdy przestanie być potrzebny.
 
 Przy rzeczywistej zmianie roli stare `timed_access` jest czyszczone. Nowa rola czasowa rozpoczyna okres przy następnym logowaniu użytkownika. Sama poprawka imienia lub nazwiska z pozostawioną aktywną rolą czasową nie zeruje jej bieżącego terminu. Zmiany ról są w pełni widoczne po odświeżeniu tokenu albo ponownym logowaniu.
 

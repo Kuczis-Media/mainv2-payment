@@ -772,6 +772,7 @@ html[data-theme="dark"] .admin-empty strong,
 html[data-theme="dark"] .admin-submission-heading h3,
 html[data-theme="dark"] .admin-dashboard-preview h3,
 html[data-theme="dark"] .profile-heading h2,
+html[data-theme="dark"] .profile-password-heading h3,
 html[data-theme="dark"] .field-label,
 html[data-theme="dark"] .admin-roles legend,
 html[data-theme="dark"] .admin-toggle-copy strong {
@@ -1955,6 +1956,71 @@ html[data-theme="dark"] .accordion-children .accordion-children .accordion-child
   white-space: nowrap;
 }
 
+.admin-contact-export {
+  display: flex;
+  margin-top: 12px;
+  padding: 13px 15px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 15px;
+}
+
+.admin-contact-export-copy {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 11px;
+}
+
+.admin-contact-export-copy > span:last-child {
+  min-width: 0;
+}
+
+.admin-contact-export-copy strong,
+.admin-contact-export-copy small {
+  display: block;
+}
+
+.admin-contact-export-copy strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.admin-contact-export-copy small {
+  max-width: 620px;
+  margin-top: 3px;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.admin-contact-export-icon {
+  display: grid;
+  width: 37px;
+  height: 37px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-radius: 11px;
+  font-size: 19px;
+  font-weight: 800;
+}
+
+.admin-contact-export-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.admin-contact-export-actions .button {
+  min-height: 40px;
+  white-space: nowrap;
+}
+
 .admin-status {
   min-height: 35px;
   padding: 11px 3px 7px;
@@ -2995,6 +3061,54 @@ html[data-theme="dark"] .admin-payment-switch.admin-payment-master-switch strong
   color: var(--primary);
 }
 
+.profile-password-form {
+  display: grid;
+  margin-top: 24px;
+  padding-top: 22px;
+  gap: 13px;
+  border-top: 1px solid var(--line);
+}
+
+.profile-password-form label {
+  display: block;
+}
+
+.profile-password-heading {
+  margin-bottom: 2px;
+}
+
+.profile-password-heading .eyebrow {
+  color: var(--primary);
+}
+
+.profile-password-heading h3 {
+  margin: 3px 0 5px;
+  color: var(--ink);
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.profile-password-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.profile-password-rules {
+  display: grid;
+  margin: -2px 0 0;
+  padding-left: 19px;
+  gap: 4px;
+  color: var(--subtle);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.profile-password-submit {
+  justify-self: end;
+}
+
 .form-message {
   min-height: 18px;
   margin: 13px 0 0;
@@ -3004,6 +3118,10 @@ html[data-theme="dark"] .admin-payment-switch.admin-payment-master-switch strong
 
 .form-message.is-error {
   color: var(--danger);
+}
+
+.form-message.is-success {
+  color: var(--primary);
 }
 
 .dialog-actions {
@@ -3240,6 +3358,16 @@ html[data-theme="dark"] .admin-payment-switch.admin-payment-master-switch strong
   .admin-toolbar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .admin-contact-export {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-contact-export-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .admin-user-list {

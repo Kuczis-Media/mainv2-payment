@@ -17,6 +17,7 @@
   const LOGIN_PATH = '/login/';
   const SESSION_CHECK_INTERVAL_MS = 30000;
   const IDENTITY_REQUEST_TIMEOUT_MS = 8000;
+  const MIN_PASSWORD_LENGTH = 10;
 
   const withTimeout = async (factory, timeoutMs = IDENTITY_REQUEST_TIMEOUT_MS) => {
     let timeoutId = null;
@@ -138,6 +139,7 @@
       getProfile: () => null,
       getAccessToken: async () => { throw new Error('Netlify Identity jest niedostępne.'); },
       updateProfile: async () => { throw new Error('Netlify Identity jest niedostępne.'); },
+      changePassword: async () => { throw new Error('Netlify Identity jest niedostępne.'); },
       logout: async () => false,
       checkSession: async () => ({ ok: false, verified: false, reason: 'identity_unavailable' }),
       getSessionStatus: () => ({ ok: false, verified: false, reason: 'identity_unavailable' }),
@@ -153,6 +155,7 @@
   let sessionMonitorId = null;
   let jwtCookieRefreshPending = false;
   let jwtClaimsRefreshRequired = false;
+  let credentialUpdateInProgress = false;
   let redirectInProgress = false;
   let lastSessionStatus = {
     ok: false,
@@ -430,6 +433,115 @@
     dispatchAuthEvent('chem-auth-profile-updated', { profile });
     dispatchAuthEvent('chem-auth-user-changed', { authenticated: true, profile });
     return profile;
+  };
+
+  const identityErrorMessage = (error) => String(
+    error && (error.message || error.msg || error.error_description)
+      ? error.message || error.msg || error.error_description
+      : error || ''
+  );
+
+  const changePassword = async ({ currentPassword, newPassword } = {}) => {
+    const user = getUser();
+    if (!user || !user.email) {
+      const error = new Error('Musisz być zalogowany, aby zmienić hasło.');
+      error.code = 'not_authenticated';
+      throw error;
+    }
+    if (typeof currentPassword !== 'string' || !currentPassword) {
+      const error = new Error('Wpisz obecne hasło.');
+      error.code = 'current_password_required';
+      throw error;
+    }
+    if (typeof newPassword !== 'string' || newPassword.length < MIN_PASSWORD_LENGTH) {
+      const error = new Error(`Nowe hasło musi mieć co najmniej ${MIN_PASSWORD_LENGTH} znaków.`);
+      error.code = 'weak_password';
+      throw error;
+    }
+    if (newPassword === currentPassword) {
+      const error = new Error('Nowe hasło musi być inne niż obecne.');
+      error.code = 'password_unchanged';
+      throw error;
+    }
+    if (!ID.gotrue || typeof ID.gotrue.login !== 'function') {
+      const error = new Error('Usługa zmiany hasła jest chwilowo niedostępna.');
+      error.code = 'identity_unavailable';
+      throw error;
+    }
+
+    if (sessionCheckInFlight) {
+      try { await sessionCheckInFlight; } catch {}
+    }
+    credentialUpdateInProgress = true;
+    try {
+      let verifiedUser;
+      try {
+        verifiedUser = await withTimeout(() => ID.gotrue.login(user.email, currentPassword, true));
+      } catch (error) {
+        const message = identityErrorMessage(error).toLowerCase();
+        if (
+          message.includes('invalid_grant')
+          || message.includes('invalid login')
+          || message.includes('password invalid')
+          || message.includes('no user found')
+        ) {
+          const invalid = new Error('Obecne hasło jest nieprawidłowe.');
+          invalid.code = 'invalid_current_password';
+          throw invalid;
+        }
+        const unavailable = new Error('Nie udało się sprawdzić obecnego hasła. Spróbuj ponownie.');
+        unavailable.code = 'reauthentication_failed';
+        throw unavailable;
+      }
+
+      const verifiedSessionId = sessionIdFrom(verifiedUser);
+      if (verifiedSessionId) saveLocalSessionId(verifiedSessionId);
+      try {
+        await setNFJwtCookie(verifiedUser, { forceRefresh: true });
+      } catch {}
+
+      let updatedUser;
+      try {
+        if (!verifiedUser || typeof verifiedUser.update !== 'function') {
+          throw new Error('identity_update_unavailable');
+        }
+        updatedUser = await withTimeout(() => verifiedUser.update({ password: newPassword }));
+      } catch (error) {
+        const message = identityErrorMessage(error).toLowerCase();
+        if (
+          message.includes('weak')
+          || message.includes('short')
+          || message.includes('minimum')
+          || message.includes('at least')
+        ) {
+          const weak = new Error(`Nowe hasło musi mieć co najmniej ${MIN_PASSWORD_LENGTH} znaków i spełniać zasady Netlify Identity.`);
+          weak.code = 'weak_password';
+          throw weak;
+        }
+        const failed = new Error('Nie udało się zapisać nowego hasła. Spróbuj ponownie.');
+        failed.code = 'password_update_failed';
+        throw failed;
+      }
+
+      const activeUser = updatedUser || getUser() || verifiedUser;
+      const activeSessionId = sessionIdFrom(activeUser) || verifiedSessionId;
+      if (activeSessionId) saveLocalSessionId(activeSessionId);
+      await setNFJwtCookie(activeUser, { forceRefresh: true });
+      credentialUpdateInProgress = false;
+      const session = await checkSingleSessionOrLogout();
+      if (!session.ok) {
+        const error = new Error('Hasło zmieniono, ale sesja wymaga ponownego zalogowania.');
+        error.code = 'password_changed_session_refresh_failed';
+        throw error;
+      }
+      dispatchAuthEvent('chem-auth-user-changed', {
+        authenticated: true,
+        profile: profileFromUser(activeUser)
+      });
+      return true;
+    } finally {
+      credentialUpdateInProgress = false;
+    }
   };
 
   const setCookie = (name, value, opts = {}) => {
@@ -760,6 +872,16 @@
   };
 
   const checkSingleSessionOrLogout = () => {
+    if (credentialUpdateInProgress) {
+      const user = getUser();
+      return Promise.resolve({
+        ok: Boolean(user && isActiveUser(user)),
+        verified: false,
+        active: Boolean(user && isActiveUser(user)),
+        reason: 'credentials_updating',
+        checkedAt: new Date().toISOString()
+      });
+    }
     if (sessionCheckInFlight) return sessionCheckInFlight;
     sessionCheckInFlight = performSessionCheck().finally(() => {
       sessionCheckInFlight = null;
@@ -884,6 +1006,7 @@
     getProfile,
     getAccessToken,
     updateProfile,
+    changePassword,
     logout,
     checkSession: checkSingleSessionOrLogout,
     getSessionStatus,

@@ -146,6 +146,13 @@
     profileLastName: document.getElementById('profile-last-name'),
     profileMessage: document.getElementById('profile-message'),
     profileSave: document.getElementById('profile-save'),
+    profilePasswordForm: document.getElementById('profile-password-form'),
+    profilePasswordEmail: document.getElementById('profile-password-email'),
+    profileCurrentPassword: document.getElementById('profile-current-password'),
+    profileNewPassword: document.getElementById('profile-new-password'),
+    profileConfirmPassword: document.getElementById('profile-confirm-password'),
+    profilePasswordMessage: document.getElementById('profile-password-message'),
+    profilePasswordSubmit: document.getElementById('profile-password-submit'),
     profileClose: document.getElementById('profile-close'),
     profileCancel: document.getElementById('profile-cancel'),
     adminButton: document.getElementById('admin-panel-button'),
@@ -154,6 +161,8 @@
     adminClose: document.getElementById('admin-close'),
     adminSearch: document.getElementById('admin-user-search'),
     adminRefresh: document.getElementById('admin-refresh'),
+    adminExportJson: document.getElementById('admin-export-json'),
+    adminExportXml: document.getElementById('admin-export-xml'),
     adminStatus: document.getElementById('admin-status'),
     adminUserList: document.getElementById('admin-user-list'),
     adminEmpty: document.getElementById('admin-empty'),
@@ -1119,12 +1128,19 @@
     if (user || profile) updateProfileDisplay(user, profile);
     elements.profileMessage.textContent = '';
     elements.profileMessage.className = 'form-message';
+    clearProfilePasswordFields();
+    elements.profilePasswordMessage.textContent = '';
+    elements.profilePasswordMessage.className = 'form-message';
+    elements.profilePasswordEmail.value = user && typeof user.email === 'string' ? user.email : '';
     if (typeof elements.profileDialog.showModal === 'function') elements.profileDialog.showModal();
     else elements.profileDialog.setAttribute('open', '');
     window.setTimeout(() => elements.profileFirstName.focus(), 0);
   }
 
   function closeProfile() {
+    clearProfilePasswordFields();
+    elements.profilePasswordMessage.textContent = '';
+    elements.profilePasswordMessage.className = 'form-message';
     if (typeof elements.profileDialog.close === 'function') elements.profileDialog.close();
     else elements.profileDialog.removeAttribute('open');
     if (lastProfileTrigger) lastProfileTrigger.focus();
@@ -1184,6 +1200,72 @@
     } finally {
       elements.profileSave.disabled = false;
       elements.profileSave.textContent = oldButtonText;
+    }
+  }
+
+  function clearProfilePasswordFields() {
+    elements.profileCurrentPassword.value = '';
+    elements.profileNewPassword.value = '';
+    elements.profileConfirmPassword.value = '';
+  }
+
+  async function changeProfilePassword(event) {
+    event.preventDefault();
+    const currentPassword = elements.profileCurrentPassword.value;
+    const newPassword = elements.profileNewPassword.value;
+    const confirmPassword = elements.profileConfirmPassword.value;
+    elements.profilePasswordMessage.textContent = '';
+    elements.profilePasswordMessage.className = 'form-message';
+
+    if (!currentPassword) {
+      elements.profilePasswordMessage.textContent = 'Wpisz obecne hasło.';
+      elements.profilePasswordMessage.className = 'form-message is-error';
+      elements.profileCurrentPassword.focus();
+      return;
+    }
+    if (newPassword.length < 10) {
+      elements.profilePasswordMessage.textContent = 'Nowe hasło musi mieć co najmniej 10 znaków.';
+      elements.profilePasswordMessage.className = 'form-message is-error';
+      elements.profileNewPassword.focus();
+      return;
+    }
+    if (newPassword === currentPassword) {
+      elements.profilePasswordMessage.textContent = 'Nowe hasło musi być inne niż obecne.';
+      elements.profilePasswordMessage.className = 'form-message is-error';
+      elements.profileNewPassword.focus();
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      elements.profilePasswordMessage.textContent = 'Powtórzone hasło nie jest identyczne.';
+      elements.profilePasswordMessage.className = 'form-message is-error';
+      elements.profileConfirmPassword.focus();
+      return;
+    }
+
+    const auth = window.ChemAuth;
+    if (!auth || typeof auth.changePassword !== 'function') {
+      elements.profilePasswordMessage.textContent = 'Zmiana hasła jest chwilowo niedostępna. Odśwież stronę i spróbuj ponownie.';
+      elements.profilePasswordMessage.className = 'form-message is-error';
+      return;
+    }
+
+    const oldButtonText = elements.profilePasswordSubmit.textContent;
+    elements.profilePasswordSubmit.disabled = true;
+    elements.profilePasswordSubmit.textContent = 'Sprawdzanie i zapisywanie…';
+    try {
+      await auth.changePassword({ currentPassword, newPassword });
+      currentUser = (typeof auth.getUser === 'function' && auth.getUser()) || currentUser;
+      clearProfilePasswordFields();
+      elements.profilePasswordMessage.textContent = 'Hasło zostało zmienione.';
+      elements.profilePasswordMessage.className = 'form-message is-success';
+    } catch (error) {
+      elements.profilePasswordMessage.textContent = error && error.message
+        ? error.message
+        : 'Nie udało się zmienić hasła. Spróbuj ponownie.';
+      elements.profilePasswordMessage.className = 'form-message is-error';
+    } finally {
+      elements.profilePasswordSubmit.disabled = false;
+      elements.profilePasswordSubmit.textContent = oldButtonText;
     }
   }
 
@@ -1680,11 +1762,88 @@
     else setAdminStatus(adminUsers.length ? `${adminUsers.length} kont w systemie` : '', 'info');
   }
 
+  function setAdminExportDisabled(disabled) {
+    elements.adminExportJson.disabled = disabled;
+    elements.adminExportXml.disabled = disabled;
+  }
+
+  function adminContactRecord(user) {
+    const clean = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+    return {
+      email: clean(user && user.email),
+      firstName: clean(user && user.firstName),
+      lastName: clean(user && user.lastName)
+    };
+  }
+
+  function escapeXml(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+  }
+
+  function serializeAdminContacts(format, contacts, exportedAt) {
+    if (format === 'json') {
+      return JSON.stringify({
+        exportedAt,
+        count: contacts.length,
+        contacts
+      }, null, 2);
+    }
+
+    const rows = contacts.map((contact) => [
+      '  <contact>',
+      `    <email>${escapeXml(contact.email)}</email>`,
+      `    <firstName>${escapeXml(contact.firstName)}</firstName>`,
+      `    <lastName>${escapeXml(contact.lastName)}</lastName>`,
+      '  </contact>'
+    ].join('\n')).join('\n');
+    return [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      `<contacts exportedAt="${escapeXml(exportedAt)}" count="${contacts.length}">`,
+      rows,
+      '</contacts>'
+    ].join('\n');
+  }
+
+  function downloadAdminContacts(format) {
+    if (format !== 'json' && format !== 'xml') return;
+    if (!adminUsers.length) {
+      setAdminStatus('Najpierw wczytaj listę użytkowników.', 'error');
+      return;
+    }
+
+    const contacts = adminUsers
+      .map(adminContactRecord)
+      .sort((left, right) => (
+        left.lastName.localeCompare(right.lastName, 'pl', { sensitivity: 'base' })
+        || left.firstName.localeCompare(right.firstName, 'pl', { sensitivity: 'base' })
+        || left.email.localeCompare(right.email, 'pl', { sensitivity: 'base' })
+      ));
+    const exportedAt = new Date().toISOString();
+    const content = serializeAdminContacts(format, contacts, exportedAt);
+    const mimeType = format === 'json' ? 'application/json;charset=utf-8' : 'application/xml;charset=utf-8';
+    const blobUrl = URL.createObjectURL(new Blob([content], { type: mimeType }));
+    const link = document.createElement('a');
+    const timestamp = exportedAt.slice(0, 19).replace(/[:T]/g, '-');
+    link.href = blobUrl;
+    link.download = `chemdisk-kontakty-${timestamp}.${format}`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    setAdminStatus(`Pobrano ${contacts.length} kontaktów w pliku ${format.toUpperCase()}.`, 'info');
+  }
+
   async function loadAdminUsers() {
     elements.adminUserList.setAttribute('aria-busy', 'true');
     elements.adminUserList.replaceChildren();
     elements.adminEmpty.hidden = true;
     elements.adminRefresh.disabled = true;
+    setAdminExportDisabled(true);
     setAdminStatus('Wczytywanie kont użytkowników…', 'loading');
     try {
       const token = await getAdminToken();
@@ -1713,6 +1872,7 @@
       collected.map(adminProfileFrom).filter((user) => user.id).forEach((user) => uniqueUsers.set(user.id, user));
       adminUsers = Array.from(uniqueUsers.values());
       renderAdminUsers();
+      setAdminExportDisabled(adminUsers.length === 0);
     } catch (error) {
       adminUsers = [];
       elements.adminEmpty.hidden = true;
@@ -2760,10 +2920,13 @@
     elements.profileClose.addEventListener('click', closeProfile);
     elements.profileCancel.addEventListener('click', closeProfile);
     elements.profileForm.addEventListener('submit', saveProfile);
+    elements.profilePasswordForm.addEventListener('submit', changeProfilePassword);
     elements.logoutButton.addEventListener('click', logout);
     elements.adminButton.addEventListener('click', openAdminPanel);
     elements.adminClose.addEventListener('click', closeAdminPanel);
     elements.adminRefresh.addEventListener('click', loadAdminUsers);
+    elements.adminExportJson.addEventListener('click', () => downloadAdminContacts('json'));
+    elements.adminExportXml.addEventListener('click', () => downloadAdminContacts('xml'));
     elements.adminSearch.addEventListener('input', renderAdminUsers);
     elements.adminInviteForm.addEventListener('submit', inviteAdminUser);
     elements.adminTabs.forEach((tab, index) => {
@@ -2811,6 +2974,8 @@
       if (event.target === elements.profileDialog) closeProfile();
     });
     elements.profileDialog.addEventListener('close', () => {
+      clearProfilePasswordFields();
+      elements.profilePasswordMessage.textContent = '';
       if (lastProfileTrigger) lastProfileTrigger.focus();
     });
     elements.adminDialog.addEventListener('click', (event) => {

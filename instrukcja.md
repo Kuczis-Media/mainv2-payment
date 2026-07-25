@@ -658,7 +658,7 @@ Po zalogowaniu kursant widzi:
 - działy i harmonijki z materiałami;
 - wyszukiwarkę;
 - zmianę jasnego lub ciemnego motywu;
-- profil i zmianę imienia/nazwiska;
+- profil i zmianę imienia, nazwiska lub hasła;
 - status i czas dostępu;
 - zakup lub przedłużenie dostępu;
 - formularz kontaktowy.
@@ -666,6 +666,16 @@ Po zalogowaniu kursant widzi:
 Użytkownik bez aktywnej roli może się zalogować i kupić dostęp, ale nie może otworzyć `/members/`.
 
 Ikona biblioteki lekcji i Studio są przeznaczone wyłącznie dla administratora.
+
+### 13.1. Zmiana własnego hasła
+
+1. Kliknij swoją kartę profilu w lewym menu albo nazwę konta u góry.
+2. W części **Zmień hasło** wpisz obecne hasło.
+3. Wpisz nowe hasło mające co najmniej 10 znaków i różniące się od obecnego.
+4. Powtórz nowe hasło dokładnie tak samo.
+5. Kliknij **Zmień hasło**.
+
+Obecne hasło jest ponownie sprawdzane przez Netlify Identity. ChemDisk nie zapisuje żadnego z wpisanych haseł. Jeśli obecne hasło jest nieprawidłowe albo nowe pola różnią się od siebie, formularz nie wykona zmiany.
 
 ## 14. Role i długość dostępu
 
@@ -727,6 +737,20 @@ Sama poprawka imienia lub nazwiska nie odnawia aktywnego okresu.
 
 Usunięcie konta jest trwałe dla Identity i historii ChemDisk. Dane transakcji pozostają w Stripe. Administrator nie może usunąć własnego aktualnie zalogowanego konta.
 
+### 15.5. Pobranie listy kontaktów na wydarzenie
+
+1. Zaloguj się jako administrator.
+2. Otwórz **Panel administratora → Użytkownicy**.
+3. Poczekaj, aż nad listą pojawi się liczba kont. Przyciski eksportu pozostają nieaktywne, dopóki aplikacja nie pobierze całej listy.
+4. Kliknij **Pobierz JSON** albo **Pobierz XML**:
+   - JSON jest wygodny do dalszego użycia w aplikacjach i automatyzacjach;
+   - XML przydaje się w programach, które wymagają tego formatu.
+5. Gotowy plik znajdziesz w folderze pobranych plików przeglądarki. Nazwa zawiera datę i godzinę eksportu.
+
+Eksport zawsze obejmuje wszystkie konta, nawet jeżeli w polu wyszukiwania widać tylko część z nich. Każdy wpis zawiera wyłącznie `email`, `firstName` i `lastName`. Plik nie zawiera haseł, ról, identyfikatorów kont, informacji o dostępie ani płatnościach Stripe.
+
+To nadal są dane osobowe. Udostępniaj plik tylko osobom, które muszą go otrzymać do organizacji wydarzenia, nie wysyłaj go przez publiczny link i usuń niepotrzebne kopie po zakończeniu pracy.
+
 ## 16. Panel administratora
 
 Panel ma pięć zakładek.
@@ -735,6 +759,7 @@ Panel ma pięć zakładek.
 
 - zapraszanie;
 - wyszukiwanie;
+- eksport wszystkich e-maili, imion i nazwisk do JSON albo XML;
 - zmiana profilu;
 - nadawanie i odbieranie dostępu;
 - nadawanie administratora;
@@ -1510,14 +1535,15 @@ Przed przyjęciem prawdziwej płatności sprawdź:
 6. Konto `admin` widzi Panel administratora i Studio.
 7. Zwykły kursant nie widzi Studio ani biblioteki lekcji.
 8. Zmiana imienia i nazwiska pozostaje po odświeżeniu.
-9. Drugie logowanie zastępuje sesję z innego urządzenia.
-10. Dashboard Builder publikuje i pokazuje zmiany po odświeżeniu.
-11. Przywrócenie pliku dashboardu działa.
-12. Repo materiałów ma status gotowy.
-13. Nowa lekcja pojawia się bez deployu.
-14. Lekcja otwiera wszystkie użyte klocki.
-15. Quiz ABCD sprawdza zaznaczoną odpowiedź.
-16. Luki z listy działają.
+9. Zmiana hasła odrzuca błędne obecne hasło, wymaga 10 znaków i pozwala zalogować się nowym hasłem.
+10. Drugie logowanie zastępuje sesję z innego urządzenia.
+11. Dashboard Builder publikuje i pokazuje zmiany po odświeżeniu.
+12. Przywrócenie pliku dashboardu działa.
+13. Repo materiałów ma status gotowy.
+14. Nowa lekcja pojawia się bez deployu.
+15. Lekcja otwiera wszystkie użyte klocki.
+16. Quiz ABCD sprawdza zaznaczoną odpowiedź.
+17. Luki z listy działają.
 17. Luki tekstowe działają osobno i wszystkie naraz.
 18. Klocek wzoru pokazuje poprawne indeksy, reakcję ze strzałką i temperaturą oraz wzór matematyczny z ułamkiem i pierwiastkiem.
 19. Kafelek z linkiem otwiera bezpieczny adres i nie pokazuje użytkownikowi surowego długiego linku.

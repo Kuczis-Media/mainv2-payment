@@ -13,6 +13,7 @@ const jwtFor = (appMetadata = {}) => {
 };
 
 const loadChemAuth = (search, currentUser = null, overrides = {}) => {
+  let activeUser = currentUser;
   const location = {
     hash: overrides.hash || '',
     origin: 'https://chemdisk.netlify.app',
@@ -23,11 +24,21 @@ const loadChemAuth = (search, currentUser = null, overrides = {}) => {
   };
   const identityListeners = {};
   const identity = {
-    currentUser: () => currentUser,
+    currentUser: () => activeUser,
     on(name, callback) { identityListeners[name] = callback; },
     init() {},
     logout: async () => { if (typeof overrides.onIdentityLogout === 'function') overrides.onIdentityLogout(); },
-    refresh: async () => {}
+    refresh: async () => {},
+    gotrue: {
+      async login(email, password, remember) {
+        if (typeof overrides.identityLogin !== 'function') {
+          throw new Error('identity login not configured');
+        }
+        const result = await overrides.identityLogin(email, password, remember);
+        if (result) activeUser = result;
+        return result;
+      }
+    }
   };
   const document = {
     title: 'Login',
@@ -87,6 +98,7 @@ test('ChemAuth exposes the dashboard profile and session contract', () => {
   assert.equal(typeof auth.getProfile, 'function');
   assert.equal(typeof auth.getAccessToken, 'function');
   assert.equal(typeof auth.updateProfile, 'function');
+  assert.equal(typeof auth.changePassword, 'function');
   assert.equal(typeof auth.logout, 'function');
   assert.equal(typeof auth.checkSession, 'function');
   assert.equal(typeof auth.getSessionStatus, 'function');
@@ -185,6 +197,98 @@ test('updateProfile writes normalized names and drops authorization lookalikes',
   assert.equal(profile.lastName, 'Kowalska-Nowak');
   assert.equal(profile.fullName, 'Anna Maria Kowalska-Nowak');
   assert.equal(profile.email, 'kursant@example.com');
+});
+
+test('changePassword verifies the current password, updates it and synchronizes the rotated session', async () => {
+  const storage = new Map([['chem_session_id', 'old-session']]);
+  let updatePayload = null;
+  const originalUser = {
+    email: 'kursant@example.com',
+    app_metadata: { roles: ['active'], session_id: 'old-session' },
+    user_metadata: {},
+    async jwt() {
+      return jwtFor(this.app_metadata);
+    }
+  };
+  const verifiedUser = {
+    email: originalUser.email,
+    app_metadata: { roles: ['active'], session_id: 'new-session' },
+    user_metadata: {},
+    async jwt() {
+      return jwtFor(this.app_metadata);
+    },
+    async update(payload) {
+      updatePayload = payload;
+      return this;
+    }
+  };
+  const auth = loadChemAuth('', originalUser, {
+    pathname: '/members/',
+    identityLogin: async (email, password, remember) => {
+      assert.equal(email, originalUser.email);
+      assert.equal(password, 'stare-haslo-123');
+      assert.equal(remember, true);
+      return verifiedUser;
+    },
+    localStorage: {
+      getItem(key) { return storage.get(key) || null; },
+      removeItem(key) { storage.delete(key); },
+      setItem(key, value) { storage.set(key, value); }
+    },
+    fetch: async () => ({
+      ok: true,
+      async json() {
+        return {
+          email: verifiedUser.email,
+          app_metadata: verifiedUser.app_metadata,
+          user_metadata: verifiedUser.user_metadata
+        };
+      }
+    })
+  });
+
+  const changed = await auth.changePassword({
+    currentPassword: 'stare-haslo-123',
+    newPassword: 'nowe-bezpieczne-456'
+  });
+
+  assert.equal(changed, true);
+  assert.equal(updatePayload.password, 'nowe-bezpieczne-456');
+  assert.deepEqual(Object.keys(updatePayload), ['password']);
+  assert.equal(storage.get('chem_session_id'), 'new-session');
+});
+
+test('changePassword rejects an invalid current password and a too-short new password', async () => {
+  const user = {
+    email: 'kursant@example.com',
+    app_metadata: { roles: ['active'], session_id: 'session-1' },
+    user_metadata: {},
+    async jwt() {
+      return jwtFor(this.app_metadata);
+    }
+  };
+  let loginCalls = 0;
+  const auth = loadChemAuth('', user, {
+    identityLogin: async () => {
+      loginCalls += 1;
+      throw new Error('invalid_grant');
+    }
+  });
+
+  await assert.rejects(
+    auth.changePassword({ currentPassword: 'stare-haslo-123', newPassword: 'krotkie' }),
+    (error) => error && error.code === 'weak_password'
+  );
+  assert.equal(loginCalls, 0);
+
+  await assert.rejects(
+    auth.changePassword({
+      currentPassword: 'bledne-haslo-123',
+      newPassword: 'nowe-bezpieczne-456'
+    }),
+    (error) => error && error.code === 'invalid_current_password'
+  );
+  assert.equal(loginCalls, 1);
 });
 
 test('a canonical session mismatch invalidates only the old local device', async () => {
