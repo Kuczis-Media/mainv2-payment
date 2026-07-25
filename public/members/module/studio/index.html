@@ -339,7 +339,7 @@
         <div class="builder-layout">
           <aside class="palette-panel" aria-label="Klocki lekcji">
             <div class="panel-heading">
-              <div><small>Builder lekcji</small><strong>Klocki lekcji</strong></div>
+              <div><small>Biblioteka</small><strong>Treść slajdu</strong></div>
               <div class="panel-heading-actions">
                 <span class="count-badge" id="lesson-slide-count">1</span>
                 <button class="panel-collapse-button" type="button" data-studio-toggle="palette" aria-label="Zwiń bibliotekę" aria-expanded="true" title="Zwiń bibliotekę">
@@ -347,44 +347,44 @@
                 </button>
               </div>
             </div>
+            <label class="palette-search">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg>
+              <input id="lesson-palette-search" type="search" placeholder="Szukaj klocka…" autocomplete="off">
+            </label>
+
+            <section class="palette-group-featured lesson-quick-tools" aria-label="Kreatory i narzędzia lekcji">
+              <h2>Narzędzia lekcji</h2>
+              <p class="palette-group-hint">Zawsze widoczne — kliknij lub przeciągnij.</p>
+              <div class="palette-grid">
+                <button class="palette-item palette-item-wide palette-item-featured" type="button" draggable="true" data-lesson-add="formula" data-search="kreator wzór równanie reakcja chemia matematyka indeks potęga ułamek pierwiastek strzałka temperatura">
+                  <span class="palette-symbol is-teal">∑</span><span><strong>Kreator równań</strong><small>Chemia, matematyka, strzałki i temperatura</small></span>
+                </button>
+                <button class="palette-item palette-item-featured" type="button" draggable="true" data-lesson-add="ai" data-search="ai sztuczna inteligencja pytanie pomoc asystent slajd">
+                  <span class="palette-symbol is-violet">✦</span><span><strong>Zapytaj AI</strong><small>Pytania do slajdu</small></span>
+                </button>
+                <button class="palette-item palette-item-featured" type="button" draggable="true" data-lesson-add="board" data-search="tablica interaktywna whiteboard bitpaper rysowanie">
+                  <span class="palette-symbol is-blue">✎</span><span><strong>Tablica</strong><small>Whiteboard lub BitPaper</small></span>
+                </button>
+              </div>
+            </section>
+
+            <details class="repository-library lesson-repository-library">
+              <summary>
+                <span><strong>Gotowe lekcje z GitHuba</strong><small>Wczytaj do buildera</small></span>
+                <span aria-hidden="true">⌄</span>
+              </summary>
+              <div class="repository-library-body">
+                <label class="repository-picker">
+                  <span>Repozytorium</span>
+                  <select id="lesson-repository-select" aria-label="Repozytorium lekcji"></select>
+                </label>
+                <input id="lesson-asset-search" type="search" placeholder="Szukaj lekcji…" autocomplete="off">
+                <p id="lesson-asset-status" role="status" aria-live="polite">Łączenie z repozytorium…</p>
+                <div class="repository-asset-list" id="lesson-asset-list"></div>
+              </div>
+            </details>
+
             <div class="palette-scroll lesson-palette-scroll">
-              <label class="palette-search">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg>
-                <input id="lesson-palette-search" type="search" placeholder="Szukaj klocka…" autocomplete="off">
-              </label>
-
-              <section class="palette-group palette-group-featured" aria-label="Kreatory i narzędzia lekcji">
-                <h2>Narzędzia lekcji</h2>
-                <p class="palette-group-hint">Kliknij albo przeciągnij klocek na slajd.</p>
-                <div class="palette-grid">
-                  <button class="palette-item palette-item-wide palette-item-featured" type="button" draggable="true" data-lesson-add="formula" data-search="kreator wzór równanie reakcja chemia matematyka indeks potęga ułamek pierwiastek strzałka temperatura">
-                    <span class="palette-symbol is-teal">∑</span><span><strong>Kreator równań</strong><small>Chemia, matematyka, strzałki i warunki reakcji</small></span>
-                  </button>
-                  <button class="palette-item palette-item-featured" type="button" draggable="true" data-lesson-add="ai" data-search="ai sztuczna inteligencja pytanie pomoc asystent slajd">
-                    <span class="palette-symbol is-violet">✦</span><span><strong>Zapytaj AI</strong><small>Pytania do slajdu</small></span>
-                  </button>
-                  <button class="palette-item palette-item-featured" type="button" draggable="true" data-lesson-add="board" data-search="tablica interaktywna whiteboard bitpaper rysowanie">
-                    <span class="palette-symbol is-blue">✎</span><span><strong>Tablica</strong><small>Whiteboard lub BitPaper</small></span>
-                  </button>
-                </div>
-              </section>
-
-              <details class="repository-library lesson-repository-library" open>
-                <summary>
-                  <span><strong>Gotowe lekcje z GitHuba</strong><small>Wczytaj do buildera</small></span>
-                  <span aria-hidden="true">⌄</span>
-                </summary>
-                <div class="repository-library-body">
-                  <label class="repository-picker">
-                    <span>Repozytorium</span>
-                    <select id="lesson-repository-select" aria-label="Repozytorium lekcji"></select>
-                  </label>
-                  <input id="lesson-asset-search" type="search" placeholder="Szukaj lekcji…" autocomplete="off">
-                  <p id="lesson-asset-status" role="status" aria-live="polite">Łączenie z repozytorium…</p>
-                  <div class="repository-asset-list" id="lesson-asset-list"></div>
-                </div>
-              </details>
-
               <section class="palette-group">
                 <h2>Slajdy</h2>
                 <div class="palette-grid">

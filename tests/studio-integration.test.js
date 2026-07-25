@@ -173,8 +173,9 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.doesNotMatch(html, /data-dashboard-add=["']filmv1["']/i);
   assert.doesNotMatch(script, /Wygenerowany adres|dashboard-url-preview|hrefPreview/);
 
-  const featuredTools = html.indexOf('palette-group palette-group-featured');
+  const featuredTools = html.indexOf('palette-group-featured lesson-quick-tools');
   const repositoryLibrary = html.indexOf('lesson-repository-library');
+  const scrollingLessonBlocks = html.indexOf('palette-scroll lesson-palette-scroll');
   const regularContent = html.indexOf('<h2>Treść</h2>', featuredTools);
   const dashboardWorkspaceStart = html.indexOf('id="dashboard-workspace"');
   const lessonWorkspaceStart = html.indexOf('id="lesson-workspace"');
@@ -183,7 +184,8 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   const lessonWorkspace = html.slice(lessonWorkspaceStart, promptWorkspaceStart);
   assert.ok(featuredTools >= 0, 'missing featured lesson tools');
   assert.ok(repositoryLibrary > featuredTools, 'featured lesson tools should be above the repository');
-  assert.ok(regularContent > repositoryLibrary, 'formula, AI and board should be visible before regular content');
+  assert.ok(scrollingLessonBlocks > repositoryLibrary, 'featured lesson tools must remain outside the scrolling block list');
+  assert.ok(regularContent > scrollingLessonBlocks, 'formula, AI and board should be visible before regular content');
   assert.doesNotMatch(dashboardWorkspace, /data-lesson-add=["'](?:formula|ai|board)["']/);
   assert.match(lessonWorkspace, /data-lesson-add=["']formula["']/);
   assert.match(lessonWorkspace, /data-lesson-add=["']ai["']/);

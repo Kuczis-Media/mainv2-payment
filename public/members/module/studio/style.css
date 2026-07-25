@@ -944,17 +944,21 @@ button {
   flex: 1 1 auto;
   padding: 2px 14px 30px;
   scrollbar-gutter: stable;
+  scrollbar-color: color-mix(in srgb, var(--chem-primary) 48%, var(--chem-line)) transparent;
+  scrollbar-width: thin;
   touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
 }
 
-.lesson-palette-scroll > .palette-search,
-.lesson-palette-scroll > .repository-library {
-  margin-inline: 0;
+.palette-scroll::-webkit-scrollbar {
+  width: 8px;
 }
 
-.lesson-palette-scroll > .palette-search {
-  margin-bottom: 12px;
+.palette-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--chem-primary) 48%, var(--chem-line));
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
 }
 
 .palette-group-featured {
@@ -991,8 +995,27 @@ button {
   border-color: color-mix(in srgb, var(--chem-primary) 30%, var(--chem-line));
 }
 
+.lesson-quick-tools {
+  margin: 0 14px 12px;
+  padding: 10px;
+  flex: 0 0 auto;
+}
+
+.lesson-quick-tools .palette-item {
+  min-height: 54px;
+}
+
+.lesson-quick-tools .palette-item-wide {
+  min-height: 50px;
+}
+
+.lesson-quick-tools .palette-symbol {
+  width: 27px;
+  height: 27px;
+}
+
 .lesson-repository-library {
-  margin-top: 16px;
+  margin-top: 0;
 }
 
 .prompt-palette-scroll {
