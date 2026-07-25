@@ -950,6 +950,10 @@ button {
   -webkit-overflow-scrolling: touch;
 }
 
+.lesson-palette-scroll {
+  scroll-padding-block: 8px 28px;
+}
+
 .palette-scroll::-webkit-scrollbar {
   width: 8px;
 }

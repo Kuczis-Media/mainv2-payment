@@ -46,9 +46,14 @@ const exampleMarkdown = [
 test('lesson application exposes a repository selector for the live library', () => {
   const html = fs.readFileSync(path.join(lessonRoot, 'index.html'), 'utf8');
   const script = fs.readFileSync(path.join(lessonRoot, 'script.js'), 'utf8');
+  const mathJaxConfig = fs.readFileSync(
+    path.join(root, 'public', 'members', 'module', 'mathjax-config.js'),
+    'utf8'
+  );
 
   assert.match(html, /id=["']lesson-library-repository["']/);
-  assert.match(html, /\[tex\]\/mhchem/);
+  assert.match(html, /\/members\/module\/mathjax-config\.js/);
+  assert.match(mathJaxConfig, /\[tex\]\/mhchem/);
   assert.match(html, /mathjax@3\.2\.2/);
   assert.match(script, /ChemContentLibrary\.repositories\(\)/);
   assert.match(script, /readLesson\(filename,\s*\{\s*repositoryId\s*\}\)/);
@@ -266,7 +271,7 @@ test('lesson renderer supports chemistry arrows, reaction conditions and mathema
   assert.equal(lesson.slides.length, 1);
   assert.match(lesson.slides[0].html, /lesson-formula-chemistry/);
   assert.match(lesson.slides[0].html, /lesson-formula-math/);
-  assert.ok(lesson.slides[0].html.includes('\\(\\ce{N2 + 3 H2 &lt;=>[450 °C][kat. Fe] 2 NH3}\\)'));
+  assert.ok(lesson.slides[0].html.includes('\\(\\ce{N2 + 3 H2 &lt;=&gt;[450 °C][kat. Fe] 2 NH3}\\)'));
   assert.ok(lesson.slides[0].html.includes('\\(\\displaystyle x = \\frac{-b \\pm \\sqrt{b^{2} - 4ac}}{2a}\\)'));
 
   const unsafe = parser.renderMarkdown([

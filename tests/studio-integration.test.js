@@ -62,6 +62,7 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   const html = read('public/members/module/studio/index.html');
   const script = read('public/members/module/studio/script.js');
   const styles = read('public/members/module/studio/style.css');
+  const mathJaxConfig = read('public/members/module/mathjax-config.js');
 
   assert.ok(fs.existsSync(path.join(studioRoot, 'dashboard-model.js')));
   assert.ok(fs.existsSync(path.join(studioRoot, 'lesson-model.js')));
@@ -89,7 +90,8 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(html, /data-lesson-add=["']flashcards["']/);
   assert.match(html, /data-lesson-add=["']task-gaps["']/);
   assert.match(html, /data-lesson-add=["']task-gaps-text["']/);
-  assert.match(html, /\[tex\]\/mhchem/);
+  assert.match(html, /\/members\/module\/mathjax-config\.js/);
+  assert.match(mathJaxConfig, /\[tex\]\/mhchem/);
   assert.match(html, /mathjax@3\.2\.2/);
   assert.match(html, /\/assets\/js\/content-library\.js/);
   assert.match(html, /id=["']dashboard-asset-search["']/);

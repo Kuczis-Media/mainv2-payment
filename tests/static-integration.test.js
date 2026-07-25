@@ -135,6 +135,10 @@ test('classic calculator supports complete physical keyboard input', async () =>
 });
 
 test('large member modules keep CSS and JavaScript outside index.html', () => {
+  assert.ok(
+    fs.existsSync(path.join(modulesRoot, 'mathjax-config.js')),
+    'shared MathJax configuration is missing'
+  );
   for (const name of ['atonom', 'bitpaper', 'whiteboard', 'forms', 'lesson', 'yt']) {
     const directory = path.join(modulesRoot, name);
     const html = fs.readFileSync(path.join(directory, 'index.html'), 'utf8');
