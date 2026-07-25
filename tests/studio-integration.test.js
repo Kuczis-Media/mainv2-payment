@@ -176,9 +176,18 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   const featuredTools = html.indexOf('palette-group palette-group-featured');
   const repositoryLibrary = html.indexOf('lesson-repository-library');
   const regularContent = html.indexOf('<h2>Treść</h2>', featuredTools);
+  const dashboardWorkspaceStart = html.indexOf('id="dashboard-workspace"');
+  const lessonWorkspaceStart = html.indexOf('id="lesson-workspace"');
+  const promptWorkspaceStart = html.indexOf('id="prompt-workspace"');
+  const dashboardWorkspace = html.slice(dashboardWorkspaceStart, lessonWorkspaceStart);
+  const lessonWorkspace = html.slice(lessonWorkspaceStart, promptWorkspaceStart);
   assert.ok(featuredTools >= 0, 'missing featured lesson tools');
   assert.ok(repositoryLibrary > featuredTools, 'featured lesson tools should be above the repository');
   assert.ok(regularContent > repositoryLibrary, 'formula, AI and board should be visible before regular content');
+  assert.doesNotMatch(dashboardWorkspace, /data-lesson-add=["'](?:formula|ai|board)["']/);
+  assert.match(lessonWorkspace, /data-lesson-add=["']formula["']/);
+  assert.match(lessonWorkspace, /data-lesson-add=["']ai["']/);
+  assert.match(lessonWorkspace, /data-lesson-add=["']board["']/);
 
   const dashboardClone = script.slice(
     script.indexOf('function cloneDashboardNode'),
