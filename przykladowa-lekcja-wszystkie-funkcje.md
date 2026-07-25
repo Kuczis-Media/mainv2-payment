@@ -134,7 +134,7 @@ transition: none
 :::linkcard
 title: Otwórz tablicę ChemDisk
 description: Wewnętrzny materiał otwierany w tej samej karcie.
-url: /members/module/board/
+url: /members/module/whiteboard/
 icon: chemistry
 color: #0e665a
 new_tab: false
@@ -146,6 +146,33 @@ description: Przykład linku HTTPS otwieranego bezpiecznie w nowej karcie.
 url: https://example.com
 icon: external
 color: #2563eb
+new_tab: true
+:::
+
+:::aihelp
+title: Nie rozumiesz fragmentu slajdu?
+description: Zadaj pytanie asystentowi. Treść tego slajdu zostanie przekazana jako kontekst pierwszej wiadomości.
+button: Zapytaj AI
+repository:
+prompt:
+point: 1
+:::
+
+:::board
+title: Rozpisz rozwiązanie na białej tablicy
+description: Otwórz prostą tablicę do szkicowania wzorów i notatek.
+button: Otwórz białą tablicę
+variant: whiteboard
+path:
+new_tab: true
+:::
+
+:::board
+title: Otwórz rozbudowaną tablicę BitPaper
+description: Użyj narzędzi rysowania, tekstu, zaznaczania oraz importu i eksportu planszy.
+button: Otwórz BitPaper
+variant: bitpaper
+path:
 new_tab: true
 :::
 
@@ -327,7 +354,7 @@ W tej przykładowej lekcji użyto:
 - tekstu, stylów, kolorów, tła i formatowania;
 - obrazu, list, cytatu, komunikatu i bloku kodu;
 - wzorów chemicznych i matematycznych;
-- harmonijki, YouTube, ATONOM, kafelków z linkami i fiszek;
+- harmonijki, YouTube, ATONOM, kafelków z linkami, pomocy AI, obu tablic i fiszek;
 - quizu ABCD, wyboru z listy, odpowiedzi tekstowej i liczbowej;
 - luk z listy oraz luk tekstowych sprawdzanych osobno i razem.
 

@@ -345,6 +345,20 @@ button.chip:hover {
   border-color: color-mix(in srgb, var(--danger) 25%, var(--border));
 }
 
+.lesson-context-status {
+  width: fit-content;
+  max-width: 680px;
+  padding: 9px 13px;
+  margin: 10px auto 0;
+  color: var(--primary);
+  background: var(--primary-soft);
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--border));
+  border-radius: 10px;
+  font-size: .78rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
 .starter-section {
   margin-top: 54px;
 }

@@ -2968,6 +2968,96 @@ button {
   white-space: nowrap;
 }
 
+.lesson-preview-body .lesson-support-card {
+  --lesson-support-color: #2563eb;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0;
+  padding: 13px;
+  color: var(--chem-text);
+  text-decoration: none;
+  background:
+    radial-gradient(circle at 92% 8%, color-mix(in srgb, var(--lesson-support-color) 13%, transparent), transparent 44%),
+    var(--chem-surface);
+  border: 1px solid color-mix(in srgb, var(--lesson-support-color) 32%, var(--chem-line));
+  border-radius: 13px;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.lesson-preview-body .lesson-ai-help { --lesson-support-color: #7c3aed; }
+.lesson-preview-body .lesson-board-card { --lesson-support-color: #2563eb; }
+
+.lesson-preview-body .lesson-board-card:hover,
+.lesson-preview-body .lesson-board-card:focus-visible,
+.lesson-preview-body .lesson-support-card:has(.lesson-support-action:hover),
+.lesson-preview-body .lesson-support-card:has(.lesson-support-action:focus-visible) {
+  color: var(--chem-text);
+  border-color: color-mix(in srgb, var(--lesson-support-color) 60%, var(--chem-line));
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--lesson-support-color) 13%, transparent);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.lesson-preview-body .lesson-support-icon {
+  display: grid;
+  width: 39px;
+  height: 39px;
+  place-items: center;
+  color: #fff;
+  background: var(--lesson-support-color);
+  border-radius: 11px;
+  font-size: 1rem;
+  font-weight: 850;
+}
+
+.lesson-preview-body .lesson-support-copy,
+.lesson-preview-body .lesson-support-copy small,
+.lesson-preview-body .lesson-support-copy strong,
+.lesson-preview-body .lesson-support-copy span {
+  display: block;
+}
+
+.lesson-preview-body .lesson-support-copy small {
+  color: var(--lesson-support-color);
+  font-size: 0.46rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.lesson-preview-body .lesson-support-copy strong {
+  margin-top: 2px;
+  color: var(--chem-text);
+  font-size: 0.7rem;
+}
+
+.lesson-preview-body .lesson-support-copy span {
+  margin-top: 3px;
+  color: var(--chem-muted);
+  font-size: 0.53rem;
+  line-height: 1.4;
+}
+
+.lesson-preview-body .lesson-support-action {
+  display: inline-flex;
+  min-height: 30px;
+  padding: 0 10px;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: var(--lesson-support-color);
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.5rem;
+  font-weight: 850;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
 .lesson-preview-body .lesson-atonom-card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -3559,6 +3649,37 @@ button {
   font-size: 0.72rem;
 }
 
+.full-lesson-slide .lesson-preview-body .lesson-support-card {
+  gap: 14px;
+  padding: 18px;
+}
+
+.full-lesson-slide .lesson-preview-body .lesson-support-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  font-size: 1.2rem;
+}
+
+.full-lesson-slide .lesson-preview-body .lesson-support-copy small {
+  font-size: 0.62rem;
+}
+
+.full-lesson-slide .lesson-preview-body .lesson-support-copy strong {
+  font-size: 1rem;
+}
+
+.full-lesson-slide .lesson-preview-body .lesson-support-copy span {
+  font-size: 0.76rem;
+}
+
+.full-lesson-slide .lesson-preview-body .lesson-support-action {
+  min-height: 42px;
+  padding-inline: 15px;
+  border-radius: 11px;
+  font-size: 0.72rem;
+}
+
 .full-lesson-slide .lesson-preview-body .lesson-atonom-card {
   padding: 18px;
   gap: 14px;
@@ -4030,6 +4151,16 @@ button {
 
   .full-lesson-slide .lesson-preview-body .lesson-link-action {
     grid-column: 2;
+    white-space: normal;
+  }
+
+  .lesson-preview-body .lesson-support-card {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .lesson-preview-body .lesson-support-action {
+    grid-column: 2;
+    justify-self: start;
     white-space: normal;
   }
 

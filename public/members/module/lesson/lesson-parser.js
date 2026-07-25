@@ -4,13 +4,16 @@
   const MAX_SOURCE_CHARS = 512 * 1024;
   const MAX_SLIDES = 100;
   const SAFE_FILENAME = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.md$/i;
+  const SAFE_PROMPT_FILENAME = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.(?:json|txt)$/i;
+  const SAFE_REPOSITORY_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
+  const SAFE_BOARD_PATH = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.json$/i;
   const TASK_START = /^\s*:::(?:task|zadanie)\s*$/i;
   const TASK_END = /^\s*:::\s*$/;
   const QUESTION_START = /^\s*:::question\s*$/i;
   const SLIDE_SETTINGS_START = /^\s*:::slide\s*$/i;
   const STYLE_START = /^\s*:::style(?:\s+(.+?))?\s*$/i;
   const ACCORDION_START = /^\s*:::accordion(?:\s+(.+?))?\s*$/i;
-  const STRUCTURAL_CONTAINER_START = /^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|atonom|formula|linkcard|flashcards)(?:\s+.*?)?\s*$/i;
+  const STRUCTURAL_CONTAINER_START = /^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|atonom|formula|linkcard|aihelp|board|flashcards)(?:\s+.*?)?\s*$/i;
   const RICH_CONTAINER_END = /^\s*:::\s*$/;
   const SAFE_STYLE_COLOR = /^#[0-9a-f]{6}$/i;
   const LINK_ICONS = new Set(['link', 'book', 'video', 'chemistry', 'math', 'file', 'external']);
@@ -36,7 +39,7 @@
     'sin', 'cos', 'tan', 'log', 'ln', 'partial', 'nabla', 'rightarrow', 'leftarrow',
     'leftrightarrow', 'text', 'mathrm', 'mathbf', 'overline', 'vec', 'left', 'right'
   ]);
-  const INTERACTIVE_START = /^\s*:::(youtube|atonom|formula|linkcard|flashcards)\s*$/i;
+  const INTERACTIVE_START = /^\s*:::(youtube|atonom|formula|linkcard|aihelp|board|flashcards)\s*$/i;
 
   class LessonFormatError extends Error {
     constructor(code, message) {
@@ -437,6 +440,21 @@
     return /^(?:https?:\/\/|mailto:)[^\s]+$/i.test(raw) ? raw : '';
   }
 
+  function safePromptFilename(value) {
+    const filename = String(value || '').trim();
+    return SAFE_PROMPT_FILENAME.test(filename) ? filename : '';
+  }
+
+  function safeRepositoryId(value) {
+    const repositoryId = String(value || '').trim().toLowerCase();
+    return SAFE_REPOSITORY_ID.test(repositoryId) ? repositoryId : '';
+  }
+
+  function safeBoardPath(value) {
+    const filename = String(value || '').trim();
+    return SAFE_BOARD_PATH.test(filename) ? filename : '';
+  }
+
   function parseStyleOptions(source) {
     const values = {};
     String(source || '').replace(
@@ -592,6 +610,55 @@
       return `<figure class="lesson-embed lesson-atonom" data-atonom-formula="${escapeHtml(formula)}"><div class="lesson-atonom-card"><span class="lesson-atonom-symbol" aria-hidden="true">⚛</span><span class="lesson-atonom-copy"><small>Interaktywny model 3D</small><strong>${escapeHtml(formula)}</strong><span>Model zostanie uruchomiony dopiero po kliknięciu.</span></span><button class="lesson-atonom-open" type="button" data-atonom-src="${escapeHtml(src)}" data-atonom-title="${escapeHtml(title)}" aria-expanded="false">Pokaż związek</button></div><div class="lesson-atonom-frame" hidden></div><figcaption>${escapeHtml(title)}</figcaption></figure>`;
     }
     if (type === 'formula') return formulaBlockHtml(values);
+    if (type === 'aihelp') {
+      const title = String(values.title || 'Masz pytanie do tego slajdu?').trim();
+      const description = String(
+        values.description || 'Otwórz ChemDisk AI z treścią tego slajdu jako kontekstem.'
+      ).trim();
+      const button = String(values.button || 'Zapytaj AI').trim();
+      const rawPrompt = String(values.prompt || '').trim();
+      const prompt = rawPrompt ? safePromptFilename(rawPrompt) : '';
+      const rawRepository = String(values.repository || '').trim();
+      const repository = rawRepository ? safeRepositoryId(rawRepository) : '';
+      const rawPoint = String(values.point || '').trim();
+      const point = /^[1-9]\d{0,3}$/.test(rawPoint) ? rawPoint : '';
+      if (
+        !title
+        || !button
+        || (rawPrompt && !prompt)
+        || (rawRepository && !repository)
+        || (rawPoint && !point)
+      ) {
+        return '<p class="lesson-interactive-error">Nieprawidłowy klocek pomocy AI.</p>';
+      }
+      if (/\.txt$/i.test(prompt) && !point) {
+        return '<p class="lesson-interactive-error">Prompt TXT wymaga numeru punktu.</p>';
+      }
+      return `<section class="lesson-support-card lesson-ai-help" data-ai-prompt="${escapeHtml(prompt)}" data-ai-repository="${escapeHtml(repository)}" data-ai-point="${escapeHtml(point || '1')}"><span class="lesson-support-icon" aria-hidden="true">✦</span><span class="lesson-support-copy"><small>Pomoc do bieżącego slajdu</small><strong>${escapeHtml(title)}</strong><span>${escapeHtml(description)}</span></span><button class="lesson-support-action" type="button" data-lesson-ai-open>${escapeHtml(button)} <b aria-hidden="true">→</b></button></section>`;
+    }
+    if (type === 'board') {
+      const variant = values.variant === 'bitpaper' ? 'bitpaper' : 'whiteboard';
+      const rawPath = String(values.path || '').trim();
+      const path = rawPath ? safeBoardPath(rawPath) : '';
+      const title = String(
+        values.title || (variant === 'bitpaper' ? 'Otwórz tablicę BitPaper' : 'Otwórz białą tablicę')
+      ).trim();
+      const description = String(
+        values.description || 'Szkicuj rozwiązanie, wzory i notatki na interaktywnej tablicy.'
+      ).trim();
+      const button = String(values.button || 'Otwórz tablicę').trim();
+      if (!title || !button || (rawPath && (variant !== 'bitpaper' || !path))) {
+        return '<p class="lesson-interactive-error">Nieprawidłowy klocek tablicy.</p>';
+      }
+      const href = variant === 'bitpaper'
+        ? `/members/module/bitpaper/${path ? `?path=${encodeURIComponent(path)}` : ''}`
+        : '/members/module/whiteboard/';
+      const newTab = !/^(?:0|false|no|nie)$/i.test(values.new_tab || 'true');
+      const target = newTab ? ' target="_blank" rel="noopener noreferrer"' : '';
+      const label = variant === 'bitpaper' ? 'Tablica BitPaper' : 'Biała tablica';
+      const icon = variant === 'bitpaper' ? '▧' : '✎';
+      return `<a class="lesson-support-card lesson-board-card" href="${escapeHtml(href)}"${target}><span class="lesson-support-icon" aria-hidden="true">${icon}</span><span class="lesson-support-copy"><small>${label}</small><strong>${escapeHtml(title)}</strong><span>${escapeHtml(description)}</span></span><span class="lesson-support-action">${escapeHtml(button)} <b aria-hidden="true">→</b></span></a>`;
+    }
     if (type === 'linkcard') {
       const url = safeLinkCardUrl(values.url);
       const title = String(values.title || '').trim();

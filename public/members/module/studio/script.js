@@ -1602,6 +1602,26 @@
         right: '2 H2O'
       });
     }
+    if (type === 'ai') {
+      return lessonModelApi.createBlock('ai', {
+        title: 'Masz pytanie do tego slajdu?',
+        description: 'Otwórz ChemDisk AI — treść slajdu zostanie dołączona jako kontekst.',
+        button: 'Zapytaj AI',
+        repositoryId: state.contentLibrary.selectedRepositoryId,
+        promptFile: '',
+        promptPoint: 1
+      });
+    }
+    if (type === 'board') {
+      return lessonModelApi.createBlock('board', {
+        title: 'Otwórz białą tablicę',
+        description: 'Rozpisz rozwiązanie, równanie albo schemat na interaktywnej tablicy.',
+        button: 'Otwórz tablicę',
+        variant: 'whiteboard',
+        path: '',
+        newTab: true
+      });
+    }
     if (type === 'link') {
       return lessonModelApi.createBlock('link', {
         title: 'Otwórz materiał dodatkowy',
@@ -1796,6 +1816,8 @@
       youtube: 'YT',
       atonom: '⚛',
       formula: '∑',
+      ai: '✦',
+      board: '✎',
       link: '↗',
       flashcards: '↻'
     };
@@ -1815,6 +1837,8 @@
     if (block.type === 'youtube') return block.title || 'Film YouTube';
     if (block.type === 'atonom') return block.title || `ATONOM: ${block.formula}`;
     if (block.type === 'formula') return block.title || (block.mode === 'math' ? 'Wzór matematyczny' : 'Równanie reakcji');
+    if (block.type === 'ai') return block.title || 'Zapytaj AI o slajd';
+    if (block.type === 'board') return block.title || 'Tablica interaktywna';
     if (block.type === 'link') return block.title || 'Kafelek z linkiem';
     if (block.type === 'flashcards') return block.title || 'Fiszki';
     return 'Klocek';
@@ -1833,6 +1857,16 @@
       return block.mode === 'math'
         ? (block.expression || 'Uzupełnij wzór matematyczny')
         : `${block.left || '…'}${block.arrow ? ` ${block.arrow} ${block.right || '…'}` : ''}`;
+    }
+    if (block.type === 'ai') {
+      return block.promptFile
+        ? `AI · ${block.promptFile}${/\.txt$/i.test(block.promptFile) ? ` · punkt ${block.promptPoint}` : ''}`
+        : 'AI · ogólny asystent';
+    }
+    if (block.type === 'board') {
+      return block.variant === 'bitpaper'
+        ? `BitPaper${block.path ? ` · ${block.path}` : ''}`
+        : 'Biała tablica';
     }
     if (block.type === 'link') return block.url || 'Uzupełnij adres linku';
     if (block.type === 'flashcards') return `${block.cards.length} fiszki · ${block.color}`;
@@ -2818,6 +2852,60 @@
           )
         );
       }
+    } else if (block.type === 'ai') {
+      form.append(
+        field('Tytuł kafelka AI', lessonInput(block.title, 'title', { maxLength: 180 })),
+        field('Opis dla ucznia', lessonTextarea(block.description, 'description', { rows: 4, maxLength: 500 })),
+        field('Tekst przycisku', lessonInput(block.button, 'button', { maxLength: 80 })),
+        field(
+          'Repozytorium promptu',
+          lessonSelect(block.repositoryId, 'repositoryId', repositoryOptions(true)),
+          'Pozostaw domyślne, jeśli AI ma korzystać ze zwykłego trybu lub prompt znajduje się w głównym repozytorium.'
+        ),
+        field(
+          'Plik promptu — opcjonalnie',
+          lessonInput(block.promptFile, 'promptFile', {
+            placeholder: 'np. pomoc-do-lekcji.json albo zestaw.txt',
+            maxLength: 80
+          }),
+          'Bez pliku otworzy się ogólny asystent. Plik JSON lub TXT jest pobierany bezpiecznie przez funkcję serwerową.'
+        )
+      );
+      if (/\.txt$/i.test(block.promptFile)) {
+        form.append(field(
+          'Numer punktu w pliku TXT',
+          lessonInput(block.promptPoint, 'promptPoint', { type: 'number', min: 1, max: 9999 }),
+          'Dla pliku JSON numer punktu nie jest używany.'
+        ));
+      }
+      form.append(create(
+        'p',
+        'formula-builder-tip',
+        'Po kliknięciu uczeń przejdzie do ChemDisk AI w nowej karcie. Treść bieżącego slajdu zostanie przekazana jako kontekst pierwszego pytania.'
+      ));
+    } else if (block.type === 'board') {
+      const newTab = create('label', 'check-field');
+      newTab.append(
+        lessonInput('', 'newTab', { type: 'checkbox', checked: block.newTab }),
+        create('span', '', 'Otwieraj tablicę w nowej karcie')
+      );
+      form.append(
+        field('Rodzaj tablicy', lessonSelect(block.variant, 'variant', [
+          { value: 'whiteboard', label: 'Biała tablica — szybkie szkicowanie' },
+          { value: 'bitpaper', label: 'BitPaper — rozbudowana plansza' }
+        ])),
+        field('Tytuł kafelka', lessonInput(block.title, 'title', { maxLength: 180 })),
+        field('Krótki opis', lessonTextarea(block.description, 'description', { rows: 4, maxLength: 500 })),
+        field('Tekst przycisku', lessonInput(block.button, 'button', { maxLength: 80 }))
+      );
+      if (block.variant === 'bitpaper') {
+        form.append(field(
+          'Plik gotowej planszy — opcjonalnie',
+          lessonInput(block.path, 'path', { placeholder: 'np. stechiometria.json', maxLength: 100 }),
+          'Pusta wartość otwiera nową tablicę. Nazwa pliku musi kończyć się .json i nie może zawierać ścieżki.'
+        ));
+      }
+      form.append(newTab);
     } else if (block.type === 'link') {
       const newTab = create('label', 'check-field');
       newTab.append(
@@ -2981,6 +3069,54 @@
         button.setAttribute('aria-expanded', 'true');
         button.textContent = 'Ukryj model';
       });
+    });
+  }
+
+  function previewAiContext(root) {
+    const clone = root.cloneNode(true);
+    all(
+      '.lesson-ai-help, .lesson-preview-meta, .preview-task, button, input, select, textarea, iframe, script, style',
+      clone
+    ).forEach((node) => node.remove());
+    return String(clone.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 6000);
+  }
+
+  function openPreviewAiHelp(button, root) {
+    const card = button.closest('.lesson-ai-help');
+    if (!card) return;
+    const url = new URL('/members/module/chat/', window.location.origin);
+    const prompt = card.dataset.aiPrompt || '';
+    const repository = card.dataset.aiRepository || '';
+    const point = card.dataset.aiPoint || '1';
+    if (/\.json$/i.test(prompt)) url.searchParams.set('prompt', prompt);
+    if (/\.txt$/i.test(prompt)) {
+      url.searchParams.set('plik', prompt);
+      url.searchParams.set('punkt', point);
+    }
+    if (repository) url.searchParams.set('repo', repository);
+
+    try {
+      const contextId = typeof window.crypto?.randomUUID === 'function'
+        ? window.crypto.randomUUID()
+        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+      const context = previewAiContext(root);
+      if (context) {
+        localStorage.setItem(`chem.lesson-ai-context.${contextId}`, JSON.stringify({
+          context,
+          title: state.lesson.model.title,
+          createdAt: Date.now()
+        }));
+        url.searchParams.set('lesson_context', contextId);
+      }
+    } catch (_) {
+      // Czat nadal może zostać otwarty bez automatycznego kontekstu.
+    }
+    window.open(url.toString(), '_blank', 'noopener');
+  }
+
+  function bindPreviewAiHelp(root) {
+    all('[data-lesson-ai-open]', root).forEach((button) => {
+      button.addEventListener('click', () => openPreviewAiHelp(button, root));
     });
   }
 
@@ -3261,6 +3397,7 @@
     );
     bindPreviewFlashcards(elements.lessonPreview);
     bindPreviewAtonom(elements.lessonPreview);
+    bindPreviewAiHelp(elements.lessonPreview);
     bindPreviewTasks(elements.lessonPreview);
     typesetMath(elements.lessonPreview);
     syncFullPreview('lesson');
@@ -3375,6 +3512,7 @@
     if (mode === 'lesson') {
       bindPreviewFlashcards(main);
       bindPreviewAtonom(main);
+      bindPreviewAiHelp(main);
       bindPreviewTasks(main);
       typesetMath(main, popup);
     }
@@ -4901,7 +5039,10 @@
     elements.lessonInspector.addEventListener('change', (event) => {
       handleLessonInspectorInput(event);
       finishEdit();
-      if (['type', 'mode', 'arrow', 'options', 'optionItem', 'useColor'].includes(event.target.dataset.lessonField)) {
+      if (
+        ['type', 'mode', 'arrow', 'variant', 'promptFile', 'options', 'optionItem', 'useColor']
+          .includes(event.target.dataset.lessonField)
+      ) {
         renderLessonInspector();
       }
     });

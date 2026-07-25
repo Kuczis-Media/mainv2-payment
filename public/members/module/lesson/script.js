@@ -508,6 +508,56 @@
       .catch(() => undefined);
   }
 
+  function slideAiContext(root) {
+    const clone = root.cloneNode(true);
+    clone.querySelectorAll(
+      '.lesson-ai-help, button, input, select, textarea, iframe, script, style'
+    ).forEach((node) => node.remove());
+    return String(clone.textContent || '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 6000);
+  }
+
+  function openSlideAiHelp(button, root) {
+    const card = button.closest('.lesson-ai-help');
+    if (!card) return;
+
+    const url = new URL('/members/module/chat/', window.location.origin);
+    const prompt = card.dataset.aiPrompt || '';
+    const repository = card.dataset.aiRepository || '';
+    const point = card.dataset.aiPoint || '1';
+    if (/\.json$/i.test(prompt)) url.searchParams.set('prompt', prompt);
+    if (/\.txt$/i.test(prompt)) {
+      url.searchParams.set('plik', prompt);
+      url.searchParams.set('punkt', point);
+    }
+    if (repository) url.searchParams.set('repo', repository);
+
+    try {
+      const contextId = typeof window.crypto?.randomUUID === 'function'
+        ? window.crypto.randomUUID()
+        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+      const context = slideAiContext(root);
+      if (context) {
+        const slideTitle = root.querySelector('h1, h2, h3')?.textContent?.trim()
+          || state.lesson?.title
+          || state.filename
+          || 'Lekcja';
+        localStorage.setItem(`chem.lesson-ai-context.${contextId}`, JSON.stringify({
+          context,
+          title: slideTitle.slice(0, 180),
+          createdAt: Date.now()
+        }));
+        url.searchParams.set('lesson_context', contextId);
+      }
+    } catch (_) {
+      // Czat nadal może zostać otwarty bez automatycznego kontekstu.
+    }
+
+    window.open(url.toString(), '_blank', 'noopener');
+  }
+
   function initializeInteractiveBlocks(root) {
     root.querySelectorAll('.lesson-flashcard').forEach((card) => {
       card.addEventListener('click', () => {
@@ -539,6 +589,9 @@
         button.setAttribute('aria-expanded', 'true');
         button.textContent = 'Ukryj model';
       });
+    });
+    root.querySelectorAll('[data-lesson-ai-open]').forEach((button) => {
+      button.addEventListener('click', () => openSlideAiHelp(button, root));
     });
   }
 

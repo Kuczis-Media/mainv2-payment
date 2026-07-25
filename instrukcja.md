@@ -1157,7 +1157,7 @@ Tworzy estetyczną kartę prowadzącą do dodatkowego materiału zamiast pokazyw
 5. Wybierz kolor akcentu.
 6. Zaznacz **Otwieraj w nowej karcie**, jeżeli kursant nie powinien opuszczać lekcji.
 
-Możesz użyć pełnego adresu `https://...`, adresu `http://...`, poczty `mailto:...`, kotwicy `#...` albo wewnętrznej ścieżki zaczynającej się od `/`, np. `/members/module/board/`. Adresy skryptowe, takie jak `javascript:...`, są odrzucane.
+Możesz użyć pełnego adresu `https://...`, adresu `http://...`, poczty `mailto:...`, kotwicy `#...` albo wewnętrznej ścieżki zaczynającej się od `/`, np. `/members/module/whiteboard/`. Adresy skryptowe, takie jak `javascript:...`, są odrzucane.
 
 ### Harmonijka
 
@@ -1170,6 +1170,32 @@ Wklej link albo 11-znakowe ID. Film jest osadzany z `youtube-nocookie.com`.
 ### ATONOM
 
 Wpisz nazwę związku. Lekcja najpierw pokazuje estetyczny kafelek. Model ładuje się dopiero po kliknięciu **Pokaż związek**, dzięki czemu nie zajmuje od razu całego slajdu.
+
+### Zapytaj AI o slajd
+
+Ten klocek daje uczniowi estetyczny przycisk **Zapytaj AI**. Po kliknięciu:
+
+1. otwiera się istniejący moduł ChemDisk AI w nowej karcie;
+2. treść bieżącego slajdu jest jednorazowo przekazywana jako kontekst;
+3. nad czatem pojawia się informacja, że AI użyje tego kontekstu przy pierwszym pytaniu;
+4. uczeń wpisuje własne pytanie, a w samej rozmowie widzi tylko swoją wiadomość.
+
+W prawym panelu ustaw tytuł, opis i napis przycisku. Pola repozytorium oraz promptu są opcjonalne:
+
+- pozostaw je puste, aby użyć zwykłego asystenta;
+- wybierz repozytorium i wpisz nazwę pliku `.json`, aby przypisać jedną instrukcję;
+- przy pliku `.txt` podaj również numer punktu.
+
+Klocek wymaga działającego czatu i zmiennej `GEMINI_API_KEY`. Kontekst nie trafia do pliku lekcji ani adresu URL. Przeglądarka zapisuje go lokalnie pod losowym identyfikatorem, czat odczytuje go tylko raz, a wpis starszy niż 10 minut jest odrzucany.
+
+### Tablica interaktywna
+
+Klocek tworzy kartę otwierającą jedno z dwóch istniejących narzędzi:
+
+- **Biała tablica** — szybkie szkicowanie i notatki;
+- **BitPaper** — rozbudowana plansza z rysowaniem, tekstem, zaznaczaniem oraz importem i eksportem.
+
+Wpisz tytuł, opis i tekst przycisku, wybierz rodzaj tablicy oraz zdecyduj, czy ma otworzyć się w nowej karcie. Dla BitPaper można opcjonalnie podać bezpieczną nazwę gotowej planszy `.json`, np. `stechiometria.json`. Puste pole otwiera nową planszę.
 
 ### Fiszki
 
@@ -1490,18 +1516,20 @@ Przed przyjęciem prawdziwej płatności sprawdź:
 19. Kafelek z linkiem otwiera bezpieczny adres i nie pokazuje użytkownikowi surowego długiego linku.
 20. Każdy slajd używa wybranego przejścia, a opcja **Brak przejścia** wyłącza animację.
 21. ATONOM pokazuje kafelek, a model dopiero po kliknięciu.
-22. Prompt JSON i wskazany punkt TXT działają w czacie.
-23. Obraz można załączyć do czatu.
-24. Formularz kontaktowy trafia do Netlify Forms.
-25. Administrator widzi i może usunąć testowe zgłoszenie.
-26. Prezentacja, PDF, film, YouTube i Google Forms działają przy docelowym udostępnianiu.
-27. Kalkulatory i obie tablice się otwierają.
-28. Stripe pokazuje tryb testowy.
-27. Płatność `4242 4242 4242 4242` kończy się sukcesem.
-28. Webhook ma odpowiedź `200`.
-29. Płatność nadaje prawidłową rolę i termin.
-30. Odebranie dostępu nie wykonuje przypadkowego refundu.
-31. `npm test` i `npm run build` kończą się bez błędów.
+22. Klocek **Zapytaj AI** otwiera czat, pokazuje informację o kontekście i odpowiada na pytanie dotyczące slajdu.
+23. Klocki białej tablicy i BitPaper otwierają właściwe narzędzia.
+24. Prompt JSON i wskazany punkt TXT działają w czacie.
+25. Obraz można załączyć do czatu.
+26. Formularz kontaktowy trafia do Netlify Forms.
+27. Administrator widzi i może usunąć testowe zgłoszenie.
+28. Prezentacja, PDF, film, YouTube i Google Forms działają przy docelowym udostępnianiu.
+29. Kalkulatory i obie tablice się otwierają.
+30. Stripe pokazuje tryb testowy.
+31. Płatność `4242 4242 4242 4242` kończy się sukcesem.
+32. Webhook ma odpowiedź `200`.
+33. Płatność nadaje prawidłową rolę i termin.
+34. Odebranie dostępu nie wykonuje przypadkowego refundu.
+35. `npm test` i `npm run build` kończą się bez błędów.
 
 ## 31. Co można usuwać i jak to odzyskać
 

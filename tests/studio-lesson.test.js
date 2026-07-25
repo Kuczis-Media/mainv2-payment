@@ -487,6 +487,76 @@ test('studio round-trips link tiles and a separate transition for every slide', 
   assert.match(published.slides[0].html, /--link-card-color:#2563eb/);
 });
 
+test('studio round-trips slide AI help and both interactive board variants', () => {
+  const lesson = studio.createLesson({
+    title: 'Pomoc na slajdzie',
+    filename: 'pomoc-na-slajdzie.md',
+    slides: [{
+      blocks: [
+        { type: 'heading', level: 2, text: 'Reakcje redoks' },
+        {
+          type: 'ai',
+          title: 'Zapytaj o reakcję',
+          description: 'AI otrzyma treść bieżącego slajdu.',
+          button: 'Otwórz pomoc',
+          repositoryId: 'organiczna',
+          promptFile: 'korepetytor.txt',
+          promptPoint: 4
+        },
+        {
+          type: 'board',
+          title: 'Szybki szkic',
+          variant: 'whiteboard',
+          newTab: false
+        },
+        {
+          type: 'board',
+          title: 'Gotowa plansza',
+          variant: 'bitpaper',
+          path: 'redoks.json',
+          newTab: true
+        }
+      ]
+    }]
+  });
+
+  assert.equal(studio.validateLesson(lesson).valid, true);
+  const markdown = studio.serializeLesson(lesson);
+  assert.match(markdown, /:::aihelp[\s\S]*repository: organiczna[\s\S]*prompt: korepetytor\.txt[\s\S]*point: 4/);
+  assert.match(markdown, /:::board[\s\S]*variant: whiteboard[\s\S]*new_tab: false/);
+  assert.match(markdown, /:::board[\s\S]*variant: bitpaper[\s\S]*path: redoks\.json[\s\S]*new_tab: true/);
+
+  const imported = studio.parseLesson(markdown, lesson.filename);
+  const ai = imported.slides[0].blocks.find((block) => block.type === 'ai');
+  const boards = imported.slides[0].blocks.filter((block) => block.type === 'board');
+  assert.equal(ai.repositoryId, 'organiczna');
+  assert.equal(ai.promptFile, 'korepetytor.txt');
+  assert.equal(ai.promptPoint, 4);
+  assert.deepEqual(boards.map((block) => block.variant), ['whiteboard', 'bitpaper']);
+  assert.equal(boards[0].newTab, false);
+  assert.equal(boards[1].path, 'redoks.json');
+
+  const published = lessonParser.parseLesson(markdown, lesson.filename);
+  assert.match(published.slides[0].html, /class="lesson-support-card lesson-ai-help"/);
+  assert.match(published.slides[0].html, /data-ai-prompt="korepetytor\.txt"/);
+  assert.match(published.slides[0].html, /data-ai-repository="organiczna"/);
+  assert.match(published.slides[0].html, /href="\/members\/module\/whiteboard\/"/);
+  assert.match(published.slides[0].html, /href="\/members\/module\/bitpaper\/\?path=redoks\.json"/);
+
+  const invalid = studio.validateLesson({
+    title: 'Błędne narzędzia',
+    slides: [{
+      blocks: [
+        { type: 'ai', promptFile: '../sekret.txt' },
+        { type: 'board', variant: 'bitpaper', path: '../plansza.json' }
+      ]
+    }]
+  });
+  assert.equal(invalid.valid, false);
+  assert.equal(invalid.errors.some((error) => error.code === 'INVALID_AI_PROMPT'), true);
+  assert.equal(invalid.errors.some((error) => error.code === 'INVALID_BOARD_PATH'), true);
+});
+
 test('studio rejects unsafe image URLs, malformed quizzes and ambiguous code fences', () => {
   const unsafeImage = studio.validateLesson({
     title: 'Obraz',
@@ -554,6 +624,8 @@ test('studio exposes renderer extension capabilities and a strict authoring file
   assert.equal(studio.capabilities.accordions, true);
   assert.equal(studio.capabilities.youtube, true);
   assert.equal(studio.capabilities.atonom, true);
+  assert.equal(studio.capabilities.aiHelp, true);
+  assert.equal(studio.capabilities.interactiveBoards, true);
   assert.equal(studio.capabilities.linkCards, true);
   assert.equal(studio.capabilities.flashcards, true);
   assert.deepEqual(studio.capabilities.slideTransitions, ['none', 'fade', 'rise', 'slide', 'zoom']);

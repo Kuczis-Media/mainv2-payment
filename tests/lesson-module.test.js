@@ -324,6 +324,63 @@ test('lesson renderer shows safe link tiles and preserves per-slide transitions'
   assert.doesNotMatch(unsafe, /javascript:/);
 });
 
+test('lesson renderer creates AI help and allowlisted interactive board cards', () => {
+  const lesson = parser.parseLesson([
+    '# Narzędzia',
+    '',
+    'Treść slajdu dla asystenta.',
+    '',
+    ':::aihelp',
+    'title: Zapytaj o slajd',
+    'description: Otwórz pomoc AI.',
+    'button: Zapytaj',
+    'repository: glowne',
+    'prompt: nauczyciel.txt',
+    'point: 2',
+    ':::',
+    '',
+    ':::board',
+    'title: Biała tablica',
+    'variant: whiteboard',
+    'new_tab: false',
+    ':::',
+    '',
+    ':::board',
+    'title: Plansza ćwiczeń',
+    'variant: bitpaper',
+    'path: redoks.json',
+    'new_tab: true',
+    ':::'
+  ].join('\n'), 'narzedzia.md');
+
+  const html = lesson.slides[0].html;
+  assert.match(html, /class="lesson-support-card lesson-ai-help"/);
+  assert.match(html, /data-ai-prompt="nauczyciel\.txt"/);
+  assert.match(html, /data-ai-repository="glowne"/);
+  assert.match(html, /data-ai-point="2"/);
+  assert.match(html, /data-lesson-ai-open/);
+  assert.match(html, /href="\/members\/module\/whiteboard\/"/);
+  assert.match(html, /href="\/members\/module\/bitpaper\/\?path=redoks\.json"/);
+  assert.match(html, /target="_blank" rel="noopener noreferrer"/);
+
+  const unsafeAi = parser.renderMarkdown([
+    ':::aihelp',
+    'prompt: ../sekret.txt',
+    ':::'
+  ].join('\n'));
+  assert.match(unsafeAi, /Nieprawidłowy klocek pomocy AI/);
+  assert.doesNotMatch(unsafeAi, /\.\.\/sekret/);
+
+  const unsafeBoard = parser.renderMarkdown([
+    ':::board',
+    'variant: bitpaper',
+    'path: ../plansza.json',
+    ':::'
+  ].join('\n'));
+  assert.match(unsafeBoard, /Nieprawidłowy klocek tablicy/);
+  assert.doesNotMatch(unsafeBoard, /\.\.\/plansza/);
+});
+
 test('lesson filename and Markdown rendering reject path traversal and active HTML', () => {
   assert.equal(parser.validateFilename('dzial-1.md'), 'dzial-1.md');
   assert.equal(parser.validateFilename('../sekret.md'), '');

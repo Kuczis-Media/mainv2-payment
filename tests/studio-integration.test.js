@@ -83,6 +83,8 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(html, /data-lesson-add=["']atonom["']/);
   assert.match(html, /data-lesson-add=["']formula["']/);
   assert.match(html, /data-lesson-add=["']link["']/);
+  assert.match(html, /data-lesson-add=["']ai["']/);
+  assert.match(html, /data-lesson-add=["']board["']/);
   assert.match(html, /data-lesson-add=["']flashcards["']/);
   assert.match(html, /data-lesson-add=["']task-gaps["']/);
   assert.match(html, /data-lesson-add=["']task-gaps-text["']/);
@@ -103,6 +105,8 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(script, /state\.lesson\.model\.slides\.forEach/);
   assert.match(script, /function bindPreviewTasks/);
   assert.match(script, /function bindPreviewAtonom/);
+  assert.match(script, /function bindPreviewAiHelp/);
+  assert.match(script, /chem\.lesson-ai-context\./);
   assert.match(script, /function typesetMath/);
   assert.match(script, /data-formula-snippet/);
   assert.match(script, /LESSON_FORMULA_PRESETS/);
@@ -139,6 +143,9 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(styles, /\.lesson-atonom-card/);
   assert.match(styles, /\.lesson-formula-display/);
   assert.match(styles, /\.lesson-link-card/);
+  assert.match(styles, /\.lesson-support-card/);
+  assert.match(styles, /\.lesson-ai-help/);
+  assert.match(styles, /\.lesson-board-card/);
   assert.match(styles, /\.formula-chemistry-equation/);
   assert.match(styles, /\.formula-builder-preview/);
   assert.match(styles, /\.formula-arrow-button/);
@@ -172,7 +179,10 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
 
 test('lesson authoring extensions are rendered through strict, non-HTML directives', () => {
   const parser = read('public/members/module/lesson/lesson-parser.js');
+  const player = read('public/members/module/lesson/script.js');
   const styles = read('public/members/module/lesson/style.css');
+  const chatHtml = read('public/members/module/chat/index.html');
+  const chatScript = read('public/members/module/chat/script.js');
 
   assert.match(parser, /STYLE_FONTS\s*=\s*new Set/);
   assert.match(parser, /SAFE_STYLE_COLOR/);
@@ -181,6 +191,8 @@ test('lesson authoring extensions are rendered through strict, non-HTML directiv
   assert.match(parser, /lesson-atonom-open/);
   assert.match(parser, /formulaBlockHtml/);
   assert.match(parser, /lesson-link-card/);
+  assert.match(parser, /lesson-ai-help/);
+  assert.match(parser, /lesson-board-card/);
   assert.match(parser, /safeLinkCardUrl/);
   assert.match(parser, /SAFE_MATH_COMMANDS/);
   assert.match(parser, /decoding=["']async["']/);
@@ -192,10 +204,18 @@ test('lesson authoring extensions are rendered through strict, non-HTML directiv
   assert.match(styles, /\.lesson-atonom-card/);
   assert.match(styles, /\.lesson-formula-display/);
   assert.match(styles, /\.lesson-link-card/);
+  assert.match(styles, /\.lesson-support-card/);
   assert.match(styles, /\.slide-card\.is-entering\[data-transition=["']zoom["']\]/);
   assert.match(styles, /\.lesson-font-rounded/);
   assert.match(styles, /\.lesson-accordion\[open\]/);
   assert.match(styles, /\.lesson-flashcard/);
   assert.match(styles, /\.lesson-embed/);
   assert.match(styles, /\.gap-exercise/);
+  assert.match(player, /function openSlideAiHelp/);
+  assert.match(player, /chem\.lesson-ai-context\./);
+  assert.match(player, /\[data-lesson-ai-open\]/);
+  assert.match(chatHtml, /id=["']lesson-context-status["']/);
+  assert.match(chatScript, /LESSON_CONTEXT_MAX_AGE\s*=\s*10\s*\*\s*60\s*\*\s*1000/);
+  assert.match(chatScript, /localStorage\.removeItem\(key\)/);
+  assert.match(chatScript, /Kontekst slajdu/);
 });

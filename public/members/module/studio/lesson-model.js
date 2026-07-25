@@ -5,10 +5,13 @@
   const MAX_SOURCE_CHARS = 512 * 1024;
   const MAX_SLIDES = 100;
   const SAFE_FILENAME = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.md$/i;
+  const SAFE_PROMPT_FILENAME = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.(?:json|txt)$/i;
+  const SAFE_REPOSITORY_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
+  const SAFE_BOARD_PATH = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.json$/i;
   const TASK_START = /^\s*:::(?:task|zadanie)\s*$/i;
   const QUESTION_START = /^\s*:::question\s*$/i;
   const SLIDE_SETTINGS_START = /^\s*:::slide\s*$/i;
-  const CONTAINER_START = /^\s*:::(style|accordion|youtube|atonom|formula|linkcard|flashcards)(?:\s+(.*?))?\s*$/i;
+  const CONTAINER_START = /^\s*:::(style|accordion|youtube|atonom|formula|linkcard|aihelp|board|flashcards)(?:\s+(.*?))?\s*$/i;
   const CONTAINER_END = /^\s*:::\s*$/;
   const STYLE_FONTS = Object.freeze([
     'sans',
@@ -48,6 +51,8 @@
     'atonom',
     'formula',
     'link',
+    'ai',
+    'board',
     'flashcards'
   ]);
   const TASK_TYPES = Object.freeze(['text', 'number', 'choice', 'abcd', 'gaps', 'gaps-text']);
@@ -167,7 +172,7 @@
       .split('\n')
       .map((line) => {
         if (/^\s*---\s*$/.test(line)) return '`---`';
-        if (/^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|atonom|formula|linkcard|flashcards)?(?:\s+.*?)?\s*$/i.test(line)) {
+        if (/^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|atonom|formula|linkcard|aihelp|board|flashcards)?(?:\s+.*?)?\s*$/i.test(line)) {
           return `\`${line.trim()}\``;
         }
         return line.replace(/\s+$/g, '');
@@ -306,6 +311,31 @@
         arrow: FORMULA_ARROWS.includes(requestedArrow) ? requestedArrow : '->',
         above: oneLine(source.above),
         below: oneLine(source.below)
+      };
+    }
+    if (type === 'ai') {
+      const promptFile = oneLine(source.promptFile || source.prompt);
+      const point = Number(source.promptPoint ?? source.point);
+      return {
+        ...base,
+        title: oneLine(source.title) || 'Masz pytanie do tego slajdu?',
+        description: oneLine(source.description) || 'Otwórz ChemDisk AI z treścią tego slajdu jako kontekstem.',
+        button: oneLine(source.button) || 'Zapytaj AI',
+        repositoryId: oneLine(source.repositoryId || source.repository).toLowerCase(),
+        promptFile,
+        promptPoint: Number.isSafeInteger(point) && point > 0 && point <= 9999 ? point : 1
+      };
+    }
+    if (type === 'board') {
+      const variant = oneLine(source.variant).toLowerCase() === 'bitpaper' ? 'bitpaper' : 'whiteboard';
+      return {
+        ...base,
+        title: oneLine(source.title) || (variant === 'bitpaper' ? 'Otwórz tablicę BitPaper' : 'Otwórz białą tablicę'),
+        description: oneLine(source.description) || 'Szkicuj rozwiązanie, wzory i notatki na interaktywnej tablicy.',
+        button: oneLine(source.button) || 'Otwórz tablicę',
+        variant,
+        path: oneLine(source.path),
+        newTab: source.newTab !== false && !/^(?:0|false|no|nie)$/i.test(oneLine(source.newTab))
       };
     }
     if (type === 'link') {
@@ -531,6 +561,28 @@
     if (block.type === 'atonom' && !safeAtonomFormula(block.formula)) {
       errors.push({ code: 'INVALID_ATONOM_FORMULA', path: `${path}.formula`, message: 'Podaj nazwę związku dla ATONOM.' });
     }
+    if (block.type === 'ai') {
+      if (!block.title) {
+        errors.push({ code: 'INVALID_AI_HELP', path: `${path}.title`, message: 'Klocek AI wymaga tytułu.' });
+      }
+      if (block.repositoryId && !SAFE_REPOSITORY_ID.test(block.repositoryId)) {
+        errors.push({ code: 'INVALID_AI_REPOSITORY', path: `${path}.repositoryId`, message: 'Wybierz prawidłowe repozytorium promptu AI.' });
+      }
+      if (block.promptFile && !SAFE_PROMPT_FILENAME.test(block.promptFile)) {
+        errors.push({ code: 'INVALID_AI_PROMPT', path: `${path}.promptFile`, message: 'Prompt AI musi być plikiem .json albo .txt bez ścieżki.' });
+      }
+      if (/\.txt$/i.test(block.promptFile) && (!Number.isSafeInteger(block.promptPoint) || block.promptPoint < 1)) {
+        errors.push({ code: 'INVALID_AI_PROMPT_POINT', path: `${path}.promptPoint`, message: 'Prompt TXT wymaga dodatniego numeru punktu.' });
+      }
+    }
+    if (block.type === 'board') {
+      if (!block.title || !['whiteboard', 'bitpaper'].includes(block.variant)) {
+        errors.push({ code: 'INVALID_BOARD', path, message: 'Wybierz obsługiwany rodzaj tablicy i wpisz tytuł.' });
+      }
+      if (block.path && (block.variant !== 'bitpaper' || !SAFE_BOARD_PATH.test(block.path))) {
+        errors.push({ code: 'INVALID_BOARD_PATH', path: `${path}.path`, message: 'Plansza BitPaper musi wskazywać bezpieczną nazwę pliku .json.' });
+      }
+    }
     if (block.type === 'link') {
       if (!block.title || !safeLinkUrl(block.url)) {
         errors.push({
@@ -700,6 +752,30 @@
       }
       lines.push(':::');
       return lines.join('\n');
+    }
+    if (block.type === 'ai') {
+      return [
+        ':::aihelp',
+        `title: ${cleanDirectiveValue(block.title)}`,
+        `description: ${cleanDirectiveValue(block.description)}`,
+        `button: ${cleanDirectiveValue(block.button)}`,
+        `repository: ${cleanDirectiveValue(block.repositoryId)}`,
+        `prompt: ${cleanDirectiveValue(block.promptFile)}`,
+        `point: ${block.promptPoint}`,
+        ':::'
+      ].join('\n');
+    }
+    if (block.type === 'board') {
+      return [
+        ':::board',
+        `title: ${cleanDirectiveValue(block.title)}`,
+        `description: ${cleanDirectiveValue(block.description)}`,
+        `button: ${cleanDirectiveValue(block.button)}`,
+        `variant: ${block.variant}`,
+        `path: ${cleanDirectiveValue(block.path)}`,
+        `new_tab: ${block.newTab ? 'true' : 'false'}`,
+        ':::'
+      ].join('\n');
     }
     if (block.type === 'link') {
       return [
@@ -965,6 +1041,28 @@
               above: values.above,
               below: values.below,
               right: values.right
+            }));
+          } else if (type === 'aihelp') {
+            const values = parseDirectiveFields(bodyLines);
+            blocks.push(createBlock({
+              type: 'ai',
+              title: values.title,
+              description: values.description,
+              button: values.button,
+              repositoryId: values.repository,
+              promptFile: values.prompt,
+              promptPoint: values.point
+            }));
+          } else if (type === 'board') {
+            const values = parseDirectiveFields(bodyLines);
+            blocks.push(createBlock({
+              type: 'board',
+              title: values.title,
+              description: values.description,
+              button: values.button,
+              variant: values.variant,
+              path: values.path,
+              newTab: values.new_tab
             }));
           } else if (type === 'linkcard') {
             const values = parseDirectiveFields(bodyLines);
@@ -1269,6 +1367,8 @@
     youtube: true,
     atonom: true,
     formulas: true,
+    aiHelp: true,
+    interactiveBoards: true,
     linkCards: true,
     flashcards: true,
     accordions: true,

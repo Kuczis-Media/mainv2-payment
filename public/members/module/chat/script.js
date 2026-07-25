@@ -12,6 +12,8 @@ const IMAGE_SIZE_LIMIT = 3 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const MAX_HISTORY_MESSAGES = 24;
 const MAX_HISTORY_CHARS = 36_000;
+const LESSON_CONTEXT_PREFIX = 'chem.lesson-ai-context.';
+const LESSON_CONTEXT_MAX_AGE = 10 * 60 * 1000;
 
 (() => {
   'use strict';
@@ -37,6 +39,7 @@ const MAX_HISTORY_CHARS = 36_000;
     fileName: $('#file-name'),
     suggestions: $('.suggestions'),
     promptStatus: $('#prompt-status'),
+    lessonContextStatus: $('#lesson-context-status'),
     promptModeLabel: $('#prompt-mode-label'),
   };
 
@@ -63,6 +66,7 @@ const MAX_HISTORY_CHARS = 36_000;
     theme: loadInitialTheme(),
     attachment: null,
     attachmentPreviewUrl: '',
+    lessonContext: null,
   };
 
   // ---------- Init ----------
@@ -97,6 +101,7 @@ const MAX_HISTORY_CHARS = 36_000;
     applyTheme(state.theme, false);
     updateMaturaButton();
     initMaturaPrompt();
+    initLessonContext();
 
     on(els.suggestions, 'click', (e) => {
       const item = e.target.closest('.suggestions-item'); if (!item) return;
@@ -222,6 +227,56 @@ const MAX_HISTORY_CHARS = 36_000;
     els.promptStatus.textContent = message;
   }
 
+  function initLessonContext(){
+    let url;
+    try {
+      url = new URL(window.location.href);
+    } catch {
+      return;
+    }
+
+    const tokens = url.searchParams.getAll('lesson_context');
+    url.searchParams.delete('lesson_context');
+    try {
+      window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+    } catch {}
+
+    if (tokens.length !== 1 || !/^[a-z0-9-]{8,80}$/i.test(tokens[0])) return;
+
+    let raw = '';
+    try {
+      const key = `${LESSON_CONTEXT_PREFIX}${tokens[0]}`;
+      raw = localStorage.getItem(key) || '';
+      localStorage.removeItem(key);
+    } catch {
+      return;
+    }
+    if (!raw) return;
+
+    try {
+      const value = JSON.parse(raw);
+      const context = String(value?.context || '').replace(/\s+/g, ' ').trim();
+      const title = String(value?.title || 'bieżący slajd').replace(/\s+/g, ' ').trim().slice(0, 180);
+      const createdAt = Number(value?.createdAt);
+      if (
+        !context
+        || context.length > 6000
+        || !Number.isFinite(createdAt)
+        || createdAt > Date.now() + 60_000
+        || Date.now() - createdAt > LESSON_CONTEXT_MAX_AGE
+      ) return;
+
+      state.lessonContext = { context, title };
+      if (els.lessonContextStatus) {
+        els.lessonContextStatus.hidden = false;
+        els.lessonContextStatus.textContent =
+          `AI otrzyma treść slajdu „${title}” jako kontekst pierwszego pytania.`;
+      }
+    } catch {
+      // Uszkodzony albo nieaktualny kontekst jest pomijany.
+    }
+  }
+
   // ---------- Messages UI ----------
   function messageEl(role, html){ const d=document.createElement('div'); d.className=`message ${role}`; d.innerHTML=html; return d; }
   function addUserMessage(text){ const el=messageEl('user',`<strong>Ty</strong><div class="md">${escapeHtml(text)}</div>`); els.chats.appendChild(el); updateConversationState(); typesetMath(el); scrollToBottom(); return el; }
@@ -299,11 +354,26 @@ const MAX_HISTORY_CHARS = 36_000;
   async function handlePromptSubmit(e){
     e.preventDefault(); if(state.busy) return;
     const text = (els.promptInput.value||'').trim(); if(!text && !state.attachment) return;
+    const displayText = text || (state.attachment ? '[Załącznik]' : '');
+    const firstMessageContext = state.messages.length === 0 ? state.lessonContext : null;
+    const messageContent = firstMessageContext
+      ? [
+          `Kontekst slajdu „${firstMessageContext.title}”:`,
+          firstMessageContext.context,
+          '',
+          'Pytanie ucznia:',
+          displayText
+        ].join('\n')
+      : displayText;
 
-    addUserMessage(text || (state.attachment?'[Załącznik]':''));
+    addUserMessage(displayText);
     els.promptInput.value='';
     resizePromptInput();
-    state.messages.push({ role:'user', content:text });
+    state.messages.push({ role:'user', content:messageContent });
+    if (firstMessageContext) {
+      state.lessonContext = null;
+      if (els.lessonContextStatus) els.lessonContextStatus.hidden = true;
+    }
     trimConversation();
 
     setBusy(true);
