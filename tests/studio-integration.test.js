@@ -85,6 +85,7 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(html, /data-lesson-add=["']link["']/);
   assert.match(html, /data-lesson-add=["']ai["']/);
   assert.match(html, /data-lesson-add=["']board["']/);
+  assert.match(html, /palette-group-featured/);
   assert.match(html, /data-lesson-add=["']flashcards["']/);
   assert.match(html, /data-lesson-add=["']task-gaps["']/);
   assert.match(html, /data-lesson-add=["']task-gaps-text["']/);
@@ -114,6 +115,9 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(script, /data-formula-arrow/);
   assert.match(script, /formulaComposerPreview/);
   assert.match(script, /updateFormulaComposerPreview/);
+  assert.match(script, /function revealFeaturedLessonTool/);
+  assert.match(script, /activateInspectorPanel\(['"]lesson['"],\s*['"]inspector['"]\)/);
+  assert.match(script, /scrollIntoView/);
   assert.match(script, /SLIDE_TRANSITIONS/);
   assert.match(script, /previewTransitionKey/);
   assert.match(script, /ChemLesson\.checkAnswer/);
@@ -151,6 +155,8 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(styles, /\.formula-arrow-button/);
   assert.match(styles, /\[data-transition=["']rise["']\]/);
   assert.match(styles, /\.formula-symbol-toolbar/);
+  assert.match(styles, /\.lesson-palette-scroll/);
+  assert.match(styles, /\.palette-group-featured/);
   assert.match(styles, /\.task-correct-toggle/);
   assert.match(styles, /\.preview-quiz/);
   assert.match(styles, /\.preview-text-gap/);
@@ -166,6 +172,13 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(styles, /100dvh[\s\S]*?overflow:\s*auto/);
   assert.doesNotMatch(html, /data-dashboard-add=["']filmv1["']/i);
   assert.doesNotMatch(script, /Wygenerowany adres|dashboard-url-preview|hrefPreview/);
+
+  const featuredTools = html.indexOf('palette-group palette-group-featured');
+  const repositoryLibrary = html.indexOf('lesson-repository-library');
+  const regularContent = html.indexOf('<h2>Treść</h2>', featuredTools);
+  assert.ok(featuredTools >= 0, 'missing featured lesson tools');
+  assert.ok(repositoryLibrary > featuredTools, 'featured lesson tools should be above the repository');
+  assert.ok(regularContent > repositoryLibrary, 'formula, AI and board should be visible before regular content');
 
   const dashboardClone = script.slice(
     script.indexOf('function cloneDashboardNode'),

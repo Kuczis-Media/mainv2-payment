@@ -1752,6 +1752,30 @@
     return { slideId: slide ? slide.id : '', parentBlockId: '' };
   }
 
+  function revealFeaturedLessonTool(type) {
+    const labels = {
+      formula: 'Kreator równań',
+      ai: 'Ustawienia pomocy AI',
+      board: 'Ustawienia tablicy'
+    };
+    if (!labels[type]) return;
+
+    applyStudioLayoutPart(elements.lessonWorkspace, 'inspector', false);
+    activateInspectorPanel('lesson', 'inspector');
+    saveStudioLayout();
+    toast(`${labels[type]} — otwarte`, 'Ustawienia klocka znajdziesz w panelu Narzędzia i podgląd.');
+
+    if (window.matchMedia?.('(max-width: 760px)').matches) {
+      const panel = elements.lessonInspector.closest('.inspector-panel');
+      window.requestAnimationFrame(() => {
+        panel?.scrollIntoView({
+          behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+          block: 'start'
+        });
+      });
+    }
+  }
+
   function addLessonNode(type, target) {
     if (type === 'slide') {
       commitMutation('lesson', () => {
@@ -1800,6 +1824,7 @@
       state.lesson.selectedId = inserted.id;
       state.lesson.previewSlideId = slide.id;
     });
+    revealFeaturedLessonTool(type);
   }
 
   function lessonBlockSymbol(block) {

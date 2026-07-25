@@ -476,6 +476,8 @@ Studio ma trzy tryby:
 
 Na większym ekranie biblioteka po lewej, obszar roboczy pośrodku oraz ustawienia/podgląd po prawej mają niezależne przewijanie. Każdą bibliotekę, prawy panel i górny pasek narzędzi można zwinąć osobno; ustawienia są zapamiętywane osobno dla Dashboard Buildera, Lesson Buildera i Prompt Buildera w `chemdisk.studio.layout.v1`.
 
+W Lesson Builderze trzy najważniejsze elementy są przypięte na początku przewijanej biblioteki w sekcji **Kreatory i narzędzia**: kreator równań, pomoc AI i tablica. Kliknięcie albo przeciągnięcie któregoś z nich automatycznie otwiera jego ustawienia; na ekranie mobilnym Studio przewija widok do panelu edycji.
+
 #### Przepływ Dashboard Buildera
 
 1. Kliknij **Wczytaj aktywny**, zanim zaczniesz publikować. Studio pobiera wtedy override z Blobs albo bazowy `dashboard.md` oraz zapamiętuje jego `etag`.

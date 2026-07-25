@@ -1032,6 +1032,8 @@ GitHub tworzy commit usuwający plik, dlatego zawartość można odzyskać z his
 
 Na jednym slajdzie można umieścić wiele klocków treści i najwyżej jedno zadanie sprawdzające.
 
+Na samej górze biblioteki znajduje się wyróżniona sekcja **Kreatory i narzędzia**. Są w niej zawsze widoczne: **Kreator równań**, **Zapytaj AI** i **Tablica**. Kliknięcie działa tak samo jak przeciągnięcie. Studio automatycznie zaznacza dodany klocek, rozwija panel **Narzędzia i podgląd** oraz pokazuje jego ustawienia; na wąskim ekranie przewija widok bezpośrednio do tego panelu.
+
 ### Nowy slajd
 
 Tworzy kolejny krok lekcji. Kursant przechodzi między slajdami przyciskami i planem lekcji.
