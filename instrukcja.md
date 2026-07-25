@@ -806,6 +806,8 @@ W każdym builderze:
 
 Publikacja zapisuje dashboard w Netlify Blobs. Nie wymaga commitu ani deployu.
 
+Duży dashboard można porządkować podczas edycji: kliknij strzałkę w nagłówku dowolnej harmonijki, aby ukryć jej zawartość w obszarze roboczym. Ponowne kliknięcie ją rozwinie. Jest to wyłącznie ustawienie widoku edytora — nie zmienia tego, co zobaczy kursant.
+
 ### 18.2. Klocki struktury
 
 | Klocek | Zastosowanie | Jak uzupełnić |
@@ -1185,7 +1187,8 @@ Ten klocek daje uczniowi estetyczny przycisk **Zapytaj AI**. Po kliknięciu:
 W prawym panelu ustaw tytuł, opis i napis przycisku. Pola repozytorium oraz promptu są opcjonalne:
 
 - pozostaw je puste, aby użyć zwykłego asystenta;
-- wybierz repozytorium i wpisz nazwę pliku `.json`, aby przypisać jedną instrukcję;
+- wybierz repozytorium, a następnie kliknij pole pliku i wybierz prompt `.json` albo `.txt` z wyświetlonej listy; nazwę nadal można wpisać ręcznie;
+- plik `.json` przypisuje jedną instrukcję;
 - przy pliku `.txt` podaj również numer punktu.
 
 Klocek wymaga działającego czatu i zmiennej `GEMINI_API_KEY`. Kontekst nie trafia do pliku lekcji ani adresu URL. Przeglądarka zapisuje go lokalnie pod losowym identyfikatorem, czat odczytuje go tylko raz, a wpis starszy niż 10 minut jest odrzucany.
@@ -1283,6 +1286,8 @@ Odtwarzacz:
 - pokazuje plan lekcji w kompaktowym, zwijanym panelu po lewej;
 - pokazuje dużą prezentację po prawej;
 - pozwala zwinąć górny pasek;
+- ma domyślnie włączony przełącznik **Nauka po kolei**, który wymaga rozwiązania zadania przed przejściem dalej;
+- po wyłączeniu **Nauki po kolei** pozwala przejść do dowolnego dalszego slajdu, pominąć trudne zadanie i wrócić do niego później;
 - pamięta postęp w danej karcie przeglądarki;
 - umożliwia powtórzenie lekcji;
 - pokazuje bibliotekę plików wyłącznie administratorowi.

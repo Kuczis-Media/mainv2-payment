@@ -1809,6 +1809,15 @@ button {
   border-radius: 14px 14px 0 0;
 }
 
+.group-node.is-editor-collapsed .node-header {
+  border-radius: 14px;
+}
+
+.group-collapse-action {
+  color: var(--chem-primary);
+  background: color-mix(in srgb, var(--chem-primary) 10%, transparent);
+}
+
 .group-node .node-symbol {
   width: 29px;
   height: 29px;

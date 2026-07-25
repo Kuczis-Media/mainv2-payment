@@ -111,6 +111,10 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(script, /function bindPreviewAiHelp/);
   assert.match(script, /chem\.lesson-ai-context\./);
   assert.match(script, /function typesetMath/);
+  assert.match(script, /function preparePreviewYouTube/);
+  assert.match(script, /source\.searchParams\.set\(['"]origin['"],\s*window\.location\.origin\)/);
+  assert.match(script, /source\.searchParams\.set\(['"]widget_referrer['"],\s*window\.location\.href\)/);
+  assert.match(script, /#MJX-CHTML-styles,\s*style\[id\^=["']MJX-["']\]/);
   assert.match(script, /data-formula-snippet/);
   assert.match(script, /LESSON_FORMULA_PRESETS/);
   assert.match(script, /data-formula-preset/);
@@ -138,6 +142,15 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(script, /ChemContentLibrary\.save/);
   assert.match(script, /ChemContentLibrary\.remove/);
   assert.match(script, /library\.search/);
+  assert.match(script, /function lessonRepositoryFilenameInput/);
+  assert.match(script, /lessonRepositoryFilenameInput\([\s\S]*?block\.promptFile[\s\S]*?\[['"]json['"],\s*['"]txt['"]\]/);
+  assert.match(script, /function syncInspectorRepository/);
+  assert.match(script, /\[['"]lesson['"],\s*['"]chat['"]\]\.includes\(node\.module\)/);
+  assert.match(script, /block\.type\s*===\s*['"]ai['"][^;\n]*syncInspectorRepository/);
+  assert.match(script, /if\s*\(fieldName\s*===\s*['"]repositoryId['"]\)[\s\S]*?selectContentRepository/);
+  assert.match(script, /collapsedGroups:\s*new Set\(\)/);
+  assert.match(script, /['"]toggle-collapse['"]/);
+  assert.match(script, /body\.hidden\s*=\s*collapsed/);
   assert.match(styles, /\.studio-preview-window/);
   assert.match(styles, /\.full-preview-main/);
   assert.match(styles, /\.full-lesson-list/);
@@ -163,6 +176,8 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(styles, /\.preview-quiz/);
   assert.match(styles, /\.preview-text-gap/);
   assert.match(styles, /\.drop-zone\.is-dragover/);
+  assert.match(styles, /\.group-node\.is-editor-collapsed/);
+  assert.match(styles, /\.group-collapse-action/);
   assert.match(styles, /prefers-reduced-motion:\s*reduce/);
   assert.match(html, /data-studio-toggle=["']palette["']/);
   assert.match(html, /data-studio-toggle=["']inspector["']/);

@@ -149,33 +149,6 @@ color: #2563eb
 new_tab: true
 :::
 
-:::aihelp
-title: Nie rozumiesz fragmentu slajdu?
-description: Zadaj pytanie asystentowi. Treść tego slajdu zostanie przekazana jako kontekst pierwszej wiadomości.
-button: Zapytaj AI
-repository:
-prompt:
-point: 1
-:::
-
-:::board
-title: Rozpisz rozwiązanie na białej tablicy
-description: Otwórz prostą tablicę do szkicowania wzorów i notatek.
-button: Otwórz białą tablicę
-variant: whiteboard
-path:
-new_tab: true
-:::
-
-:::board
-title: Otwórz rozbudowaną tablicę BitPaper
-description: Użyj narzędzi rysowania, tekstu, zaznaczania oraz importu i eksportu planszy.
-button: Otwórz BitPaper
-variant: bitpaper
-path:
-new_tab: true
-:::
-
 :::flashcards
 title: Fiszki — kliknij, aby odwrócić
 color: #7c3aed
@@ -186,6 +159,67 @@ NH3 => amoniak
 :::
 
 Ten slajd ma wyłączone przejście.
+
+---
+
+:::slide
+transition: fade
+:::
+
+## Zapytaj AI o treść slajdu
+
+Uczeń może poprosić asystenta o wyjaśnienie dokładnie tego materiału, który ogląda. Jako przykład przyjmijmy reakcję zobojętniania:
+
+:::formula
+mode: chemistry
+title: Reakcja kwasu solnego z wodorotlenkiem sodu
+left: HCl (aq) + NaOH (aq)
+arrow: ->
+above:
+below:
+right: NaCl (aq) + H2O (l)
+:::
+
+:::aihelp
+title: Masz pytanie do reakcji zobojętniania?
+description: Otwórz asystenta i zapytaj o substraty, produkty, jony albo sposób bilansowania. Treść tego slajdu zostanie użyta jako kontekst pierwszej odpowiedzi.
+button: Zapytaj AI o ten slajd
+repository:
+prompt:
+point: 1
+:::
+
+Pola repozytorium i promptu są w tym przykładzie puste, dlatego otworzy się zwykły asystent ChemDisk. W Studio można przypisać własny prompt JSON albo wybrany punkt z pliku TXT.
+
+---
+
+:::slide
+transition: rise
+:::
+
+## Tablice interaktywne
+
+Wybierz prostą białą tablicę tldraw do szybkiego szkicowania albo rozbudowaną tablicę BitPaper do rysowania, tekstu, zaznaczania oraz importowania plansz.
+
+:::board
+title: Rozpisz rozwiązanie na białej tablicy
+description: Otwórz prostą tablicę do szkicowania wzorów, mechanizmów reakcji i notatek.
+button: Otwórz białą tablicę
+variant: whiteboard
+path:
+new_tab: true
+:::
+
+:::board
+title: Otwórz rozbudowaną tablicę BitPaper
+description: Użyj narzędzi rysowania, tekstu i zaznaczania albo zaimportuj wcześniej przygotowaną planszę JSON.
+button: Otwórz BitPaper
+variant: bitpaper
+path:
+new_tab: true
+:::
+
+Puste pole planszy tworzy nową przestrzeń roboczą. Dla BitPaper można w Studio wpisać również nazwę gotowego pliku `.json`.
 
 ---
 

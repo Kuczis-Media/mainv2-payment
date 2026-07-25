@@ -30,13 +30,17 @@
     themeToggle: document.getElementById('theme-toggle'),
     topbarToggle: document.getElementById('topbar-toggle'),
     outlineToggle: document.getElementById('outline-toggle'),
+    sequenceToggle: document.getElementById('sequence-toggle'),
+    sequenceToggleHint: document.getElementById('sequence-toggle-hint'),
+    outlineTipCopy: document.getElementById('outline-tip-copy'),
     libraryButton: document.getElementById('lesson-library-button'),
     libraryDialog: document.getElementById('lesson-library-dialog'),
     libraryClose: document.getElementById('lesson-library-close'),
     librarySearch: document.getElementById('lesson-library-search'),
     libraryRepository: document.getElementById('lesson-library-repository'),
     libraryStatus: document.getElementById('lesson-library-status'),
-    libraryList: document.getElementById('lesson-library-list')
+    libraryList: document.getElementById('lesson-library-list'),
+    completionMessage: document.getElementById('completion-message')
   };
 
   const state = {
@@ -47,6 +51,7 @@
     maxReached: 0,
     solved: new Set(),
     completed: false,
+    sequential: true,
     attempts: new Map(),
     libraryAssets: [],
     repositories: [],
@@ -148,6 +153,7 @@
           : []
       );
       state.completed = Boolean(saved.completed);
+      state.sequential = saved.sequential !== false;
     } catch {}
   }
 
@@ -159,6 +165,7 @@
         maxReached: state.maxReached,
         solved: [...state.solved],
         completed: state.completed,
+        sequential: state.sequential,
         signature: state.lesson.signature
       }));
     } catch {}
@@ -241,8 +248,10 @@
       state.maxReached = 0;
       state.solved = new Set();
       state.completed = false;
+      state.sequential = true;
       state.attempts = new Map();
       loadProgress();
+      updateSequenceControl();
 
       document.title = `${state.lesson.title} — ChemDisk`;
       elements.lessonTitle.textContent = state.lesson.title;
@@ -411,8 +420,9 @@
       button.dataset.slideIndex = String(index);
       button.append(marker, label);
       button.addEventListener('click', () => {
-        if (index > state.maxReached || state.completed) return;
+        if ((state.sequential && index > state.maxReached) || state.completed) return;
         state.index = index;
+        state.maxReached = Math.max(state.maxReached, index);
         saveProgress();
         renderSlide();
       });
@@ -423,9 +433,11 @@
 
   function updateOutline() {
     elements.outlineList.querySelectorAll('button').forEach((button, index) => {
-      const accessible = index <= state.maxReached && !state.completed;
+      const slide = state.lesson.slides[index];
+      const accessible = (!state.sequential || index <= state.maxReached) && !state.completed;
       const current = index === state.index && !state.completed;
-      const complete = state.completed || index < state.maxReached || state.solved.has(index);
+      const complete = state.solved.has(index)
+        || ((!slide.task || state.solved.has(index)) && (state.completed || index < state.maxReached));
       button.disabled = !accessible;
       button.classList.toggle('is-current', current);
       button.classList.toggle('is-complete', complete);
@@ -434,6 +446,36 @@
       const marker = button.querySelector('.outline-marker');
       if (marker) marker.textContent = complete ? '✓' : String(index + 1);
     });
+  }
+
+  function updateSequenceControl() {
+    elements.sequenceToggle.checked = state.sequential;
+    elements.sequenceToggleHint.textContent = state.sequential
+      ? 'Wyłącz, aby otworzyć wszystkie kroki.'
+      : 'Wszystkie kroki są dostępne.';
+    elements.outlineTipCopy.textContent = state.sequential
+      ? 'Zadanie trzeba rozwiązać, aby odblokować kolejny krok.'
+      : 'Możesz przejść dalej i wrócić do trudnego zadania później.';
+  }
+
+  function updateNavigationAccess(slide, isSolved) {
+    const blocked = state.sequential && Boolean(slide.task && !isSolved);
+    elements.next.disabled = blocked;
+    elements.navigationHint.textContent = blocked
+      ? 'Najpierw podaj poprawną odpowiedź albo wyłącz tryb „Nauka po kolei”.'
+      : slide.task && !isSolved
+        ? 'Możesz pominąć to zadanie i wrócić do niego później.'
+        : '';
+    updateOutline();
+  }
+
+  function toggleSequentialLearning() {
+    state.sequential = elements.sequenceToggle.checked;
+    if (state.sequential) state.maxReached = Math.max(state.maxReached, state.index);
+    updateSequenceControl();
+    const slide = state.lesson && state.lesson.slides[state.index];
+    if (slide) updateNavigationAccess(slide, state.solved.has(state.index));
+    saveProgress();
   }
 
   function renderSlide() {
@@ -460,12 +502,9 @@
     renderTask(slide.task, isSolved);
     playSlideTransition(slide.transition);
     elements.previous.disabled = state.index === 0;
-    elements.next.disabled = Boolean(slide.task && !isSolved);
     elements.next.querySelector('span').textContent =
       state.index === state.lesson.slides.length - 1 ? 'Zakończ lekcję' : 'Dalej';
-    elements.navigationHint.textContent =
-      slide.task && !isSolved ? 'Najpierw podaj poprawną odpowiedź.' : '';
-    updateOutline();
+    updateNavigationAccess(slide, isSolved);
     saveProgress();
     elements.slideCard.focus?.({ preventScroll: true });
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -818,7 +857,7 @@
 
   function goNext() {
     const slide = state.lesson.slides[state.index];
-    if (slide.task && !state.solved.has(state.index)) return;
+    if (state.sequential && slide.task && !state.solved.has(state.index)) return;
     if (state.index === state.lesson.slides.length - 1) {
       state.completed = true;
       saveProgress();
@@ -838,12 +877,18 @@
 
   function showCompletion() {
     state.completed = true;
+    const unresolvedTasks = state.lesson.slides.filter(
+      (slide, index) => slide.task && !state.solved.has(index)
+    ).length;
     elements.slideCard.hidden = true;
     elements.navigation.hidden = true;
     elements.error.hidden = true;
     elements.completion.hidden = false;
     elements.progressBar.style.width = '100%';
     elements.lessonPosition.textContent = 'Lekcja ukończona';
+    elements.completionMessage.textContent = unresolvedTasks
+      ? `Przejrzano wszystkie kroki. Pominięte zadania: ${unresolvedTasks}. Możesz powtórzyć lekcję i wrócić do nich później.`
+      : 'Wszystkie kroki zostały przejrzane, a zadania rozwiązane poprawnie.';
     updateOutline();
     saveProgress();
     elements.restart.focus();
@@ -855,7 +900,9 @@
     state.maxReached = 0;
     state.solved = new Set();
     state.completed = false;
+    state.sequential = true;
     state.attempts = new Map();
+    updateSequenceControl();
     renderSlide();
   }
 
@@ -877,6 +924,7 @@
   elements.retry.addEventListener('click', loadLesson);
   elements.previous.addEventListener('click', goPrevious);
   elements.next.addEventListener('click', goNext);
+  elements.sequenceToggle.addEventListener('change', toggleSequentialLearning);
   elements.restart.addEventListener('click', restartLesson);
   document.addEventListener('chemdisk-mathjax-ready', () => typesetMath(elements.slideContent));
   document.addEventListener('keydown', (event) => {

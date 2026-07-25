@@ -598,7 +598,7 @@
       const id = youtubeVideoId(values.id || values.url);
       if (!id) return '<p class="lesson-interactive-error">Nieprawidłowy film YouTube.</p>';
       const title = values.title || 'Film do lekcji';
-      return `<figure class="lesson-embed lesson-youtube"><iframe src="https://www.youtube-nocookie.com/embed/${escapeHtml(id)}" title="${escapeHtml(title)}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe><figcaption>${escapeHtml(title)}</figcaption></figure>`;
+      return `<figure class="lesson-embed lesson-youtube"><iframe src="https://www.youtube-nocookie.com/embed/${escapeHtml(id)}?playsinline=1&amp;rel=0" title="${escapeHtml(title)}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe><figcaption>${escapeHtml(title)}</figcaption></figure>`;
     }
     if (type === 'atonom') {
       const formula = String(values.formula || '').trim();

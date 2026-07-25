@@ -72,10 +72,18 @@ test('lesson library is admin-only and the player layout can be collapsed', () =
 
   assert.match(html, /id=["']topbar-toggle["']/);
   assert.match(html, /id=["']outline-toggle["']/);
+  assert.match(html, /id=["']sequence-toggle["'][^>]*role=["']switch["'][^>]*checked/);
+  assert.match(html, /id=["']sequence-toggle-hint["']/);
+  assert.match(html, /id=["']completion-message["']/);
   assert.match(script, /classList\.toggle\(['"]is-topbar-collapsed['"]/);
   assert.match(script, /classList\.toggle\(['"]is-outline-collapsed['"]/);
+  assert.match(script, /sequential:\s*true/);
+  assert.match(script, /saved\.sequential\s*!==\s*false/);
+  assert.match(script, /state\.sequential\s*&&\s*slide\.task\s*&&\s*!state\.solved\.has/);
+  assert.match(script, /!state\.sequential\s*\|\|\s*index\s*<=\s*state\.maxReached/);
   assert.match(styles, /\.app-shell\.is-topbar-collapsed \.topbar/);
   assert.match(styles, /\.app-shell\.is-outline-collapsed \.lesson-layout/);
+  assert.match(styles, /\.sequence-toggle/);
   assert.match(styles, /grid-template-columns:\s*210px minmax\(0,\s*1fr\)/);
   assert.match(styles, /width:\s*min\(1480px,\s*calc\(100% - 32px\)\)/);
 });

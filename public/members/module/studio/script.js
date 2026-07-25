@@ -131,6 +131,7 @@
     dashboard: {
       model: null,
       selectedUid: '',
+      collapsedGroups: new Set(),
       expectedEtag: null,
       remoteLoaded: false,
       remoteSource: 'draft',
@@ -718,6 +719,17 @@
       create('small', '', dashboardNodeSubtitle(node))
     );
     const actions = create('span', 'node-actions');
+    if (node.kind === 'group') {
+      const collapsed = state.dashboard.collapsedGroups.has(node.uid);
+      const collapse = actionButton(
+        'toggle-collapse',
+        collapsed ? 'Rozwiń harmonijkę w edytorze' : 'Zwiń harmonijkę w edytorze',
+        collapsed ? '⌄' : '⌃'
+      );
+      collapse.classList.add('group-collapse-action');
+      collapse.setAttribute('aria-expanded', String(!collapsed));
+      actions.append(collapse);
+    }
     actions.append(
       actionButton('up', 'Przesuń wyżej', '↑'),
       actionButton('down', 'Przesuń niżej', '↓'),
@@ -743,7 +755,9 @@
       group.dataset.parentUid = parentUid;
       group.dataset.nodeIndex = String(index);
       group.draggable = true;
+      const collapsed = state.dashboard.collapsedGroups.has(node.uid);
       group.classList.toggle('is-selected', state.dashboard.selectedUid === node.uid);
+      group.classList.toggle('is-editor-collapsed', collapsed);
       group.append(nodeHeader(node));
       const body = create('div', 'group-body');
       node.blocks.forEach((block, blockIndex) => {
@@ -751,6 +765,7 @@
         body.append(renderDashboardBlock(block, node.uid, blockIndex));
       });
       body.append(dashboardDropZone(node.uid, node.blocks.length, 'Dodaj do harmonijki'));
+      body.hidden = collapsed;
       group.append(body);
       return group;
     }
@@ -878,6 +893,23 @@
     return options;
   }
 
+  function defaultContentRepositoryId() {
+    const repository = state.contentLibrary.repositories.find((item) => item.default)
+      || state.contentLibrary.repositories[0];
+    return repository ? repository.id : '';
+  }
+
+  function syncInspectorRepository(repositoryId) {
+    const requestedId = repositoryId || defaultContentRepositoryId();
+    if (
+      requestedId
+      && requestedId !== state.contentLibrary.selectedRepositoryId
+      && state.contentLibrary.repositories.some((repository) => repository.id === requestedId)
+    ) {
+      void selectContentRepository(requestedId);
+    }
+  }
+
   function repositoryFilenameInput(value, fieldName, kind, extension, repositoryId) {
     const wrapper = create('div', 'repository-filename-control');
     const input = textInput(value, fieldName, {
@@ -899,6 +931,38 @@
       option.label = asset.title || asset.filename;
       list.append(option);
     });
+    input.setAttribute('list', list.id);
+    wrapper.append(input, list);
+    return wrapper;
+  }
+
+  function lessonRepositoryFilenameInput(value, fieldName, extensions, repositoryId) {
+    const wrapper = create('div', 'repository-filename-control');
+    const allowedExtensions = (Array.isArray(extensions) ? extensions : [extensions])
+      .map((extension) => String(extension || '').toLowerCase())
+      .filter(Boolean);
+    const input = lessonInput(value, fieldName, {
+      placeholder: allowedExtensions.length > 1
+        ? 'Wybierz plik JSON lub TXT'
+        : `Wybierz plik .${allowedExtensions[0] || 'txt'}`,
+      maxLength: 80
+    });
+    const list = document.createElement('datalist');
+    list.id = `lesson-repository-options-${fieldName}-${allowedExtensions.join('-')}`;
+    const selectedRepositoryId = repositoryId || (
+      state.contentLibrary.repositories.find((repository) => repository.default) || {}
+    ).id || state.contentLibrary.selectedRepositoryId;
+    state.contentLibrary.prompts
+      .filter((asset) => (
+        (!selectedRepositoryId || asset.repositoryId === selectedRepositoryId)
+        && allowedExtensions.some((extension) => asset.filename.toLowerCase().endsWith(`.${extension}`))
+      ))
+      .forEach((asset) => {
+        const option = document.createElement('option');
+        option.value = asset.filename;
+        option.label = asset.title || asset.filename;
+        list.append(option);
+      });
     input.setAttribute('list', list.id);
     wrapper.append(input, list);
     return wrapper;
@@ -965,6 +1029,9 @@
       return;
     }
     const node = found.node;
+    if (node.kind === 'module' && ['lesson', 'chat'].includes(node.module)) {
+      syncInspectorRepository(node.repositoryId);
+    }
     const form = create('form', 'inspector-form');
     form.addEventListener('submit', (event) => event.preventDefault());
     form.append(inspectorHeader(
@@ -1237,6 +1304,12 @@
   function dashboardNodeAction(action, uid) {
     const found = dashboardModelApi.findNode(state.dashboard.model, uid);
     if (!found || !found.container) return;
+    if (action === 'toggle-collapse' && found.node.kind === 'group') {
+      if (state.dashboard.collapsedGroups.has(uid)) state.dashboard.collapsedGroups.delete(uid);
+      else state.dashboard.collapsedGroups.add(uid);
+      renderDashboardCanvas();
+      return;
+    }
     if (action === 'delete') {
       const needsConfirm = (found.node.kind === 'section' || found.node.kind === 'group')
         && Array.isArray(found.node.blocks)
@@ -2669,6 +2742,7 @@
       return;
     }
     const block = found.node;
+    if (block.type === 'ai') syncInspectorRepository(block.repositoryId);
     form.append(inspectorHeader(
       lessonBlockSymbol(block),
       lessonBlockSubtitle(block),
@@ -2889,11 +2963,13 @@
         ),
         field(
           'Plik promptu — opcjonalnie',
-          lessonInput(block.promptFile, 'promptFile', {
-            placeholder: 'np. pomoc-do-lekcji.json albo zestaw.txt',
-            maxLength: 80
-          }),
-          'Bez pliku otworzy się ogólny asystent. Plik JSON lub TXT jest pobierany bezpiecznie przez funkcję serwerową.'
+          lessonRepositoryFilenameInput(
+            block.promptFile,
+            'promptFile',
+            ['json', 'txt'],
+            block.repositoryId
+          ),
+          'Kliknij pole, aby wybrać plik JSON lub TXT z repozytorium. Nadal możesz wpisać nazwę ręcznie. Bez pliku otworzy się ogólny asystent.'
         )
       );
       if (/\.txt$/i.test(block.promptFile)) {
@@ -3173,6 +3249,24 @@
       .catch(() => undefined);
   }
 
+  function preparePreviewYouTube(root) {
+    if (!root) return;
+    all('.lesson-youtube iframe', root).forEach((frame) => {
+      try {
+        const source = new URL(frame.getAttribute('src') || '', window.location.origin);
+        source.searchParams.set('playsinline', '1');
+        source.searchParams.set('rel', '0');
+        source.searchParams.set('origin', window.location.origin);
+        source.searchParams.set('widget_referrer', window.location.href);
+        frame.referrerPolicy = 'strict-origin-when-cross-origin';
+        frame.removeAttribute('sandbox');
+        frame.src = source.toString();
+      } catch (_) {
+        // Nieprawidłowe źródło jest już odrzucane przez parser lekcji.
+      }
+    });
+  }
+
   function previewTaskById(taskId) {
     for (const slide of state.lesson.model.slides) {
       if (slide.task && slide.task.id === taskId) return slide.task;
@@ -3420,6 +3514,7 @@
       previewToolbar('lesson'),
       buildLessonPreviewShell(slide, index, true, animateTransition)
     );
+    preparePreviewYouTube(elements.lessonPreview);
     bindPreviewFlashcards(elements.lessonPreview);
     bindPreviewAtonom(elements.lessonPreview);
     bindPreviewAiHelp(elements.lessonPreview);
@@ -3430,6 +3525,9 @@
 
   function addFullPreviewHead(doc, mode) {
     const existingMathJax = doc.getElementById('studio-preview-mathjax');
+    const existingMathJaxStyles = mode === 'lesson'
+      ? Array.from(doc.head.querySelectorAll('#MJX-CHTML-styles, style[id^="MJX-"]'))
+      : [];
     const charset = doc.createElement('meta');
     charset.setAttribute('charset', 'utf-8');
     const viewport = doc.createElement('meta');
@@ -3450,6 +3548,7 @@
       theme,
       baseStyles,
       studioStyles,
+      ...existingMathJaxStyles,
       ...(mode === 'lesson' && existingMathJax ? [existingMathJax] : [])
     );
     if (
@@ -3535,6 +3634,7 @@
     }
     doc.body.replaceChildren(header, main);
     if (mode === 'lesson') {
+      preparePreviewYouTube(main);
       bindPreviewFlashcards(main);
       bindPreviewAtonom(main);
       bindPreviewAiHelp(main);
@@ -3566,6 +3666,11 @@
         'error'
       );
       return;
+    }
+    try {
+      popup.history.replaceState({}, '', `/members/module/studio/?preview=${encodeURIComponent(mode)}`);
+    } catch (_) {
+      // Podgląd nadal działa, nawet jeśli przeglądarka nie pozwoli zmienić adresu pustego okna.
     }
     state.previewWindows[mode] = popup;
     renderFullPreviewWindow(mode, popup);
@@ -4008,6 +4113,12 @@
         if (backgroundToggle) backgroundToggle.checked = true;
       } else {
         block[fieldName] = raw;
+      }
+      if (fieldName === 'repositoryId') {
+        const fallback = state.contentLibrary.repositories.find((repository) => repository.default)
+          || state.contentLibrary.repositories[0];
+        const repositoryId = raw || (fallback && fallback.id) || '';
+        if (repositoryId) void selectContentRepository(repositoryId);
       }
     }
     if (found.kind === 'block' && found.node.type === 'formula') {
@@ -4769,6 +4880,7 @@
     updateRepositoryButtons();
     await loadRepositoryAssets(false);
     if (state.mode === 'dashboard') renderDashboardInspector();
+    if (state.mode === 'lesson') renderLessonInspector();
   }
 
   async function loadRepositoryAssets(force) {
@@ -4813,6 +4925,7 @@
       state.contentLibrary.loaded = true;
       renderRepositoryAssets();
       if (state.mode === 'dashboard') renderDashboardInspector();
+      if (state.mode === 'lesson') renderLessonInspector();
     } catch (error) {
       if (requestId !== state.contentLibrary.requestId) return;
       state.contentLibrary.loaded = false;
@@ -5065,7 +5178,7 @@
       handleLessonInspectorInput(event);
       finishEdit();
       if (
-        ['type', 'mode', 'arrow', 'variant', 'promptFile', 'options', 'optionItem', 'useColor']
+        ['type', 'mode', 'arrow', 'variant', 'repositoryId', 'promptFile', 'options', 'optionItem', 'useColor']
           .includes(event.target.dataset.lessonField)
       ) {
         renderLessonInspector();

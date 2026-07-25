@@ -470,7 +470,7 @@ Administrator widzi w bocznym menu dodatkowy skrót **Studio treści** prowadzą
 
 Studio ma trzy tryby:
 
-- **Dashboard Builder** — przeciąganie sekcji, harmonijek poziomów 3–6, tekstów, komunikatów i kart modułów. Inspektor konfiguruje ID lub link materiału, wariant kalkulatora/tablicy, tryb ochrony `type`, plik lekcji, prompt czatu, notatkę kontaktową albo bezpieczny własny link. Selektor przełącza przeszukiwane repozytorium, a karta zapamiętuje jego `id`, więc identyczne nazwy plików nie kolidują;
+- **Dashboard Builder** — przeciąganie sekcji, harmonijek poziomów 3–6, tekstów, komunikatów i kart modułów. Każdą harmonijkę można tymczasowo zwinąć strzałką w jej nagłówku, aby skrócić obszar roboczy; nie zmienia to jej ustawienia dla kursanta. Inspektor konfiguruje ID lub link materiału, wariant kalkulatora/tablicy, tryb ochrony `type`, plik lekcji, prompt czatu, notatkę kontaktową albo bezpieczny własny link. Selektor przełącza przeszukiwane repozytorium, a karta zapamiętuje jego `id`, więc identyczne nazwy plików nie kolidują;
 - **Lesson Builder** — układanie slajdów oraz bloków nagłówka, tekstu, obrazu HTTPS, wideo YouTube, listy, cytatu, calloutu, kodu, stylowanej sekcji, harmonijki, wzorów, pomocy AI, tablic interaktywnych i estetycznych kafelków z linkiem. Dedykowany wizualny kreator równań działa podobnie do uproszczonego edytora z Worda: ma gotowe szablony, palety symboli, klikalne strzałki, osobne pola substratów i produktów, warunki nad i pod strzałką oraz bieżący podgląd. Renderuje matematykę i chemię z indeksami, jonami, izotopami, stanami skupienia, temperaturą i katalizatorem. Każdy slajd może osobno wyłączyć animację albo użyć zanikania, ruchu w górę, ruchu z boku lub miękkiego przybliżenia. Do slajdu można dodać pytanie tekstowe, liczbowe, wyboru, ABCD, luki z listą albo luki wpisywane ręcznie. Opcje quizu mają osobne pola i znacznik ✓ poprawnej odpowiedzi, a luki tworzy się przyciskiem bez ręcznego wpisywania składni. Lekcję można wyszukać, wczytać, zapisać, zaktualizować albo usunąć w repozytorium wybranym z listy;
 - **Prompt Builder** — tworzenie pojedynczego promptu `.json` lub zestawu ponumerowanych instrukcji `.txt`. Builder waliduje numery punktów, limity treści i format, pokazuje gotowe źródło oraz obsługuje ten sam ręczny, repozytoryjny i wielorepozytoryjny obieg co lekcje.
 
@@ -732,7 +732,7 @@ Gdy pytanie utworzone w Studio zawiera kilka akapitów albo element Markdown, bu
 
 #### Zadanie z polem odpowiedzi
 
-Na slajdzie może wystąpić jeden blok `:::task` (działa również polska nazwa `:::zadanie`). Slajd z zadaniem nie odblokuje przycisku **Dalej**, dopóki kursant nie poda poprawnej odpowiedzi.
+Na slajdzie może wystąpić jeden blok `:::task` (działa również polska nazwa `:::zadanie`). Domyślnie przełącznik ucznia **Nauka po kolei** jest włączony, więc slajd z zadaniem nie odblokuje przycisku **Dalej**, dopóki kursant nie poda poprawnej odpowiedzi. Uczeń może wyłączyć ten przełącznik, przejść do dowolnego dalszego kroku i wrócić do pominiętego zadania później.
 
 ```md
 ## Zadanie
@@ -766,7 +766,7 @@ Pola bloku zadania:
 
 Można również używać polskich nazw pól bez znaków diakrytycznych lub z nimi: `typ`, `odpowiedź`, `etykieta`, `przykład`, `podpowiedź`, `sukces`, `opcje`, `tekst`, `tryb sprawdzania`, `wielkość liter`.
 
-Odpowiedź tekstowa jest normalizowana Unicode NFKC, przycinana i ma łączone wielokrotne odstępy. Odpowiedź liczbowa akceptuje przecinek albo kropkę dziesiętną, ale porównanie jest dokładne — bez tolerancji i bez automatycznego rozpoznawania jednostek. Liczbę akceptowanych aliasów zwiększa się separatorem `|`. Liczba prób nie jest ograniczona; błędna próba pokazuje podpowiedź, a dopiero poprawna odpowiedź odblokowuje następny slajd.
+Odpowiedź tekstowa jest normalizowana Unicode NFKC, przycinana i ma łączone wielokrotne odstępy. Odpowiedź liczbowa akceptuje przecinek albo kropkę dziesiętną, ale porównanie jest dokładne — bez tolerancji i bez automatycznego rozpoznawania jednostek. Liczbę akceptowanych aliasów zwiększa się separatorem `|`. Liczba prób nie jest ograniczona; błędna próba pokazuje podpowiedź. Przy włączonej opcji **Nauka po kolei** dopiero poprawna odpowiedź odblokowuje następny slajd, a po jej wyłączeniu zadanie można pominąć.
 
 Przykład pytania wyboru:
 

@@ -376,6 +376,8 @@ test('studio publishes backgrounds, YouTube, ATONOM, flashcards and selectable t
   const published = lessonParser.parseLesson(markdown, lesson.filename);
   const slide = published.slides[0];
   assert.match(slide.html, /youtube-nocookie\.com\/embed\/M7lc1UVf-VE/);
+  assert.match(slide.html, /playsinline=1&amp;rel=0/);
+  assert.match(slide.html, /referrerpolicy="strict-origin-when-cross-origin"/);
   assert.match(slide.html, /\/members\/module\/atonom\/\?formula=kwas%20octowy/);
   assert.match(slide.html, /class="lesson-atonom-card"/);
   assert.match(slide.html, /class="lesson-atonom-open"/);

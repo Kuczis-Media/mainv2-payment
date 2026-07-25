@@ -59,9 +59,17 @@
             </button>
           </div>
           <ol id="outline-list"></ol>
+          <label class="sequence-toggle">
+            <input id="sequence-toggle" type="checkbox" role="switch" checked>
+            <span class="sequence-toggle-track" aria-hidden="true"><span></span></span>
+            <span class="sequence-toggle-copy">
+              <strong>Nauka po kolei</strong>
+              <small id="sequence-toggle-hint">Wyłącz, aby otworzyć wszystkie kroki.</small>
+            </span>
+          </label>
           <div class="outline-tip">
             <span aria-hidden="true">✓</span>
-            Zadanie trzeba rozwiązać, aby odblokować kolejny krok.
+            <p id="outline-tip-copy">Zadanie trzeba rozwiązać, aby odblokować kolejny krok.</p>
           </div>
         </aside>
 
@@ -98,7 +106,7 @@
             </span>
             <p class="eyebrow">Lekcja ukończona</p>
             <h1>Świetna robota!</h1>
-            <p>Wszystkie kroki zostały przejrzane, a zadania rozwiązane poprawnie.</p>
+            <p id="completion-message">Wszystkie kroki zostały przejrzane, a zadania rozwiązane poprawnie.</p>
             <div class="state-actions">
               <a class="button primary" href="/members/">Wróć do panelu</a>
               <button class="button secondary" id="restart-button" type="button">Powtórz lekcję</button>

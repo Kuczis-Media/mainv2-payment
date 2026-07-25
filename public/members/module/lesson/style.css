@@ -336,6 +336,81 @@ fieldset:focus-within {
   white-space: nowrap;
 }
 
+.sequence-toggle {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 10px;
+  margin: 0 0 12px;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.sequence-toggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sequence-toggle-track {
+  display: flex;
+  grid-row: 1;
+  align-items: center;
+  width: 38px;
+  height: 22px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.sequence-toggle-track span {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 160ms ease, background 160ms ease;
+}
+
+.sequence-toggle input:checked + .sequence-toggle-track {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.sequence-toggle input:checked + .sequence-toggle-track span {
+  background: var(--accent-strong);
+  transform: translateX(16px);
+}
+
+.sequence-toggle input:focus-visible + .sequence-toggle-track {
+  outline: 3px solid color-mix(in srgb, var(--accent) 24%, transparent);
+  outline-offset: 2px;
+}
+
+.sequence-toggle-copy {
+  display: grid;
+  grid-column: 2;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sequence-toggle-copy strong {
+  color: var(--text);
+  font-size: 0.72rem;
+}
+
+.sequence-toggle-copy small {
+  color: var(--muted);
+  font-size: 0.63rem;
+  line-height: 1.35;
+}
+
 .outline-tip {
   display: flex;
   gap: 10px;
@@ -346,6 +421,10 @@ fieldset:focus-within {
   background: color-mix(in srgb, var(--accent-soft) 38%, transparent);
   font-size: 0.71rem;
   line-height: 1.5;
+}
+
+.outline-tip p {
+  margin: 0;
 }
 
 .outline-tip span {
@@ -1413,6 +1492,9 @@ fieldset:focus-within {
   .outline-kicker,
   .outline-tip,
   .outline-label { display: none; }
+  .sequence-toggle {
+    margin-bottom: 10px;
+  }
   .lesson-outline ol {
     display: flex;
     gap: 7px;
@@ -1526,6 +1608,7 @@ fieldset:focus-within {
 
   .app-shell.is-outline-collapsed .outline-kicker,
   .app-shell.is-outline-collapsed .outline-label,
+  .app-shell.is-outline-collapsed .sequence-toggle,
   .app-shell.is-outline-collapsed .outline-tip {
     display: none;
   }
