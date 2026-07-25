@@ -806,7 +806,7 @@ W każdym builderze:
 
 Publikacja zapisuje dashboard w Netlify Blobs. Nie wymaga commitu ani deployu.
 
-Duży dashboard można porządkować podczas edycji: kliknij strzałkę w nagłówku dowolnej harmonijki, aby ukryć jej zawartość w obszarze roboczym. Ponowne kliknięcie ją rozwinie. Jest to wyłącznie ustawienie widoku edytora — nie zmienia tego, co zobaczy kursant.
+Duży dashboard można porządkować podczas edycji: kliknij strzałkę w nagłówku całej sekcji albo zagnieżdżonej harmonijki, aby ukryć jej zawartość w obszarze roboczym. Ponowne kliknięcie ją rozwinie. Jest to wyłącznie ustawienie widoku edytora — nie zmienia tego, co zobaczy kursant.
 
 ### 18.2. Klocki struktury
 

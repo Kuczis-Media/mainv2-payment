@@ -131,7 +131,7 @@
     dashboard: {
       model: null,
       selectedUid: '',
-      collapsedGroups: new Set(),
+      collapsedNodes: new Set(),
       expectedEtag: null,
       remoteLoaded: false,
       remoteSource: 'draft',
@@ -719,14 +719,15 @@
       create('small', '', dashboardNodeSubtitle(node))
     );
     const actions = create('span', 'node-actions');
-    if (node.kind === 'group') {
-      const collapsed = state.dashboard.collapsedGroups.has(node.uid);
+    if (node.kind === 'section' || node.kind === 'group') {
+      const collapsed = state.dashboard.collapsedNodes.has(node.uid);
+      const noun = node.kind === 'section' ? 'sekcję' : 'harmonijkę';
       const collapse = actionButton(
         'toggle-collapse',
-        collapsed ? 'Rozwiń harmonijkę w edytorze' : 'Zwiń harmonijkę w edytorze',
+        collapsed ? `Rozwiń ${noun} w edytorze` : `Zwiń ${noun} w edytorze`,
         collapsed ? '⌄' : '⌃'
       );
-      collapse.classList.add('group-collapse-action');
+      collapse.classList.add('dashboard-collapse-action');
       collapse.setAttribute('aria-expanded', String(!collapsed));
       actions.append(collapse);
     }
@@ -755,7 +756,7 @@
       group.dataset.parentUid = parentUid;
       group.dataset.nodeIndex = String(index);
       group.draggable = true;
-      const collapsed = state.dashboard.collapsedGroups.has(node.uid);
+      const collapsed = state.dashboard.collapsedNodes.has(node.uid);
       group.classList.toggle('is-selected', state.dashboard.selectedUid === node.uid);
       group.classList.toggle('is-editor-collapsed', collapsed);
       group.append(nodeHeader(node));
@@ -808,7 +809,9 @@
     article.dataset.parentUid = state.dashboard.model.uid;
     article.dataset.nodeIndex = String(index);
     article.draggable = true;
+    const collapsed = state.dashboard.collapsedNodes.has(section.uid);
     article.classList.toggle('is-selected', state.dashboard.selectedUid === section.uid);
+    article.classList.toggle('is-editor-collapsed', collapsed);
     article.append(nodeHeader(section));
     const body = create('div', 'section-body');
     section.blocks.forEach((block, blockIndex) => {
@@ -816,6 +819,7 @@
       body.append(renderDashboardBlock(block, section.uid, blockIndex));
     });
     body.append(dashboardDropZone(section.uid, section.blocks.length, 'Dodaj do sekcji'));
+    body.hidden = collapsed;
     article.append(body);
     return article;
   }
@@ -1304,9 +1308,12 @@
   function dashboardNodeAction(action, uid) {
     const found = dashboardModelApi.findNode(state.dashboard.model, uid);
     if (!found || !found.container) return;
-    if (action === 'toggle-collapse' && found.node.kind === 'group') {
-      if (state.dashboard.collapsedGroups.has(uid)) state.dashboard.collapsedGroups.delete(uid);
-      else state.dashboard.collapsedGroups.add(uid);
+    if (
+      action === 'toggle-collapse'
+      && (found.node.kind === 'section' || found.node.kind === 'group')
+    ) {
+      if (state.dashboard.collapsedNodes.has(uid)) state.dashboard.collapsedNodes.delete(uid);
+      else state.dashboard.collapsedNodes.add(uid);
       renderDashboardCanvas();
       return;
     }
@@ -3654,8 +3661,13 @@
   }
 
   function openFullPreview(mode) {
+    if (!['dashboard', 'lesson'].includes(mode)) return;
+    flushDrafts();
+    const previewUrl = new URL('/members/module/studio/', window.location.origin);
+    previewUrl.searchParams.set('preview', mode);
+    previewUrl.searchParams.set('draft', String(Date.now()));
     const popup = window.open(
-      '',
+      previewUrl.toString(),
       `chemdisk-${mode}-preview`,
       'width=1440,height=900,resizable=yes,scrollbars=yes'
     );
@@ -3667,14 +3679,27 @@
       );
       return;
     }
-    try {
-      popup.history.replaceState({}, '', `/members/module/studio/?preview=${encodeURIComponent(mode)}`);
-    } catch (_) {
-      // Podgląd nadal działa, nawet jeśli przeglądarka nie pozwoli zmienić adresu pustego okna.
-    }
     state.previewWindows[mode] = popup;
-    renderFullPreviewWindow(mode, popup);
     popup.focus();
+  }
+
+  function requestedFullPreviewMode() {
+    try {
+      const mode = new URL(window.location.href).searchParams.get('preview');
+      return ['dashboard', 'lesson'].includes(mode) ? mode : '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function startStandalonePreview(mode) {
+    renderFullPreviewWindow(mode, window);
+    window.addEventListener('storage', (event) => {
+      const expectedKey = mode === 'dashboard' ? DASHBOARD_DRAFT_KEY : LESSON_DRAFT_KEY;
+      if (event.key !== expectedKey || !event.newValue) return;
+      loadDrafts();
+      renderFullPreviewWindow(mode, window);
+    });
   }
 
   function updateLessonNodeSummary() {
@@ -5352,6 +5377,11 @@
     }
     state.currentUser = user;
     loadDrafts();
+    const previewMode = requestedFullPreviewMode();
+    if (previewMode) {
+      startStandalonePreview(previewMode);
+      return;
+    }
     loadStudioLayout();
     bindEvents();
     elements.accessState.hidden = true;

@@ -148,9 +148,15 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(script, /\[['"]lesson['"],\s*['"]chat['"]\]\.includes\(node\.module\)/);
   assert.match(script, /block\.type\s*===\s*['"]ai['"][^;\n]*syncInspectorRepository/);
   assert.match(script, /if\s*\(fieldName\s*===\s*['"]repositoryId['"]\)[\s\S]*?selectContentRepository/);
-  assert.match(script, /collapsedGroups:\s*new Set\(\)/);
+  assert.match(script, /collapsedNodes:\s*new Set\(\)/);
   assert.match(script, /['"]toggle-collapse['"]/);
   assert.match(script, /body\.hidden\s*=\s*collapsed/);
+  assert.match(script, /found\.node\.kind\s*===\s*['"]section['"]\s*\|\|\s*found\.node\.kind\s*===\s*['"]group['"]/);
+  assert.match(script, /function requestedFullPreviewMode/);
+  assert.match(script, /function startStandalonePreview/);
+  assert.match(script, /new URL\(['"]\/members\/module\/studio\/['"],\s*window\.location\.origin\)/);
+  assert.match(script, /previewUrl\.searchParams\.set\(['"]preview['"],\s*mode\)/);
+  assert.doesNotMatch(script, /popup\.history\.replaceState/);
   assert.match(styles, /\.studio-preview-window/);
   assert.match(styles, /\.full-preview-main/);
   assert.match(styles, /\.full-lesson-list/);
@@ -176,8 +182,9 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(styles, /\.preview-quiz/);
   assert.match(styles, /\.preview-text-gap/);
   assert.match(styles, /\.drop-zone\.is-dragover/);
+  assert.match(styles, /\.section-node\.is-editor-collapsed/);
   assert.match(styles, /\.group-node\.is-editor-collapsed/);
-  assert.match(styles, /\.group-collapse-action/);
+  assert.match(styles, /\.dashboard-collapse-action/);
   assert.match(styles, /prefers-reduced-motion:\s*reduce/);
   assert.match(html, /data-studio-toggle=["']palette["']/);
   assert.match(html, /data-studio-toggle=["']inspector["']/);
