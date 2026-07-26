@@ -13,7 +13,7 @@
   const SLIDE_SETTINGS_START = /^\s*:::slide\s*$/i;
   const STYLE_START = /^\s*:::style(?:\s+(.+?))?\s*$/i;
   const ACCORDION_START = /^\s*:::accordion(?:\s+(.+?))?\s*$/i;
-  const STRUCTURAL_CONTAINER_START = /^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|atonom|formula|linkcard|aihelp|board|flashcards)(?:\s+.*?)?\s*$/i;
+  const STRUCTURAL_CONTAINER_START = /^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|atonom|formula|linkcard|aihelp|board|flashcards|table)(?:\s+.*?)?\s*$/i;
   const RICH_CONTAINER_END = /^\s*:::\s*$/;
   const SAFE_STYLE_COLOR = /^#[0-9a-f]{6}$/i;
   const LINK_ICONS = new Set(['link', 'book', 'video', 'chemistry', 'math', 'file', 'external']);
@@ -39,7 +39,7 @@
     'sin', 'cos', 'tan', 'log', 'ln', 'partial', 'nabla', 'rightarrow', 'leftarrow',
     'leftrightarrow', 'text', 'mathrm', 'mathbf', 'overline', 'vec', 'left', 'right'
   ]);
-  const INTERACTIVE_START = /^\s*:::(youtube|atonom|formula|linkcard|aihelp|board|flashcards)\s*$/i;
+  const INTERACTIVE_START = /^\s*:::(youtube|atonom|formula|linkcard|aihelp|board|flashcards|table)\s*$/i;
 
   class LessonFormatError extends Error {
     constructor(code, message) {
@@ -592,8 +592,45 @@
     return `<figure class="lesson-formula lesson-formula-chemistry"><div class="lesson-formula-display" aria-label="${escapeHtml(title)}">\\(\\ce{${escapeHtml(reaction)}}\\)</div><figcaption>${escapeHtml(title)}</figcaption></figure>`;
   }
 
+  function tableBlockHtml(body) {
+    const lines = String(body || '').split('\n');
+    const values = directiveFields(body);
+    const splitCells = (value) => String(value || '')
+      .split('|')
+      .map((cell) => cell.trim());
+    const headers = splitCells(values.headers);
+    const rows = lines
+      .map((line) => /^\s*row:\s*(.*?)\s*$/i.exec(line))
+      .filter(Boolean)
+      .map((match) => splitCells(match[1]));
+    const align = ['left', 'center', 'right'].includes(values.align) ? values.align : 'left';
+    const caption = String(values.caption || '').trim();
+    const cells = [...headers, ...rows.flat()];
+    if (
+      headers.length < 2
+      || headers.length > 8
+      || headers.some((header) => !header)
+      || rows.length < 1
+      || rows.length > 30
+      || rows.some((row) => row.length !== headers.length)
+      || cells.some((cell) => cell.length > 240 || cell.includes('\0'))
+      || caption.length > 180
+    ) {
+      return '<p class="lesson-interactive-error">Nieprawidłowa tabela. Sprawdź liczbę nagłówków i komórek.</p>';
+    }
+    const headingHtml = headers
+      .map((header) => `<th scope="col">${renderInline(header)}</th>`)
+      .join('');
+    const bodyHtml = rows
+      .map((row) => `<tr>${row.map((cell) => `<td>${renderInline(cell)}</td>`).join('')}</tr>`)
+      .join('');
+    const label = caption ? '' : ' aria-label="Tabela"';
+    return `<figure class="lesson-table lesson-table-align-${align}"><div class="lesson-table-scroll"><table${label}>${caption ? `<caption>${renderInline(caption)}</caption>` : ''}<thead><tr>${headingHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div></figure>`;
+  }
+
   function interactiveBlockHtml(type, body) {
     const values = directiveFields(body);
+    if (type === 'table') return tableBlockHtml(body);
     if (type === 'youtube') {
       const id = youtubeVideoId(values.id || values.url);
       if (!id) return '<p class="lesson-interactive-error">Nieprawidłowy film YouTube.</p>';

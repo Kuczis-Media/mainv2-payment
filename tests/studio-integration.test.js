@@ -168,6 +168,7 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(styles, /\.lesson-atonom-card/);
   assert.match(styles, /\.lesson-formula-display/);
   assert.match(styles, /\.lesson-link-card/);
+  assert.match(styles, /\.lesson-table/);
   assert.match(styles, /\.lesson-support-card/);
   assert.match(styles, /\.lesson-ai-help/);
   assert.match(styles, /\.lesson-board-card/);
@@ -216,6 +217,9 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(lessonWorkspace, /data-lesson-add=["']formula["']/);
   assert.match(lessonWorkspace, /data-lesson-add=["']ai["']/);
   assert.match(lessonWorkspace, /data-lesson-add=["']board["']/);
+  assert.match(lessonWorkspace, /data-lesson-add=["']table["']/);
+  assert.match(script, /fieldName\s*===\s*['"]tableHeaders['"]/);
+  assert.match(script, /fieldName\s*===\s*['"]tableRows['"]/);
 
   const dashboardClone = script.slice(
     script.indexOf('function cloneDashboardNode'),
@@ -241,6 +245,7 @@ test('lesson authoring extensions are rendered through strict, non-HTML directiv
   assert.match(parser, /lesson-atonom-open/);
   assert.match(parser, /formulaBlockHtml/);
   assert.match(parser, /lesson-link-card/);
+  assert.match(parser, /tableBlockHtml/);
   assert.match(parser, /lesson-ai-help/);
   assert.match(parser, /lesson-board-card/);
   assert.match(parser, /safeLinkCardUrl/);
@@ -254,6 +259,7 @@ test('lesson authoring extensions are rendered through strict, non-HTML directiv
   assert.match(styles, /\.lesson-atonom-card/);
   assert.match(styles, /\.lesson-formula-display/);
   assert.match(styles, /\.lesson-link-card/);
+  assert.match(styles, /\.lesson-table/);
   assert.match(styles, /\.lesson-support-card/);
   assert.match(styles, /\.slide-card\.is-entering\[data-transition=["']zoom["']\]/);
   assert.match(styles, /\.lesson-font-rounded/);

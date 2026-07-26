@@ -343,6 +343,34 @@ test('lesson renderer shows safe link tiles and preserves per-slide transitions'
   assert.doesNotMatch(unsafe, /javascript:/);
 });
 
+test('lesson renderer builds responsive tables and escapes unsafe cell HTML', () => {
+  const html = parser.renderMarkdown([
+    ':::table',
+    'caption: Porównanie **substancji**',
+    'align: right',
+    'headers: Nazwa | Wzór',
+    'row: Woda | H~2~O',
+    'row: <img src=x onerror=alert(1)> | CO~2~',
+    ':::'
+  ].join('\n'));
+
+  assert.match(html, /class="lesson-table lesson-table-align-right"/);
+  assert.match(html, /<caption>Porównanie <strong>substancji<\/strong><\/caption>/);
+  assert.match(html, /<th scope="col">Nazwa<\/th>/);
+  assert.match(html, /H<sub>2<\/sub>O/);
+  assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/);
+  assert.doesNotMatch(html, /<img src=x/);
+
+  const invalid = parser.renderMarkdown([
+    ':::table',
+    'headers: A | B',
+    'row: tylko jedna komórka',
+    ':::'
+  ].join('\n'));
+  assert.match(invalid, /Nieprawidłowa tabela/);
+  assert.doesNotMatch(invalid, /<table/);
+});
+
 test('lesson renderer creates AI help and allowlisted interactive board cards', () => {
   const lesson = parser.parseLesson([
     '# Narzędzia',

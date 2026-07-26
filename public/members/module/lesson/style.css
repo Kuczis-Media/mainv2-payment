@@ -785,6 +785,72 @@ fieldset:focus-within {
   text-align: center;
 }
 
+.lesson-table {
+  margin: 28px 0;
+}
+
+.lesson-table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background: var(--surface);
+  box-shadow: 0 12px 30px rgba(20, 28, 24, 0.07);
+  scrollbar-width: thin;
+}
+
+.lesson-table table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  color: var(--text);
+  font-size: clamp(0.84rem, 1.5vw, 0.98rem);
+}
+
+.lesson-table caption {
+  padding: 14px 17px;
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent-soft) 46%, var(--surface));
+  font-weight: 800;
+  text-align: left;
+}
+
+.lesson-table th,
+.lesson-table td {
+  padding: 12px 15px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.lesson-table th:last-child,
+.lesson-table td:last-child {
+  border-right: 0;
+}
+
+.lesson-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.lesson-table th {
+  color: var(--text);
+  background: var(--surface-strong);
+  font-weight: 850;
+}
+
+.lesson-table tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--surface-soft) 72%, transparent);
+}
+
+.lesson-table-align-left th,
+.lesson-table-align-left td { text-align: left; }
+
+.lesson-table-align-center th,
+.lesson-table-align-center td { text-align: center; }
+
+.lesson-table-align-right th,
+.lesson-table-align-right td { text-align: right; }
+
 .lesson-link-card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

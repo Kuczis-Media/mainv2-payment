@@ -1108,6 +1108,28 @@ Wklej publiczny adres HTTPS i wpisz opis ALT. Plik nie jest kopiowany do repo le
 
 Wpisz jeden punkt w każdym wierszu i wybierz listę punktowaną albo numerowaną.
 
+### Tabela
+
+1. Przeciągnij klocek **Tabela** do slajdu albo kliknij go w bibliotece **Treść**.
+2. Opcjonalnie wpisz podpis, np. „Porównanie właściwości”.
+3. W polu nagłówków rozdziel kolumny pionową kreską `|`, np.:
+
+```text
+Substancja | Wzór | Stan skupienia
+```
+
+4. W polu wierszy wpisuj każdy wiersz w osobnej linii, a komórki również rozdzielaj znakiem `|`:
+
+```text
+Woda | H~2~O | ciecz
+Tlen | O~2~ | gaz
+Chlorek sodu | NaCl | ciało stałe
+```
+
+5. Wybierz wyrównanie do lewej, środka albo prawej.
+
+Tabela może mieć od 2 do 8 kolumn i maksymalnie 30 wierszy. Każdy wiersz musi zawierać tyle samo komórek, ile podano nagłówków. W komórkach działają podstawowe oznaczenia tekstu, np. `**pogrubienie**`, `^indeks górny^` oraz `~indeks dolny~`. Na telefonie szeroka tabela nie ściska całej lekcji — można ją przewijać poziomo.
+
 ### Cytat
 
 Użyj do definicji, reguły lub ważnego fragmentu.

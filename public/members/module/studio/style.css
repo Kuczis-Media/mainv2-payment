@@ -2959,6 +2959,70 @@ button {
   text-align: center;
 }
 
+.lesson-preview-body .lesson-table {
+  margin: 14px 0;
+}
+
+.lesson-preview-body .lesson-table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--chem-line);
+  border-radius: 12px;
+  background: var(--chem-surface);
+  scrollbar-width: thin;
+}
+
+.lesson-preview-body .lesson-table table {
+  width: 100%;
+  min-width: 420px;
+  border-collapse: collapse;
+  color: var(--chem-text);
+  font-size: 0.62rem;
+}
+
+.lesson-preview-body .lesson-table caption {
+  padding: 9px 11px;
+  border-bottom: 1px solid var(--chem-line);
+  color: var(--chem-text);
+  background: color-mix(in srgb, var(--chem-primary-soft) 52%, var(--chem-surface));
+  font-weight: 800;
+  text-align: left;
+}
+
+.lesson-preview-body .lesson-table th,
+.lesson-preview-body .lesson-table td {
+  padding: 8px 10px;
+  border-right: 1px solid var(--chem-line);
+  border-bottom: 1px solid var(--chem-line);
+  vertical-align: top;
+}
+
+.lesson-preview-body .lesson-table th:last-child,
+.lesson-preview-body .lesson-table td:last-child {
+  border-right: 0;
+}
+
+.lesson-preview-body .lesson-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.lesson-preview-body .lesson-table th {
+  background: var(--chem-surface-soft);
+  font-weight: 850;
+}
+
+.lesson-preview-body .lesson-table tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--chem-surface-soft) 68%, transparent);
+}
+
+.lesson-preview-body .lesson-table-align-left th,
+.lesson-preview-body .lesson-table-align-left td { text-align: left; }
+
+.lesson-preview-body .lesson-table-align-center th,
+.lesson-preview-body .lesson-table-align-center td { text-align: center; }
+
+.lesson-preview-body .lesson-table-align-right th,
+.lesson-preview-body .lesson-table-align-right td { text-align: right; }
+
 .lesson-preview-shell.is-entering[data-transition="fade"] { animation: studio-lesson-fade 260ms ease-out both; }
 .lesson-preview-shell.is-entering[data-transition="rise"] { animation: studio-lesson-rise 320ms cubic-bezier(.22, .72, .25, 1) both; }
 .lesson-preview-shell.is-entering[data-transition="slide"] { animation: studio-lesson-slide 320ms cubic-bezier(.22, .72, .25, 1) both; }

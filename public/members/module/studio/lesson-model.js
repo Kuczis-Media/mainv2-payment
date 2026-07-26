@@ -11,7 +11,7 @@
   const TASK_START = /^\s*:::(?:task|zadanie)\s*$/i;
   const QUESTION_START = /^\s*:::question\s*$/i;
   const SLIDE_SETTINGS_START = /^\s*:::slide\s*$/i;
-  const CONTAINER_START = /^\s*:::(style|accordion|youtube|atonom|formula|linkcard|aihelp|board|flashcards)(?:\s+(.*?))?\s*$/i;
+  const CONTAINER_START = /^\s*:::(style|accordion|youtube|atonom|formula|linkcard|aihelp|board|flashcards|table)(?:\s+(.*?))?\s*$/i;
   const CONTAINER_END = /^\s*:::\s*$/;
   const STYLE_FONTS = Object.freeze([
     'sans',
@@ -26,6 +26,7 @@
   ]);
   const STYLE_SIZES = Object.freeze(['small', 'normal', 'large', 'xlarge']);
   const STYLE_ALIGNS = Object.freeze(['left', 'center', 'right']);
+  const TABLE_ALIGNS = Object.freeze(['left', 'center', 'right']);
   const STYLE_COLOR = /^#[0-9a-f]{6}$/i;
   const LINK_ICONS = Object.freeze(['link', 'book', 'video', 'chemistry', 'math', 'file', 'external']);
   const SLIDE_TRANSITIONS = Object.freeze(['none', 'fade', 'rise', 'slide', 'zoom']);
@@ -41,6 +42,7 @@
     'heading',
     'text',
     'list',
+    'table',
     'image',
     'quote',
     'callout',
@@ -172,7 +174,7 @@
       .split('\n')
       .map((line) => {
         if (/^\s*---\s*$/.test(line)) return '`---`';
-        if (/^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|atonom|formula|linkcard|aihelp|board|flashcards)?(?:\s+.*?)?\s*$/i.test(line)) {
+        if (/^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|atonom|formula|linkcard|aihelp|board|flashcards|table)?(?:\s+.*?)?\s*$/i.test(line)) {
           return `\`${line.trim()}\``;
         }
         return line.replace(/\s+$/g, '');
@@ -195,6 +197,28 @@
       ? String(source.background).toLowerCase()
       : '';
     return { font, color, background, size, align, bold };
+  }
+
+  function normalizeTableCell(value) {
+    return oneLine(value)
+      .replace(/:::/g, '')
+      .replace(/\|/g, '¦')
+      .slice(0, 240);
+  }
+
+  function normalizeTableCells(value) {
+    const source = Array.isArray(value) ? value : String(value || '').split('|');
+    return source.map(normalizeTableCell).slice(0, 8);
+  }
+
+  function normalizeTableRows(value) {
+    const source = Array.isArray(value)
+      ? value
+      : normalizeNewlines(value).split('\n').filter((line) => line.trim());
+    return source
+      .map((row) => normalizeTableCells(row))
+      .filter((row) => row.some(Boolean))
+      .slice(0, 30);
   }
 
   function safeChemistryText(value, condition) {
@@ -250,6 +274,16 @@
         ...base,
         ordered: Boolean(source.ordered),
         items: (Array.isArray(source.items) ? source.items : []).map(oneLine).filter(Boolean)
+      };
+    }
+    if (type === 'table') {
+      const requestedAlign = oneLine(source.align).toLowerCase();
+      return {
+        ...base,
+        caption: oneLine(source.caption).replace(/:::/g, '').slice(0, 180),
+        align: TABLE_ALIGNS.includes(requestedAlign) ? requestedAlign : 'left',
+        headers: normalizeTableCells(source.headers || source.columns),
+        rows: normalizeTableRows(source.rows)
       };
     }
     if (type === 'image') {
@@ -644,6 +678,22 @@
       errors.push({ code: 'INVALID_FLASHCARDS', path: `${path}.cards`, message: 'Dodaj co najmniej dwie kompletne fiszki bez znaku =>.' });
     }
     if (
+      block.type === 'table'
+      && (
+        block.headers.length < 2
+        || block.headers.some((header) => !header)
+        || block.rows.length < 1
+        || block.rows.some((row) => row.length !== block.headers.length)
+        || !TABLE_ALIGNS.includes(block.align)
+      )
+    ) {
+      errors.push({
+        code: 'INVALID_TABLE',
+        path,
+        message: 'Tabela wymaga od 2 do 8 nagłówków oraz co najmniej jednego wiersza z taką samą liczbą komórek.'
+      });
+    }
+    if (
       (block.type === 'heading' && !block.text)
       || (block.type === 'text' && !block.text.trim())
       || (block.type === 'list' && !block.items.length)
@@ -702,6 +752,16 @@
     if (block.type === 'text') return protectStructuralLines(block.text);
     if (block.type === 'list') {
       return block.items.map((item, index) => `${block.ordered ? `${index + 1}.` : '-'} ${cleanInline(item)}`).join('\n');
+    }
+    if (block.type === 'table') {
+      return [
+        ':::table',
+        `caption: ${cleanDirectiveValue(block.caption)}`,
+        `align: ${block.align}`,
+        `headers: ${block.headers.map(cleanDirectiveValue).join(' | ')}`,
+        ...block.rows.map((row) => `row: ${row.map(cleanDirectiveValue).join(' | ')}`),
+        ':::'
+      ].join('\n');
     }
     if (block.type === 'image') {
       return `![${cleanInline(block.alt)}](${safeImageUrl(block.url)})`;
@@ -1075,6 +1135,19 @@
               color: values.color,
               newTab: values.new_tab
             }));
+          } else if (type === 'table') {
+            const values = parseDirectiveFields(bodyLines);
+            const rows = bodyLines
+              .map((bodyLine) => /^\s*row:\s*(.*?)\s*$/i.exec(bodyLine))
+              .filter(Boolean)
+              .map((match) => match[1].split('|'));
+            blocks.push(createBlock({
+              type: 'table',
+              caption: values.caption,
+              align: values.align,
+              headers: String(values.headers || '').split('|'),
+              rows
+            }));
           } else {
             const values = parseDirectiveFields(bodyLines);
             const cards = bodyLines
@@ -1371,6 +1444,7 @@
     interactiveBoards: true,
     linkCards: true,
     flashcards: true,
+    tables: true,
     accordions: true,
     nestedContainers: false,
     styleFonts: STYLE_FONTS,
@@ -1387,6 +1461,7 @@
     STYLE_ALIGNS,
     STYLE_FONTS,
     STYLE_SIZES,
+    TABLE_ALIGNS,
     FORMULA_ARROWS,
     LINK_ICONS,
     SLIDE_TRANSITIONS,

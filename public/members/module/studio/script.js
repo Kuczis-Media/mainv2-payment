@@ -1641,6 +1641,18 @@
         items: ['Pierwszy punkt', 'Drugi punkt']
       });
     }
+    if (type === 'table') {
+      return lessonModelApi.createBlock('table', {
+        caption: 'Porównanie właściwości',
+        align: 'left',
+        headers: ['Substancja', 'Wzór', 'Właściwość'],
+        rows: [
+          ['Woda', 'H2O', 'ciecz'],
+          ['Tlen', 'O2', 'gaz'],
+          ['Chlorek sodu', 'NaCl', 'ciało stałe']
+        ]
+      });
+    }
     if (type === 'quote') {
       return lessonModelApi.createBlock('quote', {
         text: 'Dodaj ważny cytat, definicję albo regułę do zapamiętania.'
@@ -1912,6 +1924,7 @@
       heading: 'H',
       text: 'T',
       list: '☷',
+      table: '▦',
       image: '▧',
       quote: '❞',
       callout: '!',
@@ -1933,6 +1946,7 @@
     if (block.type === 'heading') return block.text || 'Nagłówek';
     if (block.type === 'text') return block.text || 'Pusty akapit';
     if (block.type === 'list') return block.items.join(' · ') || 'Pusta lista';
+    if (block.type === 'table') return block.caption || 'Tabela';
     if (block.type === 'image') return block.alt || 'Ilustracja';
     if (block.type === 'quote') return block.text || 'Cytat';
     if (block.type === 'callout') return block.title || 'Callout';
@@ -1955,6 +1969,7 @@
     }
     if (block.type === 'accordion') return `${block.blocks.length} elementów · ${block.open ? 'otwarta' : 'zamknięta'}`;
     if (block.type === 'list') return `${block.items.length} punktów`;
+    if (block.type === 'table') return `${block.headers.length} kolumn · ${block.rows.length} wierszy · ${block.align}`;
     if (block.type === 'image') return block.url || 'Uzupełnij adres HTTPS';
     if (block.type === 'youtube') return block.video || 'Uzupełnij link lub ID filmu';
     if (block.type === 'atonom') return `Związek: ${block.formula || 'nieustawiony'}`;
@@ -2781,6 +2796,35 @@
       form.append(
         field('Punkty — jeden w wierszu', lessonTextarea(block.items.join('\n'), 'items', { rows: 7 })),
         check
+      );
+    } else if (block.type === 'table') {
+      form.append(
+        field(
+          'Podpis tabeli — opcjonalnie',
+          lessonInput(block.caption, 'caption', { maxLength: 180, placeholder: 'np. Porównanie właściwości' })
+        ),
+        field(
+          'Nagłówki kolumn',
+          lessonInput(block.headers.join(' | '), 'tableHeaders', {
+            maxLength: 2000,
+            placeholder: 'Substancja | Wzór | Właściwość'
+          }),
+          'Rozdziel nagłówki pionową kreską |. Tabela może mieć od 2 do 8 kolumn.'
+        ),
+        field(
+          'Wiersze tabeli',
+          lessonTextarea(
+            block.rows.map((row) => row.join(' | ')).join('\n'),
+            'tableRows',
+            { rows: 10, maxLength: 12000, placeholder: 'Woda | H2O | ciecz\nTlen | O2 | gaz' }
+          ),
+          'Każdy wiersz wpisz w nowej linii, a komórki rozdziel znakiem |. Każdy wiersz musi mieć tyle komórek, ile jest nagłówków.'
+        ),
+        field('Wyrównanie zawartości', lessonSelect(block.align, 'align', [
+          { value: 'left', label: 'Do lewej' },
+          { value: 'center', label: 'Wyśrodkowane' },
+          { value: 'right', label: 'Do prawej' }
+        ]))
       );
     } else if (block.type === 'image') {
       form.append(
@@ -4100,6 +4144,23 @@
         ) {
           block.title = block.mode === 'math' ? 'Wzór matematyczny' : 'Równanie reakcji';
         }
+      } else if (fieldName === 'tableHeaders' && block.type === 'table') {
+        block.headers = String(raw)
+          .split('|')
+          .map((cell) => cell.trim().replace(/:::/g, '').slice(0, 240))
+          .slice(0, 8);
+        block.rows = block.rows.map((row) => (
+          block.headers.map((_, index) => row[index] || '')
+        ));
+      } else if (fieldName === 'tableRows' && block.type === 'table') {
+        block.rows = String(raw)
+          .split('\n')
+          .filter((line) => line.trim())
+          .map((line) => line
+            .split('|')
+            .map((cell) => cell.trim().replace(/:::/g, '').slice(0, 240))
+            .slice(0, 8))
+          .slice(0, 30);
       } else if (fieldName === 'items') {
         block.items = String(raw).split('\n').map((item) => item.trim()).filter(Boolean);
       } else if (fieldName === 'cards' && block.type === 'flashcards') {

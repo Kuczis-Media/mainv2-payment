@@ -261,6 +261,63 @@ test('studio serializes code, callouts, safe style containers and accordions', (
   assert.match(lessonParser.parseLesson(markdown, 'materialy.md').slides[0].html, /<details class="lesson-accordion" open>/);
 });
 
+test('studio creates, previews and reimports accessible lesson tables', () => {
+  const lesson = studio.createLesson({
+    title: 'Porównanie substancji',
+    filename: 'tabela.md',
+    slides: [{
+      blocks: [{
+        type: 'table',
+        caption: 'Właściwości w temperaturze pokojowej',
+        align: 'center',
+        headers: ['Substancja', 'Wzór', 'Stan skupienia'],
+        rows: [
+          ['Woda', 'H~2~O', 'ciecz'],
+          ['Tlen', 'O~2~', 'gaz']
+        ]
+      }]
+    }]
+  });
+
+  assert.equal(studio.validateLesson(lesson).valid, true);
+  const markdown = studio.serializeLesson(lesson);
+  assert.match(markdown, /:::table/);
+  assert.match(markdown, /caption: Właściwości w temperaturze pokojowej/);
+  assert.match(markdown, /align: center/);
+  assert.match(markdown, /headers: Substancja \| Wzór \| Stan skupienia/);
+  assert.match(markdown, /row: Woda \| H~2~O \| ciecz/);
+
+  const imported = studio.parseLesson(markdown, lesson.filename);
+  const table = imported.slides[0].blocks.find((block) => block.type === 'table');
+  assert.equal(table.caption, 'Właściwości w temperaturze pokojowej');
+  assert.equal(table.align, 'center');
+  assert.deepEqual(table.headers, ['Substancja', 'Wzór', 'Stan skupienia']);
+  assert.deepEqual(table.rows, [
+    ['Woda', 'H~2~O', 'ciecz'],
+    ['Tlen', 'O~2~', 'gaz']
+  ]);
+
+  const html = lessonParser.parseLesson(markdown, lesson.filename).slides[0].html;
+  assert.match(html, /class="lesson-table lesson-table-align-center"/);
+  assert.match(html, /<caption>Właściwości w temperaturze pokojowej<\/caption>/);
+  assert.match(html, /<th scope="col">Substancja<\/th>/);
+  assert.match(html, /H<sub>2<\/sub>O/);
+
+  const invalid = studio.createLesson({
+    title: 'Błędna tabela',
+    slides: [{
+      blocks: [{
+        type: 'table',
+        headers: ['A', 'B'],
+        rows: [['tylko jedna komórka']]
+      }]
+    }]
+  });
+  const validation = studio.validateLesson(invalid);
+  assert.equal(validation.valid, false);
+  assert.equal(validation.errors[0].code, 'INVALID_TABLE');
+});
+
 test('studio round-trips chemistry reactions and safe mathematical formulas', () => {
   const lesson = studio.createLesson({
     title: 'Wzory i reakcje',
