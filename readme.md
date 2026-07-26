@@ -811,7 +811,7 @@ success: Wszystkie luki są poprawne.
 :::
 ```
 
-Postęp, rozwiązane zadania i ukończenie są zachowywane w `sessionStorage`, czyli przy odświeżeniu w tej samej karcie. Przycisk **Powtórz lekcję** czyści ten postęp. Odpowiedzi znajdują się w statycznym pliku Markdown, więc ten moduł służy do nauki i samosprawdzenia, a nie do tajnych lub punktowanych egzaminów.
+Postęp, rozwiązane zadania i ukończenie są zachowywane w `sessionStorage`, czyli przy odświeżeniu w tej samej karcie. Dostępny pod planem przycisk **Resetuj postęp** po potwierdzeniu czyści stan wyłącznie bieżącej lekcji i wraca do pierwszego slajdu. Przycisk **Powtórz lekcję** robi to samo po ukończeniu materiału. Odpowiedzi znajdują się w statycznym pliku Markdown, więc ten moduł służy do nauki i samosprawdzenia, a nie do tajnych lub punktowanych egzaminów.
 
 ### Atonom — modele cząsteczek
 

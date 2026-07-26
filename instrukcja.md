@@ -1314,6 +1314,7 @@ Odtwarzacz:
 - ma domyślnie włączony przełącznik **Nauka po kolei**, który wymaga rozwiązania zadania przed przejściem dalej;
 - po wyłączeniu **Nauki po kolei** pozwala przejść do dowolnego dalszego slajdu, pominąć trudne zadanie i wrócić do niego później;
 - pamięta postęp w danej karcie przeglądarki;
+- pozwala użyć **Resetuj postęp** pod planem lekcji, potwierdzić operację i zacząć bieżącą lekcję od początku;
 - umożliwia powtórzenie lekcji;
 - pokazuje bibliotekę plików wyłącznie administratorowi.
 

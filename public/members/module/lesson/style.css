@@ -439,6 +439,41 @@ fieldset:focus-within {
   font-weight: 900;
 }
 
+.lesson-outline .reset-progress-button {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  margin-top: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  background: transparent;
+}
+
+.lesson-outline .reset-progress-button:hover:not(:disabled) {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+  background: var(--surface);
+}
+
+.reset-progress-button svg {
+  width: 19px;
+  height: 19px;
+  justify-self: center;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.reset-progress-button span {
+  overflow: hidden;
+  font-size: 0.72rem;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .lesson-workspace { min-width: 0; }
 
 .slide-card,
@@ -1609,7 +1644,8 @@ fieldset:focus-within {
   .app-shell.is-outline-collapsed .outline-kicker,
   .app-shell.is-outline-collapsed .outline-label,
   .app-shell.is-outline-collapsed .sequence-toggle,
-  .app-shell.is-outline-collapsed .outline-tip {
+  .app-shell.is-outline-collapsed .outline-tip,
+  .app-shell.is-outline-collapsed .reset-progress-button {
     display: none;
   }
 
@@ -1640,6 +1676,10 @@ fieldset:focus-within {
   }
 
   .app-shell.is-outline-collapsed .lesson-outline ol {
+    display: none;
+  }
+
+  .app-shell.is-outline-collapsed .reset-progress-button {
     display: none;
   }
 

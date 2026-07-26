@@ -33,6 +33,7 @@
     sequenceToggle: document.getElementById('sequence-toggle'),
     sequenceToggleHint: document.getElementById('sequence-toggle-hint'),
     outlineTipCopy: document.getElementById('outline-tip-copy'),
+    resetProgress: document.getElementById('reset-progress-button'),
     libraryButton: document.getElementById('lesson-library-button'),
     libraryDialog: document.getElementById('lesson-library-dialog'),
     libraryClose: document.getElementById('lesson-library-close'),
@@ -202,6 +203,7 @@
     elements.errorTitle.textContent = title;
     elements.errorMessage.textContent = message;
     elements.retry.hidden = !canRetry;
+    elements.resetProgress.disabled = true;
     elements.lessonPosition.textContent = 'Błąd wczytywania';
     elements.app.removeAttribute('aria-busy');
   }
@@ -215,6 +217,7 @@
 
   async function loadLesson() {
     elements.app.setAttribute('aria-busy', 'true');
+    elements.resetProgress.disabled = true;
     elements.loading.hidden = false;
     elements.error.hidden = true;
     elements.slideCard.hidden = true;
@@ -257,6 +260,7 @@
       elements.lessonTitle.textContent = state.lesson.title;
       buildOutline();
       elements.loading.hidden = true;
+      elements.resetProgress.disabled = false;
       elements.app.removeAttribute('aria-busy');
       if (state.completed) showCompletion();
       else renderSlide();
@@ -906,6 +910,15 @@
     renderSlide();
   }
 
+  function confirmResetProgress() {
+    if (!state.lesson) return;
+    const confirmed = window.confirm(
+      'Zresetować postęp tej lekcji? Rozwiązane zadania i zapamiętany krok zostaną usunięte.'
+    );
+    if (!confirmed) return;
+    restartLesson();
+  }
+
   elements.themeToggle.addEventListener('click', toggleTheme);
   elements.topbarToggle.addEventListener('click', toggleTopbar);
   elements.outlineToggle.addEventListener('click', toggleOutline);
@@ -925,6 +938,7 @@
   elements.previous.addEventListener('click', goPrevious);
   elements.next.addEventListener('click', goNext);
   elements.sequenceToggle.addEventListener('change', toggleSequentialLearning);
+  elements.resetProgress.addEventListener('click', confirmResetProgress);
   elements.restart.addEventListener('click', restartLesson);
   document.addEventListener('chemdisk-mathjax-ready', () => typesetMath(elements.slideContent));
   document.addEventListener('keydown', (event) => {
