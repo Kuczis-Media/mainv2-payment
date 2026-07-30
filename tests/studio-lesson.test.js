@@ -494,6 +494,36 @@ test('studio round-trips manually typed gaps and their checking mode', () => {
   assert.equal(invalid.errors.some((error) => error.code === 'INVALID_GAPS'), true);
 });
 
+test('studio round-trips a lesson contact form without exposing active HTML', () => {
+  const lesson = studio.createLesson({
+    title: 'Kontakt w lekcji',
+    filename: 'kontakt-w-lekcji.md',
+    slides: [{
+      blocks: [{
+        type: 'contact',
+        title: 'Zapytaj prowadzącego',
+        description: 'Napisz, który krok wymaga wyjaśnienia.',
+        button: 'Otwórz formularz',
+        internal: 'Pytanie do lekcji o wiązaniach',
+        newTab: true
+      }]
+    }]
+  });
+
+  const markdown = studio.serializeLesson(lesson);
+  assert.match(markdown, /:::contactform/);
+  assert.match(markdown, /internal: Pytanie do lekcji o wiązaniach/);
+
+  const imported = studio.parseLesson(markdown, lesson.filename);
+  assert.equal(imported.slides[0].blocks[1].type, 'contact');
+  assert.equal(imported.slides[0].blocks[1].newTab, true);
+
+  const published = lessonParser.parseLesson(markdown, lesson.filename);
+  assert.match(published.slides[0].html, /lesson-contact-card/);
+  assert.match(published.slides[0].html, /target="_blank" rel="noopener noreferrer"/);
+  assert.doesNotMatch(published.slides[0].html, /<script/i);
+});
+
 test('studio round-trips link tiles and a separate transition for every slide', () => {
   const lesson = studio.createLesson({
     title: 'Materiały dodatkowe',

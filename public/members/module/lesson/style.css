@@ -946,9 +946,12 @@ fieldset:focus-within {
 
 .lesson-ai-help { --lesson-support-color: #7c3aed; }
 .lesson-board-card { --lesson-support-color: #2563eb; }
+.lesson-contact-card { --lesson-support-color: #b7791f; }
 
 .lesson-board-card:hover,
 .lesson-board-card:focus-visible,
+.lesson-contact-card:hover,
+.lesson-contact-card:focus-visible,
 .lesson-support-card:has(.lesson-support-action:hover),
 .lesson-support-card:has(.lesson-support-action:focus-visible) {
   color: var(--text);

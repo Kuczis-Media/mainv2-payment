@@ -5,16 +5,29 @@
   const params = media.readParamsAndHide(window);
   const STORAGE_KEY = 'chemdisk.pdf.v3';
   const fromUrl = params.has('id');
-  const idFromUrl = fromUrl ? media.extractDriveId(params.get('id')) : '';
-  const requestedType = media.normalizeType(params.get('type'), ['1', '2', '3'], '1');
+  const requestedType = media.normalizeType(params.get('type'), ['1', '2', '3', '4', '5'], '1');
+  const rawFromUrl = fromUrl ? params.get('id') : '';
+  const directFromUrl = ['4', '5'].includes(requestedType) ? media.safeHttpsUrl(rawFromUrl) : '';
+  const idFromUrl = ['4', '5'].includes(requestedType) ? '' : media.extractDriveId(rawFromUrl);
 
-  if (idFromUrl) media.saveState(sessionStorage, STORAGE_KEY, { id: idFromUrl, type: requestedType });
+  if (idFromUrl || directFromUrl) {
+    media.saveState(sessionStorage, STORAGE_KEY, {
+      id: idFromUrl,
+      url: directFromUrl,
+      type: requestedType
+    });
+  }
   const saved = !fromUrl ? media.loadState(sessionStorage, STORAGE_KEY) : null;
-  const state = idFromUrl
-    ? { id: idFromUrl, type: requestedType }
-    : saved && media.isDriveId(saved.id)
-      ? { id: saved.id, type: media.normalizeType(saved.type, ['1', '2', '3'], '1') }
-      : null;
+  const savedType = saved
+    ? media.normalizeType(saved.type, ['1', '2', '3', '4', '5'], '1')
+    : '1';
+  const state = idFromUrl || directFromUrl
+    ? { id: idFromUrl, url: directFromUrl, type: requestedType }
+    : saved && ['4', '5'].includes(savedType) && media.safeHttpsUrl(saved.url)
+      ? { id: '', url: media.safeHttpsUrl(saved.url), type: savedType }
+      : saved && media.isDriveId(saved.id)
+        ? { id: saved.id, url: '', type: savedType }
+        : null;
 
   const authState = await window.ChemAuth.ready;
   if (!authState?.authenticated || !authState.session?.ok) return;
@@ -52,13 +65,23 @@
   }
 
   if (!state) {
-    showError('Brakuje poprawnego ID lub linku do pliku na Dysku Google.');
+    showError('Brakuje poprawnego ID/linku Google Drive albo pełnego adresu HTTPS dla trybu 4 lub 5.');
     return;
   }
 
+  if (state.type === '5') {
+    window.location.replace(state.url);
+    return;
+  }
+
+  const directEmbedMode = state.type === '4';
   const encodedId = encodeURIComponent(state.id);
-  const previewUrl = `https://drive.google.com/file/d/${encodedId}/preview`;
-  const outsideUrl = `https://drive.google.com/file/d/${encodedId}/view`;
+  const previewUrl = directEmbedMode
+    ? state.url
+    : `https://drive.google.com/file/d/${encodedId}/preview`;
+  const outsideUrl = directEmbedMode
+    ? state.url
+    : `https://drive.google.com/file/d/${encodedId}/view`;
   const downloadUrl = `https://drive.google.com/uc?export=download&id=${encodedId}`;
   const protectedMode = state.type === '1';
   providerTop.hidden = protectedMode;
@@ -81,7 +104,9 @@
     return;
   }
 
-  modeBadge.textContent = protectedMode ? 'Ograniczone akcje' : 'Zwykły podgląd';
+  modeBadge.textContent = protectedMode
+    ? 'Ograniczone akcje'
+    : directEmbedMode ? 'Osadzony adres HTTPS' : 'Zwykły podgląd';
   stage.classList.toggle('is-protected', protectedMode);
   if (protectedMode) {
     frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-presentation');
@@ -104,7 +129,9 @@
     app.setAttribute('aria-busy', 'true');
     frame.src = 'about:blank';
     window.requestAnimationFrame(() => {
-      frame.src = attempt === 1 ? previewUrl : media.withCacheBust(previewUrl, attempt);
+      frame.src = attempt === 1 || directEmbedMode
+        ? previewUrl
+        : media.withCacheBust(previewUrl, attempt);
     });
 
     slowTimer = window.setTimeout(() => {
@@ -116,7 +143,9 @@
     }, 12000);
     failTimer = window.setTimeout(() => {
       if (!stage.classList.contains('is-ready')) {
-        showError('Google nie potwierdził załadowania dokumentu. Sprawdź udostępnianie albo spróbuj ponownie później.');
+        showError(directEmbedMode
+          ? 'Ta strona nie potwierdziła osadzenia. Jej właściciel może blokować wyświetlanie w iframe — użyj trybu 5.'
+          : 'Google nie potwierdził załadowania dokumentu. Sprawdź udostępnianie albo spróbuj ponownie później.');
       }
     }, 45000);
   }
@@ -131,7 +160,9 @@
     retryTop.hidden = false;
     app.removeAttribute('aria-busy');
   });
-  frame.addEventListener('error', () => showError('Nie udało się połączyć z podglądem Google Drive.'));
+  frame.addEventListener('error', () => showError(directEmbedMode
+    ? 'Nie udało się osadzić podanego adresu HTTPS. Spróbuj trybu 5.'
+    : 'Nie udało się połączyć z podglądem Google Drive.'));
 
   document.getElementById('keep-waiting').addEventListener('click', () => {
     slow.hidden = true;

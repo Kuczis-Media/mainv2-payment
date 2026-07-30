@@ -24,14 +24,16 @@ test('studio exposes every requested dashboard block with the runtime protection
   ]);
   assert.deepEqual(
     studio.PROTECTION_OPTIONS.slides.map((option) => option.value),
-    ['1', '2']
+    ['1', '2', '4', '5']
   );
-  for (const moduleName of ['pdf', 'film']) {
-    assert.deepEqual(
-      studio.PROTECTION_OPTIONS[moduleName].map((option) => option.value),
-      ['1', '2', '3']
-    );
-  }
+  assert.deepEqual(
+    studio.PROTECTION_OPTIONS.pdf.map((option) => option.value),
+    ['1', '2', '3', '4', '5']
+  );
+  assert.deepEqual(
+    studio.PROTECTION_OPTIONS.film.map((option) => option.value),
+    ['1', '2', '3']
+  );
   assert.deepEqual(
     studio.MODULE_DEFINITIONS.calculator.variants.map((option) => option.value),
     ['kalkulator', 'classic']
@@ -46,6 +48,14 @@ test('module cards serialize to the exact URLs consumed by existing applications
   const cases = [
     [{ module: 'slides', id: 'slide id', protection: 2 }, '/members/module/slides/?id=slide%20id&type=2'],
     [{ module: 'pdf', id: 'drive', protection: 3 }, '/members/module/pdf/?id=drive&type=3'],
+    [
+      { module: 'slides', id: 'https://example.com/presentation', protection: 4 },
+      '/members/module/slides/?id=https%3A%2F%2Fexample.com%2Fpresentation&type=4'
+    ],
+    [
+      { module: 'pdf', id: 'https://example.com/material.pdf', protection: 5 },
+      '/members/module/pdf/?id=https%3A%2F%2Fexample.com%2Fmaterial.pdf&type=5'
+    ],
     [{ module: 'film', id: 'youtube', protection: 1 }, '/members/module/film/?id=youtube&type=1'],
     [{ module: 'yt', id: 'abc' }, '/members/module/yt/?id=abc'],
     [{ module: 'forms', id: 'form' }, '/members/module/forms/?id=form'],
@@ -358,6 +368,37 @@ test('validation accepts only provider links matching the configured media modul
   model.sections[0].blocks[0].id = 'https://docs.google.com/presentation/d/abcdefghijk/edit';
   model.sections[0].blocks[1].id = 'https://youtu.be/CH50zuS8DD0';
   assert.equal(studio.validate(model).valid, true);
+});
+
+test('PDF and Slides types 4 and 5 require complete credential-free HTTPS URLs', () => {
+  const model = studio.createModel({
+    title: 'Adresy internetowe',
+    sections: [{
+      title: 'Materiały',
+      blocks: [
+        studio.createModule({
+          module: 'slides',
+          title: 'Osadzona prezentacja',
+          id: 'https://example.com/prezentacja',
+          protection: '4'
+        }),
+        studio.createModule({
+          module: 'pdf',
+          title: 'PDF w przeglądarce',
+          id: 'https://cdn.example.com/material.pdf',
+          protection: '5'
+        })
+      ]
+    }]
+  });
+  assert.equal(studio.validate(model).valid, true);
+
+  model.sections[0].blocks[0].id = 'http://example.com/prezentacja';
+  model.sections[0].blocks[1].id = 'https://user:secret@example.com/material.pdf';
+  assert.equal(
+    studio.validate(model).errors.filter((error) => error.code === 'MODULE_ID_REQUIRED').length,
+    2
+  );
 });
 
 test('drag-and-drop helpers move blocks and reject cyclic accordion moves', () => {

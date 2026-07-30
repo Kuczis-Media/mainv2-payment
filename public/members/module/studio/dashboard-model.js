@@ -24,12 +24,16 @@
   const PROTECTION_OPTIONS = deepFreeze({
     slides: [
       { value: '1', label: '1 — zwykły podgląd' },
-      { value: '2', label: '2 — ograniczony interfejs' }
+      { value: '2', label: '2 — ograniczony interfejs' },
+      { value: '4', label: '4 — osadź dowolny adres HTTPS' },
+      { value: '5', label: '5 — otwórz adres w przeglądarce' }
     ],
     pdf: [
       { value: '1', label: '1 — podgląd chroniony' },
       { value: '2', label: '2 — wymuszone pobranie' },
-      { value: '3', label: '3 — zwykły podgląd' }
+      { value: '3', label: '3 — zwykły podgląd' },
+      { value: '4', label: '4 — osadź dowolny adres HTTPS' },
+      { value: '5', label: '5 — otwórz adres w przeglądarce' }
     ],
     film: [
       { value: '1', label: '1 — YouTube chroniony' },
@@ -57,7 +61,7 @@
       label: 'Prezentacja',
       icon: '▤',
       path: 'slides',
-      idLabel: 'ID lub link prezentacji Google',
+      idLabel: 'ID, link Google lub pełny adres HTTPS',
       protection: PROTECTION_OPTIONS.slides,
       defaultProtection: '1'
     },
@@ -65,7 +69,7 @@
       label: 'Dokument PDF',
       icon: 'PDF',
       path: 'pdf',
-      idLabel: 'ID lub link pliku Google Drive',
+      idLabel: 'ID, link Google Drive lub pełny adres HTTPS',
       protection: PROTECTION_OPTIONS.pdf,
       defaultProtection: '1'
     },
@@ -123,7 +127,7 @@
       defaultVariant: 'whiteboard'
     },
     contact: {
-      label: 'Kontakt',
+      label: 'Formularz kontaktowy',
       icon: '✉',
       path: 'contact',
       internalLabel: 'Wewnętrzna treść wiadomości'
@@ -749,18 +753,38 @@
     if (
       !reference
       || reference.length > 2_048
-      || /[\u0000-\u0020()\\]/.test(reference)
+      || /[\u0000-\u0020\\]/.test(reference)
     ) return false;
     const module = singleLine(moduleName).toLowerCase();
     const idPattern = /^[A-Za-z0-9_-]{10,200}$/;
     const youtubeIdPattern = /^[A-Za-z0-9_-]{11}$/;
     const expectsYouTube = ['yt', 'film'].includes(module) && String(protection) !== '2';
+    const directWebMode = ['slides', 'pdf'].includes(module)
+      && ['4', '5'].includes(String(protection));
+    if (directWebMode) {
+      try {
+        const directUrl = new URL(reference);
+        return (
+          directUrl.protocol === 'https:'
+          && Boolean(directUrl.hostname)
+          && !directUrl.username
+          && !directUrl.password
+        );
+      } catch (_) {
+        return false;
+      }
+    }
     if (idPattern.test(reference)) {
       return expectsYouTube ? youtubeIdPattern.test(reference) : true;
     }
     try {
       const url = new URL(reference);
-      if (url.protocol !== 'https:' || !url.hostname) return false;
+      if (
+        url.protocol !== 'https:'
+        || !url.hostname
+        || url.username
+        || url.password
+      ) return false;
       const host = url.hostname.toLowerCase().replace(/^www\./, '');
       const path = url.pathname;
       const driveHosts = ['drive.google.com', 'docs.google.com'];

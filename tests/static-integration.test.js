@@ -293,6 +293,11 @@ test('administrator UI covers users, Forms, dashboard and private content status
   assert.match(script, /method:\s*'POST'/);
   assert.match(script, /method:\s*'DELETE'/);
   assert.match(script, /deleteToken:\s*submission\.deleteToken/);
+  assert.match(html, /id=["']admin-forms-export["']/);
+  assert.match(html, /Pobierz wszystko/);
+  assert.match(script, /function exportAllAdminFormSubmissions\(\)/);
+  assert.match(script, /chemdisk-formularze-/);
+  assert.match(script, /submissionCount:\s*totalSubmissions/);
   assert.match(script, /expectedEtag:\s*adminDashboardEtag/);
   assert.match(script, /window\.confirm/);
   assert.doesNotMatch(script, /process\.env|api\.netlify\.com|github_pat_[A-Za-z0-9]/);

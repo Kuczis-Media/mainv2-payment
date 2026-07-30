@@ -547,7 +547,7 @@
       whiteboard: ['Biała tablica', 'Szkicuj wzory, reakcje i notatki.'],
       bitpaper: ['Tablica BitPaper', 'Wspólna przestrzeń do rozwiązywania zadań.'],
       atonom: ['ATONOM', 'Buduj modele cząsteczek z polskich nazw.'],
-      contact: ['Kontakt', 'Wyślij wiadomość bez opuszczania platformy.'],
+      contact: ['Formularz kontaktowy', 'Wyślij wiadomość do prowadzącego bez opuszczania platformy.'],
       external: ['Materiał zewnętrzny', 'Otwórz materiał w nowej karcie.']
     };
     return defaults[type] || ['Nowy materiał', 'Otwórz materiał kursowy.'];
@@ -1064,12 +1064,20 @@
       );
       const definition = dashboardModelApi.MODULE_DEFINITIONS[node.module] || dashboardModelApi.MODULE_DEFINITIONS.link;
       if (['slides', 'pdf', 'film', 'yt', 'forms'].includes(node.module)) {
+        const directWebMode = ['slides', 'pdf'].includes(node.module)
+          && ['4', '5'].includes(String(node.protection));
         form.append(field(
           definition.idLabel || 'ID materiału',
-          textInput(node.id, 'id', { placeholder: 'Wklej ID albo pełny link' }),
+          textInput(node.id, 'id', {
+            placeholder: directWebMode ? 'https://…' : 'Wklej ID albo pełny link'
+          }),
           node.module === 'film'
             ? 'Dla type=2 podaj ID lub link Google Drive; pozostałe tryby korzystają z YouTube.'
-            : 'Możesz wkleić samo ID lub obsługiwany link udostępniania.'
+            : directWebMode
+              ? node.protection === '4'
+                ? 'Wklej pełny adres HTTPS. Strona zostanie osadzona w iframe, jeśli jej właściciel na to pozwala.'
+                : 'Wklej pełny adres HTTPS. Po sprawdzeniu dostępu moduł otworzy go bezpośrednio w zwykłym widoku przeglądarki.'
+              : 'Możesz wkleić samo ID lub obsługiwany link udostępniania.'
         ));
       }
       const protection = dashboardModelApi.PROTECTION_OPTIONS[node.module];
@@ -1714,6 +1722,15 @@
         newTab: true
       });
     }
+    if (type === 'contact') {
+      return lessonModelApi.createBlock('contact', {
+        title: 'Masz pytanie do prowadzącego?',
+        description: 'Wyślij wiadomość przez formularz kontaktowy platformy.',
+        button: 'Otwórz formularz',
+        internal: 'Pytanie dotyczące bieżącej lekcji',
+        newTab: false
+      });
+    }
     if (type === 'link') {
       return lessonModelApi.createBlock('link', {
         title: 'Otwórz materiał dodatkowy',
@@ -1936,6 +1953,7 @@
       formula: '∑',
       ai: '✦',
       board: '✎',
+      contact: '✉',
       link: '↗',
       flashcards: '↻'
     };
@@ -1958,6 +1976,7 @@
     if (block.type === 'formula') return block.title || (block.mode === 'math' ? 'Wzór matematyczny' : 'Równanie reakcji');
     if (block.type === 'ai') return block.title || 'Zapytaj AI o slajd';
     if (block.type === 'board') return block.title || 'Tablica interaktywna';
+    if (block.type === 'contact') return block.title || 'Formularz kontaktowy';
     if (block.type === 'link') return block.title || 'Kafelek z linkiem';
     if (block.type === 'flashcards') return block.title || 'Fiszki';
     return 'Klocek';
@@ -1987,6 +2006,9 @@
       return block.variant === 'bitpaper'
         ? `BitPaper${block.path ? ` · ${block.path}` : ''}`
         : 'Biała tablica';
+    }
+    if (block.type === 'contact') {
+      return block.newTab ? 'Formularz · nowa karta' : 'Formularz · w module lekcji';
     }
     if (block.type === 'link') return block.url || 'Uzupełnij adres linku';
     if (block.type === 'flashcards') return `${block.cards.length} fiszki · ${block.color}`;
@@ -2339,8 +2361,31 @@
   }
 
   function taskGapLabels(task) {
-    return [...String(task.text || '').matchAll(/\{\{([^{}]*)\}\}/g)]
-      .map((match) => match[1].trim() || 'luka');
+    return taskGapStructure(task).labels;
+  }
+
+  function taskGapStructure(task) {
+    const text = String(task.text || '');
+    const labels = [];
+    const segments = [];
+    const pattern = /\{\{([^{}]*)\}\}/g;
+    let match;
+    let offset = 0;
+    while ((match = pattern.exec(text))) {
+      segments.push(text.slice(offset, match.index));
+      labels.push(match[1].trim() || `luka ${labels.length + 1}`);
+      offset = match.index + match[0].length;
+    }
+    segments.push(text.slice(offset));
+    return { labels, segments };
+  }
+
+  function applyTaskGapStructure(task, structure) {
+    const labels = Array.isArray(structure && structure.labels) ? structure.labels : [];
+    const segments = Array.isArray(structure && structure.segments) ? structure.segments : [''];
+    task.text = labels.map((label, index) => (
+      `${String(segments[index] || '')}{{${String(label || `luka ${index + 1}`).replace(/[{}|]/g, '').trim() || `luka ${index + 1}`}}}`
+    )).join('') + String(segments[labels.length] || '');
   }
 
   function replaceTaskGapLabel(task, targetIndex, value) {
@@ -2358,15 +2403,49 @@
     const header = create('header', 'task-answer-editor-header');
     const heading = create('div');
     heading.append(
-      create('strong', '', 'Luki i poprawne odpowiedzi'),
-      create('small', '', 'Dodaj lukę przyciskiem, nazwij ją i ustaw poprawną odpowiedź.')
+      create('strong', '', 'Wizualny edytor zdania z lukami'),
+      create('small', '', 'Wpisuj zwykły tekst. Przyciskiem dodasz lukę dokładnie w wybranym miejscu.')
     );
-    const insert = create('button', 'mini-button', '＋ Wstaw lukę');
-    insert.type = 'button';
-    insert.dataset.lessonTaskEditorAction = 'insert-gap';
-    header.append(heading, insert);
+    header.append(heading);
+    const structure = taskGapStructure(task);
+    const sentence = create('div', 'task-gap-sentence-editor');
+    structure.segments.forEach((segment, index) => {
+      const row = create('div', 'task-gap-segment-row');
+      const text = lessonTextarea(segment, 'gapSegment', {
+        rows: 2,
+        maxLength: 1600,
+        placeholder: index === 0 ? 'Wpisz początek zdania…' : 'Wpisz dalszą część zdania…'
+      });
+      text.dataset.gapSegmentIndex = String(index);
+      const insert = create('button', 'mini-button task-gap-insert', '＋ Dodaj lukę tutaj');
+      insert.type = 'button';
+      insert.dataset.lessonTaskEditorAction = 'insert-gap';
+      insert.dataset.gapSegmentIndex = String(index);
+      row.append(
+        field(
+          index < structure.labels.length ? `Tekst przed luką ${index + 1}` : 'Tekst po ostatniej luce',
+          text
+        ),
+        insert
+      );
+      sentence.append(row);
+      if (index < structure.labels.length) {
+        const token = create('div', 'task-gap-token');
+        token.append(
+          create('span', 'task-gap-number', String(index + 1)),
+          create('span', '', `Luka: ${structure.labels[index]}`)
+        );
+        sentence.append(token);
+      }
+    });
+
+    const answersHeading = create('div', 'task-gap-answers-heading');
+    answersHeading.append(
+      create('strong', '', 'Ustawienia luk'),
+      create('small', '', 'Nazwij każdą lukę i wybierz albo wpisz poprawną odpowiedź.')
+    );
     const list = create('div', 'task-gap-editor-list');
-    const labels = taskGapLabels(task);
+    const labels = structure.labels;
     labels.forEach((gapLabel, index) => {
       const row = create('div', 'task-gap-editor-row');
       const number = create('span', 'task-gap-number', String(index + 1));
@@ -2402,9 +2481,9 @@
       list.append(row);
     });
     if (!labels.length) {
-      list.append(create('p', 'task-editor-empty', 'Nie ma jeszcze żadnej luki. Ustaw kursor w zdaniu i kliknij „Wstaw lukę”.'));
+      list.append(create('p', 'task-editor-empty', 'Nie ma jeszcze żadnej luki. Kliknij „Dodaj lukę tutaj” przy wybranym fragmencie zdania.'));
     }
-    editor.append(header, list);
+    editor.append(header, sentence, answersHeading, list);
     return editor;
   }
 
@@ -2435,13 +2514,15 @@
       return;
     }
     if (action === 'insert-gap') {
-      const textarea = elements.lessonInspector.querySelector('[data-lesson-field="text"]');
-      const text = String(task.text || '');
-      const start = textarea && Number.isInteger(textarea.selectionStart) ? textarea.selectionStart : text.length;
-      const end = textarea && Number.isInteger(textarea.selectionEnd) ? textarea.selectionEnd : start;
-      const gapIndex = (text.slice(0, start).match(/\{\{[^{}]*\}\}/g) || []).length;
+      const structure = taskGapStructure(task);
+      const requestedIndex = Number(button.dataset.gapSegmentIndex);
+      const gapIndex = Number.isSafeInteger(requestedIndex)
+        ? Math.max(0, Math.min(requestedIndex, structure.labels.length))
+        : structure.labels.length;
       commitMutation('lesson', () => {
-        task.text = `${text.slice(0, start)}{{nowa luka}}${text.slice(end)}`;
+        structure.labels.splice(gapIndex, 0, `luka ${gapIndex + 1}`);
+        structure.segments.splice(gapIndex + 1, 0, '');
+        applyTaskGapStructure(task, structure);
         const answer = task.type === 'gaps' ? task.options[0] || '' : 'odpowiedź';
         task.answers.splice(gapIndex, 0, answer);
       });
@@ -2451,12 +2532,12 @@
       const targetIndex = Number(button.dataset.gapIndex);
       if (!Number.isSafeInteger(targetIndex)) return;
       commitMutation('lesson', () => {
-        let current = 0;
-        task.text = String(task.text || '').replace(/\{\{([^{}]*)\}\}/g, (match, label) => {
-          const replacement = current === targetIndex ? String(label || '').trim() : match;
-          current += 1;
-          return replacement;
-        });
+        const structure = taskGapStructure(task);
+        if (targetIndex < 0 || targetIndex >= structure.labels.length) return;
+        const merged = `${structure.segments[targetIndex] || ''}${structure.labels[targetIndex] || ''}${structure.segments[targetIndex + 1] || ''}`;
+        structure.labels.splice(targetIndex, 1);
+        structure.segments.splice(targetIndex, 2, merged);
+        applyTaskGapStructure(task, structure);
         task.answers.splice(targetIndex, 1);
       });
     }
@@ -2482,15 +2563,6 @@
       form.append(field('Placeholder', lessonInput(task.placeholder, 'placeholder', { maxLength: 160 })));
     }
     if (task.type === 'gaps' || task.type === 'gaps-text') {
-      form.append(field(
-        'Zdanie z lukami',
-        lessonTextarea(task.text, 'text', {
-          rows: 6,
-          maxLength: 1600,
-          placeholder: 'Etanol należy do grupy związków.'
-        }),
-        'Ustaw kursor w wybranym miejscu i kliknij „Wstaw lukę”. Nie musisz ręcznie wpisywać specjalnej składni.'
-      ));
       if (task.type === 'gaps') form.append(taskOptionsEditor(task, false));
       form.append(taskGapEditor(task));
       if (task.type === 'gaps-text') {
@@ -3058,6 +3130,28 @@
         ));
       }
       form.append(newTab);
+    } else if (block.type === 'contact') {
+      const newTab = create('label', 'check-field');
+      newTab.append(
+        lessonInput('', 'newTab', { type: 'checkbox', checked: block.newTab }),
+        create('span', '', 'Otwieraj formularz w nowej karcie')
+      );
+      form.append(
+        field('Tytuł kafelka', lessonInput(block.title, 'title', { maxLength: 180 })),
+        field('Krótki opis', lessonTextarea(block.description, 'description', { rows: 4, maxLength: 500 })),
+        field('Tekst przycisku', lessonInput(block.button, 'button', { maxLength: 80 })),
+        field(
+          'Wstępna treść wiadomości — opcjonalnie',
+          lessonTextarea(block.internal, 'internal', { rows: 4, maxLength: 240 }),
+          'Ta treść pojawi się w formularzu jako podpowiedź dla ucznia. Adres e-mail oraz imię zostaną uzupełnione z zalogowanego konta.'
+        ),
+        newTab,
+        create(
+          'p',
+          'formula-builder-tip',
+          'Wiadomości trafiają do Netlify Forms. Administrator może je przeglądać, usuwać i pobrać wszystkie w panelu administratora.'
+        )
+      );
     } else if (block.type === 'link') {
       const newTab = create('label', 'check-field');
       newTab.append(
@@ -4116,6 +4210,13 @@
       } else if (fieldName === 'gapLabel') {
         const index = Number(target.dataset.gapIndex);
         if (Number.isSafeInteger(index)) replaceTaskGapLabel(task, index, raw);
+      } else if (fieldName === 'gapSegment') {
+        const index = Number(target.dataset.gapSegmentIndex);
+        const structure = taskGapStructure(task);
+        if (Number.isSafeInteger(index) && index >= 0 && index < structure.segments.length) {
+          structure.segments[index] = String(raw).replace(/\{\{|\}\}/g, '');
+          applyTaskGapStructure(task, structure);
+        }
       } else if (fieldName === 'gapAnswer') {
         const index = Number(target.dataset.gapIndex);
         if (Number.isSafeInteger(index) && index >= 0 && index < task.answers.length) {
@@ -5237,7 +5338,7 @@
     elements.dashboardInspector.addEventListener('change', (event) => {
       handleDashboardInspectorInput(event);
       finishEdit();
-      if (['source', 'variant', 'repositoryId'].includes(event.target.dataset.dashboardField)) {
+      if (['source', 'variant', 'repositoryId', 'protection'].includes(event.target.dataset.dashboardField)) {
         renderDashboardInspector();
       }
     });
@@ -5264,7 +5365,7 @@
       handleLessonInspectorInput(event);
       finishEdit();
       if (
-        ['type', 'mode', 'arrow', 'variant', 'repositoryId', 'promptFile', 'options', 'optionItem', 'useColor']
+        ['type', 'mode', 'arrow', 'variant', 'repositoryId', 'promptFile', 'options', 'optionItem', 'gapLabel', 'gapSegment', 'useColor']
           .includes(event.target.dataset.lessonField)
       ) {
         renderLessonInspector();

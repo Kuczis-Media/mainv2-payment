@@ -86,6 +86,7 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(html, /data-lesson-add=["']link["']/);
   assert.match(html, /data-lesson-add=["']ai["']/);
   assert.match(html, /data-lesson-add=["']board["']/);
+  assert.match(html, /data-lesson-add=["']contact["']/);
   assert.match(html, /palette-group-featured/);
   assert.match(html, /data-lesson-add=["']flashcards["']/);
   assert.match(html, /data-lesson-add=["']task-gaps["']/);
@@ -248,6 +249,7 @@ test('lesson authoring extensions are rendered through strict, non-HTML directiv
   assert.match(parser, /tableBlockHtml/);
   assert.match(parser, /lesson-ai-help/);
   assert.match(parser, /lesson-board-card/);
+  assert.match(parser, /lesson-contact-card/);
   assert.match(parser, /safeLinkCardUrl/);
   assert.match(parser, /SAFE_MATH_COMMANDS/);
   assert.match(parser, /decoding=["']async["']/);
@@ -261,6 +263,7 @@ test('lesson authoring extensions are rendered through strict, non-HTML directiv
   assert.match(styles, /\.lesson-link-card/);
   assert.match(styles, /\.lesson-table/);
   assert.match(styles, /\.lesson-support-card/);
+  assert.match(styles, /\.lesson-contact-card/);
   assert.match(styles, /\.slide-card\.is-entering\[data-transition=["']zoom["']\]/);
   assert.match(styles, /\.lesson-font-rounded/);
   assert.match(styles, /\.lesson-accordion\[open\]/);

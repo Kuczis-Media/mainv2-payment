@@ -397,6 +397,14 @@ test('lesson renderer creates AI help and allowlisted interactive board cards', 
     'variant: bitpaper',
     'path: redoks.json',
     'new_tab: true',
+    ':::',
+    '',
+    ':::contactform',
+    'title: Zapytaj prowadzącego',
+    'description: Napisz, czego nie rozumiesz.',
+    'button: Otwórz formularz',
+    'internal: Pytanie do slajdu o redoks',
+    'new_tab: false',
     ':::'
   ].join('\n'), 'narzedzia.md');
 
@@ -408,6 +416,8 @@ test('lesson renderer creates AI help and allowlisted interactive board cards', 
   assert.match(html, /data-lesson-ai-open/);
   assert.match(html, /href="\/members\/module\/whiteboard\/"/);
   assert.match(html, /href="\/members\/module\/bitpaper\/\?path=redoks\.json"/);
+  assert.match(html, /class="lesson-support-card lesson-contact-card"/);
+  assert.match(html, /href="\/members\/module\/contact\/\?internal=Pytanie%20do%20slajdu%20o%20redoks"/);
   assert.match(html, /target="_blank" rel="noopener noreferrer"/);
 
   const unsafeAi = parser.renderMarkdown([

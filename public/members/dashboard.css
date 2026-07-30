@@ -1956,6 +1956,13 @@ html[data-theme="dark"] .accordion-children .accordion-children .accordion-child
   white-space: nowrap;
 }
 
+.admin-forms-export-note {
+  margin: 9px 3px 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
 .admin-contact-export {
   display: flex;
   margin-top: 12px;

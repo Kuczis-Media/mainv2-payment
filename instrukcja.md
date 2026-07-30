@@ -770,6 +770,7 @@ Panel ma pięć zakładek.
 - pokazuje odpowiedzi formularzy Netlify;
 - obsługuje publiczny `contact` i kursowy `members-contact`;
 - nie pokazuje odpowiedzi Google Forms;
+- przycisk **Pobierz wszystko** tworzy jeden plik JSON ze wszystkimi formularzami Netlify i wszystkimi ich odpowiedziami;
 - usunięcie zgłoszenia jest trwałe;
 - odpowiedzi można również eksportować z zakładki Forms w Netlify.
 
@@ -859,6 +860,8 @@ Każdą kartę dodaje się tak samo:
 - Wklej pełny link albo ID prezentacji.
 - Tryb `1` to zwykły podgląd.
 - Tryb `2` ogranicza interfejs dostawcy.
+- Tryb `4` przyjmuje dowolny pełny adres HTTPS i próbuje pokazać go wewnątrz ChemDisk.
+- Tryb `5` przyjmuje dowolny pełny adres HTTPS i otwiera go bezpośrednio w zwykłym widoku przeglądarki, bez masek.
 - Prezentacja musi mieć uprawnienia pozwalające kursantowi ją otworzyć.
 
 Przykład adresu:
@@ -873,12 +876,16 @@ Przykład adresu:
 - Tryb `1` to podgląd z ograniczonym interfejsem.
 - Tryb `2` wymusza pobranie.
 - Tryb `3` to zwykły podgląd.
+- Tryb `4` osadza dowolny pełny adres HTTPS wewnątrz ChemDisk.
+- Tryb `5` otwiera pełny adres HTTPS bezpośrednio w przeglądarce, bez dodatkowych zabezpieczeń interfejsu.
 
 ```text
 /members/module/pdf/?id=ID_PLIKU&type=1
 ```
 
 Ograniczony interfejs nie jest DRM. Osoba mogąca obejrzeć dokument może użyć narzędzi przeglądarki lub wykonać zrzut.
+
+W trybach `4` i `5` wklej cały adres zaczynający się od `https://`, nie samo ID. ChemDisk usuwa parametr z widocznego paska adresu po jego odczytaniu. Nie każda strona pozwala działać w iframe: jeśli tryb `4` pokazuje pusty ekran lub błąd, właściciel strony prawdopodobnie blokuje osadzanie. Wtedy wybierz tryb `5`.
 
 ### 19.3. Film
 
@@ -991,7 +998,7 @@ Opcjonalny parametr `path=nazwa.json` automatycznie wczytuje planszę opublikowa
 
 ATONOM pokazuje wzór, rodzinę, atomy, wiązania, przybliżoną masę molową oraz model do obracania.
 
-### 19.13. Kontakt
+### 19.13. Formularz kontaktowy
 
 - Ustaw stałą treść wewnętrzną, która opisuje, skąd otwarto formularz.
 - Wiadomość trafia do Netlify Forms jako `members-contact`.
@@ -1059,7 +1066,7 @@ GitHub tworzy commit usuwający plik, dlatego zawartość można odzyskać z his
 
 Na jednym slajdzie można umieścić wiele klocków treści i najwyżej jedno zadanie sprawdzające.
 
-Na dole przewijanej biblioteki klocków znajduje się sekcja **Narzędzia lekcji**. Są w niej: **Kreator równań**, **Zapytaj AI** i **Tablica**. Kliknięcie działa tak samo jak przeciągnięcie. Studio automatycznie zaznacza dodany klocek, rozwija panel **Narzędzia i podgląd** oraz pokazuje jego ustawienia; na wąskim ekranie przewija widok bezpośrednio do tego panelu.
+Na dole przewijanej biblioteki klocków znajduje się sekcja **Narzędzia lekcji**. Są w niej: **Kreator równań**, **Zapytaj AI** i **Tablica**. Formularz kontaktowy znajduje się w grupie **Multimedia i aplikacje**. Kliknięcie działa tak samo jak przeciągnięcie. Studio automatycznie zaznacza dodany klocek i pokazuje jego ustawienia w panelu **Narzędzia i podgląd**.
 
 ### Nowy slajd
 
@@ -1222,6 +1229,15 @@ Wklej link albo 11-znakowe ID. Film jest osadzany z `youtube-nocookie.com`.
 
 Wpisz nazwę związku. Lekcja najpierw pokazuje estetyczny kafelek. Model ładuje się dopiero po kliknięciu **Pokaż związek**, dzięki czemu nie zajmuje od razu całego slajdu.
 
+### Formularz kontaktowy
+
+1. Przeciągnij **Formularz kontaktowy** na slajd.
+2. Wpisz tytuł, opis i tekst przycisku.
+3. Opcjonalnie wpisz do 240 znaków wstępnej wiadomości, np. `Pytanie do slajdu o redoks`.
+4. Zdecyduj, czy formularz ma otwierać się w tej samej, czy w nowej karcie.
+
+Uczeń otwiera istniejący formularz ChemDisk. Imię i e-mail są uzupełniane z konta, a wiadomość trafia do Netlify Forms i jest dostępna w panelu administratora. Wstępna treść pomaga rozpoznać lekcję, lecz nie jest bezpiecznym identyfikatorem użytkownika ani uprawnienia.
+
 ### Zapytaj AI o slajd
 
 Ten klocek daje uczniowi estetyczny przycisk **Zapytaj AI**. Po kliknięciu:
@@ -1304,26 +1320,27 @@ Moduł nie stosuje automatycznej tolerancji i nie rozpoznaje jednostek. Jeśli o
 
 ### 22.5. Luki z listy
 
-1. Wpisz całe zdanie.
-2. Ustaw kursor w miejscu luki.
-3. Kliknij **Wstaw lukę**.
-4. Powtórz dla kolejnych luk.
-5. Dodaj listę możliwych opcji.
-6. Przy każdej luce wybierz prawidłową odpowiedź.
+1. Dodaj możliwe odpowiedzi do listy.
+2. W polu **Tekst przed luką 1** wpisz początek zdania.
+3. Kliknij **Dodaj lukę tutaj** przy fragmencie, po którym ma znaleźć się luka.
+4. W następnym zwykłym polu wpisz dalszy tekst.
+5. Powtórz dla kolejnych luk.
+6. Na karcie każdej luki wpisz jej krótki opis i wybierz prawidłową odpowiedź.
 
 Uczeń uzupełnia luki listami wyboru.
 
 ### 22.6. Luki wpisywane ręcznie
 
-1. Wpisz zdanie.
-2. Ustaw kursor i kliknij **Wstaw lukę**.
-3. Przy każdej luce wpisz prawidłową odpowiedź.
-4. Wybierz:
+1. Wpisz początek zdania w pierwszym zwykłym polu tekstowym.
+2. Kliknij **Dodaj lukę tutaj**.
+3. W kolejnym polu wpisz tekst po luce i dodaj następne luki tam, gdzie ich potrzebujesz.
+4. Przy każdej luce wpisz prawidłową odpowiedź.
+5. Wybierz:
    - **Każda luka osobno** — uczeń sprawdza kolejne pola;
    - **Wszystkie luki naraz** — jeden przycisk sprawdza całe zadanie.
-5. Opcjonalnie włącz rozróżnianie wielkości liter.
+6. Opcjonalnie włącz rozróżnianie wielkości liter.
 
-Nie trzeba ręcznie znać składni `{{luka}}`; builder wstawia ją sam.
+Edytor pokazuje wyłącznie zwykłe fragmenty tekstu i czytelne karty luk. Nie trzeba wpisywać ani oglądać składni `{{luka}}`; pojawia się ona wyłącznie wewnątrz wygenerowanego pliku Markdown.
 
 ## 23. Odtwarzacz lekcji
 
@@ -1467,7 +1484,7 @@ Po deployu Netlify wykrywa formularze w HTML. Odpowiedzi znajdziesz:
 - w **Panel administratora → Formularze**; albo
 - w zakładce **Forms** projektu Netlify.
 
-Usuwanie odpowiedzi jest trwałe. Przed większym czyszczeniem pobierz CSV. Oficjalna instrukcja: [zgłoszenia Netlify Forms](https://docs.netlify.com/manage/forms/submissions/).
+W panelu administratora kliknij **Pobierz wszystko**, aby dostać jeden plik JSON ze wszystkimi formularzami ChemDisk oraz wszystkimi ich odpowiedziami. Eksport może zawierać dane osobowe, więc przechowuj go bezpiecznie i usuń po wykorzystaniu. Usuwanie odpowiedzi jest trwałe. Możesz też pobrać eksport z panelu Netlify. Oficjalna instrukcja: [zgłoszenia Netlify Forms](https://docs.netlify.com/manage/forms/submissions/).
 
 ## 28. Dane w Netlify Blobs
 
@@ -1578,12 +1595,14 @@ Przed przyjęciem prawdziwej płatności sprawdź:
 25. Obraz można załączyć do czatu.
 26. Formularz kontaktowy trafia do Netlify Forms.
 27. Administrator widzi i może usunąć testowe zgłoszenie.
-28. Prezentacja, PDF, film, YouTube i Google Forms działają przy docelowym udostępnianiu.
-29. Kalkulatory i obie tablice się otwierają.
-30. Stripe pokazuje tryb testowy.
-31. Płatność `4242 4242 4242 4242` kończy się sukcesem.
-32. Webhook ma odpowiedź `200`.
-33. Płatność nadaje prawidłową rolę i termin.
+28. **Pobierz wszystko** zapisuje komplet formularzy i odpowiedzi do JSON.
+29. Prezentacja i PDF działają także w trybie `4` z dozwolonym iframe oraz w trybie `5` jako bezpośredni adres.
+30. Prezentacja, PDF, film, YouTube i Google Forms działają przy docelowym udostępnianiu.
+31. Kalkulatory i obie tablice się otwierają.
+32. Stripe pokazuje tryb testowy.
+33. Płatność `4242 4242 4242 4242` kończy się sukcesem.
+34. Webhook ma odpowiedź `200`.
+35. Płatność nadaje prawidłową rolę i termin.
 34. Odebranie dostępu nie wykonuje przypadkowego refundu.
 35. `npm test` i `npm run build` kończą się bez błędów.
 
@@ -1606,7 +1625,7 @@ Raz w miesiącu:
 
 1. Pobierz lub sklonuj repozytorium aplikacji.
 2. Pobierz lub sklonuj wszystkie repozytoria materiałów.
-3. Eksportuj ważne zgłoszenia Forms do CSV.
+3. W **Panel administratora → Formularze** kliknij **Pobierz wszystko** i zachowaj ważne zgłoszenia w JSON.
 4. Zanotuj konfigurację repozytoriów bez wartości tokenów.
 5. Sprawdź daty wygaśnięcia tokenów.
 6. Sprawdź, kto ma dostęp do GitHuba, Netlify, Google i Stripe.

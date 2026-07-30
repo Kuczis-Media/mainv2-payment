@@ -35,6 +35,10 @@ test('media helpers accept IDs and common Google/YouTube sharing links', () => {
     media.extractSlides(`https://docs.google.com/presentation/d/e/${publishedId}/pub?start=false`),
     { id: publishedId, published: true }
   );
+
+  assert.equal(media.safeHttpsUrl('https://example.com/material.pdf'), 'https://example.com/material.pdf');
+  assert.equal(media.safeHttpsUrl('http://example.com/material.pdf'), '');
+  assert.equal(media.safeHttpsUrl('https://user:secret@example.com/material.pdf'), '');
 });
 
 test('media parameter reader removes source IDs from the visible address immediately', () => {
@@ -135,5 +139,19 @@ test('protected PDF and Slides suppress every direct Google fallback link', () =
     assert.match(script, /providerLink\.removeAttribute\('href'\)/);
     assert.match(script, /sandbox.*allow-scripts allow-same-origin allow-forms allow-presentation/);
     assert.doesNotMatch(script, /allow-popups|allow-top-navigation/);
+  }
+});
+
+test('PDF and Slides expose direct HTTPS modes 4 and 5 after hiding the source query', () => {
+  for (const name of ['pdf', 'slides']) {
+    const script = fs.readFileSync(path.join(moduleRoot, name, 'script.js'), 'utf8');
+    assert.match(script, /\['4', '5'\]/);
+    assert.match(script, /media\.safeHttpsUrl/);
+    assert.match(script, /const directEmbedMode = state\.type === '4'/);
+    assert.match(script, /if \(state\.type === '5'\)\s*\{[\s\S]*window\.location\.replace\(state\.url\)/);
+    assert.ok(
+      script.indexOf('readParamsAndHide(window)') < script.indexOf("state.type === '5'"),
+      `${name}: direct navigation happens before the source query is hidden`
+    );
   }
 });

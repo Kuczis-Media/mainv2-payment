@@ -13,7 +13,7 @@
   const SLIDE_SETTINGS_START = /^\s*:::slide\s*$/i;
   const STYLE_START = /^\s*:::style(?:\s+(.+?))?\s*$/i;
   const ACCORDION_START = /^\s*:::accordion(?:\s+(.+?))?\s*$/i;
-  const STRUCTURAL_CONTAINER_START = /^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|atonom|formula|linkcard|aihelp|board|flashcards|table)(?:\s+.*?)?\s*$/i;
+  const STRUCTURAL_CONTAINER_START = /^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table)(?:\s+.*?)?\s*$/i;
   const RICH_CONTAINER_END = /^\s*:::\s*$/;
   const SAFE_STYLE_COLOR = /^#[0-9a-f]{6}$/i;
   const LINK_ICONS = new Set(['link', 'book', 'video', 'chemistry', 'math', 'file', 'external']);
@@ -39,7 +39,7 @@
     'sin', 'cos', 'tan', 'log', 'ln', 'partial', 'nabla', 'rightarrow', 'leftarrow',
     'leftrightarrow', 'text', 'mathrm', 'mathbf', 'overline', 'vec', 'left', 'right'
   ]);
-  const INTERACTIVE_START = /^\s*:::(youtube|atonom|formula|linkcard|aihelp|board|flashcards|table)\s*$/i;
+  const INTERACTIVE_START = /^\s*:::(youtube|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table)\s*$/i;
 
   class LessonFormatError extends Error {
     constructor(code, message) {
@@ -695,6 +695,21 @@
       const label = variant === 'bitpaper' ? 'Tablica BitPaper' : 'Biała tablica';
       const icon = variant === 'bitpaper' ? '▧' : '✎';
       return `<a class="lesson-support-card lesson-board-card" href="${escapeHtml(href)}"${target}><span class="lesson-support-icon" aria-hidden="true">${icon}</span><span class="lesson-support-copy"><small>${label}</small><strong>${escapeHtml(title)}</strong><span>${escapeHtml(description)}</span></span><span class="lesson-support-action">${escapeHtml(button)} <b aria-hidden="true">→</b></span></a>`;
+    }
+    if (type === 'contactform') {
+      const title = String(values.title || 'Masz pytanie do prowadzącego?').trim();
+      const description = String(
+        values.description || 'Wyślij wiadomość przez formularz kontaktowy platformy.'
+      ).trim();
+      const button = String(values.button || 'Otwórz formularz').trim();
+      const internal = String(values.internal || '').trim();
+      if (!title || !button || internal.length > 240 || /[\u0000-\u001f<>]/.test(internal)) {
+        return '<p class="lesson-interactive-error">Nieprawidłowy klocek formularza kontaktowego.</p>';
+      }
+      const href = `/members/module/contact/${internal ? `?internal=${encodeURIComponent(internal)}` : ''}`;
+      const newTab = /^(?:1|true|yes|tak|new)$/i.test(values.new_tab || '');
+      const target = newTab ? ' target="_blank" rel="noopener noreferrer"' : '';
+      return `<a class="lesson-support-card lesson-contact-card" href="${escapeHtml(href)}"${target}><span class="lesson-support-icon" aria-hidden="true">✉</span><span class="lesson-support-copy"><small>Formularz kontaktowy</small><strong>${escapeHtml(title)}</strong><span>${escapeHtml(description)}</span></span><span class="lesson-support-action">${escapeHtml(button)} <b aria-hidden="true">→</b></span></a>`;
     }
     if (type === 'linkcard') {
       const url = safeLinkCardUrl(values.url);

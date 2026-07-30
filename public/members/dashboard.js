@@ -178,6 +178,7 @@
     adminInviteSubmit: document.getElementById('admin-invite-submit'),
     adminFormFilter: document.getElementById('admin-form-filter'),
     adminFormsRefresh: document.getElementById('admin-forms-refresh'),
+    adminFormsExport: document.getElementById('admin-forms-export'),
     adminFormsStatus: document.getElementById('admin-forms-status'),
     adminSubmissionList: document.getElementById('admin-submission-list'),
     adminFormsEmpty: document.getElementById('admin-forms-empty'),
@@ -2305,6 +2306,117 @@
     }
   }
 
+  async function exportAllAdminFormSubmissions() {
+    const button = elements.adminFormsExport;
+    if (!button || button.disabled) return;
+    const originalText = button.textContent;
+    button.disabled = true;
+    elements.adminFormsRefresh.disabled = true;
+    button.textContent = 'Pobieranie…';
+    setPanelStatus(elements.adminFormsStatus, 'Przygotowywanie pełnego eksportu formularzy…', 'loading');
+    try {
+      const token = await getAdminToken();
+      const headers = { Accept: 'application/json', Authorization: `Bearer ${token}` };
+      const formsResponse = await fetch(ADMIN_FORMS_URL, {
+        method: 'GET',
+        cache: 'no-store',
+        headers
+      });
+      const formsPayload = await readAdminResponse(formsResponse);
+      const forms = (formsPayload && Array.isArray(formsPayload.forms) ? formsPayload.forms : [])
+        .map((source) => {
+          const normalized = normalizeAdminForm(source);
+          return {
+            ...normalized,
+            paths: Array.isArray(source && source.paths)
+              ? source.paths.map((path) => String(path || '')).filter(Boolean)
+              : [],
+            createdAt: String(source && (source.createdAt || source.created_at) || '')
+          };
+        })
+        .filter((form) => form.id);
+
+      const exportedForms = [];
+      let totalSubmissions = 0;
+      for (let formIndex = 0; formIndex < forms.length; formIndex += 1) {
+        const form = forms[formIndex];
+        const submissions = [];
+        let page = 1;
+        let hasMore = false;
+        do {
+          setPanelStatus(
+            elements.adminFormsStatus,
+            `Pobieranie formularza ${formIndex + 1} z ${forms.length}: ${form.name} · ${submissions.length} odpowiedzi`,
+            'loading'
+          );
+          const query = new URLSearchParams({
+            formId: form.id,
+            page: String(page),
+            perPage: '50'
+          });
+          const response = await fetch(`${ADMIN_FORMS_URL}?${query}`, {
+            method: 'GET',
+            cache: 'no-store',
+            headers
+          });
+          const payload = await readAdminResponse(response);
+          const pageSubmissions = payload && Array.isArray(payload.submissions)
+            ? payload.submissions
+            : [];
+          pageSubmissions.forEach((rawSubmission) => {
+            const submission = normalizeAdminSubmission(rawSubmission);
+            if (!submission.id) return;
+            submissions.push({
+              id: submission.id,
+              number: submission.number,
+              createdAt: submission.createdAt,
+              formName: form.name,
+              data: submission.data
+            });
+          });
+          hasMore = Boolean(payload && payload.pagination && payload.pagination.hasMore);
+          page += 1;
+        } while (hasMore && page <= 10_000);
+        if (hasMore) {
+          throw new Error(`Formularz „${form.name}” przekracza limit pełnego eksportu.`);
+        }
+        totalSubmissions += submissions.length;
+        exportedForms.push({ ...form, submissions });
+      }
+
+      const exportedAt = new Date().toISOString();
+      const content = JSON.stringify({
+        exportedAt,
+        formCount: exportedForms.length,
+        submissionCount: totalSubmissions,
+        forms: exportedForms
+      }, null, 2);
+      const blobUrl = URL.createObjectURL(new Blob([content], { type: 'application/json;charset=utf-8' }));
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `chemdisk-formularze-${exportedAt.slice(0, 19).replace(/[:T]/g, '-')}.json`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+      setPanelStatus(
+        elements.adminFormsStatus,
+        `Pobrano ${exportedForms.length} formularzy i ${totalSubmissions} odpowiedzi w jednym pliku JSON.`,
+        'info'
+      );
+    } catch (error) {
+      setPanelStatus(
+        elements.adminFormsStatus,
+        error && error.message ? error.message : 'Nie udało się pobrać wszystkich formularzy.',
+        'error'
+      );
+    } finally {
+      button.disabled = false;
+      elements.adminFormsRefresh.disabled = false;
+      button.textContent = originalText;
+    }
+  }
+
   async function deleteAdminSubmission(submission, button) {
     const person = String(submission.data.name || submission.data.email || '').trim();
     const suffix = person ? ` od ${person}` : '';
@@ -2943,6 +3055,7 @@
       });
     });
     elements.adminFormsRefresh.addEventListener('click', loadAdminForms);
+    elements.adminFormsExport.addEventListener('click', exportAllAdminFormSubmissions);
     elements.adminFormFilter.addEventListener('change', () => loadAdminSubmissions(elements.adminFormFilter.value));
     elements.adminDashboardReload.addEventListener('click', () => {
       const changed = adminDashboardLoaded && elements.adminDashboardSource.value !== adminDashboardBaseline;

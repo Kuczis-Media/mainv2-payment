@@ -85,6 +85,24 @@
     return '';
   }
 
+  function safeHttpsUrl(input) {
+    const value = String(input || '').trim();
+    if (
+      !value
+      || value.length > 2_048
+      || /[\u0000-\u0020\\]/.test(value)
+    ) return '';
+    const url = parseUrl(value);
+    if (
+      !url
+      || url.protocol !== 'https:'
+      || !url.hostname
+      || url.username
+      || url.password
+    ) return '';
+    return url.toString();
+  }
+
   function normalizeType(value, allowed, fallback) {
     const normalized = String(value || '');
     return allowed.includes(normalized) ? normalized : fallback;
@@ -146,6 +164,7 @@
     loadState,
     normalizeType,
     readParamsAndHide,
+    safeHttpsUrl,
     saveState,
     withCacheBust
   };

@@ -6,22 +6,35 @@
   const STORAGE_KEY = 'chemdisk.slides.v3';
 
   const fromUrl = params.has('id');
-  const parsedFromUrl = fromUrl ? media.extractSlides(params.get('id')) : null;
-  const requestedType = media.normalizeType(params.get('type'), ['1', '2'], '1');
-  if (parsedFromUrl) {
+  const requestedType = media.normalizeType(params.get('type'), ['1', '2', '4', '5'], '1');
+  const rawFromUrl = fromUrl ? params.get('id') : '';
+  const directFromUrl = ['4', '5'].includes(requestedType) ? media.safeHttpsUrl(rawFromUrl) : '';
+  const parsedFromUrl = ['4', '5'].includes(requestedType) ? null : media.extractSlides(rawFromUrl);
+  if (parsedFromUrl || directFromUrl) {
     media.saveState(sessionStorage, STORAGE_KEY, {
-      id: parsedFromUrl.id,
-      published: parsedFromUrl.published,
+      id: parsedFromUrl ? parsedFromUrl.id : '',
+      url: directFromUrl,
+      published: parsedFromUrl ? parsedFromUrl.published : false,
       type: requestedType
     });
   }
 
   const saved = !fromUrl ? media.loadState(sessionStorage, STORAGE_KEY) : null;
-  const state = parsedFromUrl
-    ? { ...parsedFromUrl, type: requestedType }
-    : saved && media.isDriveId(saved.id)
-      ? { id: saved.id, published: saved.published === true, type: media.normalizeType(saved.type, ['1', '2'], '1') }
-      : null;
+  const savedType = saved
+    ? media.normalizeType(saved.type, ['1', '2', '4', '5'], '1')
+    : '1';
+  const state = parsedFromUrl || directFromUrl
+    ? {
+        id: parsedFromUrl ? parsedFromUrl.id : '',
+        url: directFromUrl,
+        published: parsedFromUrl ? parsedFromUrl.published : false,
+        type: requestedType
+      }
+    : saved && ['4', '5'].includes(savedType) && media.safeHttpsUrl(saved.url)
+      ? { id: '', url: media.safeHttpsUrl(saved.url), published: false, type: savedType }
+      : saved && media.isDriveId(saved.id)
+        ? { id: saved.id, url: '', published: saved.published === true, type: savedType }
+        : null;
 
   const authState = await window.ChemAuth.ready;
   if (!authState?.authenticated || !authState.session?.ok) return;
@@ -57,12 +70,20 @@
   }
 
   if (!state) {
-    showError('Brakuje poprawnego ID lub linku do prezentacji Google Slides.');
+    showError('Brakuje poprawnego ID/linku Google Slides albo pełnego adresu HTTPS dla trybu 4 lub 5.');
     return;
   }
 
+  if (state.type === '5') {
+    window.location.replace(state.url);
+    return;
+  }
+
+  const directEmbedMode = state.type === '4';
   const protectedMode = state.type === '2';
-  modeBadge.textContent = protectedMode ? 'Tryb ograniczony' : 'Zwykły podgląd';
+  modeBadge.textContent = protectedMode
+    ? 'Tryb ograniczony'
+    : directEmbedMode ? 'Osadzony adres HTTPS' : 'Zwykły podgląd';
   stage.classList.toggle('is-protected', protectedMode);
   if (protectedMode) {
     frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-presentation');
@@ -77,12 +98,16 @@
   const base = state.published
     ? `https://docs.google.com/presentation/d/e/${encodedId}`
     : `https://docs.google.com/presentation/d/${encodedId}`;
-  const sourceUrl = state.published
-    ? `${base}/embed?start=false&loop=false&delayms=3000`
-    : protectedMode
-      ? `${base}/embed?start=false&loop=false&delayms=3000&rm=minimal`
-      : `${base}/preview?start=false&loop=false&delayms=3000`;
-  const outsideUrl = state.published ? `${base}/pub` : `${base}/view`;
+  const sourceUrl = directEmbedMode
+    ? state.url
+    : state.published
+      ? `${base}/embed?start=false&loop=false&delayms=3000`
+      : protectedMode
+        ? `${base}/embed?start=false&loop=false&delayms=3000&rm=minimal`
+        : `${base}/preview?start=false&loop=false&delayms=3000`;
+  const outsideUrl = directEmbedMode
+    ? state.url
+    : state.published ? `${base}/pub` : `${base}/view`;
   providerTop.hidden = protectedMode;
   providerLink.hidden = protectedMode;
   if (!protectedMode) {
@@ -105,7 +130,9 @@
 
     frame.src = 'about:blank';
     window.requestAnimationFrame(() => {
-      frame.src = attempt === 1 ? sourceUrl : media.withCacheBust(sourceUrl, attempt);
+      frame.src = attempt === 1 || directEmbedMode
+        ? sourceUrl
+        : media.withCacheBust(sourceUrl, attempt);
     });
 
     slowTimer = window.setTimeout(() => {
@@ -117,7 +144,9 @@
     }, 12000);
     failTimer = window.setTimeout(() => {
       if (!stage.classList.contains('is-ready')) {
-        showError('Google nie potwierdził załadowania prezentacji. Upewnij się, że plik jest udostępniony odbiorcom.');
+        showError(directEmbedMode
+          ? 'Ta strona nie potwierdziła osadzenia. Jej właściciel może blokować wyświetlanie w iframe — użyj trybu 5.'
+          : 'Google nie potwierdził załadowania prezentacji. Upewnij się, że plik jest udostępniony odbiorcom.');
       }
     }, 45000);
   }
@@ -132,7 +161,9 @@
     retryTop.hidden = false;
     app.removeAttribute('aria-busy');
   });
-  frame.addEventListener('error', () => showError('Nie udało się połączyć z Google Slides.'));
+  frame.addEventListener('error', () => showError(directEmbedMode
+    ? 'Nie udało się osadzić podanego adresu HTTPS. Spróbuj trybu 5.'
+    : 'Nie udało się połączyć z Google Slides.'));
 
   document.getElementById('keep-waiting').addEventListener('click', () => {
     slow.hidden = true;

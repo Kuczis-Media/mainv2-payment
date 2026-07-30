@@ -2181,6 +2181,69 @@ button {
   gap: 7px;
 }
 
+.task-gap-sentence-editor {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--chem-surface) 82%, var(--studio-violet-soft));
+  border: 1px solid var(--chem-line);
+  border-radius: 12px;
+}
+
+.task-gap-segment-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.task-gap-segment-row textarea {
+  min-height: 62px;
+  resize: vertical;
+}
+
+.task-gap-insert {
+  min-height: 36px;
+  white-space: nowrap;
+}
+
+.task-gap-token {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 5px 10px 5px 5px;
+  color: var(--studio-violet);
+  background: color-mix(in srgb, var(--studio-violet-soft) 78%, var(--chem-surface));
+  border: 1px solid color-mix(in srgb, var(--studio-violet) 25%, var(--chem-line));
+  border-radius: 11px;
+  font-size: 0.6rem;
+  font-weight: 800;
+}
+
+.task-gap-token .task-gap-number {
+  width: 28px;
+  height: 28px;
+}
+
+.task-gap-answers-heading strong,
+.task-gap-answers-heading small {
+  display: block;
+}
+
+.task-gap-answers-heading strong {
+  color: var(--chem-text);
+  font-size: 0.66rem;
+}
+
+.task-gap-answers-heading small {
+  margin-top: 3px;
+  color: var(--chem-muted);
+  font-size: 0.55rem;
+  line-height: 1.4;
+}
+
 .task-option-editor-row {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr) 29px;
@@ -2285,6 +2348,16 @@ button {
 
 .task-gap-editor-row .field > span {
   font-size: 0.52rem;
+}
+
+@media (max-width: 760px) {
+  .task-gap-segment-row {
+    grid-template-columns: 1fr;
+  }
+
+  .task-gap-insert {
+    width: 100%;
+  }
 }
 
 .task-editor-empty {

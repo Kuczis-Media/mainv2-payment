@@ -11,7 +11,7 @@
   const TASK_START = /^\s*:::(?:task|zadanie)\s*$/i;
   const QUESTION_START = /^\s*:::question\s*$/i;
   const SLIDE_SETTINGS_START = /^\s*:::slide\s*$/i;
-  const CONTAINER_START = /^\s*:::(style|accordion|youtube|atonom|formula|linkcard|aihelp|board|flashcards|table)(?:\s+(.*?))?\s*$/i;
+  const CONTAINER_START = /^\s*:::(style|accordion|youtube|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table)(?:\s+(.*?))?\s*$/i;
   const CONTAINER_END = /^\s*:::\s*$/;
   const STYLE_FONTS = Object.freeze([
     'sans',
@@ -55,6 +55,7 @@
     'link',
     'ai',
     'board',
+    'contact',
     'flashcards'
   ]);
   const TASK_TYPES = Object.freeze(['text', 'number', 'choice', 'abcd', 'gaps', 'gaps-text']);
@@ -174,7 +175,7 @@
       .split('\n')
       .map((line) => {
         if (/^\s*---\s*$/.test(line)) return '`---`';
-        if (/^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|atonom|formula|linkcard|aihelp|board|flashcards|table)?(?:\s+.*?)?\s*$/i.test(line)) {
+        if (/^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table)?(?:\s+.*?)?\s*$/i.test(line)) {
           return `\`${line.trim()}\``;
         }
         return line.replace(/\s+$/g, '');
@@ -370,6 +371,16 @@
         variant,
         path: oneLine(source.path),
         newTab: source.newTab !== false && !/^(?:0|false|no|nie)$/i.test(oneLine(source.newTab))
+      };
+    }
+    if (type === 'contact') {
+      return {
+        ...base,
+        title: oneLine(source.title) || 'Masz pytanie do prowadzącego?',
+        description: oneLine(source.description) || 'Wyślij wiadomość przez formularz kontaktowy platformy.',
+        button: oneLine(source.button) || 'Otwórz formularz',
+        internal: oneLine(source.internal).slice(0, 240),
+        newTab: source.newTab === true || /^(?:1|true|yes|tak|new)$/i.test(oneLine(source.newTab))
       };
     }
     if (type === 'link') {
@@ -629,6 +640,15 @@
         errors.push({ code: 'INVALID_LINK_STYLE', path, message: 'Wybierz obsługiwaną ikonę i kolor kafelka.' });
       }
     }
+    if (block.type === 'contact') {
+      if (!block.title || !block.button || block.internal.length > 240) {
+        errors.push({
+          code: 'INVALID_CONTACT_FORM',
+          path,
+          message: 'Formularz kontaktowy wymaga tytułu i tekstu przycisku; wstępna wiadomość może mieć maksymalnie 240 znaków.'
+        });
+      }
+    }
     if (block.type === 'formula') {
       if (block.mode === 'math') {
         if (!safeMathExpression(block.expression)) {
@@ -833,6 +853,17 @@
         `button: ${cleanDirectiveValue(block.button)}`,
         `variant: ${block.variant}`,
         `path: ${cleanDirectiveValue(block.path)}`,
+        `new_tab: ${block.newTab ? 'true' : 'false'}`,
+        ':::'
+      ].join('\n');
+    }
+    if (block.type === 'contact') {
+      return [
+        ':::contactform',
+        `title: ${cleanDirectiveValue(block.title)}`,
+        `description: ${cleanDirectiveValue(block.description)}`,
+        `button: ${cleanDirectiveValue(block.button)}`,
+        `internal: ${cleanDirectiveValue(block.internal)}`,
         `new_tab: ${block.newTab ? 'true' : 'false'}`,
         ':::'
       ].join('\n');
@@ -1122,6 +1153,16 @@
               button: values.button,
               variant: values.variant,
               path: values.path,
+              newTab: values.new_tab
+            }));
+          } else if (type === 'contactform') {
+            const values = parseDirectiveFields(bodyLines);
+            blocks.push(createBlock({
+              type: 'contact',
+              title: values.title,
+              description: values.description,
+              button: values.button,
+              internal: values.internal,
               newTab: values.new_tab
             }));
           } else if (type === 'linkcard') {
@@ -1442,6 +1483,7 @@
     formulas: true,
     aiHelp: true,
     interactiveBoards: true,
+    contactForms: true,
     linkCards: true,
     flashcards: true,
     tables: true,
