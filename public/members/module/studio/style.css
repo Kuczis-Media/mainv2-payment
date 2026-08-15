@@ -1432,6 +1432,21 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
     scrollbar-gutter: stable;
   }
 
+  .exam-builder-shell {
+    height: calc(100dvh - var(--studio-header-height) - var(--workspace-toolbar-height));
+    min-height: 0;
+  }
+
+  .exam-builder-navigation,
+  .exam-editor-panel,
+  .exam-summary-panel {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    -webkit-overflow-scrolling: touch;
+  }
+
   .workspace-view.is-palette-collapsed .builder-layout {
     grid-template-columns: 52px minmax(440px, 1fr) 340px;
   }

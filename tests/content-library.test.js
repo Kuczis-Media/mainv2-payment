@@ -198,6 +198,32 @@ test('content repository lists allowlisted files and applies catalog metadata', 
   assert.ok(requests.every((request) => request.headers['X-GitHub-Api-Version']));
 });
 
+test('an older repository without exams keeps lessons and prompts available', async () => {
+  repository._test.clearCache();
+  const fetchImpl = async (url) => {
+    const value = String(url);
+    if (value.includes('/contents/catalog.json')) return githubResponse({ assets: {} });
+    if (value.includes('/contents/lessons')) {
+      return githubResponse([{ type: 'file', name: 'atom.md', size: 120, sha: 'lesson-sha' }]);
+    }
+    if (value.includes('/contents/prompts')) {
+      return githubResponse([{ type: 'file', name: 'pomoc.txt', size: 80, sha: 'prompt-sha' }]);
+    }
+    if (value.includes('/contents/exams')) return githubResponse({ message: 'Not Found' }, { status: 404 });
+    throw new Error(`Unexpected request: ${value}`);
+  };
+
+  const [lessons, prompts, exams] = await Promise.all([
+    repository.listAssets('lesson', { config: configured, fetchImpl }),
+    repository.listAssets('prompt', { config: configured, fetchImpl }),
+    repository.listAssets('exam', { config: configured, fetchImpl })
+  ]);
+
+  assert.equal(lessons[0].filename, 'atom.md');
+  assert.equal(prompts[0].filename, 'pomoc.txt');
+  assert.deepEqual(exams, []);
+});
+
 test('content repository reads UTF-8 lessons and rejects traversal', async () => {
   const fetchImpl = async () => githubResponse('# Lekcja\n\nTreść.', {
     headers: { etag: '"abc123"', 'content-length': '18' }

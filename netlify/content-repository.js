@@ -409,13 +409,25 @@ async function listAssets(kind, options = {}) {
     return cached.value.map((asset) => ({ ...asset, tags: [...asset.tags] }));
   }
 
+  const directoryRequest = githubRequest(config, definition.directory, {
+    ...options,
+    notFoundCode: 'CONTENT_DIRECTORY_NOT_FOUND'
+  }).catch((error) => {
+    if (
+      definition.directory === 'exams'
+      && error instanceof ContentRepositoryError
+      && error.code === 'CONTENT_DIRECTORY_NOT_FOUND'
+    ) return null;
+    throw error;
+  });
   const [response, catalog] = await Promise.all([
-    githubRequest(config, definition.directory, {
-      ...options,
-      notFoundCode: 'CONTENT_DIRECTORY_NOT_FOUND'
-    }),
+    directoryRequest,
     readCatalog(config, options)
   ]);
+  if (!response) {
+    listCache.set(cacheKey, { expiresAt: Date.now() + LIST_CACHE_MS, value: [] });
+    return [];
+  }
   let entries;
   try {
     entries = await response.json();

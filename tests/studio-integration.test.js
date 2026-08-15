@@ -84,6 +84,8 @@ test('Studio exposes dashboard, lesson, exam and prompt authoring workflows', ()
   assert.match(examBuilder, /\/\.netlify\/functions\/admin-users/);
   assert.match(examBuilder, /Szukaj po imieniu, nazwisku, e-mailu lub ID/);
   assert.match(styles, /\.exam-audience-picker/);
+  assert.match(styles, /\.exam-builder-shell\s*\{[\s\S]*?height:\s*calc\(100dvh\s*-\s*var\(--studio-header-height\)\s*-\s*var\(--workspace-toolbar-height\)\)/);
+  assert.match(styles, /\.exam-editor-panel,[\s\S]*?\.exam-summary-panel\s*\{[\s\S]*?overflow-y:\s*auto/);
   assert.match(html, /id=["']prompt-download-button["']/);
   assert.match(html, /id=["']prompt-import-button["']/);
   assert.match(html, /id=["']prompt-repository-save-button["']/);
