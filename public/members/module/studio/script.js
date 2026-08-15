@@ -4224,6 +4224,9 @@
       };
       const key = mapping[fieldName];
       if (key === 'weight') value = Math.max(.01, Math.min(10000, Number(value) || 1));
+      if (found.node.kind === 'dashboard' && ['tracking', 'showProgress'].includes(key)) {
+        value = value === 'OFF' ? 'OFF' : 'ON';
+      }
       found.node.progress[key] = value;
       found.node.progressConfigured = true;
       }

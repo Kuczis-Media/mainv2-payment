@@ -184,9 +184,11 @@
     const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
     const state = (input, fallback) => ['ON', 'OFF', 'INHERIT'].includes(String(input || '').toUpperCase())
       ? String(input).toUpperCase() : fallback;
+    const tracking = state(source.tracking, root ? 'ON' : 'INHERIT');
+    const showProgress = state(source.showProgress, root ? 'ON' : 'INHERIT');
     return {
-      tracking: state(source.tracking, root ? 'ON' : 'INHERIT'),
-      showProgress: state(source.showProgress, root ? 'ON' : 'INHERIT'),
+      tracking: root && tracking === 'INHERIT' ? 'ON' : tracking,
+      showProgress: root && showProgress === 'INHERIT' ? 'ON' : showProgress,
       includeInSection: source.includeInSection !== false,
       includeInDepartment: source.includeInDepartment !== false,
       includeInCourse: source.includeInCourse !== false,

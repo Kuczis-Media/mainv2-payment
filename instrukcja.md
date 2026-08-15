@@ -1758,13 +1758,15 @@ W trybie sekwencyjnym serwer blokuje nieznane i zbyt odległe kroki. W raporcie 
 
 Lista użytkowników pokazuje konta Identity także wtedy, gdy nie mają jeszcze rekordu postępu. Można wyszukiwać po nazwie, e-mailu i ID, filtrować stan oraz sortować po aktywności, postępie, nazwie albo e-mailu.
 
-Po kliknięciu konta zobaczysz procent kursu i każdego kontenera oraz szczegóły materiałów. „Otwarto” znaczy wyłącznie, że użytkownik uruchomił materiał. Dla PDF procent oznacza najwyższą odwiedzoną stronę i nie jest dowodem przeczytania. Dla quizu wynik jest oddzielony od stopnia wypełnienia. Dla filmu wiarygodne są zakresy odtworzone przez kontrolowany player; samo ustawienie pozycji blisko końca nie zalicza filmu.
+Po kliknięciu konta zobaczysz procent kursu i każdego kontenera oraz szczegóły materiałów. Otwarcie materiału innego niż lekcja zalicza go na 100%; lekcja nadal wylicza dokładny procent z wykonanych kroków. Dla PDF, prezentacji, quizu i filmu zachowane dane szczegółowe trzeba interpretować osobno: ukończenie przy otwarciu nie jest dowodem przeczytania, obejrzenia ani uzyskania wyniku. Dla filmu wiarygodne są zakresy odtworzone przez kontrolowany player, a wynik quizu pozostaje oddzielony od postępu.
 
-Google Slides, Google Drive i Google Forms są obcymi iframe'ami. ChemDisk nie może samodzielnie odczytać ich wewnętrznej nawigacji. Zawsze zobaczysz otwarcie; dokładną pozycję lub wynik tylko dla odtwarzacza, który emituje zweryfikowane komunikaty integracyjne ChemDisk.
+Google Slides, Google Drive i Google Forms są obcymi iframe'ami. ChemDisk nie może samodzielnie odczytać ich wewnętrznej nawigacji. Moduł zostanie zaliczony przy otwarciu, ale dokładną pozycję lub wynik zobaczysz tylko dla odtwarzacza, który emituje zweryfikowane komunikaty integracyjne ChemDisk.
 
 ### 34.5. Reset i ręczne zmiany
 
 W raporcie ucznia można oznaczyć materiał jako ukończony/nieukończony oraz zresetować materiał, sekcję, dział lub cały kurs. Reset wymaga potwierdzenia. Każda operacja administratora trafia do audit logu razem z administratorem, użytkownikiem, zakresem, poprzednią i nową wartością oraz czasem.
+
+Kursant może zresetować pojedynczy własny materiał przy pasku na dashboardzie albo cały własny kurs z karty postępu lub ustawień profilu. Funkcja używa wyłącznie zalogowanej sesji i nie pozwala wskazać innego użytkownika.
 
 Wyłączenie śledzenia nie jest resetem. Aby zachować historię, użyj przełącznika `OFF`; aby usunąć stan konkretnego użytkownika, użyj jawnej operacji resetu.
 
@@ -1772,7 +1774,7 @@ Wyłączenie śledzenia nie jest resetem. Aby zachować historię, użyj przeł�
 
 - brak zakładki **Postępy**: sprawdź świeżą rolę `admin` i ponowne logowanie;
 - `PROGRESS_STORAGE_UNAVAILABLE`: sprawdź `NETLIFY_API_TOKEN`, `SITE_ID` oraz dostęp tokenu do witryny;
-- materiał ma tylko „Otwarto”: sprawdź, czy jego player dostarcza zdarzenia pozycji oraz czy tracking jest efektywnie `ON`;
+- materiał inny niż lekcja nie zalicza się po otwarciu: sprawdź, czy tracking jest efektywnie `ON`, materiał jest opublikowany w katalogu i nie jest kontenerem;
 - brak paska przy zapisanym procencie: sprawdź dziedziczone `showProgress`;
 - lekcja nie pozwala przejść dalej: sprawdź tryb sekwencyjny, warunek poprzedniego kroku oraz nadpisanie użytkownika;
 - nowy materiał nie wchodzi do procentu kursu: opublikuj ponownie Dashboard Builder, aby zsynchronizować katalog;

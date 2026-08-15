@@ -122,6 +122,15 @@ test('protected Film suppresses provider links and sandboxes YouTube frames with
   }
 });
 
+test('Film tracks real YouTube watch ranges through the iframe API with batched writes', () => {
+  const script = fs.readFileSync(path.join(moduleRoot, 'film', 'script.js'), 'utf8');
+  assert.match(script, /query\.set\('enablejsapi', '1'\)/);
+  assert.match(script, /new window\.YT\.Player\(frame/);
+  assert.match(script, /watchedRanges:\s*trackedRanges\(\)/);
+  assert.match(script, /delta > 0 && delta <= 2\.5/);
+  assert.match(script, /const PROGRESS_SYNC_INTERVAL = 15000/);
+});
+
 test('protected PDF and Slides suppress every direct Google fallback link', () => {
   const cases = [
     { name: 'pdf', protectedType: /const protectedMode = state\.type === '1'/ },

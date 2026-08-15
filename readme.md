@@ -973,7 +973,7 @@ Funkcja `progress` zawsze wyznacza użytkownika z aktualnie zweryfikowanej sesji
 
 ### Statusy i dane
 
-Status ma jedną z wartości: `not_started`, `opened`, `in_progress`, `completed`. Otwarcie nie kończy materiału. Wspólna część rekordu zawiera `materialId`, `materialType`, pierwsze i ostatnie otwarcie, `openCount`, procent, ostatnią pozycję, datę ukończenia i ostatnią aktywność. Pole `details` przechowuje dane typu materiału:
+Status ma jedną z wartości: `not_started`, `opened`, `in_progress`, `completed`. Otwarcie śledzonego materiału będącego liściem dashboardu kończy go na 100%, z wyjątkiem lekcji, która nadal wylicza dokładny procent z wykonanych kroków. Otwarcie działu lub harmonijki nie zalicza ich bezpośrednio — ich procent wynika z dzieci. Wspólna część rekordu zawiera `materialId`, `materialType`, pierwsze i ostatnie otwarcie, `openCount`, procent, ostatnią pozycję, datę ukończenia i ostatnią aktywność. Pole `details` przechowuje dane typu materiału:
 
 - lekcja: bieżący i najwyższy krok, stabilne identyfikatory ukończonych kroków oraz liczba kroków śledzonych;
 - prezentacja: ostatni i najwyższy slajd, odwiedzone slajdy oraz łączna liczba slajdów;
@@ -1007,6 +1007,8 @@ Tryb lekcji może być swobodny albo sekwencyjny. Serwer odrzuca nieznany, zablo
 
 Dashboard wyświetla pasek całego kursu, działów, harmonijek i materiałów, o ile efektywne `showProgress` jest włączone. Procent kontenera jest średnią ważoną śledzonych liści, które są włączone do danego poziomu. Elementy wyłączone i materiały dodatkowe nie zwiększają mianownika. Gdy globalne śledzenie jest wyłączone, historia pozostaje w Blobs, procenty nie są aktualizowane, a paski są ukryte; rejestrowanie samych otwarć może nadal działać.
 
+Kursant może po potwierdzeniu zresetować pojedynczy materiał przy jego pasku albo cały własny kurs z karty postępu i ustawień profilu. Endpoint zawsze bierze właściciela danych z uwierzytelnionej sesji; reset kursanta nie przyjmuje `userId`.
+
 ### Panel administratora
 
 Zakładka **Postępy** zawiera ustawienia globalne, wyszukiwanie, sortowanie i filtry użytkowników, raport pojedynczego kursanta, agregaty globalne oraz audit log. Raport pokazuje otwarcia, procent, pozycję właściwą dla typu materiału, pierwsze otwarcie i ostatnią aktywność. Konta Identity bez aktywności są dołączane z postępem 0%.
@@ -1017,15 +1019,15 @@ Raport globalny obejmuje średni postęp, rozpoczęcia, ukończenia, rozkład kw
 
 ### Integracje odtwarzaczy i iframe
 
-Moduł `yt` liczy zakresy odtwarzane w normalnym tempie i nie uznaje samego przewinięcia do końca. Aktualizacje są grupowane i wysyłane co kilka sekund zamiast przy każdym `timeupdate`.
+Moduły `yt` i `film` zapisują także zakresy odtwarzane w normalnym tempie i nie uznają samego przewinięcia do końca za obejrzany fragment. Aktualizacje są grupowane co 15 sekund zamiast wysyłania przy każdym `timeupdate`. Zgodnie z prostą regułą ukończenia moduł jako element kursu osiąga jednak 100% już przy otwarciu; telemetria filmu pozostaje dostępna w szczegółach raportu.
 
-Google Slides, Google Drive PDF i Google Forms działają w obcych iframe'ach, których zawartości przeglądarka nie pozwala ChemDisk odczytać. Dla nich otwarcie jest zawsze rejestrowane, natomiast dokładny slajd, strona lub wynik pojawia się tylko wtedy, gdy użyty, kontrolowany odtwarzacz wysyła odpowiednio `chemdisk:slide`, `chemdisk:pdf-page`, `chemdisk:video` albo `chemdisk:quiz`. ChemDisk akceptuje komunikat wyłącznie z bieżącego iframe i jego oczekiwanego originu. Nie należy przedstawiać braku takich eventów jako potwierdzenia obejrzenia lub przeczytania materiału.
+Google Slides, Google Drive PDF i Google Forms działają w obcych iframe'ach, których zawartości przeglądarka nie pozwala ChemDisk odczytać. Ich otwarcie zalicza sam moduł według reguły 100%, natomiast dokładny slajd, strona lub wynik pojawia się tylko wtedy, gdy użyty, kontrolowany odtwarzacz wysyła odpowiednio `chemdisk:slide`, `chemdisk:pdf-page`, `chemdisk:video` albo `chemdisk:quiz`. ChemDisk akceptuje komunikat wyłącznie z bieżącego iframe i jego oczekiwanego originu. Sam status ukończenia po otwarciu nie jest dowodem obejrzenia, przeczytania ani poprawnego rozwiązania materiału.
 
 ### Endpointy
 
 - `GET /.netlify/functions/progress` — własny dokument, katalog i agregaty;
 - `POST /.netlify/functions/progress` — własne zdarzenie `open`, `progress`, `complete`, `lesson_step`, `presentation`, `video`, `pdf` lub `quiz`;
-- `DELETE /.netlify/functions/progress` — reset własnego materiału;
+- `DELETE /.netlify/functions/progress` — reset własnego materiału (`materialId`) albo całego własnego kursu (`scope: "course"`);
 - `GET|PUT|DELETE /.netlify/functions/admin-progress` — raporty, konfiguracja, ręczne operacje, reset i audyt administratora.
 
 Nie są potrzebne nowe zmienne środowiskowe. System używa istniejących `NETLIFY_API_TOKEN` i `SITE_ID`, które są już wymagane przez pozostałe store'y Blobs.
@@ -1087,7 +1089,7 @@ Przed publikacją wykonaj też krótki test ręczny:
 27. po zmianie pliku w repo materiałów nowa wersja jest widoczna bez deployu aplikacji po wygaśnięciu 20-sekundowego cache’u;
 28. linki Google i YouTube działają na docelowej domenie i przy docelowych ustawieniach udostępniania;
 29. zwykły użytkownik nie może podać cudzego `userId`, odczytać cudzego postępu ani wywołać `admin-progress`;
-30. otwarcie materiału daje status „Otwarto”, a nie „Ukończono”;
+30. otwarcie materiału innego niż lekcja daje 100%, lekcja nadal wylicza procent z kroków, a otwarcie kontenera nie zalicza jego dzieci;
 31. ustawienia `ON/OFF/INHERIT`, osobne flagi agregacji i wagi dają oczekiwany procent działu i kursu;
 32. wyłączenie globalnego postępu zachowuje historię, a osobny przełącznik otwarć działa zgodnie z ustawieniem;
 33. lekcja sekwencyjna odrzuca skok do zablokowanego kroku, natomiast nadpisanie użytkownika działa;

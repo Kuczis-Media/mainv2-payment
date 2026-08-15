@@ -154,6 +154,8 @@
     profileConfirmPassword: document.getElementById('profile-confirm-password'),
     profilePasswordMessage: document.getElementById('profile-password-message'),
     profilePasswordSubmit: document.getElementById('profile-password-submit'),
+    profileResetProgress: document.getElementById('profile-reset-progress'),
+    profileProgressMessage: document.getElementById('profile-progress-message'),
     profileClose: document.getElementById('profile-close'),
     profileCancel: document.getElementById('profile-cancel'),
     adminButton: document.getElementById('admin-panel-button'),
@@ -700,11 +702,61 @@
     hydrateDashboardProgress(model);
   }
 
-  async function hydrateDashboardProgress(model) {
+  async function resetStudentProgress(materialId, title, trigger) {
+    const api = window.ChemProgress;
+    if (!api) return false;
+    const courseReset = !materialId;
+    const question = courseReset
+      ? 'Zresetować cały Twój postęp kursu? Tej operacji nie można cofnąć.'
+      : `Zresetować Twój postęp materiału „${title || 'Materiał'}”?`;
+    if (!window.confirm(question)) return null;
+    const previousText = trigger?.textContent || '';
+    if (trigger) {
+      trigger.disabled = true;
+      trigger.textContent = 'Resetowanie…';
+    }
+    try {
+      if (courseReset) await api.resetAll();
+      else await api.reset(materialId);
+      await hydrateDashboardProgress(null, true);
+      return true;
+    } catch (error) {
+      console.warn('Nie udało się zresetować postępu', error?.code || error?.message || error);
+      return false;
+    } finally {
+      if (trigger?.isConnected) {
+        trigger.disabled = false;
+        trigger.textContent = previousText;
+      }
+    }
+  }
+
+  function studentResetButton(label, materialId, title) {
+    const button = document.createElement('button');
+    button.className = 'student-progress-reset';
+    button.type = 'button';
+    button.textContent = label;
+    button.setAttribute('aria-label', materialId ? `Resetuj postęp: ${title}` : 'Resetuj cały mój postęp kursu');
+    button.addEventListener('click', async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const reset = await resetStudentProgress(materialId, title, button);
+      if (reset) {
+        elements.message.hidden = false;
+        elements.message.className = 'dashboard-message';
+        elements.message.textContent = materialId
+          ? `Zresetowano Twój postęp materiału „${title}”.`
+          : 'Zresetowano cały Twój postęp kursu.';
+      }
+    });
+    return button;
+  }
+
+  async function hydrateDashboardProgress(model, force) {
     const api = window.ChemProgress;
     if (!api) return;
     try {
-      const state = await api.load();
+      const state = await api.load({ force: Boolean(force) });
       const nodes = state?.aggregate?.nodes || {};
       document.querySelectorAll('[data-progress-host]').forEach((host) => {
         const id = host.dataset.progressHost;
@@ -716,6 +768,7 @@
         }
         host.hidden = false;
         host.append(api.progressView(aggregate.record || aggregate, { compact: true }));
+        if (aggregate.record) host.append(studentResetButton('Resetuj', id, aggregate.title));
       });
       const courseHost = document.getElementById('course-progress');
       const course = state?.aggregate?.course;
@@ -726,6 +779,12 @@
           const title = document.createElement('strong');
           title.textContent = 'Twój postęp kursu';
           courseHost.append(title, api.progressView(course));
+          if (Object.keys(state?.records || {}).length) {
+            const actions = document.createElement('div');
+            actions.className = 'course-progress-actions';
+            actions.append(studentResetButton('Resetuj postęp', '', 'Kurs'));
+            courseHost.append(actions);
+          }
         }
       }
     } catch (error) {
@@ -1221,6 +1280,8 @@
     clearProfilePasswordFields();
     elements.profilePasswordMessage.textContent = '';
     elements.profilePasswordMessage.className = 'form-message';
+    elements.profileProgressMessage.textContent = '';
+    elements.profileProgressMessage.className = 'form-message profile-progress-message';
     elements.profilePasswordEmail.value = user && typeof user.email === 'string' ? user.email : '';
     if (typeof elements.profileDialog.showModal === 'function') elements.profileDialog.showModal();
     else elements.profileDialog.setAttribute('open', '');
@@ -1290,6 +1351,18 @@
     } finally {
       elements.profileSave.disabled = false;
       elements.profileSave.textContent = oldButtonText;
+    }
+  }
+
+  async function resetProfileProgress() {
+    elements.profileProgressMessage.textContent = '';
+    elements.profileProgressMessage.className = 'form-message profile-progress-message';
+    const reset = await resetStudentProgress('', 'Kurs', elements.profileResetProgress);
+    if (reset) {
+      elements.profileProgressMessage.textContent = 'Twój postęp kursu został zresetowany.';
+    } else if (reset === false) {
+      elements.profileProgressMessage.textContent = 'Nie zresetowano postępu.';
+      elements.profileProgressMessage.className = 'form-message profile-progress-message is-error';
     }
   }
 
@@ -2998,7 +3071,11 @@
   }
 
   function adminProgressPercent(value) {
-    return `${Math.round(Math.max(0, Math.min(100, Number(value) || 0)))}%`;
+    const percent = Math.max(0, Math.min(100, Number(value) || 0));
+    if (percent === 0) return '0%';
+    if (percent < 1) return '<1%';
+    if (percent < 10) return `${String(Math.round(percent * 10) / 10).replace('.', ',')}%`;
+    return `${Math.round(percent)}%`;
   }
 
   function reconcileAdminProgressUsers() {
@@ -3445,6 +3522,9 @@
     window.addEventListener('resize', requestNavigationSync, { passive: true });
     window.addEventListener('hashchange', handleLocationNavigation);
     window.addEventListener('popstate', handleLocationNavigation);
+    window.addEventListener('pageshow', (event) => {
+      if (event.persisted && dashboardLoadId > 0) hydrateDashboardProgress(null, true);
+    });
     window.addEventListener('wheel', cancelNavigationIntent, { passive: true });
     window.addEventListener('touchstart', cancelNavigationIntent, { passive: true });
     if (window.visualViewport) {
@@ -3473,6 +3553,7 @@
     elements.profileCancel.addEventListener('click', closeProfile);
     elements.profileForm.addEventListener('submit', saveProfile);
     elements.profilePasswordForm.addEventListener('submit', changeProfilePassword);
+    elements.profileResetProgress.addEventListener('click', resetProfileProgress);
     elements.logoutButton.addEventListener('click', logout);
     elements.adminButton.addEventListener('click', openAdminPanel);
     elements.adminClose.addEventListener('click', closeAdminPanel);

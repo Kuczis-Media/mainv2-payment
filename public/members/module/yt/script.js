@@ -74,6 +74,7 @@
       let watchedRanges = [];
       let lastProgressSync = 0;
       const CONTROLS_HIDE_DELAY = 3200;
+      const PROGRESS_SYNC_INTERVAL = 15000;
 
       const trackedRanges = () => [
         ...watchedRanges,
@@ -117,7 +118,7 @@
         }
         lastWatchSample = current;
         if (watchedRanges.length > 300) watchedRanges = watchedRanges.slice(-300);
-        if (Date.now() - lastProgressSync >= 5000) syncTrackedProgress(false);
+        if (Date.now() - lastProgressSync >= PROGRESS_SYNC_INTERVAL) syncTrackedProgress(false);
       };
 
       const resetControlsHideTimer = (keepVisible = false) => {

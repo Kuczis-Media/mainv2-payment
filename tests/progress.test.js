@@ -48,6 +48,7 @@ function merge(existing, event, options = {}) {
     effective: node ? resolved.effective.get(node.id) : { tracking: true, showProgress: true },
     global: options.global || normalizedCatalog.global,
     preferences: options.preferences || {},
+    isLeaf: options.isLeaf,
     now: options.now || '2026-08-15T10:00:00.000Z'
   });
 }
@@ -89,6 +90,44 @@ test('global progress OFF suppresses percentages but can keep open history', () 
   }, { catalog: noOpens });
   assert.equal(ignored.changed, false);
   assert.equal(ignored.record, null);
+});
+
+test('opening a non-lesson leaf completes it while lessons and containers keep exact progress', () => {
+  const openedPresentation = merge(null, {
+    materialId: 'slides', materialType: 'presentation', action: 'open', opened: true
+  });
+  assert.equal(openedPresentation.record.progressPercent, 100);
+  assert.equal(openedPresentation.record.status, 'completed');
+  assert.equal(openedPresentation.record.openCount, 1);
+
+  const lessonNode = progressCommon.normalizeCatalog({ nodes: [{
+    id: 'lesson', type: 'lesson', progress: progress({ tracking: 'ON' })
+  }] }).nodes[0];
+  const openedLesson = merge(null, {
+    materialId: 'lesson', materialType: 'lesson', action: 'open', opened: true
+  }, { node: lessonNode });
+  assert.equal(openedLesson.record.progressPercent, 0);
+  assert.equal(openedLesson.record.status, 'opened');
+
+  const disguisedLesson = merge(null, {
+    materialId: 'lesson', materialType: 'presentation', action: 'open', opened: true
+  }, { node: lessonNode });
+  assert.equal(disguisedLesson.record.materialType, 'lesson');
+  assert.equal(disguisedLesson.record.progressPercent, 0);
+
+  const openedContainer = merge(null, {
+    materialId: 'accordion', materialType: 'other', action: 'open', opened: true
+  }, { isLeaf: false });
+  assert.equal(openedContainer.record.progressPercent, 0);
+  assert.equal(openedContainer.record.status, 'opened');
+
+  const opensDisabled = catalog({ global: { tracking: 'ON', showProgress: 'ON', recordOpens: false } });
+  const completedWithoutOpenTelemetry = merge(null, {
+    materialId: 'slides', materialType: 'presentation', action: 'open', opened: true
+  }, { catalog: opensDisabled });
+  assert.equal(completedWithoutOpenTelemetry.record.progressPercent, 100);
+  assert.equal(completedWithoutOpenTelemetry.record.opened, false);
+  assert.equal(completedWithoutOpenTelemetry.record.openCount, 0);
 });
 
 test('weighted course and nested accordion aggregation counts only effective leaves', () => {
@@ -336,6 +375,30 @@ test('progress endpoints derive the learner from Identity, deny privilege escala
   const ownRead = await progressFunction.handler(eventFor('GET'), userOneContext);
   assert.equal(JSON.parse(ownRead.body).userId, USER_ONE);
   assert.equal(JSON.parse(ownRead.body).records.slides.openCount, 1);
+  assert.equal(JSON.parse(ownRead.body).records.slides.progressPercent, 100);
+
+  const ownMaterialReset = await progressFunction.handler(eventFor('DELETE', {
+    materialId: 'slides'
+  }), userOneContext);
+  assert.equal(ownMaterialReset.statusCode, 200);
+  assert.equal(JSON.parse(ownMaterialReset.body).existed, true);
+  await progressFunction.handler(eventFor('POST', {
+    materialId: 'slides', materialType: 'presentation', action: 'open', opened: true
+  }), userOneContext);
+  const ownCourseReset = await progressFunction.handler(eventFor('DELETE', {
+    scope: 'course'
+  }), userOneContext);
+  assert.equal(ownCourseReset.statusCode, 200);
+  assert.equal(JSON.parse(ownCourseReset.body).removed, 1);
+  const afterOwnCourseReset = await progressFunction.handler(eventFor('GET'), userOneContext);
+  assert.deepEqual(JSON.parse(afterOwnCourseReset.body).records, {});
+  const forgedOwnReset = await progressFunction.handler(eventFor('DELETE', {
+    scope: 'course', targetUserId: USER_TWO
+  }), userOneContext);
+  assert.equal(forgedOwnReset.statusCode, 400);
+  await progressFunction.handler(eventFor('POST', {
+    materialId: 'slides', materialType: 'presentation', action: 'open', opened: true
+  }), userOneContext);
 
   canonical = { id: USER_TWO, email: 'anna@example.com', app_metadata: { roles: ['active'] } };
   const foreignRead = await progressFunction.handler(eventFor('GET', undefined, { userId: USER_ONE }), contextFor(canonical));

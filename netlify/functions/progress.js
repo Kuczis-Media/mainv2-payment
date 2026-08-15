@@ -93,6 +93,7 @@ async function handleEvent(event, store, auth) {
   const resolved = effectiveSettings(catalog);
   const node = resolved.byId.get(progressEvent.materialId) || null;
   const effective = node ? resolved.effective.get(node.id) : { tracking: true, showProgress: true };
+  const isLeaf = !node || !catalog.nodes.some((candidate) => candidate.parentId === node.id);
   let rejected = null;
   const outcome = await updateUser(store, auth.userId, profileFrom(auth.user), (document) => {
     const merged = mergeProgressEvent(document.records[progressEvent.materialId] || null, progressEvent, {
@@ -102,6 +103,7 @@ async function handleEvent(event, store, auth) {
       global: catalog.global,
       preferences: document.preferences,
       records: document.records,
+      isLeaf,
       now: Date.now()
     });
     if (!merged.ok) {
@@ -131,6 +133,17 @@ async function handleReset(event, store, auth) {
   const parsed = parseJsonBody(event);
   if (!parsed.ok) return responseForFailure(parsed);
   const body = parsed.value;
+  if (!plainObject(body)) return json({ error: 'INVALID_BODY' }, 400);
+  if (body.scope === 'course') {
+    if (Object.keys(body).some((key) => key !== 'scope')) return json({ error: 'UNEXPECTED_FIELDS' }, 400);
+    const outcome = await updateUser(store, auth.userId, profileFrom(auth.user), (document) => {
+      const removed = Object.keys(document.records).length;
+      document.records = {};
+      document.lastActivityAt = null;
+      return removed ? { document, result: { removed } } : { abort: true, result: { removed } };
+    });
+    return json({ reset: true, scope: 'course', removed: Number(outcome.result?.removed) || 0 });
+  }
   if (Object.keys(body).some((key) => key !== 'materialId')) return json({ error: 'UNEXPECTED_FIELDS' }, 400);
   if (!validMaterialId(body.materialId)) return json({ error: 'INVALID_MATERIAL_ID' }, 400);
   const outcome = await updateUser(store, auth.userId, profileFrom(auth.user), (document) => {

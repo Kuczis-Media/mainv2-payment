@@ -8,6 +8,23 @@ const path = require('node:path');
 const studio = require('../public/members/module/studio/dashboard-model.js');
 const runtimeParser = require('../public/members/dashboard-parser.js');
 
+test('root dashboard progress cannot inherit while descendants still can', () => {
+  const model = studio.createModel({
+    progressConfigured: true,
+    progress: { tracking: 'INHERIT', showProgress: 'INHERIT' },
+    sections: [{
+      title: 'Dział',
+      progressConfigured: true,
+      progress: { tracking: 'INHERIT', showProgress: 'INHERIT' }
+    }]
+  });
+
+  assert.equal(model.progress.tracking, 'ON');
+  assert.equal(model.progress.showProgress, 'ON');
+  assert.equal(model.sections[0].progress.tracking, 'INHERIT');
+  assert.equal(model.sections[0].progress.showProgress, 'INHERIT');
+});
+
 test('studio exposes every requested dashboard block with the runtime protection modes', () => {
   assert.deepEqual(studio.MODULE_ORDER, [
     'slides',

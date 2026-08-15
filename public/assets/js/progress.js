@@ -137,7 +137,13 @@
   function update(event, options = {}) {
     const id = event?.materialId;
     if (!MATERIAL_ID.test(String(id || ''))) return Promise.reject(new Error('INVALID_MATERIAL_ID'));
-    if (options.immediate) return send(event, options).catch(reportBackgroundError);
+    if (options.immediate) {
+      const payload = mergeObjects(pending.get(id), event);
+      pending.delete(id);
+      root.clearTimeout(timers.get(id));
+      timers.delete(id);
+      return send(payload, options).catch(reportBackgroundError);
+    }
     pending.set(id, mergeObjects(pending.get(id), event));
     root.clearTimeout(timers.get(id));
     return new Promise((resolve) => {
@@ -186,6 +192,14 @@
     });
   }
 
+  function resetAll() {
+    return request('DELETE', { scope: 'course' }).then((payload) => {
+      if (serverState) serverState.records = {};
+      saveCache(serverState);
+      return payload;
+    });
+  }
+
   function record(materialIdValue) {
     return serverState?.records?.[materialIdValue] || null;
   }
@@ -198,6 +212,14 @@
     return 'Nie rozpoczęto';
   }
 
+  function percentLabel(value) {
+    const percent = Math.max(0, Math.min(100, Number(value) || 0));
+    if (percent === 0) return '0%';
+    if (percent < 1) return '<1%';
+    if (percent < 10) return `${String(Math.round(percent * 10) / 10).replace('.', ',')}%`;
+    return `${Math.round(percent)}%`;
+  }
+
   function progressView(input, options = {}) {
     const recordValue = input || null;
     const percent = Math.max(0, Math.min(100, Number(recordValue?.progressPercent) || 0));
@@ -206,17 +228,21 @@
     wrapper.dataset.status = recordValue?.status || 'not_started';
     const line = document.createElement('span');
     line.className = 'chem-progress-label';
-    line.innerHTML = `<strong>${Math.round(percent)}%</strong><small></small>`;
-    line.querySelector('small').textContent = statusLabel(recordValue);
+    const value = document.createElement('strong');
+    value.textContent = percentLabel(percent);
+    const status = document.createElement('small');
+    status.textContent = statusLabel(recordValue);
+    line.append(value, status);
     const track = document.createElement('span');
     track.className = 'chem-progress-track';
     track.setAttribute('role', 'progressbar');
     track.setAttribute('aria-valuemin', '0');
     track.setAttribute('aria-valuemax', '100');
-    track.setAttribute('aria-valuenow', String(Math.round(percent)));
+    track.setAttribute('aria-valuenow', String(Math.round(percent * 10) / 10));
     const bar = document.createElement('span');
     bar.className = 'chem-progress-bar';
     bar.style.width = `${percent}%`;
+    bar.style.minWidth = percent > 0 ? '3px' : '0';
     track.append(bar);
     wrapper.append(line, track);
     return wrapper;
@@ -272,7 +298,9 @@
     progressView,
     record,
     reset,
+    resetAll,
     send,
+    percentLabel,
     statusLabel,
     update,
     get state() { return serverState; }

@@ -7,6 +7,7 @@ const MATERIAL_TYPES = Object.freeze([
 ]);
 const STATUS_VALUES = Object.freeze(['not_started', 'opened', 'in_progress', 'completed']);
 const MATERIAL_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
+const STRUCTURAL_MATERIAL_TYPES = new Set(['lesson', 'lesson_step', 'section', 'subsection', 'department', 'course']);
 const MAX_RECORDS = 5_000;
 const MAX_VISITED = 1_000;
 
@@ -394,13 +395,18 @@ function mergeProgressEvent(existingInput, eventInput, context) {
   const shouldOpen = event.action === 'open' || event.opened === true;
   const canTrack = global.tracking !== 'OFF' && settings.tracking !== false;
   const canOpen = global.recordOpens !== false;
-  if (event.action === 'open' && !canOpen) {
+  const openedType = materialType(node?.type || event.materialType || existing.materialType);
+  const completesOnOpen = event.action === 'open'
+    && canTrack
+    && context.isLeaf !== false
+    && !STRUCTURAL_MATERIAL_TYPES.has(openedType);
+  if (event.action === 'open' && !canOpen && !completesOnOpen) {
     return { ok: true, record: existingInput || null, changed: false };
   }
   if (!canTrack && !(canOpen && shouldOpen)) return { ok: true, record: existingInput || null, changed: false };
 
   const record = { ...existing, details: { ...existing.details } };
-  record.materialType = materialType(event.materialType || node?.type || record.materialType);
+  record.materialType = materialType(node?.type || event.materialType || record.materialType);
   if (shouldOpen && canOpen) {
     record.opened = true;
     record.firstOpenedAt = record.firstOpenedAt || now;
@@ -413,11 +419,15 @@ function mergeProgressEvent(existingInput, eventInput, context) {
       : event;
     applyTypedProgress(record, typedEvent, node, now);
   }
+  if (completesOnOpen) {
+    record.progressPercent = 100;
+    record.completedAt = record.completedAt || now;
+  }
   if (event.action === 'complete' && canTrack) {
     record.progressPercent = 100;
     record.completedAt = record.completedAt || now;
   }
-  record.progressPercent = clamp(record.progressPercent);
+  record.progressPercent = record.completedAt ? 100 : clamp(record.progressPercent);
   if (record.progressPercent >= 100) record.completedAt = record.completedAt || now;
   record.status = record.completedAt || record.progressPercent >= 100 ? 'completed'
     : record.progressPercent > 0 ? 'in_progress'
