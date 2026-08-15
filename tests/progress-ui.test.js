@@ -59,8 +59,11 @@ test('admin student report renders a compact, lazily expanded material tree', ()
   assert.match(dashboard, /card = document\.createElement\('details'\)/);
   assert.match(dashboard, /card\.addEventListener\('toggle',[\s\S]*if \(!card\.open \|\| hydrated\) return;[\s\S]*admin-progress-material-body/);
   assert.match(dashboard, /childrenByParent[\s\S]*admin-progress-material-children[\s\S]*createMaterialRow\(child\)/);
+  assert.match(dashboard, /report\.className = 'admin-progress-exam-attempts'/);
+  assert.match(dashboard, /report\.addEventListener\('toggle',[\s\S]*view=user[\s\S]*Reset próby/);
   assert.match(css, /\.admin-progress-material > summary\s*\{[\s\S]*min-height:\s*54px/);
   assert.match(css, /\.admin-progress-material-children\s*\{/);
+  assert.match(css, /\.admin-progress-exam-attempt\s*\{/);
 });
 
 test('global progress report explains metrics and renders readable audit entries', () => {
@@ -72,6 +75,7 @@ test('global progress report explains metrics and renders readable audit entries
   assert.match(dashboard, /Jak uczniowie przechodzą kurs/);
   assert.match(dashboard, /wskaźnikiem pomocniczym:[\s\S]*nie jest dowodem/);
   assert.match(dashboard, /adminProgressAuditActionLabel[\s\S]*Zresetowano cały kurs/);
+  assert.match(dashboard, /'exam\.attempt\.reset': 'Zresetowano próbę egzaminu'/);
   assert.match(dashboard, /administrator: \$\{adminProgressIdentityLabel\(entry\.adminId\)\}/);
   assert.match(css, /\.admin-progress-distribution\s*\{[\s\S]*repeat\(4/);
   assert.match(css, /\.admin-progress-audit-list li:not\(:last-child\)::before/);

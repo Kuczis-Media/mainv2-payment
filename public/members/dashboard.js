@@ -6,6 +6,7 @@
   const ADMIN_USERS_URL = '/.netlify/functions/admin-users';
   const ADMIN_FORMS_URL = '/.netlify/functions/admin-forms';
   const ADMIN_DASHBOARD_URL = '/.netlify/functions/admin-dashboard';
+  const ADMIN_EXAMS_URL = '/.netlify/functions/admin-exams';
   const PAYMENT_ADMIN_URL = '/.netlify/functions/payment-admin';
   const PAYMENT_CONFIG_URL = '/.netlify/functions/payment-config';
   const ADMIN_PROGRESS_URL = '/.netlify/functions/admin-progress';
@@ -409,6 +410,7 @@
     if (/\/slides\//.test(pathname)) return { kind: 'document', icon: '▤' };
     if (/\/pdf\//.test(pathname)) return { kind: 'document', icon: 'PDF' };
     if (/\/lesson\//.test(pathname)) return { kind: 'exercise', icon: 'L' };
+    if (/\/exam\//.test(pathname)) return { kind: 'exercise', icon: 'E' };
     if (/\/(forms|chat)\//.test(pathname)) return { kind: 'exercise', icon: pathname.includes('/chat/') ? '✦' : '✓' };
     if (/\/(kalkulator|classic)\//.test(pathname)) return { kind: 'calculator', icon: '±' };
     if (/\/(bitpaper|whiteboard)\//.test(pathname)) return { kind: 'exercise', icon: '✎' };
@@ -3344,7 +3346,8 @@
       'progress.reset.material': 'Zresetowano materiał',
       'progress.reset.section': 'Zresetowano sekcję',
       'progress.reset.department': 'Zresetowano dział',
-      'progress.reset.course': 'Zresetowano cały kurs'
+      'progress.reset.course': 'Zresetowano cały kurs',
+      'exam.attempt.reset': 'Zresetowano próbę egzaminu'
     })[action] || 'Wykonano operację administracyjną';
   }
 
@@ -3373,6 +3376,9 @@
     }
     if (entry.action === 'progress.unlock_step') return 'Wskazany krok dodano do indywidualnych odblokowań ucznia.';
     if (entry.action === 'progress.lock_step') return 'Wskazany krok dodano do indywidualnych blokad ucznia.';
+    if (entry.action === 'exam.attempt.reset') {
+      return `Próba ${next.attemptId || previous.attemptId || '—'} została wycofana, a wynik egzaminu przeliczony na podstawie pozostałych prób.`;
+    }
     if (String(entry.action || '').startsWith('progress.reset.')) {
       const count = previous && typeof previous === 'object' ? Object.keys(previous).length : 0;
       return `Usunięte rekordy postępu: ${count}.`;
@@ -3426,6 +3432,22 @@
   async function adminProgressRequest(method, body, query = '') {
     const token = await getAdminToken();
     const response = await fetch(`${ADMIN_PROGRESS_URL}${query}`, {
+      method,
+      cache: 'no-store',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...(body ? { 'Content-Type': 'application/json' } : {})
+      },
+      ...(body ? { body: JSON.stringify(body) } : {})
+    });
+    return readAdminResponse(response);
+  }
+
+  async function adminExamRequest(method, query, body) {
+    const token = await getAdminToken();
+    const response = await fetch(`${ADMIN_EXAMS_URL}${query || ''}`, {
       method,
       cache: 'no-store',
       credentials: 'same-origin',
@@ -3501,6 +3523,7 @@
     if (node.type === 'lesson') return `Krok ${Number(details.currentStepIndex) + 1 || '—'} · ukończone ${details.completedStepIds?.length || 0}/${details.totalTrackedSteps || '—'}`;
     if (node.type === 'pdf') return `Strona ${details.lastPage || '—'}/${details.totalPages || '—'} · postęp nawigacyjny`;
     if (node.type === 'quiz') return `Postęp ${adminProgressPercent(record.progressPercent)} · wynik ${details.scorePercent == null ? '—' : adminProgressPercent(details.scorePercent)} · próby ${details.attempts || 0}`;
+    if (node.type === 'exam') return `Postęp ${adminProgressPercent(record.progressPercent)} · wynik ${details.scorePercent == null ? '—' : adminProgressPercent(details.scorePercent)} · ${details.passed == null ? 'bez wyniku zaliczenia' : details.passed ? 'zaliczono' : 'nie zaliczono'} · próba ${details.attempts || 0}`;
     return `${record.openCount || 0} otwarć`;
   }
 
@@ -3515,6 +3538,7 @@
       video: 'Film',
       pdf: 'PDF',
       quiz: 'Quiz',
+      exam: 'Egzamin',
       script: 'Skrypt',
       iframe: 'Osadzony materiał',
       other: 'Materiał'
@@ -3636,6 +3660,81 @@
       actions.append(reset);
     };
 
+    const formatExamDuration = (seconds) => {
+      const total = Math.max(0, Math.round(Number(seconds) || 0));
+      const minutes = Math.floor(total / 60);
+      return `${minutes ? `${minutes} min ` : ''}${total % 60} s`;
+    };
+
+    const appendExamAttempts = (body, node) => {
+      const repositoryId = node.settings?.repositoryId || 'default';
+      const examId = node.settings?.examId || '';
+      if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(repositoryId) || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(examId)) return;
+      const report = document.createElement('details');
+      report.className = 'admin-progress-exam-attempts';
+      const summary = document.createElement('summary');
+      summary.textContent = 'Próby egzaminu, wyniki i czas';
+      const content = document.createElement('div');
+      content.className = 'admin-progress-exam-attempt-list';
+      report.append(summary, content);
+      let loaded = false;
+      report.addEventListener('toggle', async () => {
+        if (!report.open || loaded) return;
+        loaded = true;
+        content.textContent = 'Wczytywanie prób egzaminu…';
+        try {
+          const query = `?view=user&repo=${encodeURIComponent(repositoryId)}&exam=${encodeURIComponent(examId)}&userId=${encodeURIComponent(user.userId)}`;
+          const result = await adminExamRequest('GET', query);
+          const attempts = (result.user?.attempts || []).slice().sort((left, right) => Number(right.number) - Number(left.number));
+          content.replaceChildren();
+          if (!attempts.length) {
+            content.append(Object.assign(document.createElement('p'), { className: 'admin-progress-report-empty', textContent: 'Uczeń nie rozpoczął jeszcze żadnej próby tego egzaminu.' }));
+            return;
+          }
+          attempts.forEach((attempt) => {
+            const row = document.createElement('article');
+            row.className = 'admin-progress-exam-attempt';
+            const copy = document.createElement('div');
+            const status = attempt.status === 'active' ? 'W trakcie'
+              : attempt.status === 'timed_out' ? 'Zakończona przez limit czasu'
+                : attempt.status === 'reset' ? 'Zresetowana' : 'Zakończona';
+            copy.append(
+              Object.assign(document.createElement('strong'), { textContent: `Próba ${attempt.number} · ${status}` }),
+              Object.assign(document.createElement('small'), { textContent: `Wynik: ${attempt.scorePercent == null ? '—' : adminProgressPercent(attempt.scorePercent)} · ${attempt.passed == null ? 'brak statusu' : attempt.passed ? 'zaliczono' : 'nie zaliczono'} · czas: ${attempt.durationSeconds == null ? '—' : formatExamDuration(attempt.durationSeconds)}` }),
+              Object.assign(document.createElement('small'), { textContent: `Start: ${adminDateLabel(attempt.startedAt)} · zakończenie: ${adminDateLabel(attempt.submittedAt)}` })
+            );
+            row.append(copy);
+            if (attempt.status !== 'reset') {
+              const reset = document.createElement('button');
+              reset.type = 'button';
+              reset.className = 'button button-danger-soft';
+              reset.textContent = 'Reset próby';
+              reset.addEventListener('click', async () => {
+                if (!window.confirm(`Zresetować próbę ${attempt.number} tego egzaminu? Wynik ucznia zostanie przeliczony na podstawie pozostałych prób.`)) return;
+                reset.disabled = true;
+                try {
+                  await adminExamRequest('DELETE', '', {
+                    repositoryId, examId, targetUserId: user.userId, attemptId: attempt.attemptId,
+                    operationId: `dashboard-reset-${Date.now()}`
+                  });
+                  await loadAdminProgressUser(user.userId);
+                } catch (error) {
+                  setPanelStatus(elements.adminProgressStatus, error?.message || 'Nie udało się zresetować próby.', 'error');
+                  reset.disabled = false;
+                }
+              });
+              row.append(reset);
+            }
+            content.append(row);
+          });
+        } catch (error) {
+          loaded = false;
+          content.textContent = error?.message || 'Nie udało się wczytać prób egzaminu.';
+        }
+      });
+      body.append(report);
+    };
+
     const createMaterialRow = (node) => {
       const data = aggregate.nodes[node.id];
       const record = user.records[node.id] || null;
@@ -3688,6 +3787,7 @@
         actions.className = 'admin-progress-material-actions';
         appendMaterialActions(actions, node, record);
         body.append(facts, actions);
+        if (node.type === 'exam') appendExamAttempts(body, node);
         if (nested.length) {
           const childList = document.createElement('div');
           childList.className = 'admin-progress-material-children';

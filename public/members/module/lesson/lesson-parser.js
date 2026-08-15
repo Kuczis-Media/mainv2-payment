@@ -13,7 +13,7 @@
   const SLIDE_SETTINGS_START = /^\s*:::slide\s*$/i;
   const STYLE_START = /^\s*:::style(?:\s+(.+?))?\s*$/i;
   const ACCORDION_START = /^\s*:::accordion(?:\s+(.+?))?\s*$/i;
-  const STRUCTURAL_CONTAINER_START = /^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table)(?:\s+.*?)?\s*$/i;
+  const STRUCTURAL_CONTAINER_START = /^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam)(?:\s+.*?)?\s*$/i;
   const RICH_CONTAINER_END = /^\s*:::\s*$/;
   const SAFE_STYLE_COLOR = /^#[0-9a-f]{6}$/i;
   const LINK_ICONS = new Set(['link', 'book', 'video', 'chemistry', 'math', 'file', 'external']);
@@ -39,7 +39,7 @@
     'sin', 'cos', 'tan', 'log', 'ln', 'partial', 'nabla', 'rightarrow', 'leftarrow',
     'leftrightarrow', 'text', 'mathrm', 'mathbf', 'overline', 'vec', 'left', 'right'
   ]);
-  const INTERACTIVE_START = /^\s*:::(youtube|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table)\s*$/i;
+  const INTERACTIVE_START = /^\s*:::(youtube|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam)\s*$/i;
 
   class LessonFormatError extends Error {
     constructor(code, message) {
@@ -758,6 +758,22 @@
       const newTab = /^(?:1|true|yes|tak|new)$/i.test(values.new_tab || '');
       const target = newTab ? ' target="_blank" rel="noopener noreferrer"' : '';
       return `<a class="lesson-support-card lesson-contact-card" href="${escapeHtml(href)}"${target}><span class="lesson-support-icon" aria-hidden="true">✉</span><span class="lesson-support-copy"><small>Formularz kontaktowy</small><strong>${escapeHtml(title)}</strong><span>${escapeHtml(description)}</span></span><span class="lesson-support-action">${escapeHtml(button)} <b aria-hidden="true">→</b></span></a>`;
+    }
+    if (type === 'exam') {
+      const repository = safeRepositoryId(values.repository || 'default');
+      const examId = String(values.exam || '').trim().toLowerCase();
+      const title = String(values.title || 'Egzamin').trim();
+      const description = String(values.description || 'Rozwiąż egzamin i zapisz wynik w ChemDisk.').trim();
+      const button = String(values.button || 'Otwórz egzamin').trim();
+      const requirement = ['optional', 'completed', 'passed', 'minimum_score'].includes(values.requirement)
+        ? values.requirement : 'optional';
+      const minimumScore = Math.max(0, Math.min(100, Number(values.minimum_score) || 0));
+      if (!repository || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(examId) || !title || !button) {
+        return '<p class="lesson-interactive-error">Nieprawidłowe odwołanie do egzaminu.</p>';
+      }
+      const materialId = `exam:${repository}:${examId}`.slice(0, 128);
+      const href = `/members/module/exam/?repo=${encodeURIComponent(repository)}&amp;exam=${encodeURIComponent(examId)}&amp;material=${encodeURIComponent(materialId)}`;
+      return `<section class="lesson-support-card lesson-exam-card" data-exam-repository="${escapeHtml(repository)}" data-exam-id="${escapeHtml(examId)}" data-exam-material="${escapeHtml(materialId)}" data-exam-requirement="${escapeHtml(requirement)}" data-exam-minimum-score="${minimumScore}"><span class="lesson-support-icon" aria-hidden="true">E</span><span class="lesson-support-copy"><small>Egzamin ChemDisk</small><strong>${escapeHtml(title)}</strong><span>${escapeHtml(description)}</span><em data-exam-state>Sprawdzanie wyniku…</em></span><a class="lesson-support-action" href="${href}">${escapeHtml(button)} <b aria-hidden="true">→</b></a></section>`;
     }
     if (type === 'linkcard') {
       const url = safeLinkCardUrl(values.url);

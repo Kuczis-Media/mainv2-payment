@@ -11,7 +11,7 @@
   const TASK_START = /^\s*:::(?:task|zadanie)\s*$/i;
   const QUESTION_START = /^\s*:::question\s*$/i;
   const SLIDE_SETTINGS_START = /^\s*:::slide\s*$/i;
-  const CONTAINER_START = /^\s*:::(style|accordion|youtube|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table)(?:\s+(.*?))?\s*$/i;
+  const CONTAINER_START = /^\s*:::(style|accordion|youtube|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam)(?:\s+(.*?))?\s*$/i;
   const CONTAINER_END = /^\s*:::\s*$/;
   const STYLE_FONTS = Object.freeze([
     'sans',
@@ -56,6 +56,7 @@
     'ai',
     'board',
     'contact',
+    'exam',
     'flashcards'
   ]);
   const TASK_TYPES = Object.freeze(['text', 'number', 'choice', 'abcd', 'gaps', 'gaps-text']);
@@ -383,6 +384,20 @@
         newTab: source.newTab === true || /^(?:1|true|yes|tak|new)$/i.test(oneLine(source.newTab))
       };
     }
+    if (type === 'exam') {
+      const requirement = ['optional', 'completed', 'passed', 'minimum_score'].includes(source.requirement)
+        ? source.requirement : 'optional';
+      return {
+        ...base,
+        title: oneLine(source.title) || 'Egzamin',
+        description: oneLine(source.description) || 'Rozwiąż egzamin w bezpiecznym odtwarzaczu ChemDisk.',
+        button: oneLine(source.button) || 'Otwórz egzamin',
+        repositoryId: oneLine(source.repositoryId || source.repository).toLowerCase(),
+        examId: oneLine(source.examId || source.exam).toLowerCase(),
+        requirement,
+        minimumScore: Math.max(0, Math.min(100, Number(source.minimumScore) || 0))
+      };
+    }
     if (type === 'link') {
       const icon = oneLine(source.icon).toLowerCase();
       return {
@@ -513,6 +528,13 @@
     if (source.title && !blocks.some((block) => block.type === 'heading')) {
       blocks.unshift(createBlock('heading', { level: source.level || 2, text: source.title }));
     }
+    const examBlock = blocks.find((block) => block.type === 'exam' && block.requirement !== 'optional');
+    const derivedCondition = examBlock ? {
+      type: examBlock.requirement === 'completed' ? 'exam_completed'
+        : examBlock.requirement === 'passed' ? 'exam_passed' : 'minimum_score',
+      materialId: `exam:${examBlock.repositoryId || 'default'}:${examBlock.examId}`.slice(0, 128),
+      minimumScore: examBlock.requirement === 'minimum_score' ? examBlock.minimumScore : 0
+    } : source.condition;
     return {
       id: oneLine(source.id) || nextId('slide'),
       transition: SLIDE_TRANSITIONS.includes(oneLine(source.transition).toLowerCase())
@@ -523,7 +545,7 @@
       includeInLesson: ['ON', 'OFF', 'INHERIT'].includes(String(source.includeInLesson || '').toUpperCase())
         ? String(source.includeInLesson).toUpperCase() : 'INHERIT',
       requiredToAdvance: source.requiredToAdvance !== false,
-      condition: normalizeStepCondition(source.condition),
+      condition: normalizeStepCondition(derivedCondition),
       progressConfigured: source.progressConfigured === true
     };
   }
@@ -677,6 +699,15 @@
           path,
           message: 'Formularz kontaktowy wymaga tytułu i tekstu przycisku; wstępna wiadomość może mieć maksymalnie 240 znaków.'
         });
+      }
+    }
+    if (block.type === 'exam') {
+      if (
+        !SAFE_REPOSITORY_ID.test(block.repositoryId || '')
+        || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(block.examId || '')
+        || !['optional', 'completed', 'passed', 'minimum_score'].includes(block.requirement)
+      ) {
+        errors.push({ code: 'INVALID_EXAM_REFERENCE', path, message: 'Wybierz prawidłowe repozytorium i egzamin z biblioteki.' });
       }
     }
     if (block.type === 'formula') {
@@ -895,6 +926,19 @@
         `button: ${cleanDirectiveValue(block.button)}`,
         `internal: ${cleanDirectiveValue(block.internal)}`,
         `new_tab: ${block.newTab ? 'true' : 'false'}`,
+        ':::'
+      ].join('\n');
+    }
+    if (block.type === 'exam') {
+      return [
+        ':::exam',
+        `repository: ${cleanDirectiveValue(block.repositoryId)}`,
+        `exam: ${cleanDirectiveValue(block.examId)}`,
+        `title: ${cleanDirectiveValue(block.title)}`,
+        `description: ${cleanDirectiveValue(block.description)}`,
+        `button: ${cleanDirectiveValue(block.button)}`,
+        `requirement: ${block.requirement}`,
+        `minimum_score: ${block.minimumScore}`,
         ':::'
       ].join('\n');
     }
@@ -1205,6 +1249,18 @@
               button: values.button,
               internal: values.internal,
               newTab: values.new_tab
+            }));
+          } else if (type === 'exam') {
+            const values = parseDirectiveFields(bodyLines);
+            blocks.push(createBlock({
+              type: 'exam',
+              repositoryId: values.repository,
+              examId: values.exam,
+              title: values.title,
+              description: values.description,
+              button: values.button,
+              requirement: values.requirement,
+              minimumScore: values.minimum_score
             }));
           } else if (type === 'linkcard') {
             const values = parseDirectiveFields(bodyLines);
@@ -1551,6 +1607,7 @@
     linkCards: true,
     flashcards: true,
     tables: true,
+    exams: true,
     accordions: true,
     nestedContainers: false,
     styleFonts: STYLE_FONTS,

@@ -25,7 +25,8 @@ public/
     └── module/
         ├── theme.js / theme.css       # wspólna paleta jasna/ciemna aplikacji
         ├── media-*.js / *.css         # wspólne mechanizmy podglądów mediów
-        ├── studio/                    # Dashboard Builder i Lesson Builder
+        ├── studio/                    # Dashboard, Lesson, Prompt i Exam Builder
+        ├── exam/                      # wspólny odtwarzacz egzaminów
         ├── lesson/                    # odtwarzacz lekcji z prywatnego repo treści
         ├── atonom/                    # modele cząsteczek z polskich nazw
         └── …                          # kalkulatory, tablice, media, czat i kontakt
@@ -41,15 +42,20 @@ netlify/functions/
 ├── admin-forms.js                     # odczyt/usuwanie zgłoszeń Netlify Forms
 ├── admin-dashboard.js                 # aktywny Markdown w Netlify Blobs
 ├── content-library.js                 # chroniona lista i odczyt repo treści
+├── exam.js                            # definicja dla ucznia i cykl życia próby
+├── admin-exams.js                     # raporty, analiza pytań i reset prób
 └── chat.mjs                           # chronione połączenie z Gemini i limit Netlify
 netlify/admin-common.js                # wspólna kanoniczna autoryzacja
 netlify/content-repository.js           # serwerowy klient GitHub Contents API
+netlify/exam-common.js                  # model, losowanie i punktacja egzaminów
+netlify/exam-storage.js                 # próby, indeksy i agregaty w Blobs
+netlify/exam-progress.js                # adapter do centralnego systemu postępu
 netlify/payment-common.js              # pakiety, księga zakupów i synchronizacja Identity
 netlify.toml                           # publikacja, nagłówki i ochrona /members/*
 tests/                                 # testy auth i Netlify Functions
 ```
 
-To nie jest aplikacja SPA ani projekt wymagający własnego, stale uruchomionego serwera. Netlify publikuje katalog `public`, a pliki z `netlify/functions` uruchamia na żądanie jako funkcje serverless. Profile i role przechowuje Identity, zgłoszenia — Netlify Forms, aktywny Markdown edytora — Netlify Blobs, a lekcje i prompty — osobne prywatne repozytorium GitHub odczytywane wyłącznie przez Functions.
+To nie jest aplikacja SPA ani projekt wymagający własnego, stale uruchomionego serwera. Netlify publikuje katalog `public`, a pliki z `netlify/functions` uruchamia na żądanie jako funkcje serverless. Profile i role przechowuje Identity, zgłoszenia — Netlify Forms, aktywny Markdown edytora — Netlify Blobs, a lekcje, prompty i definicje egzaminów — osobne prywatne repozytorium GitHub odczytywane wyłącznie przez Functions.
 
 ## Panel kursanta, motyw i nawigacja
 
@@ -113,7 +119,7 @@ Nie umieszczaj kluczy w `public`, plikach JavaScript przeglądarki, `dashboard.m
 7. Nowe konto bez roli może się uwierzytelnić i zobaczy cennik, ale nie otworzy `/members/`. Po udanej płatności rola i dokładny termin są nadawane automatycznie. Administrator nadal może przyznać dostęp ręcznie.
 8. Udostępnij osadzane pliki Google odbiorcom, którzy mają je oglądać. Aplikacja nie omija uprawnień Dysku, Prezentacji ani Formularzy Google.
 9. Jeżeli używasz własnej domeny, ustaw ją jako główną domenę witryny, włącz HTTPS i sprawdź na niej link potwierdzający oraz zaproszenie Identity. Kod korzysta ze ścieżek same-origin i `location.origin`, więc nie wymaga zamiany `chemdisk.netlify.app` na `chemdisk.pl` w plikach.
-10. Po pierwszym deployu sprawdź logowanie, pięć zakładek panelu administratora, status biblioteki materiałów, testową płatność, formularz kontaktowy, czat oraz po jednym materiale Google i YouTube na docelowej domenie.
+10. Po pierwszym deployu sprawdź logowanie, sześć zakładek panelu administratora, status biblioteki materiałów, testową płatność, formularz kontaktowy, czat, testowy egzamin oraz po jednym materiale Google i YouTube na docelowej domenie.
 
 Deploy Preview tej samej witryny może widzieć site-wide store `chemdisk-dashboard` oraz `chemdisk-payments`, jeśli udostępnisz mu produkcyjny token i `SITE_ID`. Publikacja dashboardu, edycja cen, usuwanie użytkownika lub test Checkoutu z takiego podglądu mogą zmienić realne dane. Nie wykonuj mutacji administracyjnych na Preview podłączonym do produkcyjnych Blobs.
 
@@ -134,6 +140,12 @@ chemdisk-content/
 ├── catalog.json
 ├── lessons/
 │   └── nazwa-lekcji.md
+├── exams/
+│   ├── question-bank.json
+│   └── egzamin-alkohole/
+│       ├── exam.json
+│       └── photos/
+│           └── mechanizm.webp
 └── prompts/
     ├── nazwa-promptu.json
     └── zestaw-promptow.txt
@@ -168,7 +180,7 @@ Konfiguracja krok po kroku:
    - w **Repository permissions** ustaw wyłącznie **Contents: Read and write**;
    - pozostałych uprawnień nie rozszerzaj i nie wybieraj dostępu do wszystkich repozytoriów.
 
-   Jeden fine-grained token może obejmować kilka jawnie wybranych repozytoriów tego samego właściciela zasobów. Uprawnienie zapisu jest potrzebne tylko funkcji serwerowej obsługującej Lesson Builder i Prompt Builder. Token nadal nie daje dostępu do pozostałych repozytoriów konta.
+   Jeden fine-grained token może obejmować kilka jawnie wybranych repozytoriów tego samego właściciela zasobów. Uprawnienie zapisu jest potrzebne tylko funkcji serwerowej obsługującej Lesson Builder, Prompt Builder i Exam Builder. Token nadal nie daje dostępu do pozostałych repozytoriów konta.
 3. W Netlify otwórz ustawienia witryny i dodaj poniższe zmienne środowiskowe z zakresem **Functions**:
 
    ```dotenv
@@ -195,7 +207,7 @@ Późniejsze dodanie, poprawienie lub usunięcie pliku w repo materiałów — p
 
 Przeglądarka nigdy nie otrzymuje tokenu GitHub. Kursant po sprawdzeniu aktywnego dostępu może pobrać treść lekcji, ponieważ musi ją wyświetlić, ale nie może zapisywać ani usuwać plików. Lista i treść promptów są dostępne w bibliotece tylko administratorowi, aby Prompt Builder mógł je edytować; zwykły moduł czatu nadal pobiera wybrany prompt po stronie funkcji `chat` i nie wysyła go kursantowi.
 
-Dozwolone są lekcje `.md` do 512 KiB oraz prompty `.txt` i `.json` do 256 KiB. Nazwa pliku nie może zawierać ścieżki, `..` ani niedozwolonych znaków. `catalog.json` ma limit 256 KiB. Po rotacji tokenu zaktualizuj `GITHUB_CONTENT_TOKEN` w Netlify i ponownie wdróż Functions.
+Dozwolone są lekcje `.md` do 512 KiB, prompty `.txt` i `.json` do 256 KiB, `exam.json` do 2 MiB oraz wspólny `question-bank.json` do 5 MiB. Chroniony odczyt obrazu egzaminu ma limit 10 MiB. Nazwa pliku nie może zawierać ścieżki, `..` ani niedozwolonych znaków. `catalog.json` ma limit 256 KiB. Po rotacji tokenu zaktualizuj `GITHUB_CONTENT_TOKEN` w Netlify i ponownie wdróż Functions.
 
 Te same repozytoria materiałów mogą zasilać inne wdrożenie ChemDisk: skopiuj do niego moduł `netlify/content-repository.js`, funkcję `content-library`, klienta `public/assets/js/content-library.js` i ustaw tę samą konfigurację `GITHUB_CONTENT_*`. Klient domyślnie używa chronionej funkcji w tej samej domenie. Jeśli aplikacja ma własny zgodny endpoint, można wskazać go w `<head>` przez:
 
@@ -477,7 +489,7 @@ Studio ma trzy tryby:
 - **Lesson Builder** — układanie slajdów oraz bloków nagłówka, tekstu, obrazu HTTPS, wideo YouTube, listy, tabeli, cytatu, calloutu, kodu, stylowanej sekcji, harmonijki, wzorów, pomocy AI, tablic interaktywnych, formularza kontaktowego i estetycznych kafelków z linkiem. Tabela ma od 2 do 8 kolumn, do 30 wierszy, opcjonalny podpis i wyrównanie; w odtwarzaczu przewija się poziomo na wąskim ekranie. Dedykowany wizualny kreator równań działa podobnie do uproszczonego edytora z Worda: ma gotowe szablony, palety symboli, klikalne strzałki, osobne pola substratów i produktów, warunki nad i pod strzałką oraz bieżący podgląd. Renderuje matematykę i chemię z indeksami, jonami, izotopami, stanami skupienia, temperaturą i katalizatorem. Każdy slajd może osobno wyłączyć animację albo użyć zanikania, ruchu w górę, ruchu z boku lub miękkiego przybliżenia. Do slajdu można dodać pytanie tekstowe, liczbowe, wyboru, ABCD, luki z listą albo luki wpisywane ręcznie. Opcje quizu mają osobne pola i znacznik ✓ poprawnej odpowiedzi. Luki tworzy się w wizualnym układzie „tekst → luka → tekst”: użytkownik nie wpisuje ani nie widzi składni `{{…}}`. Lekcję można wyszukać, wczytać, zapisać, zaktualizować albo usunąć w repozytorium wybranym z listy;
 - **Prompt Builder** — tworzenie pojedynczego promptu `.json` lub zestawu ponumerowanych instrukcji `.txt`. Builder waliduje numery punktów, limity treści i format, pokazuje gotowe źródło oraz obsługuje ten sam ręczny, repozytoryjny i wielorepozytoryjny obieg co lekcje.
 
-Na większym ekranie biblioteka po lewej, obszar roboczy pośrodku oraz ustawienia/podgląd po prawej mają niezależne przewijanie. Każdą bibliotekę, prawy panel i górny pasek narzędzi można zwinąć osobno; ustawienia są zapamiętywane osobno dla Dashboard Buildera, Lesson Buildera i Prompt Buildera w `chemdisk.studio.layout.v1`. Pełny podgląd otwiera chroniony adres Studio w osobnym oknie, wczytuje aktualny lokalny draft i aktualizuje się po kolejnych zmianach.
+Na większym ekranie biblioteka po lewej, obszar roboczy pośrodku oraz ustawienia/podgląd po prawej mają niezależne przewijanie. Każdą bibliotekę, prawy panel i górny pasek narzędzi można zwinąć osobno; ustawienia są zapamiętywane osobno dla Dashboard Buildera, Lesson Buildera, Prompt Buildera i Exam Buildera w `chemdisk.studio.layout.v1`. Pełny podgląd otwiera chroniony adres Studio w osobnym oknie, wczytuje aktualny lokalny draft i aktualizuje się po kolejnych zmianach.
 
 W Lesson Builderze na dole przewijanej listy klocków znajduje się sekcja **Narzędzia lekcji**: kreator równań, pomoc AI i tablica. Kliknięcie albo przeciągnięcie któregoś z nich automatycznie otwiera jego ustawienia; na ekranie mobilnym Studio przewija widok do panelu edycji.
 
@@ -973,13 +985,14 @@ Funkcja `progress` zawsze wyznacza użytkownika z aktualnie zweryfikowanej sesji
 
 ### Statusy i dane
 
-Status ma jedną z wartości: `not_started`, `opened`, `in_progress`, `completed`. Otwarcie śledzonego materiału będącego liściem dashboardu kończy go na 100%, z wyjątkiem lekcji, która nadal wylicza dokładny procent z wykonanych kroków. Otwarcie działu lub harmonijki nie zalicza ich bezpośrednio — ich procent wynika z dzieci. Wspólna część rekordu zawiera `materialId`, `materialType`, pierwsze i ostatnie otwarcie, `openCount`, procent, ostatnią pozycję, datę ukończenia i ostatnią aktywność. Pole `details` przechowuje dane typu materiału:
+Status ma jedną z wartości: `not_started`, `opened`, `in_progress`, `completed`. Otwarcie zwykłego śledzonego materiału będącego liściem dashboardu kończy go na 100%. Lekcja nadal wylicza dokładny procent z wykonanych kroków, a egzamin po samym otwarciu ma status `opened`; jego procent rośnie z liczbą zapisanych odpowiedzi i osiąga 100% dopiero po zakończeniu próby. Otwarcie działu lub harmonijki nie zalicza ich bezpośrednio — ich procent wynika z dzieci. Wspólna część rekordu zawiera `materialId`, `materialType`, pierwsze i ostatnie otwarcie, `openCount`, procent, ostatnią pozycję, datę ukończenia i ostatnią aktywność. Pole `details` przechowuje dane typu materiału:
 
 - lekcja: bieżący i najwyższy krok, stabilne identyfikatory ukończonych kroków oraz liczba kroków śledzonych;
 - prezentacja: ostatni i najwyższy slajd, odwiedzone slajdy oraz łączna liczba slajdów;
 - film: czas trwania, ostatnia pozycja, rozpoczęcie odtwarzania i złączone zakresy rzeczywiście odtworzone;
 - PDF: ostatnia i najwyższa odwiedzona strona; jest to wyłącznie postęp nawigacyjny, nie dowód przeczytania;
 - quiz: osobne `progressPercent`, `scorePercent`, rozpoczęcie, ukończenie i liczba prób.
+- egzamin: rozpoczęcie, liczba odpowiedzi, liczba pytań, numer i ID próby, osobny `scorePercent`, zaliczenie oraz czas.
 
 ### Konfiguracja w Dashboard Builderze
 
@@ -998,7 +1011,7 @@ Konfiguracja i stabilne identyfikatory są zapisywane w niewidocznych, jednolini
 
 ### Lekcje i blokada nawigacji
 
-Lesson Builder zapisuje stabilne `stepId`; zmiana kolejności nie usuwa zaliczeń przypisanych do istniejących kroków. Dla każdego kroku można niezależnie ustawić wpływ na procent, wymagalność do przejścia oraz warunek przejścia. Dostępne warunki obejmują kliknięcie „Dalej”, ukończenie poprzedniego kroku lub materiału, ukończenie quizu, poprawną odpowiedź, minimalny wynik oraz przygotowane warunki przyszłego egzaminu.
+Lesson Builder zapisuje stabilne `stepId`; zmiana kolejności nie usuwa zaliczeń przypisanych do istniejących kroków. Dla każdego kroku można niezależnie ustawić wpływ na procent, wymagalność do przejścia oraz warunek przejścia. Krok egzaminowy przechowuje wyłącznie `repositoryId` i `examId`, a warunek może wymagać ukończenia, zaliczenia albo wyniku wyższego niż lokalny próg lekcji. Definicja i klucz odpowiedzi nie są kopiowane do Markdownu lekcji.
 
 Tryb lekcji może być swobodny albo sekwencyjny. Serwer odrzuca nieznany, zablokowany lub zbyt odległy krok, więc blokada nie opiera się wyłącznie na przyciskach w przeglądarce. Administrator może dla użytkownika wymusić `DEFAULT`, `ALLOW` lub `DENY`, a także ustawić, odblokować lub zablokować krok. Stary zapis sesyjny pozostaje cache'em awaryjnym, ale po załadowaniu pierwszeństwo ma stan serwera.
 
@@ -1027,11 +1040,65 @@ Google Slides, Google Drive PDF i Google Forms działają w obcych iframe'ach, k
 ### Endpointy
 
 - `GET /.netlify/functions/progress` — własny dokument, katalog i agregaty;
-- `POST /.netlify/functions/progress` — własne zdarzenie `open`, `progress`, `complete`, `lesson_step`, `presentation`, `video`, `pdf` lub `quiz`;
+- `POST /.netlify/functions/progress` — własne zdarzenie `open`, `progress`, `complete`, `lesson_step`, `presentation`, `video`, `pdf`, `quiz` lub `exam`;
 - `DELETE /.netlify/functions/progress` — reset własnego materiału (`materialId`) albo całego własnego kursu (`scope: "course"`);
 - `GET|PUT|DELETE /.netlify/functions/admin-progress` — raporty, konfiguracja, ręczne operacje, reset i audyt administratora.
 
 Nie są potrzebne nowe zmienne środowiskowe. System używa istniejących `NETLIFY_API_TOKEN` i `SITE_ID`, które są już wymagane przez pozostałe store'y Blobs.
+
+## Exam Engine i Exam Builder
+
+Exam Engine rozszerza obecną architekturę ChemDisk. Definicje egzaminów i bank pytań używają tego samego `content-repository.js`, tych samych dozwolonych repozytoriów i tego samego tokenu GitHub co lekcje. Próby użytkowników nie trafiają do GitHuba: ich źródłem prawdy jest silnie spójny store Netlify Blobs `chemdisk-exams`. Wynik i stan egzaminu są równocześnie przekazywane do jedynego store'u postępu `chemdisk-progress`; nie istnieje drugi system agregowania postępu kursu.
+
+### Pliki i stabilne identyfikatory
+
+Każdy egzamin ma ścieżkę `exams/<examId>/exam.json`. Plik zawiera metadane, pytania lub stabilne odwołania do banku, konfigurację wyświetlania, nawigacji, czasu, losowania, punktacji, prób, dostępu, wyniku i status `draft`/`published`. Przy dostępie selektywnym może zawierać stabilne ID uprawnionych kont, ale nie zawiera ich nazw, e-maili, prób, indywidualnych wyników ani sekretów. Wspólny `exams/question-bank.json` przechowuje pytania wielokrotnego użycia ze stabilnym `questionId`.
+
+Obrazy są zapisywane jako referencje względne, np. `photos/mechanizm.webp`, wraz z ALT. Pytanie i odpowiedź mogą mieć wiele obrazów. Exam Player pobiera je przez uwierzytelnioną Function z odpowiedniego katalogu egzaminu; adres tymczasowy, token GitHub i dowolna ścieżka wejściowa nie są ujawniane klientowi. Pełny Media Manager nie jest częścią tej implementacji, dlatego plik obrazu trzeba na razie dodać do folderu `photos/` repozytorium.
+
+### Praca w Builderze
+
+W **Studio treści → Egzamin** administrator wybiera repozytorium, tworzy egzamin i przechodzi przez zakładki: Informacje, Pytania, Bank pytań, Wyświetlanie, Nawigacja, Czas, Losowanie, Punktacja, Próby, Dostęp, Bezpieczeństwo, Wyniki i Raporty. Obsługiwane typy to jedna odpowiedź, wiele odpowiedzi, prawda/fałsz, krótki tekst, liczba z tolerancją, dopasowywanie, kolejność i uzupełnianie luk.
+
+W **Dostępie** można wskazać wszystkich uprawnionych kursantów albo tylko wybrane osoby. Selektor pobiera konta z istniejącego, chronionego endpointu Netlify Identity i wyszukuje po imieniu, nazwisku, adresie e-mail oraz stabilnym ID. Do `exam.json` trafiają wyłącznie ID zaznaczonych kont; e-mail i nazwa służą tylko do wygodnego wyboru w Builderze. Wyszukiwanie automatycznie dociąga kolejne strony użytkowników, więc nie jest ograniczone do pierwszych 100 kont. Pusta lista w trybie „Tylko wybrane osoby” blokuje publikację, zamiast przypadkowo udostępnić egzamin wszystkim.
+
+**Zapisz draft** zapisuje poprawny, niewidoczny dla uczniów `exam.json`; **Opublikuj** udostępnia go Exam Playerowi. Podgląd draftu jest dostępny tylko dla administratora i tworzy izolowaną próbę, która nie wpływa na limity, raporty ani postęp. Bank jest zapisywany przed egzaminem, aby publikacja nie utworzyła odwołań do brakujących pytań. Kontrola publikacji odrzuca m.in. powtórzone ID, brak klucza, niemożliwą pulę losowania i sumę limitów kategorii większą od liczby pytań.
+
+Przed usunięciem Builder sprawdza opublikowany Dashboard oraz pliki lekcji w wybranym repozytorium, pokazuje liczbę i nazwy znalezionych miejsc, a potem wymaga potwierdzenia. Usunięcie jest commitem Git i można je odtworzyć z historii, ale istniejące odwołanie w Dashboardzie lub lekcji przestanie działać.
+
+### Próba, czas i bezpieczeństwo klucza
+
+Function `exam` wyznacza właściciela próby wyłącznie ze zweryfikowanej sesji Identity. Klient nie może przesłać `userId`, odczytać próby innej osoby ani samodzielnie policzyć wyniku. Przy starcie serwer zapisuje dokładny zestaw pytań, kolejność pytań i odpowiedzi, `startedAt`, opcjonalne `expiresAt`, numer próby oraz rewizję. Losowanie z całej puli i limity kategorii są więc stałe dla wznowionej próby.
+
+Aktywna próba otrzymuje wyłącznie bezpieczną reprezentację pytań. Klucz, ukryta punktacja i wyjaśnienia nie są wysyłane z definicją. Wyjątkiem jest jawnie włączony tryb informacji natychmiastowej: dopiero po kliknięciu **Zatwierdź i sprawdź odpowiedź** Function zwraca ocenę oraz tekst prawidłowej odpowiedzi wyłącznie dla tego jednego pytania. Serwer zapisuje zatwierdzenie i od tej chwili odrzuca każdą próbę zmiany tej odpowiedzi, także wykonaną poza interfejsem. Dla dopasowywania serwer generuje losowe identyfikatory prawej kolumny, aby same ID nie zdradzały par. Punktacja — w tym punkty częściowe, opcjonalne ujemne, strategie wielokrotnego wyboru, zaakceptowane teksty i tolerancja liczby — jest liczona wyłącznie po stronie serwera.
+
+Odpowiedź jest zapisywana po około 700 ms bezczynności oraz przed zmianą strony lub zakończeniem. Każda mutacja ma `operationId` i oczekiwaną rewizję; powtórzenie tego samego zapisu jest idempotentne, a równoległa starsza karta dostaje konflikt zamiast nadpisać nowszy stan. Odświeżenie wznawia aktywną próbę, jeśli pozwala na to konfiguracja. Limit całego egzaminu i limit pytania są sprawdzane przez serwer również wtedy, gdy timer jest ukryty. Upływ limitu całego egzaminu kończy próbę server-side.
+
+Zdarzenia startu, zapisu, przejścia, odświeżenia, opuszczenia, wznowienia, timeoutu i wysłania są rejestrowane pomocniczo. Przeglądarka nie gwarantuje dostarczenia zdarzenia zamknięcia karty, dlatego log nie jest reklamowany jako proctoring. Polityka opuszczenia może pozwolić wrócić, ostrzec, tylko zapisać zdarzenie albo zakończyć próbę, jeśli komunikat dotrze do serwera.
+
+### Wynik, próby i integracja z kursem
+
+Egzamin rozdziela `progressPercent` od `scorePercent`. Otwarcie daje status `opened`, zapisane odpowiedzi zwiększają postęp, a wysłanie lub timeout kończy próbę. O wyniku zaliczono/nie zaliczono decyduje serwerowy próg egzaminu. Przy wielu próbach wynik przekazywany do kursu może być najlepszy, pierwszy, ostatni albo średni. Limity prób i cooldown są sprawdzane atomowo.
+
+Administrator wybiera jeden z trzech trybów odpowiedzi: od razu po osobnym zatwierdzeniu pytania, dopiero po zakończeniu całego testu albo nigdy. W trybie „Nigdy — pełny wynik tylko dla administratora” uczeń dostaje jedynie potwierdzenie zapisania próby; procent, punkty, zaliczenie, odpowiedzi i wyjaśnienia pozostają w chronionym raporcie administratora. W dwóch pozostałych trybach można osobno zdecydować o widoczności procentu, punktów, zaliczenia, własnych odpowiedzi, wyjaśnień i czasu. Ukryte pola nie są tylko maskowane CSS-em — nie występują w odpowiedzi Function.
+
+Dashboard Builder ma typ **Egzamin**, który zapisuje repozytorium i `examId` oraz zwykłe ustawienia centralnego postępu. Lesson Builder ma klocek **Egzamin z biblioteki** z warunkiem opcjonalnym, wymaganym ukończeniem, wymaganym zaliczeniem lub lokalnym minimum. Wymagany krok blokuje przejście także server-side; wyłączenie go z procentu lekcji nie wyłącza wymagalności. Ten sam egzamin może być użyty na Dashboardzie i w wielu lekcjach bez kopiowania definicji.
+
+### Raporty i dane
+
+Zakładka **Raporty** w Exam Builderze pokazuje uczestników, liczbę prób, średnią, medianę, minimum/maksimum, średni czas, zdawalność, rozkład wyników oraz analizę pytań z odsetkiem odpowiedzi poprawnych, dystrybucją i najczęstszym błędnym dystraktorem. Lista prób jest kompaktowa; pełne pytania, odpowiedzi, klucz, punkty, kolejność i event log są pobierane dopiero po rozwinięciu próby.
+
+Raport ucznia w **Panel administratora → Postępy** ma przy egzaminie drugi zwijany poziom „Próby egzaminu, wyniki i czas”. Dopiero jego otwarcie pobiera daty, czas, numer, wynik i zaliczenie. Administrator może zresetować pojedynczą próbę; operacja jest miękkim resetem, przelicza postęp na podstawie pozostałych prób i trafia do wspólnego audit logu. Próby i raporty są indeksowane po repozytorium, egzaminie i użytkowniku, więc zwykły odczyt nie skanuje całego store.
+
+`chemdisk-exams` przechowuje odpowiedzi i wyniki niezależnie od przełącznika pasków postępu. Globalne `OFF` centralnego postępu zatrzymuje liczenie procentu kursu i ukrywa paski, ale nie może wyłączyć autosave, czasu ani zapisu samej próby, bo egzamin przestałby działać. Każda odpowiedź oraz przejście między ekranami oznacza wywołanie Function i zapis indeksów Blobs; tryb natychmiastowy dodaje po jednym zapisie zatwierdzenia na sprawdzone pytanie. Debounce, zapis tylko zmienionych odpowiedzi, bezpośrednie klucze i agregaty ograniczają liczbę wywołań; dokładny koszt zależy od bieżącego planu Netlify i liczby rozwiązywanych egzaminów. Samo przeglądanie i wyszukiwanie odbiorców odbywa się tylko w panelu administratora i nie generuje ruchu podczas pracy uczniów.
+
+### Endpointy egzaminacyjne
+
+- `GET|POST /.netlify/functions/exam` — publiczna definicja, obraz, start/wznowienie, autosave, bezpieczne zatwierdzenie pojedynczej odpowiedzi, nawigacja, event, submit i wynik własnej próby;
+- `GET|DELETE /.netlify/functions/admin-exams` — raport globalny, raport użytkownika/próby, odwołania oraz administracyjny reset;
+- `GET|POST|PUT|DELETE /.netlify/functions/content-library` — istniejący chroniony przepływ listy, odczytu, zapisu/publikacji i usuwania `exam.json` oraz banku.
+
+Exam Engine nie dodaje nowych zmiennych środowiskowych i nie implementuje AI, pełnego Media Managera ani niezawodnego proctoringu.
 
 ## Bezpieczeństwo i ograniczenia materiałów
 
@@ -1051,7 +1118,7 @@ npm test
 npm run build
 ```
 
-Oba skrypty uruchamiają `node --test`; projekt nie ma osobnego etapu bundlowania ani kompilowania zasobów. Testy obejmują między innymi hooki Identity, odporność sesji po uśpieniu i w wielu kartach, funkcje administracyjne, Stripe i księgi Blobs, bezpieczny odczyt i zapis prywatnego repo GitHub, parser dashboardu, natychmiastowe śledzenie sekcji, wspólny motyw, media, kalkulator klasyczny, parser chemiczny Atonom, odtwarzacz lekcji oraz trzy modele Studio. Netlify wykonuje tę samą bramkę `npm run build` przed publikacją katalogu `public`.
+Oba skrypty uruchamiają `node --test`; projekt nie ma osobnego etapu bundlowania zasobów. Testy obejmują między innymi hooki Identity, odporność sesji po uśpieniu i w wielu kartach, funkcje administracyjne, Stripe i księgi Blobs, bezpieczny odczyt i zapis prywatnego repo GitHub, parser dashboardu, centralny postęp, wspólny motyw, media, kalkulator klasyczny, parser chemiczny Atonom, odtwarzacz lekcji oraz modele Studio i Exam Engine. Netlify wykonuje tę samą bramkę `npm run build` przed publikacją katalogu `public`.
 
 Opcjonalna kontrola składni wszystkich plików JavaScript:
 
@@ -1086,13 +1153,16 @@ Przed publikacją wykonaj też krótki test ręczny:
 23. Prompt Builder importuje, waliduje i eksportuje pliki `.json` oraz wielopunktowe `.txt`;
 24. administrator tworzy testowy plik lekcji lub promptu w GitHubie, aktualizuje go po ponownym wczytaniu, a konflikt SHA nie nadpisuje nowszej wersji;
 25. usunięcie testowego pliku wymaga potwierdzenia i tworzy commit widoczny w historii repo;
-26. zakładka **Materiały** pokazuje poprawne repo i liczby plików, wyszukiwarka Studio widzi lekcje i prompty, a odtwarzacz otwiera lekcję z repo;
+26. zakładka **Materiały** pokazuje poprawne repo i liczby plików, wyszukiwarka Studio widzi lekcje, prompty i egzaminy, a odtwarzacze otwierają treść z właściwego repo;
 27. po zmianie pliku w repo materiałów nowa wersja jest widoczna bez deployu aplikacji po wygaśnięciu 20-sekundowego cache’u;
 28. linki Google i YouTube działają na docelowej domenie i przy docelowych ustawieniach udostępniania;
 29. zwykły użytkownik nie może podać cudzego `userId`, odczytać cudzego postępu ani wywołać `admin-progress`;
-30. otwarcie materiału innego niż lekcja daje 100%, lekcja nadal wylicza procent z kroków, a otwarcie kontenera nie zalicza jego dzieci;
+30. otwarcie zwykłego materiału innego niż lekcja i egzamin daje 100%, lekcja wylicza procent z kroków, egzamin z odpowiedzi, a otwarcie kontenera nie zalicza jego dzieci;
 31. ustawienia `ON/OFF/INHERIT` i wagi dają hierarchiczny procent sekcji, działu i kursu bez osobnych flag agregacji;
 32. wyłączenie globalnego postępu zachowuje historię, a osobny przełącznik otwarć działa zgodnie z ustawieniem;
 33. lekcja sekwencyjna odrzuca skok do zablokowanego kroku, natomiast nadpisanie użytkownika działa;
 34. film YT nie zalicza przewiniętego fragmentu, PDF jest opisany jako nawigacyjny, a quiz pokazuje osobno postęp i wynik;
-35. reset i ręczna zmiana administratora pojawiają się w audit logu.
+35. reset i ręczna zmiana administratora pojawiają się w audit logu;
+36. aktywna próba nie zwraca klucza, obce `attemptId` daje 404, a timer ukryty nadal kończy próbę server-side;
+37. Dashboard → egzamin → autosave → odświeżenie → wynik → raport działa end-to-end;
+38. niezaliczony wymagany egzamin blokuje lekcję, a wynik spełniający lokalny próg ją odblokowuje.

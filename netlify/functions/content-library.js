@@ -28,7 +28,7 @@ exports.handler = async function contentLibraryHandler(event = {}, context = {})
   }
 
   if (event.httpMethod === 'PUT' || event.httpMethod === 'DELETE') {
-    const guard = mutationGuard(event, { maxBodyBytes: 1_100_000 });
+    const guard = mutationGuard(event, { maxBodyBytes: 6_200_000 });
     if (!guard.ok) return responseForFailure(guard);
     const authorization = await requireAdmin(event, context);
     if (!authorization.ok) return responseForFailure(authorization);
@@ -39,7 +39,7 @@ exports.handler = async function contentLibraryHandler(event = {}, context = {})
   const action = typeof query.action === 'string' ? query.action : 'list';
   const kind = typeof query.kind === 'string' ? query.kind : 'lesson';
   const repositoryId = typeof query.repo === 'string' ? query.repo : '';
-  const adminOnly = action === 'status' || kind === 'prompt' || query.refresh === '1';
+  const adminOnly = action === 'status' || ['prompt', 'exam', 'question_bank'].includes(kind) || query.refresh === '1';
   const authorization = adminOnly
     ? await requireAdmin(event, context)
     : await requireCourseAccess(event, context);
@@ -49,12 +49,12 @@ exports.handler = async function contentLibraryHandler(event = {}, context = {})
     if (action === 'status') {
       const configuration = contentRepository.publicConfiguration(process.env, repositoryId);
       const repositories = contentRepository.publicConfigurations();
-      let counts = { lessons: 0, prompts: 0 };
+      let counts = { lessons: 0, prompts: 0, exams: 0 };
       let connection = configuration.configured ? 'pending' : 'not_configured';
       let error = '';
       if (configuration.configured) {
         try {
-          const [lessons, prompts] = await Promise.all([
+          const [lessons, prompts, exams] = await Promise.all([
             contentRepository.listAssets('lesson', {
               force: query.refresh === '1',
               repositoryId: configuration.id
@@ -62,9 +62,13 @@ exports.handler = async function contentLibraryHandler(event = {}, context = {})
             contentRepository.listAssets('prompt', {
               force: query.refresh === '1',
               repositoryId: configuration.id
+            }),
+            contentRepository.listAssets('exam', {
+              force: query.refresh === '1',
+              repositoryId: configuration.id
             })
           ]);
-          counts = { lessons: lessons.length, prompts: prompts.length };
+          counts = { lessons: lessons.length, prompts: prompts.length, exams: exams.length };
           connection = 'ready';
         } catch (statusError) {
           connection = 'error';
@@ -90,7 +94,7 @@ exports.handler = async function contentLibraryHandler(event = {}, context = {})
       });
     }
 
-    if (action === 'read' && (kind === 'lesson' || kind === 'prompt')) {
+    if (action === 'read' && ['lesson', 'prompt', 'exam', 'question_bank'].includes(kind)) {
       const asset = await contentRepository.readAsset(kind, query.file, { repositoryId });
       return json(asset);
     }
@@ -112,6 +116,9 @@ async function mutateContent(event) {
 
   try {
     if (event.httpMethod === 'PUT') {
+      if (validation.value.kind === 'exam') {
+        await validateExamQuestionReferences(validation.value.content, validation.value.repositoryId);
+      }
       const saved = await contentRepository.saveAsset(
         validation.value.kind,
         validation.value.filename,
@@ -138,6 +145,39 @@ async function mutateContent(event) {
   }
 }
 
+async function validateExamQuestionReferences(rawContent, repositoryId) {
+  let parsed;
+  try { parsed = JSON.parse(rawContent); }
+  catch { return; }
+  const { normalizeDefinition, normalizeQuestionBank, resolveExamQuestions } = require('../exam-common.js');
+  const definition = normalizeDefinition(parsed, parsed?.examId);
+  let bank = { questions: [] };
+  if (definition.questionRefs.length) {
+    try {
+      const asset = await contentRepository.readAsset('question_bank', 'question-bank.json', { repositoryId });
+      bank = normalizeQuestionBank(JSON.parse(asset.content));
+    } catch (error) {
+      if (error instanceof contentRepository.ContentRepositoryError && error.code === 'CONTENT_FILE_NOT_FOUND') {
+        throw new contentRepository.ContentRepositoryError('EXAM_QUESTION_REFERENCE_MISSING', 422);
+      }
+      throw error;
+    }
+  }
+  const questions = resolveExamQuestions(definition, bank);
+  if (questions.length !== definition.questions.length + definition.questionRefs.length) {
+    throw new contentRepository.ContentRepositoryError('EXAM_QUESTION_REFERENCE_MISSING', 422);
+  }
+  for (const quota of definition.randomization.categoryQuotas) {
+    if (questions.filter((question) => question.categories.includes(quota.category)).length < quota.count) {
+      throw new contentRepository.ContentRepositoryError('EXAM_CATEGORY_POOL_TOO_SMALL', 422);
+    }
+  }
+  const requested = definition.randomization.totalQuestions;
+  if (requested && requested > questions.length) {
+    throw new contentRepository.ContentRepositoryError('EXAM_QUESTION_POOL_TOO_SMALL', 422);
+  }
+}
+
 function validateMutationBody(value, method) {
   if (!plainObject(value)) return { ok: false, code: 'INVALID_CONTENT_REQUEST' };
   const allowed = method === 'PUT'
@@ -146,7 +186,7 @@ function validateMutationBody(value, method) {
   if (Object.keys(value).some((key) => !allowed.has(key))) {
     return { ok: false, code: 'INVALID_CONTENT_REQUEST' };
   }
-  if (!['lesson', 'prompt'].includes(value.kind)) {
+  if (!['lesson', 'prompt', 'exam', 'question_bank'].includes(value.kind)) {
     return { ok: false, code: 'INVALID_CONTENT_KIND' };
   }
   if (typeof value.filename !== 'string') {
@@ -185,4 +225,4 @@ function errorCode(error) {
     : 'CONTENT_REPOSITORY_UNAVAILABLE';
 }
 
-exports._test = { errorCode, validateMutationBody };
+exports._test = { errorCode, validateExamQuestionReferences, validateMutationBody };

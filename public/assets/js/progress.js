@@ -142,7 +142,11 @@
       pending.delete(id);
       root.clearTimeout(timers.get(id));
       timers.delete(id);
-      return send(payload, options).catch(reportBackgroundError);
+      return send(payload, options).catch((error) => {
+        reportBackgroundError(error);
+        if (options.throwOnError) throw error;
+        return null;
+      });
     }
     pending.set(id, mergeObjects(pending.get(id), event));
     root.clearTimeout(timers.get(id));

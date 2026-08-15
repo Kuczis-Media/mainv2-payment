@@ -8,6 +8,9 @@ const MAX_PROMPT_CHARS = 10_000;
 const MAX_CATALOG_BYTES = 256 * 1024;
 const MAX_LESSON_BYTES = 512 * 1024;
 const MAX_PROMPT_BYTES = 256 * 1024;
+const MAX_EXAM_BYTES = 2 * 1024 * 1024;
+const MAX_QUESTION_BANK_BYTES = 5 * 1024 * 1024;
+const MAX_EXAM_MEDIA_BYTES = 10 * 1024 * 1024;
 const SAFE_REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const SAFE_REPOSITORY_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const SAFE_TOKEN_ENV = /^GITHUB_CONTENT_TOKEN(?:_[A-Z0-9][A-Z0-9_]*)?$/;
@@ -15,6 +18,9 @@ const SAFE_REF = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/;
 const SAFE_ROOT = /^(?:[A-Za-z0-9][A-Za-z0-9_.-]*\/)*[A-Za-z0-9][A-Za-z0-9_.-]*$/;
 const SAFE_LESSON_FILENAME = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.md$/i;
 const SAFE_PROMPT_FILENAME = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.(json|txt)$/i;
+const SAFE_EXAM_ID = /^[a-z0-9][a-z0-9-]{0,79}$/;
+const SAFE_QUESTION_BANK_FILENAME = /^question-bank\.json$/;
+const SAFE_EXAM_MEDIA_REF = /^photos\/(?!.*\.\.)(?:[A-Za-z0-9][A-Za-z0-9_.-]*\/)*[A-Za-z0-9][A-Za-z0-9_.-]{0,119}$/;
 const SAFE_SHA = /^[a-f0-9]{40,64}$/i;
 const PROMPT_POINT_HEADER = /^::punkt[ \t]+([1-9]\d{0,3})[ \t]*$/i;
 const SIMPLE_PROMPT_POINT_HEADER = /^([1-9]\d{0,3})[.)][ \t]+(.+)$/;
@@ -180,6 +186,21 @@ function assetDefinition(kind) {
       directory: 'prompts',
       maxBytes: MAX_PROMPT_BYTES,
       pattern: SAFE_PROMPT_FILENAME
+    };
+  }
+  if (kind === 'exam') {
+    return {
+      directory: 'exams',
+      maxBytes: MAX_EXAM_BYTES,
+      pattern: SAFE_EXAM_ID,
+      nestedFilename: 'exam.json'
+    };
+  }
+  if (kind === 'question_bank') {
+    return {
+      directory: 'exams',
+      maxBytes: MAX_QUESTION_BANK_BYTES,
+      pattern: SAFE_QUESTION_BANK_FILENAME
     };
   }
   throw new ContentRepositoryError('INVALID_CONTENT_KIND', 400);
@@ -404,16 +425,40 @@ async function listAssets(kind, options = {}) {
   if (!Array.isArray(entries)) {
     throw new ContentRepositoryError('CONTENT_REPOSITORY_RESPONSE_INVALID', 503);
   }
-  const assets = entries
-    .filter((entry) => (
-      entry &&
-      entry.type === 'file' &&
-      definition.pattern.test(entry.name || '') &&
-      Number.isFinite(Number(entry.size)) &&
-      Number(entry.size) <= definition.maxBytes
-    ))
+  let usableEntries = entries.filter((entry) => {
+    if (!entry || !definition.pattern.test(entry.name || '')) return false;
+    if (kind === 'exam') return entry.type === 'dir';
+    return entry.type === 'file'
+      && Number.isFinite(Number(entry.size))
+      && Number(entry.size) <= definition.maxBytes;
+  });
+  if (kind === 'exam') {
+    const verified = [];
+    for (let offset = 0; offset < usableEntries.length; offset += 12) {
+      const batch = await Promise.all(usableEntries.slice(offset, offset + 12).map(async (entry) => {
+        try {
+          const examResponse = await githubRequest(config, `${definition.directory}/${entry.name}/${definition.nestedFilename}`, {
+            ...options,
+            notFoundCode: 'CONTENT_FILE_NOT_FOUND'
+          });
+          const file = await examResponse.json();
+          if (!file || file.type !== 'file' || file.name !== definition.nestedFilename
+            || !Number.isFinite(Number(file.size)) || Number(file.size) > definition.maxBytes) return null;
+          return { ...entry, examFile: file };
+        } catch (error) {
+          if (error instanceof ContentRepositoryError && error.status === 404) return null;
+          throw error;
+        }
+      }));
+      verified.push(...batch.filter(Boolean));
+    }
+    usableEntries = verified;
+  }
+  const assets = usableEntries
     .map((entry) => {
-      const path = `${definition.directory}/${entry.name}`;
+      const path = kind === 'exam'
+        ? `${definition.directory}/${entry.name}/exam.json`
+        : `${definition.directory}/${entry.name}`;
       const metadata = normalizeMetadata(catalog[path]);
       return {
         id: `${kind}:${entry.name}`,
@@ -425,8 +470,8 @@ async function listAssets(kind, options = {}) {
         title: metadata.title || titleFromFilename(entry.name),
         description: metadata.description,
         tags: metadata.tags,
-        size: Number(entry.size),
-        sha: cleanString(entry.sha)
+        size: kind === 'exam' ? Number(entry.examFile.size) : Number(entry.size),
+        sha: cleanString(kind === 'exam' ? entry.examFile.sha : entry.sha)
       };
     })
     .sort((left, right) => left.title.localeCompare(right.title, 'pl', { sensitivity: 'base' }));
@@ -442,7 +487,10 @@ async function readAsset(kind, rawFilename, options = {}) {
   const definition = assetDefinition(kind);
   const filename = validateFilename(kind, rawFilename);
   const config = configFromOptions(options);
-  const response = await githubRequest(config, `${definition.directory}/${filename}`, {
+  const relativePath = definition.nestedFilename
+    ? `${definition.directory}/${filename}/${definition.nestedFilename}`
+    : `${definition.directory}/${filename}`;
+  const response = await githubRequest(config, relativePath, {
     ...options,
     raw: true,
     notFoundCode: 'CONTENT_FILE_NOT_FOUND'
@@ -545,6 +593,22 @@ function validateAssetContent(kind, filename, rawContent) {
     } else {
       validateTxtPrompt(rawContent);
     }
+  } else if (kind === 'exam') {
+    let parsed;
+    try { parsed = JSON.parse(rawContent.replace(/^\uFEFF/, '')); }
+    catch { throw new ContentRepositoryError('EXAM_FILE_INVALID', 422); }
+    const { validateDefinition } = require('./exam-common.js');
+    const validation = validateDefinition(parsed, filename);
+    if (!validation.valid) throw new ContentRepositoryError(validation.errors[0]?.code || 'EXAM_FILE_INVALID', 422);
+  } else if (kind === 'question_bank') {
+    let parsed;
+    try { parsed = JSON.parse(rawContent.replace(/^\uFEFF/, '')); }
+    catch { throw new ContentRepositoryError('QUESTION_BANK_INVALID', 422); }
+    const { validateQuestionBank } = require('./exam-common.js');
+    const validation = validateQuestionBank(parsed);
+    if (!validation.valid) {
+      throw new ContentRepositoryError(validation.errors[0]?.code || 'QUESTION_BANK_INVALID', 422);
+    }
   }
   return rawContent;
 }
@@ -579,8 +643,8 @@ async function saveAsset(kind, rawFilename, rawContent, options = {}) {
   const creating = !expectedSha;
   const payload = {
     message: creating
-      ? `Add ${definition.directory}/${filename} from ChemDisk Studio`
-      : `Update ${definition.directory}/${filename} from ChemDisk Studio`,
+      ? `Add ${definition.nestedFilename ? `${definition.directory}/${filename}/${definition.nestedFilename}` : `${definition.directory}/${filename}`} from ChemDisk Studio`
+      : `Update ${definition.nestedFilename ? `${definition.directory}/${filename}/${definition.nestedFilename}` : `${definition.directory}/${filename}`} from ChemDisk Studio`,
     content: Buffer.from(content, 'utf8').toString('base64'),
     branch: config.ref
   };
@@ -589,7 +653,9 @@ async function saveAsset(kind, rawFilename, rawContent, options = {}) {
   return enqueueMutation(config, async () => {
     const data = await githubMutationRequest(
       config,
-      `${definition.directory}/${filename}`,
+      definition.nestedFilename
+        ? `${definition.directory}/${filename}/${definition.nestedFilename}`
+        : `${definition.directory}/${filename}`,
       'PUT',
       payload,
       {
@@ -619,10 +685,12 @@ async function deleteAsset(kind, rawFilename, rawSha, options = {}) {
   return enqueueMutation(config, async () => {
     const data = await githubMutationRequest(
       config,
-      `${definition.directory}/${filename}`,
+      definition.nestedFilename
+        ? `${definition.directory}/${filename}/${definition.nestedFilename}`
+        : `${definition.directory}/${filename}`,
       'DELETE',
       {
-        message: `Delete ${definition.directory}/${filename} from ChemDisk Studio`,
+        message: `Delete ${definition.nestedFilename ? `${definition.directory}/${filename}/${definition.nestedFilename}` : `${definition.directory}/${filename}`} from ChemDisk Studio`,
         sha: expectedSha,
         branch: config.ref
       },
@@ -643,6 +711,27 @@ async function deleteAsset(kind, rawFilename, rawSha, options = {}) {
   });
 }
 
+async function readExamMedia(rawExamId, rawReference, options = {}) {
+  const examId = validateFilename('exam', rawExamId);
+  const reference = cleanString(rawReference);
+  if (!SAFE_EXAM_MEDIA_REF.test(reference)) {
+    throw new ContentRepositoryError('INVALID_EXAM_MEDIA_REFERENCE', 400);
+  }
+  const config = configFromOptions(options);
+  const response = await githubRequest(config, `exams/${examId}/${reference}`, {
+    ...options,
+    raw: true,
+    notFoundCode: 'CONTENT_FILE_NOT_FOUND'
+  });
+  const buffer = await readResponseBytes(response, MAX_EXAM_MEDIA_BYTES);
+  const extension = (reference.match(/\.([A-Za-z0-9]+)$/) || [])[1]?.toLowerCase();
+  const mimeType = ({
+    png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif'
+  })[extension] || '';
+  if (!mimeType) throw new ContentRepositoryError('INVALID_EXAM_MEDIA_REFERENCE', 400);
+  return { buffer, mimeType, reference, examId, repositoryId: config.id };
+}
+
 function cleanString(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
@@ -659,6 +748,7 @@ module.exports = {
   publicConfiguration,
   publicConfigurations,
   readAsset,
+  readExamMedia,
   repositoryConfig,
   repositoryConfigs,
   saveAsset,

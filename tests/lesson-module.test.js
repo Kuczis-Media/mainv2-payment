@@ -80,7 +80,10 @@ test('lesson library is admin-only and the player layout can be collapsed', () =
   assert.match(script, /classList\.toggle\(['"]is-outline-collapsed['"]/);
   assert.match(script, /sequential:\s*true/);
   assert.match(script, /saved\.sequential\s*!==\s*false/);
-  assert.match(script, /state\.sequential\s*&&\s*slide\.task\s*&&\s*!state\.solved\.has/);
+  assert.match(script, /const taskBlocked\s*=\s*Boolean\(slide\.task\s*&&\s*!isSolved\)/);
+  assert.match(script, /state\.sequential\s*&&\s*\(taskBlocked\s*\|\|\s*!examGate\.satisfied\)/);
+  assert.match(script, /studentResultVisible\s*===\s*false/);
+  assert.match(script, /wynik dostępny administratorowi/);
   assert.match(script, /!state\.sequential\s*\|\|\s*index\s*<=\s*state\.maxReached/);
   assert.match(script, /function confirmResetProgress\(\)/);
   assert.match(script, /window\.confirm\(/);

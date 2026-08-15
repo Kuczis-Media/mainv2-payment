@@ -72,6 +72,7 @@
     lessonRepositorySave: byId('lesson-repository-save-button'),
     lessonRepositoryDelete: byId('lesson-repository-delete-button'),
     promptWorkspace: byId('prompt-workspace'),
+    examWorkspace: byId('exam-workspace'),
     promptFilename: byId('prompt-filename-input'),
     promptFormat: byId('prompt-format-select'),
     promptInstruction: byId('prompt-instruction-input'),
@@ -124,6 +125,7 @@
       selectedRepositoryId: '',
       lessons: [],
       prompts: [],
+      exams: [],
       loaded: false,
       loading: false,
       requestId: 0
@@ -309,6 +311,7 @@
     if (state.dashboard.model) writeStorage(DASHBOARD_DRAFT_KEY, state.dashboard.model);
     if (state.lesson.model) writeStorage(LESSON_DRAFT_KEY, state.lesson.model);
     if (state.prompt.model) writeStorage(PROMPT_DRAFT_KEY, state.prompt.model);
+    window.ChemExamBuilder?.flush?.();
   }
 
   function snapshot(mode) {
@@ -516,12 +519,13 @@
 
   function switchMode(mode) {
     finishEdit();
-    const next = ['home', 'dashboard', 'lesson', 'prompt'].includes(mode) ? mode : 'home';
+    const next = ['home', 'dashboard', 'lesson', 'exam', 'prompt'].includes(mode) ? mode : 'home';
     state.mode = next;
     elements.home.hidden = next !== 'home';
     elements.dashboardWorkspace.hidden = next !== 'dashboard';
     elements.lessonWorkspace.hidden = next !== 'lesson';
     elements.promptWorkspace.hidden = next !== 'prompt';
+    elements.examWorkspace.hidden = next !== 'exam';
     all('[data-switch-mode]').forEach((button) => {
       const active = button.dataset.switchMode === next;
       button.classList.toggle('is-active', active);
@@ -530,6 +534,7 @@
     if (next === 'dashboard') renderDashboard();
     if (next === 'lesson') renderLesson();
     if (next === 'prompt') renderPrompt();
+    if (next === 'exam') void window.ChemExamBuilder?.activate?.();
     updateHistoryButtons();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -542,6 +547,7 @@
       yt: ['Film YouTube', 'Nagranie z własnymi kontrolkami ChemDisk.'],
       lesson: ['Lekcja interaktywna', 'Przejdź przez prezentację i zadania.'],
       forms: ['Test wiedzy', 'Sprawdź swoją wiedzę w formularzu.'],
+      exam: ['Egzamin', 'Rozwiąż egzamin i zapisz wynik w ChemDisk.'],
       chat: ['Asystent AI', 'Skorzystaj z przygotowanej pomocy.'],
       kalkulator: ['Kalkulator naukowy', 'Wykonuj obliczenia potrzebne w zadaniach.'],
       classic: ['Kalkulator klasyczny', 'Szybkie podstawowe obliczenia.'],
@@ -589,7 +595,7 @@
       title,
       description,
       source: 'prompt',
-      repositoryId: ['lesson', 'chat'].includes(type)
+      repositoryId: ['lesson', 'chat', 'exam'].includes(type)
         ? state.contentLibrary.selectedRepositoryId
         : '',
       formula: type === 'atonom' ? 'fenol' : ''
@@ -652,6 +658,14 @@
         title: asset.title || asset.filename,
         description: asset.description || 'Interaktywna lekcja z prywatnej biblioteki kursu.'
       });
+    } else if (asset.kind === 'exam') {
+      node = dashboardModelApi.createModule({
+        module: 'exam',
+        repositoryId: asset.repositoryId,
+        examId: asset.filename,
+        title: asset.title || asset.filename,
+        description: asset.description || 'Egzamin z bezpiecznym zapisem próby i wyniku.'
+      });
     } else {
       const isText = /\.txt$/i.test(asset.filename);
       node = dashboardModelApi.createModule({
@@ -670,6 +684,8 @@
       'Materiał dodany',
       asset.kind === 'lesson'
         ? 'Karta lekcji jest gotowa w dashboardzie.'
+        : asset.kind === 'exam'
+          ? 'Karta egzaminu jest gotowa w dashboardzie.'
         : 'Karta AI jest gotowa; dla pliku TXT sprawdź numer punktu.'
     );
   }
@@ -1078,7 +1094,7 @@
       ? dashboardModelApi.findNode(state.dashboard.model, state.dashboard.selectedUid)
       : { node: state.dashboard.model, parent: null, container: null, index: -1 };
     const node = found.node;
-    if (node.kind === 'module' && ['lesson', 'chat'].includes(node.module)) {
+    if (node.kind === 'module' && ['lesson', 'chat', 'exam'].includes(node.module)) {
       syncInspectorRepository(node.repositoryId);
     }
     const form = create('form', 'inspector-form');
@@ -1144,6 +1160,23 @@
           'Plik lekcji',
           repositoryFilenameInput(node.file, 'file', 'lesson', 'md', node.repositoryId),
           'Wybierz plik z prywatnego repozytorium albo wpisz jego nazwę.'
+        ));
+      }
+      if (node.module === 'exam') {
+        form.append(field(
+          'Repozytorium',
+          selectInput(node.repositoryId, 'repositoryId', repositoryOptions(true))
+        ));
+        const examOptions = state.contentLibrary.exams
+          .filter((asset) => !node.repositoryId || asset.repositoryId === node.repositoryId)
+          .map((asset) => ({ value: asset.filename, label: asset.title || asset.filename }));
+        if (node.examId && !examOptions.some((option) => option.value === node.examId)) {
+          examOptions.unshift({ value: node.examId, label: `${node.examId} — poza bieżącą listą` });
+        }
+        form.append(field(
+          'Egzamin',
+          selectInput(node.examId, 'examId', examOptions.length ? examOptions : [{ value: '', label: 'Brak egzaminów w repozytorium' }]),
+          'Karta przechowuje tylko repositoryId i examId. Definicja pozostaje w jednym pliku exam.json.'
         ));
       }
       if (node.module === 'chat') {
@@ -1769,6 +1802,18 @@
         title: 'Film do lekcji'
       });
     }
+    if (type === 'exam') {
+      const firstExam = state.contentLibrary.exams[0];
+      return lessonModelApi.createBlock('exam', {
+        title: firstExam?.title || 'Egzamin do lekcji',
+        description: 'Ukończ egzamin, aby kontynuować naukę zgodnie z warunkiem tego kroku.',
+        button: 'Otwórz egzamin',
+        repositoryId: state.contentLibrary.selectedRepositoryId,
+        examId: firstExam?.filename || '',
+        requirement: 'optional',
+        minimumScore: 75
+      });
+    }
     if (type === 'atonom') {
       return lessonModelApi.createBlock('atonom', {
         formula: 'fenol',
@@ -2033,6 +2078,7 @@
       style: 'Aa',
       accordion: '⌄',
       youtube: 'YT',
+      exam: 'E',
       atonom: '⚛',
       formula: '∑',
       ai: '✦',
@@ -2056,6 +2102,7 @@
     if (block.type === 'style') return 'Stylowany tekst';
     if (block.type === 'accordion') return block.title || 'Harmonijka';
     if (block.type === 'youtube') return block.title || 'Film YouTube';
+    if (block.type === 'exam') return block.title || 'Egzamin';
     if (block.type === 'atonom') return block.title || `ATONOM: ${block.formula}`;
     if (block.type === 'formula') return block.title || (block.mode === 'math' ? 'Wzór matematyczny' : 'Równanie reakcji');
     if (block.type === 'ai') return block.title || 'Zapytaj AI o slajd';
@@ -2075,6 +2122,15 @@
     if (block.type === 'table') return `${block.headers.length} kolumn · ${block.rows.length} wierszy · ${block.align}`;
     if (block.type === 'image') return block.url || 'Uzupełnij adres HTTPS';
     if (block.type === 'youtube') return block.video || 'Uzupełnij link lub ID filmu';
+    if (block.type === 'exam') {
+      const requirements = {
+        optional: 'opcjonalny',
+        completed: 'wymagane ukończenie',
+        passed: 'wymagane zaliczenie',
+        minimum_score: `minimum ${Math.max(0, Math.min(100, Number(block.minimumScore) || 0))}%`
+      };
+      return `${block.examId || 'wybierz egzamin'} · ${requirements[block.requirement] || requirements.optional}`;
+    }
     if (block.type === 'atonom') return `Związek: ${block.formula || 'nieustawiony'}`;
     if (block.type === 'formula') {
       return block.mode === 'math'
@@ -2928,8 +2984,8 @@
           { value: 'material_completed', label: 'Obejrzenie / ukończenie materiału' },
           { value: 'quiz_completed', label: 'Ukończenie quizu' },
           { value: 'correct_answer', label: 'Poprawna odpowiedź' },
-          { value: 'exam_completed', label: 'Ukończenie egzaminu (przyszłe)' },
-          { value: 'exam_passed', label: 'Zaliczenie egzaminu (przyszłe)' },
+          { value: 'exam_completed', label: 'Ukończenie egzaminu' },
+          { value: 'exam_passed', label: 'Zaliczenie egzaminu' },
           { value: 'minimum_score', label: 'Minimalny wynik' }
         ])
       ));
@@ -3059,6 +3115,46 @@
         ),
         field('Tytuł filmu', lessonInput(block.title, 'title', { maxLength: 180 }))
       );
+    } else if (block.type === 'exam') {
+      syncInspectorRepository(block.repositoryId);
+      const exams = state.contentLibrary.exams || [];
+      const examOptions = exams.map((asset) => ({
+        value: asset.filename,
+        label: asset.title ? `${asset.title} · ${asset.filename}` : asset.filename
+      }));
+      if (block.examId && !examOptions.some((option) => option.value === block.examId)) {
+        examOptions.unshift({ value: block.examId, label: `${block.examId} (spoza bieżącej listy)` });
+      }
+      if (!examOptions.length) examOptions.push({ value: '', label: 'Brak egzaminów w repozytorium' });
+      form.append(
+        field(
+          'Repozytorium egzaminu',
+          lessonSelect(block.repositoryId, 'repositoryId', repositoryOptions(true)),
+          'Lekcja przechowuje wyłącznie stabilną referencję do egzaminu, nie kopiuje jego pytań.'
+        ),
+        field('Egzamin z biblioteki', lessonSelect(block.examId, 'examId', examOptions)),
+        field('Tytuł kafelka', lessonInput(block.title, 'title', { maxLength: 180 })),
+        field('Opis dla ucznia', lessonTextarea(block.description, 'description', { rows: 4, maxLength: 500 })),
+        field('Tekst przycisku', lessonInput(block.button, 'button', { maxLength: 80 })),
+        field('Warunek tego użycia', lessonSelect(block.requirement, 'requirement', [
+          { value: 'optional', label: 'Opcjonalny' },
+          { value: 'completed', label: 'Wymagane ukończenie' },
+          { value: 'passed', label: 'Wymagane zaliczenie' },
+          { value: 'minimum_score', label: 'Wymagany minimalny wynik' }
+        ]), 'Warunek dotyczy tylko tego kroku lekcji. Nie zmienia progu w globalnej definicji egzaminu.')
+      );
+      if (block.requirement === 'minimum_score') {
+        form.append(field(
+          'Minimalny wynik w tej lekcji (%)',
+          lessonInput(String(block.minimumScore), 'minimumScore', { type: 'number', min: 0, max: 100 }),
+          'Możesz wymagać tu np. 75%, nawet jeśli globalny próg egzaminu wynosi 60%.'
+        ));
+      }
+      form.append(create(
+        'p',
+        'formula-builder-tip',
+        'W trybie sekwencyjnym wynik jest ponownie sprawdzany po stronie serwera przed odblokowaniem kolejnego kroku.'
+      ));
     } else if (block.type === 'atonom') {
       form.append(
         field(
@@ -5193,7 +5289,7 @@
     const kind = create(
       'span',
       'repository-asset-kind',
-      asset.kind === 'lesson' ? 'MD' : /\.txt$/i.test(asset.filename) ? 'TXT' : 'JSON'
+      asset.kind === 'lesson' ? 'MD' : asset.kind === 'exam' ? 'EXAM' : /\.txt$/i.test(asset.filename) ? 'TXT' : 'JSON'
     );
     const copy = create('span');
     copy.append(
@@ -5210,7 +5306,7 @@
     const library = window.ChemContentLibrary;
     if (!library) return;
     const dashboardAssets = library.search(
-      [...state.contentLibrary.lessons, ...state.contentLibrary.prompts],
+      [...state.contentLibrary.lessons, ...state.contentLibrary.prompts, ...state.contentLibrary.exams],
       elements.dashboardAssetSearch.value
     );
     elements.dashboardAssetList.replaceChildren(
@@ -5272,6 +5368,7 @@
     state.contentLibrary.selectedRepositoryId = repositoryId;
     state.contentLibrary.lessons = [];
     state.contentLibrary.prompts = [];
+    state.contentLibrary.exams = [];
     state.contentLibrary.loaded = false;
     renderRepositorySelectors();
     renderRepositoryAssets();
@@ -5313,13 +5410,15 @@
       }
       renderRepositorySelectors();
       const repositoryId = state.contentLibrary.selectedRepositoryId;
-      const [lessons, prompts] = await Promise.all([
+      const [lessons, prompts, exams] = await Promise.all([
         library.list('lesson', { refresh: Boolean(force), repositoryId }),
-        library.list('prompt', { refresh: Boolean(force), repositoryId })
+        library.list('prompt', { refresh: Boolean(force), repositoryId }),
+        library.list('exam', { refresh: Boolean(force), repositoryId })
       ]);
       if (requestId !== state.contentLibrary.requestId) return;
       state.contentLibrary.lessons = lessons;
       state.contentLibrary.prompts = prompts;
+      state.contentLibrary.exams = exams;
       state.contentLibrary.loaded = true;
       renderRepositoryAssets();
       if (state.mode === 'dashboard') renderDashboardInspector();
@@ -5576,7 +5675,7 @@
       handleLessonInspectorInput(event);
       finishEdit();
       if (
-        ['type', 'mode', 'arrow', 'variant', 'repositoryId', 'promptFile', 'options', 'optionItem', 'gapLabel', 'gapSegment', 'useColor', 'conditionType']
+        ['type', 'mode', 'arrow', 'variant', 'repositoryId', 'promptFile', 'examId', 'requirement', 'options', 'optionItem', 'gapLabel', 'gapSegment', 'useColor', 'conditionType']
           .includes(event.target.dataset.lessonField)
       ) {
         renderLessonInspector();
@@ -5713,7 +5812,7 @@
   }
 
   async function start() {
-    if (!dashboardModelApi || !lessonModelApi || !promptModelApi || !window.ChemLesson) {
+    if (!dashboardModelApi || !lessonModelApi || !promptModelApi || !window.ChemExamStudioModel || !window.ChemLesson) {
       setAccessState(
         'Studio nie może się uruchomić',
         'Brakuje jednego z lokalnych modułów buildera. Sprawdź pliki wdrożenia.',

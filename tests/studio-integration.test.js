@@ -58,15 +58,18 @@ test('Dashboard Builder loads and conditionally publishes the active Blob versio
   assert.doesNotMatch(script, /localStorage\.setItem\([^)]*(?:token|jwt)/i);
 });
 
-test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
+test('Studio exposes dashboard, lesson, exam and prompt authoring workflows', () => {
   const html = read('public/members/module/studio/index.html');
   const script = read('public/members/module/studio/script.js');
   const styles = read('public/members/module/studio/style.css');
+  const examBuilder = read('public/members/module/studio/exam-builder.js');
   const mathJaxConfig = read('public/members/module/mathjax-config.js');
 
   assert.ok(fs.existsSync(path.join(studioRoot, 'dashboard-model.js')));
   assert.ok(fs.existsSync(path.join(studioRoot, 'lesson-model.js')));
   assert.ok(fs.existsSync(path.join(studioRoot, 'prompt-model.js')));
+  assert.ok(fs.existsSync(path.join(studioRoot, 'exam-model.js')));
+  assert.ok(fs.existsSync(path.join(studioRoot, 'exam-builder.js')));
   assert.match(html, /draggable=["']true["']/);
   assert.match(html, /id=["']lesson-download-button["']/);
   assert.match(html, /id=["']lesson-copy-button["']/);
@@ -74,6 +77,13 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(html, /id=["']lesson-repository-save-button["']/);
   assert.match(html, /id=["']lesson-repository-delete-button["']/);
   assert.match(html, /id=["']prompt-workspace["']/);
+  assert.match(html, /id=["']exam-workspace["']/);
+  assert.match(html, /data-exam-tab=["']questions["']/);
+  assert.match(html, /data-exam-tab=["']reports["']/);
+  assert.match(examBuilder, /resultVisibility\.feedbackMode/);
+  assert.match(examBuilder, /\/\.netlify\/functions\/admin-users/);
+  assert.match(examBuilder, /Szukaj po imieniu, nazwisku, e-mailu lub ID/);
+  assert.match(styles, /\.exam-audience-picker/);
   assert.match(html, /id=["']prompt-download-button["']/);
   assert.match(html, /id=["']prompt-import-button["']/);
   assert.match(html, /id=["']prompt-repository-save-button["']/);
@@ -146,7 +156,7 @@ test('Studio exposes dashboard, lesson and prompt authoring workflows', () => {
   assert.match(script, /function lessonRepositoryFilenameInput/);
   assert.match(script, /lessonRepositoryFilenameInput\([\s\S]*?block\.promptFile[\s\S]*?\[['"]json['"],\s*['"]txt['"]\]/);
   assert.match(script, /function syncInspectorRepository/);
-  assert.match(script, /\[['"]lesson['"],\s*['"]chat['"]\]\.includes\(node\.module\)/);
+  assert.match(script, /\[['"]lesson['"],\s*['"]chat['"],\s*['"]exam['"]\]\.includes\(node\.module\)/);
   assert.match(script, /block\.type\s*===\s*['"]ai['"][^;\n]*syncInspectorRepository/);
   assert.match(script, /if\s*\(fieldName\s*===\s*['"]repositoryId['"]\)[\s\S]*?selectContentRepository/);
   assert.match(script, /collapsedNodes:\s*new Set\(\)/);

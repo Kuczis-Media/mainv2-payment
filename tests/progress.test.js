@@ -48,6 +48,7 @@ function merge(existing, event, options = {}) {
     effective: node ? resolved.effective.get(node.id) : { tracking: true, showProgress: true },
     global: options.global || normalizedCatalog.global,
     preferences: options.preferences || {},
+    records: options.records || {},
     isLeaf: options.isLeaf,
     now: options.now || '2026-08-15T10:00:00.000Z'
   });
@@ -121,6 +122,15 @@ test('opening a non-lesson leaf completes it while lessons and containers keep e
   assert.equal(openedContainer.record.progressPercent, 0);
   assert.equal(openedContainer.record.status, 'opened');
 
+  const examNode = progressCommon.normalizeCatalog({ nodes: [{
+    id: 'exam-one', type: 'exam', progress: progress({ tracking: 'ON' })
+  }] }).nodes[0];
+  const openedExam = merge(null, {
+    materialId: 'exam-one', materialType: 'exam', action: 'open', opened: true
+  }, { node: examNode });
+  assert.equal(openedExam.record.progressPercent, 0);
+  assert.equal(openedExam.record.status, 'opened');
+
   const opensDisabled = catalog({ global: { tracking: 'ON', showProgress: 'ON', recordOpens: false } });
   const completedWithoutOpenTelemetry = merge(null, {
     materialId: 'slides', materialType: 'presentation', action: 'open', opened: true
@@ -128,6 +138,31 @@ test('opening a non-lesson leaf completes it while lessons and containers keep e
   assert.equal(completedWithoutOpenTelemetry.record.progressPercent, 100);
   assert.equal(completedWithoutOpenTelemetry.record.opened, false);
   assert.equal(completedWithoutOpenTelemetry.record.openCount, 0);
+});
+
+test('exam progress keeps the student result visibility policy for lesson embeds', () => {
+  const examNode = progressCommon.normalizeCatalog({ nodes: [{
+    id: 'exam-private-result', type: 'exam', progress: progress({ tracking: 'ON' })
+  }] }).nodes[0];
+  const completed = merge(null, {
+    materialId: 'exam-private-result',
+    materialType: 'exam',
+    action: 'exam',
+    details: {
+      started: true,
+      completed: true,
+      answeredQuestions: 10,
+      totalQuestions: 10,
+      scorePercent: 80,
+      passed: true,
+      studentResultVisible: false
+    }
+  }, { node: examNode });
+
+  assert.equal(completed.record.status, 'completed');
+  assert.equal(completed.record.details.studentResultVisible, false);
+  assert.equal(completed.record.details.scorePercent, 80);
+  assert.equal(completed.record.details.passed, true);
 });
 
 test('hierarchical aggregation weights enabled direct children at every level', () => {
@@ -237,6 +272,67 @@ test('server lesson navigation blocks jumps and honors per-user allow/deny/lock 
   }, { node });
   assert.equal(finished.record.status, 'completed');
   assert.deepEqual(finished.record.details.completedStepIds, ['a', 'b', 'c']);
+});
+
+test('lesson exam conditions stay locked after a failed attempt and unlock after pass or minimum score', () => {
+  const examMaterialId = 'exam:default:egzamin-testowy';
+  const node = progressCommon.normalizeCatalog({ nodes: [{
+    id: 'lesson-exam', type: 'lesson', progress: progress({ tracking: 'ON' }),
+    settings: {
+      navigation: 'sequential',
+      steps: [
+        { id: 'exam-step', includeInLesson: false, requiredToAdvance: true, condition: { type: 'exam_passed', materialId: examMaterialId } },
+        { id: 'summary', includeInLesson: true, requiredToAdvance: true }
+      ]
+    }
+  }] }).nodes[0];
+  const failedRecord = { status: 'completed', details: { scorePercent: 45, passed: false } };
+  const blocked = merge(null, {
+    materialId: 'lesson-exam', action: 'lesson_step', details: { currentStepId: 'summary', completedStepIds: ['exam-step'] }
+  }, { node, records: { [examMaterialId]: failedRecord } });
+  assert.equal(blocked.code, 'STEP_NOT_UNLOCKED');
+
+  const passed = merge(null, {
+    materialId: 'lesson-exam', action: 'lesson_step', details: { currentStepId: 'summary', completedStepIds: ['exam-step'] }
+  }, { node, records: { [examMaterialId]: { status: 'completed', details: { scorePercent: 75, passed: true } } } });
+  assert.equal(passed.ok, true);
+
+  const minimumNode = {
+    ...node,
+    settings: {
+      ...node.settings,
+      steps: [
+        { id: 'exam-step', includeInLesson: false, requiredToAdvance: true, condition: { type: 'minimum_score', materialId: examMaterialId, minimumScore: 80 } },
+        node.settings.steps[1]
+      ]
+    }
+  };
+  const belowMinimum = merge(null, {
+    materialId: 'lesson-exam', action: 'lesson_step', details: { currentStepId: 'summary', completedStepIds: ['exam-step'] }
+  }, { node: minimumNode, records: { [examMaterialId]: { status: 'completed', details: { scorePercent: 79, passed: true } } } });
+  assert.equal(belowMinimum.code, 'STEP_NOT_UNLOCKED');
+  const atMinimum = merge(null, {
+    materialId: 'lesson-exam', action: 'lesson_step', details: { currentStepId: 'summary', completedStepIds: ['exam-step'] }
+  }, { node: minimumNode, records: { [examMaterialId]: { status: 'completed', details: { scorePercent: 80, passed: true } } } });
+  assert.equal(atMinimum.ok, true);
+});
+
+test('lesson completion requirements are independent from percentage inclusion', () => {
+  const node = progressCommon.normalizeCatalog({ nodes: [{
+    id: 'lesson-separate', type: 'lesson', progress: progress({ tracking: 'ON' }),
+    settings: { navigation: 'sequential', steps: [
+      { id: 'tracked-optional', includeInLesson: true, requiredToAdvance: false },
+      { id: 'untracked-required', includeInLesson: false, requiredToAdvance: true }
+    ] }
+  }] }).nodes[0];
+  const incomplete = merge(null, {
+    materialId: 'lesson-separate', action: 'complete', details: { currentStepId: 'tracked-optional', completedStepIds: ['tracked-optional'] }
+  }, { node });
+  assert.equal(incomplete.code, 'LESSON_INCOMPLETE');
+  const completed = merge(null, {
+    materialId: 'lesson-separate', action: 'complete', details: { currentStepId: 'untracked-required', completedStepIds: ['untracked-required'] }
+  }, { node });
+  assert.equal(completed.record.status, 'completed');
 });
 
 test('presentation supports visited slides and preserves resumable position', () => {

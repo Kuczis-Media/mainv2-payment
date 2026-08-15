@@ -2,7 +2,7 @@
 
 Ta instrukcja jest przeznaczona dla osoby, która nie musi znać programowania. Prowadzi od założenia kont, przez wdrożenie aplikacji, aż do codziennego dodawania lekcji, użytkowników i płatności.
 
-Stan instrukcji: 24 lipca 2026 r. Nazwy pojedynczych przycisków w GitHubie, Netlify, Google lub Stripe mogą z czasem zostać lekko zmienione, ale opisane miejsca i zasady pozostają takie same.
+Stan instrukcji: 15 sierpnia 2026 r. Nazwy pojedynczych przycisków w GitHubie, Netlify, Google lub Stripe mogą z czasem zostać lekko zmienione, ale opisane miejsca i zasady pozostają takie same.
 
 ## 1. Najważniejsze pojęcia
 
@@ -20,7 +20,7 @@ Kursant nie musi mieć konta GitHub, Netlify ani Stripe. Kursant ma zwykłe kont
 ### Repozytoria
 
 - **Repozytorium aplikacji** zawiera kod ChemDisk. Otrzymujesz do niego od właściciela oprogramowania link GitHub. W tej instrukcji nie podajemy konkretnego adresu, ponieważ właściciel może go zmienić.
-- **Repozytorium materiałów** tworzysz osobno. Zawiera lekcje `.md` i prompty `.json` lub `.txt`. Może być prywatne.
+- **Repozytorium materiałów** tworzysz osobno. Zawiera lekcje `.md`, prompty `.json`/`.txt`, bank pytań i definicje egzaminów. Może być prywatne.
 - Można podłączyć jedno albo kilka repozytoriów materiałów.
 - Repozytorium obrazów może być publiczne. Lekcja używa wtedy zwykłych adresów HTTPS do obrazów.
 
@@ -38,7 +38,7 @@ Kursant nie musi mieć konta GitHub, Netlify ani Stripe. Kursant ma zwykłe kont
 | Element | Do czego służy | Czy wymaga klucza |
 | --- | --- | --- |
 | GitHub — repo aplikacji | Przechowuje kod ChemDisk i uruchamia automatyczne deploye | Nie dla aplikacji; potrzebny jest dostęp konta GitHub |
-| GitHub — repo materiałów | Przechowuje prywatne lekcje i prompty | Tak, fine-grained token |
+| GitHub — repo materiałów | Przechowuje prywatne lekcje, prompty i egzaminy | Tak, fine-grained token |
 | Netlify Hosting | Publikuje stronę z katalogu `public` | Nie |
 | Netlify Functions | Bezpiecznie łączy stronę z Gemini, GitHubem i Stripe | Korzysta z kluczy zapisanych w Netlify |
 | Netlify Identity | Rejestracja, logowanie, reset hasła, użytkownicy i role | Nie |
@@ -753,7 +753,7 @@ To nadal są dane osobowe. Udostępniaj plik tylko osobom, które muszą go otrz
 
 ## 16. Panel administratora
 
-Panel ma pięć zakładek.
+Panel ma sześć zakładek.
 
 ### Użytkownicy
 
@@ -785,9 +785,17 @@ Panel ma pięć zakładek.
 
 - wybór repozytorium;
 - kontrola połączenia;
-- liczba lekcji i promptów;
+- liczba lekcji, promptów i egzaminów;
 - wymuszenie odświeżenia listy;
 - token nie jest pokazywany w przeglądarce.
+
+### Postępy
+
+- lista i wyszukiwarka kursantów;
+- postęp kursu, działów i materiałów;
+- próby egzaminów ładowane dopiero po rozwinięciu wybranego egzaminu;
+- raporty globalne i audit log;
+- ręczne ukończenie, reset i ustawienia nawigacji użytkownika.
 
 ### Płatności
 
@@ -805,6 +813,7 @@ Studio jest dostępne tylko dla konta z rolą `admin`. Zawiera:
 1. **Dashboard Builder**
 2. **Lesson Builder**
 3. **Prompt Builder**
+4. **Exam Builder**
 
 W każdym builderze:
 
@@ -1012,6 +1021,16 @@ ATONOM pokazuje wzór, rodzinę, atomy, wiązania, przybliżoną masę molową o
 - Wklej pełny bezpieczny adres HTTPS.
 - Używaj do stron, których nie obsługuje gotowy moduł.
 - Sprawdź, czy użytkownik nie potrzebuje osobnego konta lub zgody.
+
+### 19.15. Egzamin
+
+1. Najpierw utwórz i opublikuj egzamin w **Studio treści → Egzamin**.
+2. W Dashboard Builderze przeciągnij kartę **Egzamin**.
+3. Wybierz repozytorium i egzamin z biblioteki.
+4. Ustaw nazwę, opis, ikonę oraz zwykłe opcje centralnego postępu.
+5. Opublikuj dashboard.
+
+Karta przechowuje tylko stabilne `repositoryId` i `examId`. Nie kopiuje pytań ani odpowiedzi. Ten sam egzamin można dodać w kilku miejscach.
 
 ## 20. Lesson Builder — tworzenie lekcji
 
@@ -1752,13 +1771,13 @@ W Lesson Builderze wybierz lekcję, aby ustawić nawigację swobodną lub sekwen
 
 Nie używaj numeru kroku jako ręcznego identyfikatora. `stepId` ma pozostać taki sam po zmianie kolejności. Krok dodatkowy może nie wpływać na procent, a nadal być wymagany — są to dwie różne opcje.
 
-W trybie sekwencyjnym serwer blokuje nieznane i zbyt odległe kroki. W raporcie użytkownika administrator może ustawić pomijanie według lekcji, dozwolone lub zabronione oraz ręcznie ustawić, odblokować albo zablokować krok. Warunki egzaminacyjne są zapisane w modelu, ale pełny Exam Engine nie należy do tego etapu.
+W trybie sekwencyjnym serwer blokuje nieznane i zbyt odległe kroki. W raporcie użytkownika administrator może ustawić pomijanie według lekcji, dozwolone lub zabronione oraz ręcznie ustawić, odblokować albo zablokować krok. Dla klocka egzaminowego można wymagać ukończenia, zaliczenia albo minimalnego wyniku. Serwer sprawdza aktualny wynik Exam Engine przed odblokowaniem kolejnego kroku.
 
 ### 34.4. Czytanie raportu
 
 Lista użytkowników pokazuje konta Identity także wtedy, gdy nie mają jeszcze rekordu postępu. Można wyszukiwać po nazwie, e-mailu i ID, filtrować stan oraz sortować po aktywności, postępie, nazwie albo e-mailu.
 
-Po kliknięciu konta zobaczysz procent kursu i kompaktową listę najwyższych działów. Kliknij wiersz, aby wczytać jego szczegóły, przyciski administracyjne i bezpośrednie dzieci; kolejne poziomy rozwija się tak samo. Ustawienia ucznia i reset całego kursu są schowane w osobnym rozwijanym bloku. Otwarcie materiału innego niż lekcja zalicza go na 100%; lekcja nadal wylicza dokładny procent z wykonanych kroków. Dla PDF, prezentacji, quizu i filmu zachowane dane szczegółowe trzeba interpretować osobno: ukończenie przy otwarciu nie jest dowodem przeczytania, obejrzenia ani uzyskania wyniku. Dla filmu wiarygodne są zakresy odtworzone przez kontrolowany player, a wynik quizu pozostaje oddzielony od postępu.
+Po kliknięciu konta zobaczysz procent kursu i kompaktową listę najwyższych działów. Kliknij wiersz, aby wczytać jego szczegóły, przyciski administracyjne i bezpośrednie dzieci; kolejne poziomy rozwija się tak samo. Ustawienia ucznia i reset całego kursu są schowane w osobnym rozwijanym bloku. Otwarcie zwykłego materiału innego niż lekcja i egzamin zalicza go na 100%; lekcja liczy wykonane kroki, a egzamin liczy zapisane odpowiedzi i kończy postęp dopiero po wysłaniu lub timeoutcie. Dla PDF, prezentacji, quizu i filmu zachowane dane szczegółowe trzeba interpretować osobno: ukończenie przy otwarciu nie jest dowodem przeczytania, obejrzenia ani uzyskania wyniku. Dla filmu wiarygodne są zakresy odtworzone przez kontrolowany player, a wynik quizu i egzaminu pozostaje oddzielony od postępu.
 
 Google Slides, Google Drive i Google Forms są obcymi iframe'ami. ChemDisk nie może samodzielnie odczytać ich wewnętrznej nawigacji. Moduł zostanie zaliczony przy otwarciu, ale dokładną pozycję lub wynik zobaczysz tylko dla odtwarzacza, który emituje zweryfikowane komunikaty integracyjne ChemDisk.
 
@@ -1788,7 +1807,107 @@ Wyłączenie śledzenia nie jest resetem. Aby zachować historię, użyj przeł�
 
 Uruchom `npm test` i `npm run build`, a następnie przetestuj dwa różne konta. Próba wysłania `userId` do funkcji kursanta ma zostać odrzucona, zwykły użytkownik nie może wywołać endpointu administratora, a skok w lekcji sekwencyjnej ma zwrócić blokadę. Sprawdź też zapis otwarcia przy globalnym `OFF`, reset każdego zakresu, wagi, dziedziczenie i audit log.
 
-## 35. Bezpieczeństwo i ograniczenia
+## 35. Exam Builder i obsługa egzaminów
+
+### 35.1. Przygotowanie repozytorium
+
+Exam Builder używa tego samego prywatnego repozytorium i tokenu co Lesson Builder. Nie dodawaj drugiego tokenu ani nowej bazy. Po pierwszym zapisie repo otrzyma strukturę:
+
+```text
+exams/
+├── question-bank.json
+└── identyfikator-egzaminu/
+    ├── exam.json
+    └── photos/
+```
+
+`exam.json` przechowuje definicję i klucz odpowiedzi. Przy dostępie dla wybranych osób zapisuje również ich stabilne ID, ale nie nazwy ani e-maile. Próby uczniów są zapisywane wyłącznie w Netlify Blobs `chemdisk-exams`, a postęp kursu nadal w istniejącym `chemdisk-progress`. Nie dodawaj prób, wyników ani profili użytkowników do GitHuba.
+
+### 35.2. Utworzenie pierwszego egzaminu
+
+1. Zaloguj się jako administrator i otwórz **Studio treści → Egzamin**.
+2. Wybierz repozytorium treści.
+3. Kliknij **Nowy**.
+4. W **Informacje** wpisz trwały identyfikator małymi literami, nazwę, opis, instrukcję, komunikaty i próg zaliczenia.
+5. Dodaj pytania w zakładce **Pytania** albo utwórz je w **Banku pytań** i dołącz do egzaminu.
+6. Przejdź kolejno przez zakładki wyświetlania, nawigacji, czasu, losowania, punktacji, prób, dostępu, bezpieczeństwa i wyników.
+7. Kliknij **Zapisz draft** i sprawdź **Podgląd ucznia**.
+8. Gdy konfiguracja jest gotowa, kliknij **Opublikuj**.
+
+Draft jest zapisany w GitHubie, ale zwykły kursant go nie otworzy. Podgląd administratora używa izolowanej próby: nie zużywa limitu, nie trafia do raportów i nie zmienia postępu.
+
+### 35.3. Pytania i bank
+
+Obsługiwane są: jedna odpowiedź, wiele odpowiedzi, prawda/fałsz, krótki tekst, liczba, dopasowywanie, kolejność i uzupełnianie luk. Każde pytanie ma stabilne `questionId`. Nie zmieniaj go po użyciu pytania, jeżeli chcesz zachować czytelną analizę historycznych prób.
+
+Bank pozwala tworzyć, edytować, duplikować, usuwać, wyszukiwać, tagować i kategoryzować pytania. Dołączenie pytania z banku zapisuje odwołanie, a nie drugą kopię. Pytanie usunięte z banku trzeba również usunąć z listy odwołań egzaminu; Builder nie opublikuje brakującej referencji.
+
+Przy obrazie wpisz stabilną ścieżkę `photos/nazwa.webp` i ALT. Plik dodaj ręcznie do `exams/<examId>/photos/`. Dla wielu obrazów użyj osobnych pozycji. Nie wklejaj tymczasowego adresu z sesji GitHuba. Obsługiwane są bezpieczne formaty rastrowe; SVG jest celowo odrzucany w chronionym proxy.
+
+### 35.4. Najważniejsze ustawienia
+
+- **Wyświetlanie**: jedno pytanie, określona liczba na ekran albo wszystkie.
+- **Nawigacja**: cofanie, swobodne przechodzenie, pomijanie, wymagana odpowiedź i oznaczanie do sprawdzenia.
+- **Czas**: brak limitu, limit egzaminu albo limit pytania; countdown, count up lub ukryty timer. Ukrycie licznika nie wyłącza limitu serwera.
+- **Losowanie**: kolejność pytań/odpowiedzi, liczba z całej puli i limity kategorii.
+- **Punktacja**: jednakowe lub indywidualne punkty, częściowe, ujemne oraz strategia wielu odpowiedzi. Tekst może mieć kilka akceptowanych wariantów, a liczba tolerancję.
+- **Próby**: jedna, ograniczona liczba albo bez limitu; cooldown oraz wynik najlepszy, pierwszy, ostatni lub średni.
+- **Dostęp**: zawsze, od/do daty albo zakres oraz wszyscy uprawnieni lub tylko osoby wybrane wyszukiwarką.
+- **Wyniki**: prawidłowa odpowiedź od razu po zatwierdzeniu pytania, dopiero po zakończeniu całego testu albo nigdy; dodatkowo widoczność procentu, punktów, zaliczenia, własnych odpowiedzi, wyjaśnień i czasu.
+
+W zakładce **Dostęp** ustaw **Tylko wybrane osoby**, wpisz co najmniej dwa znaki imienia, nazwiska, e-maila lub ID i kliknij znalezione konto. Wybrani pojawią się jako małe etykiety nad wyszukiwarką. Wyszukiwanie dociąga całą stronicowaną listę z Netlify Identity; przycisk **Wczytaj całą listę użytkowników** pozwala zrobić to od razu. Usunięcie etykiety odbiera przydział po ponownym opublikowaniu egzaminu. Pusta lista nie przejdzie walidacji. Osoba nadal potrzebuje aktywnej roli dostępu do kursu.
+
+W trybie **Od razu po zatwierdzeniu** uczeń używa osobnego przycisku **Zatwierdź i sprawdź odpowiedź**. Po ujawnieniu prawidłowej odpowiedzi pole jest blokowane, a Function odrzuci również ręczną próbę późniejszego nadpisania. Tryb **Dopiero po zakończeniu całego testu** nie ujawnia klucza podczas aktywnej próby. Tryb **Nigdy — pełny wynik tylko dla administratora** pokazuje uczniowi tylko potwierdzenie zapisania próby; wynik i klucz pozostają w raporcie administratora.
+
+### 35.5. Egzamin w Dashboardzie i lekcji
+
+W Dashboard Builderze dodaj kartę **Egzamin**, wybierz repo i egzamin, ustaw opis oraz postęp, a następnie opublikuj dashboard. Uczeń zawsze otwiera wspólny Exam Player.
+
+W Lesson Builderze dodaj klocek **Egzamin z biblioteki** i wybierz:
+
+- opcjonalny;
+- wymagane ukończenie;
+- wymagane zaliczenie;
+- wymagany minimalny wynik.
+
+Lokalne minimum lekcji, np. 75%, nie zmienia globalnego progu egzaminu, np. 60%. Krok może być wyłączony z procentu lekcji i jednocześnie wymagany do przejścia — są to niezależne ustawienia. Lekcja przechowuje tylko `repositoryId` i `examId`, więc ten sam egzamin może być użyty w wielu lekcjach.
+
+### 35.6. Próba ucznia
+
+Po kliknięciu **Rozpocznij** serwer zapisuje zestaw i kolejność pytań, czas startu, ewentualny termin końca i numer próby. Odpowiedzi zapisują się automatycznie po krótkiej przerwie w pisaniu oraz przed zmianą ekranu. Odświeżenie strony nie usuwa próby, jeżeli konfiguracja pozwala wrócić.
+
+Jeśli administrator włączył informację natychmiastową, samo zaznaczenie lub autosave jeszcze niczego nie ujawnia. Dopiero zatwierdzenie konkretnego pytania zapisuje nieodwracalny stan tego pytania i pobiera z serwera ograniczoną informację zwrotną. Pozostałe pytania aktywnej próby nadal nie zawierają klucza.
+
+Timer i punktacja są serwerowe. Przesunięcie zegara urządzenia, edycja HTML ani wysłanie własnego procentu nie zmienia wyniku. System rejestruje podstawowe zdarzenia, ale zamknięcie karty nie zawsze może zostać wiarygodnie wysłane przez przeglądarkę. Event log nie jest pełnym proctoringiem.
+
+`progressPercent` oznacza część egzaminu z zapisaną odpowiedzią, a `scorePercent` wynik merytoryczny. Samo otwarcie nie kończy egzaminu. Globalne wyłączenie pasków postępu nie wyłącza zapisu odpowiedzi, timerów ani wyników egzaminu.
+
+### 35.7. Raporty i reset
+
+W Exam Builderze otwórz egzamin i zakładkę **Raporty**. Najpierw zobaczysz zbiorcze metryki i kompaktową listę prób. Dopiero rozwinięcie konkretnej próby pobiera pytania, odpowiedzi ucznia, klucz, punkty, kolejność i event log. Analiza pytań pokazuje odsetek poprawnych/błędnych odpowiedzi, dystrybucję, częsty błędny dystraktor oraz ranking najłatwiejszych i najtrudniejszych.
+
+W **Panel administratora → Postępy → użytkownik → egzamin** rozwiń **Próby egzaminu, wyniki i czas**. Lista jest pobierana dopiero wtedy, więc raport użytkownika nie tworzy od razu ogromnej strony. Możesz zresetować pojedynczą próbę; wynik kursu zostanie przeliczony z pozostałych prób, a operacja pojawi się w audit logu.
+
+Przed usunięciem egzaminu Builder sprawdza Dashboard i lekcje w wybranym repozytorium oraz pokazuje znalezione miejsca. Najpierw usuń lub zmień odwołania. Sam commit usuwający `exam.json` można odzyskać z historii Git, ale nie naprawia on automatycznie kart ani kroków lekcji.
+
+### 35.8. Koszt i diagnostyka
+
+Egzamin wykonuje więcej wywołań Functions niż zwykły materiał: start, autosave zmienionych odpowiedzi, nawigacja i zakończenie zapisują stan oraz małe indeksy w Blobs. Tryb odpowiedzi natychmiastowej dodaje jedno zatwierdzenie Function/Blobs na sprawdzone pytanie. Zapis jest opóźniony i grupowany, a raporty korzystają z indeksów zamiast skanować cały magazyn. Wyłączenie centralnego postępu zatrzymuje procent kursu, lecz nie może zatrzymać przechowywania samej próby. Wyszukiwarka odbiorców działa wyłącznie podczas pracy administratora i nie zwiększa kosztu zwykłych wejść uczniów.
+
+Najczęstsze problemy:
+
+- `EXAM_NOT_PUBLISHED`: zapisałeś draft, ale nie kliknąłeś **Opublikuj**;
+- `ATTEMPT_LIMIT_REACHED`: użytkownik wykorzystał limit; zresetuj właściwą próbę albo zmień konfigurację;
+- `ATTEMPT_COOLDOWN`: nie minął wymagany odstęp;
+- brak egzaminu na liście: sprawdź repozytorium i odśwież bibliotekę;
+- brak obrazu: sprawdź ścieżkę względem katalogu egzaminu, format, wielkość i ALT;
+- krok lekcji nadal zablokowany: sprawdź wymaganie lokalne, ostatni wynik oraz czy próba została zakończona;
+- `EXAM_STORAGE_UNAVAILABLE`: sprawdź `NETLIFY_API_TOKEN`, `SITE_ID` i log Function;
+- konflikt zapisu: druga karta ma nowszą rewizję; odśwież próbę, zamiast nadpisywać ją ręcznie.
+
+Po wdrożeniu przetestuj pełny obieg na dwóch kontach: Dashboard → start → autosave → odświeżenie → wynik → raport, a potem Lekcja → egzamin niezaliczony → blokada oraz kolejna zaliczona próba → odblokowanie.
+
+## 36. Bezpieczeństwo i ograniczenia
 
 - Prywatne repo chroni pliki przed przypadkowym publicznym odczytem, ale kursant z dostępem musi otrzymać treść lekcji, aby ją zobaczyć.
 - Maski PDF/YouTube utrudniają typowe kliknięcie lub pobranie, ale nie są DRM.
@@ -1801,14 +1920,14 @@ Uruchom `npm test` i `npm run build`, a następnie przetestuj dwa różne konta.
 - Włącz 2FA we wszystkich usługach.
 - Nie publikuj danych osobowych kursantów w repozytoriach.
 
-## 36. Lista przed uruchomieniem produkcji
+## 37. Lista przed uruchomieniem produkcji
 
 - [ ] Mam dostęp do repozytorium aplikacji otrzymanego od właściciela.
 - [ ] Netlify publikuje `public` i uruchamia `netlify/functions`.
 - [ ] Identity jest włączone.
 - [ ] Rejestracja ma właściwy tryb.
 - [ ] Pierwszy administrator ma rolę `admin`.
-- [ ] Prywatne repo materiałów ma `lessons` i `prompts`.
+- [ ] Prywatne repo materiałów ma `lessons`, `prompts` i `exams`.
 - [ ] Token GitHub ma dostęp tylko do wybranych repo.
 - [ ] `GITHUB_CONTENT_REPOSITORY` albo `GITHUB_CONTENT_REPOSITORIES` jest ustawione.
 - [ ] `GEMINI_API_KEY` działa.
@@ -1822,10 +1941,15 @@ Uruchom `npm test` i `npm run build`, a następnie przetestuj dwa różne konta.
 - [ ] Dashboard Builder opublikował katalog postępu, a ustawienia efektywne są zgodne z planem kursu.
 - [ ] Dwa konta testowe nie mogą odczytać swoich wzajemnych postępów.
 - [ ] Reset i ręczne oznaczenie ukończenia są widoczne w audit logu.
+- [ ] Opublikowany egzamin przechodzi pełny test Dashboard → wynik → raport.
+- [ ] Aktywna próba nie pokazuje klucza odpowiedzi, a dwa konta nie odczytują wzajemnych prób.
+- [ ] Natychmiastowa odpowiedź ujawnia tylko zatwierdzone pytanie i nie pozwala go później zmienić.
+- [ ] Wyszukiwarka odbiorców znajduje konto po imieniu, e-mailu i ID, a niewybrana osoba dostaje odmowę.
+- [ ] Wymagany egzamin blokuje i odblokowuje krok lekcji zgodnie z wynikiem.
 - [ ] Produkcyjne sekrety są ograniczone do Production.
 - [ ] Utworzono kopię materiałów i zapisano procedurę odzyskania.
 
-## 37. Oficjalne źródła
+## 38. Oficjalne źródła
 
 - [Netlify — deploy z repozytorium](https://docs.netlify.com/start/quickstarts/deploy-from-repository/)
 - [Netlify — zmienne środowiskowe](https://docs.netlify.com/build/environment-variables/get-started/)

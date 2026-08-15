@@ -23,6 +23,8 @@
   <script src="dashboard-model.js"></script>
   <script src="lesson-model.js"></script>
   <script src="prompt-model.js"></script>
+  <script src="exam-model.js"></script>
+  <script src="exam-builder.js" defer></script>
   <script src="script.js" defer></script>
 </head>
 <body>
@@ -49,6 +51,7 @@
       <button type="button" data-switch-mode="home">Start</button>
       <button type="button" data-switch-mode="dashboard">Dashboard</button>
       <button type="button" data-switch-mode="lesson">Lekcja</button>
+      <button type="button" data-switch-mode="exam">Egzamin</button>
       <button type="button" data-switch-mode="prompt">Prompt AI</button>
     </nav>
 
@@ -118,6 +121,18 @@
               <small>JSON lub zestaw punktów TXT</small>
               <strong>Builder promptów AI</strong>
               <span>Twórz instrukcje asystenta, testuj strukturę i zapisuj wersje bezpośrednio w prywatnym repo.</span>
+            </span>
+            <span class="project-arrow" aria-hidden="true">→</span>
+          </button>
+
+          <button class="project-card project-card-exam" type="button" data-open-mode="exam">
+            <span class="project-icon" aria-hidden="true">
+              <svg viewBox="0 0 40 40"><path d="M9 6h22v28H9z"></path><path d="M14 14h12M14 20h12M14 26h7"></path><circle cx="29" cy="28" r="5"></circle><path d="m27 28 1.5 1.5L31 27"></path></svg>
+            </span>
+            <span class="project-copy">
+              <small>Próby, punktacja i raporty</small>
+              <strong>Exam Builder</strong>
+              <span>Buduj bezpieczne egzaminy, bank pytań i zasady dostępu bez ręcznej edycji JSON.</span>
             </span>
             <span class="project-arrow" aria-hidden="true">→</span>
           </button>
@@ -223,6 +238,9 @@
                   </button>
                   <button class="palette-item" type="button" draggable="true" data-dashboard-add="forms" data-search="formularz forms test">
                     <span class="palette-symbol is-blue">✓</span><span><strong>Google Forms</strong><small>Test lub ankieta</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-dashboard-add="exam" data-search="egzamin exam test próba">
+                    <span class="palette-symbol is-amber">E</span><span><strong>Egzamin</strong><small>Exam Engine</small></span>
                   </button>
                   <button class="palette-item" type="button" draggable="true" data-dashboard-add="chat" data-search="chat asystent ai">
                     <span class="palette-symbol is-violet">✦</span><span><strong>Asystent AI</strong><small>Prompt JSON/TXT</small></span>
@@ -413,6 +431,9 @@
                   <button class="palette-item" type="button" draggable="true" data-lesson-add="youtube" data-search="youtube film wideo iframe">
                     <span class="palette-symbol is-red">YT</span><span><strong>Wideo YouTube</strong><small>Film wewnątrz lekcji</small></span>
                   </button>
+                  <button class="palette-item" type="button" draggable="true" data-lesson-add="exam" data-search="egzamin exam próba zaliczenie wynik">
+                    <span class="palette-symbol is-amber">E</span><span><strong>Egzamin</strong><small>Odwołanie z biblioteki</small></span>
+                  </button>
                   <button class="palette-item" type="button" draggable="true" data-lesson-add="atonom" data-search="atonom model cząsteczki związek chemiczny">
                     <span class="palette-symbol is-teal">⚛</span><span><strong>ATONOM</strong><small>Model wybranego związku</small></span>
                   </button>
@@ -600,6 +621,71 @@
             </div>
             <div class="prompt-validation-status" id="prompt-validation-status" role="status" aria-live="polite"></div>
             <pre class="prompt-source-preview" id="prompt-source-preview"></pre>
+          </aside>
+        </div>
+      </section>
+
+      <section class="workspace-view exam-workspace" id="exam-workspace" data-workspace="exam" hidden>
+        <div class="workspace-toolbar">
+          <div>
+            <span class="eyebrow">Exam Builder</span>
+            <h1>Egzaminy i bank pytań</h1>
+          </div>
+          <div class="toolbar-actions">
+            <button class="button button-soft" id="exam-new-button" type="button">＋ Nowy</button>
+            <button class="button button-soft" id="exam-preview-button" type="button">Podgląd ucznia</button>
+            <button class="button button-danger" id="exam-delete-button" type="button" disabled>Usuń z GitHuba</button>
+            <button class="button button-soft" id="exam-save-draft-button" type="button">Zapisz draft</button>
+            <button class="button button-primary" id="exam-publish-button" type="button">Opublikuj</button>
+          </div>
+        </div>
+
+        <div class="exam-builder-shell">
+          <aside class="exam-builder-navigation" aria-label="Sekcje Exam Buildera">
+            <label class="repository-picker">
+              <span>Repozytorium treści</span>
+              <select id="exam-repository-select"></select>
+            </label>
+            <label class="palette-search exam-library-search">
+              <span class="sr-only">Szukaj egzaminu</span>
+              <input id="exam-library-search" type="search" placeholder="Szukaj egzaminu…" autocomplete="off">
+            </label>
+            <div class="exam-library" id="exam-library" aria-label="Egzaminy w repozytorium"></div>
+            <nav class="exam-tab-list" id="exam-tab-list">
+              <button class="is-active" type="button" data-exam-tab="information">Informacje</button>
+              <button type="button" data-exam-tab="questions">Pytania</button>
+              <button type="button" data-exam-tab="bank">Bank pytań</button>
+              <button type="button" data-exam-tab="display">Wyświetlanie</button>
+              <button type="button" data-exam-tab="navigation">Nawigacja</button>
+              <button type="button" data-exam-tab="time">Czas</button>
+              <button type="button" data-exam-tab="randomization">Losowanie</button>
+              <button type="button" data-exam-tab="scoring">Punktacja</button>
+              <button type="button" data-exam-tab="attempts">Próby</button>
+              <button type="button" data-exam-tab="access">Dostęp</button>
+              <button type="button" data-exam-tab="security">Bezpieczeństwo</button>
+              <button type="button" data-exam-tab="results">Wyniki</button>
+              <button type="button" data-exam-tab="reports">Raporty</button>
+            </nav>
+          </aside>
+
+          <section class="exam-editor-panel" aria-live="polite">
+            <header class="exam-editor-heading">
+              <div>
+                <small id="exam-editor-eyebrow">Definicja egzaminu</small>
+                <h2 id="exam-editor-title">Informacje</h2>
+              </div>
+              <span class="exam-status-badge" id="exam-status-badge">Draft lokalny</span>
+            </header>
+            <div class="exam-editor" id="exam-editor"></div>
+          </section>
+
+          <aside class="exam-summary-panel">
+            <div class="panel-heading">
+              <div><small>Kontrola jakości</small><strong>Podsumowanie</strong></div>
+            </div>
+            <div class="exam-validation" id="exam-validation" role="status" aria-live="polite"></div>
+            <div class="exam-summary" id="exam-summary"></div>
+            <p class="exam-builder-status" id="exam-builder-status" role="status" aria-live="polite">Łączenie z prywatnym repozytorium…</p>
           </aside>
         </div>
       </section>

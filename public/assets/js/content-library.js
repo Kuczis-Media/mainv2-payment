@@ -8,6 +8,8 @@
   const DEFAULT_ENDPOINT = '/.netlify/functions/content-library';
   const SAFE_LESSON_FILENAME = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.md$/i;
   const SAFE_PROMPT_FILENAME = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.(json|txt)$/i;
+  const SAFE_EXAM_ID = /^[a-z0-9][a-z0-9-]{0,79}$/;
+  const SAFE_QUESTION_BANK_FILENAME = /^question-bank\.json$/;
   const SAFE_REPOSITORY_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 
   const ERROR_MESSAGES = Object.freeze({
@@ -38,6 +40,8 @@
     INVALID_CONTENT_REQUEST: 'Żądanie zapisu materiału jest nieprawidłowe.',
     INVALID_CONTENT_REPOSITORY: 'Wybrane repozytorium jest nieprawidłowe albo nie zostało skonfigurowane.',
     PROMPT_FILE_INVALID: 'Prompt ma nieprawidłowy format albo przekracza limit.',
+    EXAM_FILE_INVALID: 'Definicja egzaminu jest nieprawidłowa.',
+    QUESTION_BANK_INVALID: 'Bank pytań jest nieprawidłowy.',
     SESSION_CHECK_UNAVAILABLE: 'Nie udało się potwierdzić sesji.'
   });
 
@@ -60,7 +64,10 @@
 
   function validateFilename(kind, rawFilename) {
     const filename = typeof rawFilename === 'string' ? rawFilename.trim() : '';
-    const pattern = kind === 'lesson' ? SAFE_LESSON_FILENAME : SAFE_PROMPT_FILENAME;
+    const pattern = kind === 'lesson'
+      ? SAFE_LESSON_FILENAME
+      : kind === 'exam' ? SAFE_EXAM_ID
+        : kind === 'question_bank' ? SAFE_QUESTION_BANK_FILENAME : SAFE_PROMPT_FILENAME;
     if (!pattern.test(filename)) {
       throw new ContentLibraryError('INVALID_CONTENT_FILENAME', 400);
     }
@@ -135,7 +142,7 @@
   }
 
   async function list(kind, options = {}) {
-    if (kind !== 'lesson' && kind !== 'prompt') {
+    if (!['lesson', 'prompt', 'exam', 'question_bank'].includes(kind)) {
       throw new ContentLibraryError('INVALID_CONTENT_KIND', 400);
     }
     const payload = await request({
@@ -153,6 +160,14 @@
 
   async function readPrompt(rawFilename, options = {}) {
     return read('prompt', rawFilename, options);
+  }
+
+  async function readExam(rawExamId, options = {}) {
+    return read('exam', rawExamId, options);
+  }
+
+  async function readQuestionBank(options = {}) {
+    return read('question_bank', 'question-bank.json', options);
   }
 
   async function read(kind, rawFilename, options = {}) {
@@ -220,6 +235,15 @@
     return `/members/module/lesson/?${params.toString()}`;
   }
 
+  function examUrl(rawExamId, rawRepositoryId = '', materialId = '') {
+    const examId = validateFilename('exam', rawExamId);
+    const repositoryId = validateRepositoryId(rawRepositoryId);
+    const params = new URLSearchParams({ exam: examId });
+    if (repositoryId) params.set('repo', repositoryId);
+    if (/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(materialId || '')) params.set('material', materialId);
+    return `/members/module/exam/?${params.toString()}`;
+  }
+
   function search(assets, query) {
     const normalized = String(query || '').trim().toLocaleLowerCase('pl');
     if (!normalized) return Array.isArray(assets) ? assets.slice() : [];
@@ -241,14 +265,17 @@
     ContentLibraryError,
     ERROR_MESSAGES,
     list,
+    readExam,
     readPrompt,
     readLesson,
+    readQuestionBank,
     repositories,
     remove,
     save,
     search,
     status,
     lessonUrl,
+    examUrl,
     validateFilename,
     validateRepositoryId,
     _test: { endpoint }

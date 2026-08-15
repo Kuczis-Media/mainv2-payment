@@ -48,6 +48,7 @@
     'film',
     'yt',
     'forms',
+    'exam',
     'chat',
     'lesson',
     'calculator',
@@ -92,6 +93,12 @@
       icon: '✓',
       path: 'forms',
       idLabel: 'ID formularza Google'
+    },
+    exam: {
+      label: 'Egzamin',
+      icon: 'E',
+      path: 'exam',
+      examLabel: 'ID egzaminu z biblioteki'
     },
     chat: {
       label: 'Asystent AI',
@@ -296,6 +303,7 @@
     const file = singleLine(source.file || source.plik);
     const point = singleLine(source.point || source.punkt);
     const repositoryId = singleLine(source.repositoryId || source.repo).toLowerCase();
+    const examId = singleLine(source.examId || source.exam).toLowerCase();
     const sourceMode = source.source === 'file' || (!source.source && file)
       ? 'file'
       : 'prompt';
@@ -315,6 +323,7 @@
       file,
       point,
       repositoryId,
+      examId,
       internal: singleLine(source.internal),
       formula: canonical.module === 'atonom' ? singleLine(source.formula) : '',
       href: singleLine(source.href),
@@ -455,6 +464,7 @@
       file: '',
       point: '',
       repositoryId: '',
+      examId: '',
       internal: '',
       formula: '',
       hash: '',
@@ -512,6 +522,10 @@
       parsed.repositoryId = take('repo').toLowerCase();
       parsed.file = take('file');
     }
+    if (parsed.module === 'exam') {
+      parsed.repositoryId = take('repo').toLowerCase();
+      parsed.examId = take('exam').toLowerCase();
+    }
     if (parsed.module === 'contact') parsed.internal = take('internal');
     if (parsed.module === 'atonom') parsed.formula = take('formula');
 
@@ -559,6 +573,10 @@
     if (card.module === 'lesson') {
       add('repo', card.repositoryId);
       add('file', card.file);
+    }
+    if (card.module === 'exam') {
+      add('repo', card.repositoryId);
+      add('exam', card.examId);
     }
     if (card.module === 'contact') add('internal', card.internal);
     if (card.module === 'atonom') add('formula', card.formula);
@@ -699,7 +717,7 @@
 
   function runtimeMaterialType(block) {
     return ({
-      lesson: 'lesson', slides: 'presentation', film: 'video', yt: 'video', pdf: 'pdf', forms: 'quiz', chat: 'script'
+      lesson: 'lesson', slides: 'presentation', film: 'video', yt: 'video', pdf: 'pdf', forms: 'quiz', exam: 'exam', chat: 'script'
     })[block.module] || (block.module === 'link' ? 'embed' : 'other');
   }
 
@@ -913,7 +931,9 @@
           append(block, parentId, runtimeMaterialType(block), block.title, {
             presentationMode: block.presentationMode,
             videoCompletionThreshold: block.videoCompletionThreshold,
-            contentFile: block.module === 'lesson' ? block.file : ''
+            contentFile: block.module === 'lesson' ? block.file : '',
+            repositoryId: block.module === 'exam' ? block.repositoryId : '',
+            examId: block.module === 'exam' ? block.examId : ''
           });
         }
       });
@@ -1092,7 +1112,10 @@
         if (block.module === 'lesson' && !safeBuilderFilename(block.file, 'md')) {
           addError('LESSON_FILE_REQUIRED', 'Podaj bezpieczną nazwę pliku lekcji zakończoną przez .md.', block);
         }
-        if (['lesson', 'chat'].includes(block.module) && !safeRepositoryId(block.repositoryId)) {
+        if (block.module === 'exam' && !/^[a-z0-9][a-z0-9-]{0,79}$/.test(block.examId)) {
+          addError('EXAM_ID_REQUIRED', 'Wybierz prawidłowy egzamin z biblioteki.', block);
+        }
+        if (['lesson', 'chat', 'exam'].includes(block.module) && !safeRepositoryId(block.repositoryId)) {
           addError('CONTENT_REPOSITORY_INVALID', 'Wybierz poprawne repozytorium materiałów.', block);
         }
         if (block.module === 'chat') {

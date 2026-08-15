@@ -757,3 +757,37 @@ test('lesson export migrates removed FilmV1 links to the supported Film module',
   assert.match(markdown, /\/members\/module\/film\/\?id=CH50zuS8DD0&type=1/);
   assert.doesNotMatch(markdown, /filmv1/i);
 });
+
+test('lesson keeps a stable exam reference and derives pass conditions without copying exam JSON', () => {
+  const lesson = studio.createLesson({
+    title: 'Lekcja z egzaminem',
+    filename: 'lekcja-egzamin.md',
+    navigation: 'sequential',
+    slides: [{
+      id: 'exam-step',
+      includeInLesson: 'OFF',
+      requiredToAdvance: true,
+      blocks: [studio.createBlock('exam', {
+        repositoryId: 'default', examId: 'alkohole-test', title: 'Sprawdź alkohole',
+        description: 'Próba działowa', button: 'Rozpocznij', requirement: 'minimum_score', minimumScore: 75
+      })]
+    }, { id: 'summary', blocks: [studio.createBlock('text', { text: 'Podsumowanie.' })] }]
+  });
+  const markdown = studio.serializeLesson(lesson);
+  assert.match(markdown, /:::exam[\s\S]*repository: default[\s\S]*exam: alkohole-test/);
+  assert.match(markdown, /requirement: minimum_score[\s\S]*minimum_score: 75/);
+  assert.doesNotMatch(markdown, /correctAnswer|questions\s*:/);
+
+  const editable = studio.parseEditableLesson(markdown, 'lekcja-egzamin.md');
+  const examBlock = editable.slides[0].blocks.find((block) => block.type === 'exam');
+  assert.equal(examBlock.examId, 'alkohole-test');
+  assert.equal(examBlock.minimumScore, 75);
+  assert.deepEqual(editable.slides[0].condition, {
+    type: 'minimum_score', materialId: 'exam:default:alkohole-test', minimumScore: 75
+  });
+
+  const runtime = lessonParser.parseLesson(markdown, 'lekcja-egzamin.md');
+  assert.match(runtime.slides[0].html, /class="lesson-support-card lesson-exam-card"/);
+  assert.match(runtime.slides[0].html, /\/members\/module\/exam\/\?repo=default&amp;exam=alkohole-test/);
+  assert.match(runtime.slides[0].html, /data-exam-requirement="minimum_score"/);
+});

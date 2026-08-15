@@ -947,6 +947,10 @@ fieldset:focus-within {
 .lesson-ai-help { --lesson-support-color: #7c3aed; }
 .lesson-board-card { --lesson-support-color: #2563eb; }
 .lesson-contact-card { --lesson-support-color: #b7791f; }
+.lesson-exam-card { --lesson-support-color: #6d28d9; }
+.lesson-exam-card[data-gate="locked"] {
+  border-style: dashed;
+}
 
 .lesson-board-card:hover,
 .lesson-board-card:focus-visible,
@@ -978,6 +982,15 @@ fieldset:focus-within {
 .lesson-support-copy strong,
 .lesson-support-copy span {
   display: block;
+}
+
+.lesson-support-copy em {
+  display: block;
+  margin-top: 8px;
+  color: var(--text);
+  font-size: 0.76rem;
+  font-style: normal;
+  font-weight: 800;
 }
 
 .lesson-support-copy small {

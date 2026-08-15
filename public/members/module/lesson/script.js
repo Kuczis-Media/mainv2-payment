@@ -196,7 +196,7 @@
     return state.lesson.slides.filter((slide) => slide.includeInLesson !== 'OFF');
   }
 
-  function saveProgress(immediate = false) {
+  function saveProgress(immediate = false, throwOnError = false) {
     if (!state.lesson) return Promise.resolve(null);
     try {
       sessionStorage.setItem(progressKey(), JSON.stringify({
@@ -225,7 +225,7 @@
           completedTrackedSteps,
           totalTrackedSteps: tracked.length
         }
-      }, { immediate, debounceMs: 1200 });
+      }, { immediate, debounceMs: 1200, throwOnError });
     }
     return Promise.resolve(null);
   }
@@ -522,10 +522,14 @@
   }
 
   function updateNavigationAccess(slide, isSolved) {
-    const blocked = state.sequential && Boolean(slide.task && !isSolved);
+    const examGate = currentExamGate();
+    const taskBlocked = Boolean(slide.task && !isSolved);
+    const blocked = state.sequential && (taskBlocked || !examGate.satisfied);
     elements.next.disabled = blocked;
     elements.navigationHint.textContent = blocked
-      ? 'Najpierw podaj poprawną odpowiedź albo wyłącz tryb „Nauka po kolei”.'
+      ? (!examGate.satisfied
+        ? examGate.message
+        : 'Najpierw podaj poprawną odpowiedź albo wyłącz tryb „Nauka po kolei”.')
       : slide.task && !isSolved
         ? 'Możesz pominąć to zadanie i wrócić do niego później.'
         : '';
@@ -663,6 +667,7 @@
   }
 
   function initializeInteractiveBlocks(root) {
+    initializeExamBlocks(root);
     root.querySelectorAll('.lesson-flashcard').forEach((card) => {
       card.addEventListener('click', () => {
         const flipped = card.getAttribute('aria-pressed') !== 'true';
@@ -697,6 +702,66 @@
     root.querySelectorAll('[data-lesson-ai-open]').forEach((button) => {
       button.addEventListener('click', () => openSlideAiHelp(button, root));
     });
+  }
+
+  function examGateFor(card) {
+    const requirement = card?.dataset.examRequirement || 'optional';
+    if (requirement === 'optional') return { satisfied: true, message: '' };
+    const record = progressApi?.record(card.dataset.examMaterial) || null;
+    const score = Number(record?.details?.scorePercent);
+    if (requirement === 'completed' && record?.status === 'completed') {
+      return { satisfied: true, message: 'Egzamin ukończony.' };
+    }
+    if (requirement === 'passed' && record?.status === 'completed' && record?.details?.passed === true) {
+      return { satisfied: true, message: 'Egzamin zaliczony.' };
+    }
+    const minimum = Math.max(0, Math.min(100, Number(card?.dataset.examMinimumScore) || 0));
+    if (requirement === 'minimum_score' && Number.isFinite(score) && score >= minimum) {
+      return { satisfied: true, message: `Osiągnięto wymagane ${minimum}%.` };
+    }
+    if (requirement === 'passed') {
+      return { satisfied: false, message: 'Aby przejść dalej, zalicz egzamin.' };
+    }
+    if (requirement === 'minimum_score') {
+      return { satisfied: false, message: `Aby przejść dalej, uzyskaj z egzaminu co najmniej ${minimum}%.` };
+    }
+    return { satisfied: false, message: 'Aby przejść dalej, ukończ egzamin.' };
+  }
+
+  function initializeExamBlocks(root) {
+    root.querySelectorAll('.lesson-exam-card').forEach((card) => {
+      const gate = examGateFor(card);
+      const record = progressApi?.record(card.dataset.examMaterial) || null;
+      const status = card.querySelector('[data-exam-state]');
+      card.dataset.gate = gate.satisfied ? 'open' : 'locked';
+      if (!status) return;
+      if (!record) status.textContent = card.dataset.examRequirement === 'optional'
+        ? 'Egzamin opcjonalny'
+        : gate.message;
+      else if (record.status === 'completed') {
+        if (record.details?.studentResultVisible === false) {
+          status.textContent = 'Egzamin ukończony · wynik dostępny administratorowi';
+          return;
+        }
+        const score = Number(record.details?.scorePercent);
+        status.textContent = `${record.details?.passed === true ? 'Zaliczono' : 'Ukończono'}${Number.isFinite(score) ? ` · wynik ${Math.round(score)}%` : ''}`;
+      } else {
+        status.textContent = `${progressApi.statusLabel(record)} · postęp ${progressApi.percentLabel(record.progressPercent)}`;
+      }
+    });
+  }
+
+  function currentExamGate() {
+    const cards = Array.from(elements.slideContent.querySelectorAll('.lesson-exam-card'));
+    return cards.map(examGateFor).find((gate) => !gate.satisfied) || { satisfied: true, message: '' };
+  }
+
+  async function refreshExamProgress(force = false) {
+    if (!progressApi || !elements.slideContent.querySelector('.lesson-exam-card')) return;
+    try { await progressApi.load({ force }); } catch (_) {}
+    initializeExamBlocks(elements.slideContent);
+    const slide = state.lesson?.slides[state.index];
+    if (slide) updateNavigationAccess(slide, state.solved.has(state.index));
   }
 
   function renderTask(task, solved) {
@@ -923,18 +988,37 @@
 
   async function goNext() {
     const slide = state.lesson.slides[state.index];
-    if (state.sequential && slide.task && !state.solved.has(state.index)) return;
+    await refreshExamProgress(true);
+    if (state.sequential && (slide.task && !state.solved.has(state.index) || !currentExamGate().satisfied)) return;
+    const previousIndex = state.index;
+    const wasCompleted = state.completed;
     state.completedStepIds.add(slide.id);
     if (state.index === state.lesson.slides.length - 1) {
       state.completed = true;
-      await saveProgress(true);
-      showCompletion();
+      try {
+        await saveProgress(true, true);
+        showCompletion();
+      } catch (error) {
+        state.completed = wasCompleted;
+        elements.navigationHint.textContent = error?.code === 'LESSON_INCOMPLETE'
+          ? 'Nie wszystkie wymagane kroki i egzaminy są ukończone.'
+          : 'Nie udało się potwierdzić ukończenia. Spróbuj ponownie.';
+        updateNavigationAccess(slide, state.solved.has(state.index));
+      }
       return;
     }
-    await saveProgress(true);
     state.index += 1;
     state.maxReached = Math.max(state.maxReached, state.index);
-    renderSlide();
+    try {
+      await saveProgress(true, true);
+      renderSlide();
+    } catch (error) {
+      state.index = previousIndex;
+      elements.navigationHint.textContent = error?.code === 'STEP_NOT_UNLOCKED'
+        ? 'Warunek tego kroku nie został jeszcze spełniony.'
+        : 'Nie udało się potwierdzić przejścia. Spróbuj ponownie.';
+      updateNavigationAccess(slide, state.solved.has(state.index));
+    }
   }
 
   function goPrevious() {
@@ -1003,6 +1087,7 @@
     if (event.target === elements.libraryDialog) closeLessonLibrary();
   });
   window.addEventListener('popstate', loadLesson);
+  window.addEventListener('focus', () => { void refreshExamProgress(true); });
   elements.retry.addEventListener('click', loadLesson);
   elements.previous.addEventListener('click', goPrevious);
   elements.next.addEventListener('click', goNext);

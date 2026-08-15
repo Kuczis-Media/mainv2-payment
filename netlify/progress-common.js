@@ -8,6 +8,7 @@ const MATERIAL_TYPES = Object.freeze([
 const STATUS_VALUES = Object.freeze(['not_started', 'opened', 'in_progress', 'completed']);
 const MATERIAL_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
 const STRUCTURAL_MATERIAL_TYPES = new Set(['lesson', 'lesson_step', 'section', 'subsection', 'department', 'course']);
+const DOES_NOT_COMPLETE_ON_OPEN = new Set([...STRUCTURAL_MATERIAL_TYPES, 'exam']);
 const MAX_RECORDS = 5_000;
 const MAX_VISITED = 1_000;
 const MAX_INVALIDATIONS = 10_000;
@@ -113,6 +114,8 @@ function normalizeNode(input, index = 0) {
         : [],
       videoCompletionThreshold: clamp(settings.videoCompletionThreshold == null ? 90 : settings.videoCompletionThreshold, 1, 100),
       contentFile: oneLine(settings.contentFile, 120),
+      repositoryId: oneLine(settings.repositoryId, 40).toLowerCase(),
+      examId: oneLine(settings.examId, 80).toLowerCase(),
       steps
     }
   };
@@ -360,8 +363,9 @@ function transitionConditionSatisfied(previous, completed, records) {
   }
   const score = Number(related?.details?.scorePercent);
   if (condition.type === 'exam_passed') {
-    return related?.status === 'completed' && Number.isFinite(score)
-      && score >= Number(condition.minimumScore || 0);
+    return related?.status === 'completed'
+      && related?.details?.passed === true
+      && (!Number(condition.minimumScore || 0) || score >= Number(condition.minimumScore));
   }
   if (condition.type === 'minimum_score') {
     return Number.isFinite(score) && score >= Number(condition.minimumScore || 0);
@@ -408,22 +412,23 @@ function mergeProgressEvent(existingInput, eventInput, context) {
   const navigation = validateLessonNavigation(existingInput, event, node, context.preferences, context.records);
   if (!navigation.ok) return navigation;
 
-  const allowedActions = new Set(['open', 'progress', 'complete', 'lesson_step', 'presentation', 'video', 'pdf', 'quiz']);
+  const allowedActions = new Set(['open', 'progress', 'complete', 'lesson_step', 'presentation', 'video', 'pdf', 'quiz', 'exam']);
   if (!allowedActions.has(event.action)) return { ok: false, code: 'INVALID_ACTION', status: 400 };
   const typedActions = {
     lesson: new Set(['open', 'lesson_step', 'complete']),
     presentation: new Set(['open', 'presentation', 'complete']),
     video: new Set(['open', 'video', 'complete']),
     pdf: new Set(['open', 'pdf', 'complete']),
-    quiz: new Set(['open', 'quiz', 'complete'])
+    quiz: new Set(['open', 'quiz', 'complete']),
+    exam: new Set(['open', 'exam', 'complete'])
   };
   if (node && typedActions[node.type] && !typedActions[node.type].has(event.action)) {
     return { ok: false, code: 'INVALID_ACTION_FOR_MATERIAL', status: 400 };
   }
   if (node?.type === 'lesson' && event.action === 'complete' && node.settings.steps.length) {
     const completed = new Set(unionIds(existing.details.completedStepIds, event.details?.completedStepIds));
-    const required = node.settings.steps.filter((step) => step.includeInLesson);
-    if (required.some((step) => !completed.has(step.id))) {
+    const required = node.settings.steps.filter((step) => step.requiredToAdvance !== false);
+    if (required.some((step) => !transitionConditionSatisfied(step, completed, context.records))) {
       return { ok: false, code: 'LESSON_INCOMPLETE', status: 409 };
     }
   }
@@ -434,7 +439,7 @@ function mergeProgressEvent(existingInput, eventInput, context) {
   const completesOnOpen = event.action === 'open'
     && canTrack
     && context.isLeaf !== false
-    && !STRUCTURAL_MATERIAL_TYPES.has(openedType);
+    && !DOES_NOT_COMPLETE_ON_OPEN.has(openedType);
   if (event.action === 'open' && !canOpen && !completesOnOpen) {
     return { ok: true, record: existingInput || null, changed: false };
   }
@@ -570,6 +575,39 @@ function applyTypedProgress(record, event, node, now) {
       record.progressPercent = 100;
       record.completedAt = record.completedAt || now;
     }
+  }
+
+  if (event.action === 'exam') {
+    const totalQuestions = Math.max(0, Math.floor(Number(details.totalQuestions) || Number(record.details.totalQuestions) || 0));
+    const answeredQuestions = Math.max(0, Math.min(totalQuestions || Number.MAX_SAFE_INTEGER,
+      Math.floor(Number(details.answeredQuestions) || Number(record.details.answeredQuestions) || 0)));
+    record.details.started = Boolean(record.details.started || details.started);
+    record.details.completed = details.completed === true || record.details.completed === true;
+    record.details.answeredQuestions = answeredQuestions;
+    record.details.totalQuestions = totalQuestions;
+    record.details.currentQuestionIndex = Math.max(0, Math.floor(Number(details.currentQuestionIndex) || 0));
+    record.details.attemptId = oneLine(details.attemptId || record.details.attemptId, 128);
+    record.details.attempts = Math.max(0, Math.floor(Number(details.attempts) || Number(record.details.attempts) || 0));
+    if (typeof details.studentResultVisible === 'boolean') {
+      record.details.studentResultVisible = details.studentResultVisible;
+    }
+    record.details.scorePercent = Number.isFinite(Number(details.scorePercent))
+      ? clamp(details.scorePercent) : record.details.scorePercent ?? null;
+    if (typeof details.passed === 'boolean') record.details.passed = details.passed;
+    if (Number.isFinite(Number(details.durationSeconds))) {
+      record.details.durationSeconds = Math.max(0, Math.floor(Number(details.durationSeconds)));
+    }
+    if (details.completed === true) {
+      record.progressPercent = 100;
+      record.completedAt = record.completedAt || now;
+    } else if (totalQuestions > 0) {
+      record.progressPercent = clamp((answeredQuestions / totalQuestions) * 100);
+    }
+    record.lastPosition = {
+      questionIndex: record.details.currentQuestionIndex,
+      answeredQuestions,
+      totalQuestions
+    };
   }
 }
 

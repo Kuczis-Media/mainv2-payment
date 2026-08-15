@@ -32,6 +32,7 @@ test('studio exposes every requested dashboard block with the runtime protection
     'film',
     'yt',
     'forms',
+    'exam',
     'chat',
     'lesson',
     'calculator',
