@@ -1,0 +1,371 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+const progressCommon = require('../netlify/progress-common.js');
+const progressFunction = require('../netlify/functions/progress.js');
+const adminProgressFunction = require('../netlify/functions/admin-progress.js');
+const { CATALOG_KEY, listEntries } = require('../netlify/progress-storage.js');
+
+const USER_ONE = '11111111-1111-4111-8111-111111111111';
+const USER_TWO = '22222222-2222-4222-8222-222222222222';
+const ADMIN = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const IDENTITY_URL = 'https://course.example/.netlify/identity';
+
+function progress(overrides = {}) {
+  return {
+    tracking: 'INHERIT',
+    showProgress: 'INHERIT',
+    includeInSection: true,
+    includeInDepartment: true,
+    includeInCourse: true,
+    weight: 1,
+    ...overrides
+  };
+}
+
+function catalog(overrides = {}) {
+  return progressCommon.normalizeCatalog({
+    global: { tracking: 'ON', showProgress: 'ON', recordOpens: true },
+    nodes: [
+      { id: 'course', type: 'course', title: 'ChemDisk', progress: progress({ tracking: 'ON' }) },
+      { id: 'organic', parentId: 'course', type: 'department', title: 'Organiczna', progress: progress() },
+      { id: 'alcohols', parentId: 'organic', type: 'section', title: 'Alkohole', progress: progress() },
+      { id: 'accordion', parentId: 'alcohols', type: 'other', title: 'Harmonijka', progress: progress() },
+      { id: 'slides', parentId: 'accordion', type: 'presentation', title: 'Slajdy', progress: progress({ weight: 3 }) },
+      { id: 'video', parentId: 'alcohols', type: 'video', title: 'Film', progress: progress({ weight: 1 }), settings: { videoCompletionThreshold: 90 } }
+    ],
+    ...overrides
+  });
+}
+
+function merge(existing, event, options = {}) {
+  const normalizedCatalog = options.catalog || catalog();
+  const resolved = progressCommon.effectiveSettings(normalizedCatalog);
+  const node = options.node || resolved.byId.get(event.materialId) || null;
+  return progressCommon.mergeProgressEvent(existing, event, {
+    userId: USER_ONE,
+    node,
+    effective: node ? resolved.effective.get(node.id) : { tracking: true, showProgress: true },
+    global: options.global || normalizedCatalog.global,
+    preferences: options.preferences || {},
+    now: options.now || '2026-08-15T10:00:00.000Z'
+  });
+}
+
+test('tracking inheritance supports section OFF and a material ON override', () => {
+  const source = catalog({
+    nodes: [
+      { id: 'course', type: 'course', progress: progress({ tracking: 'ON', showProgress: 'ON' }) },
+      { id: 'section', parentId: 'course', type: 'section', progress: progress({ tracking: 'OFF', showProgress: 'OFF' }) },
+      { id: 'inherited', parentId: 'section', type: 'pdf', progress: progress() },
+      { id: 'override', parentId: 'section', type: 'pdf', progress: progress({ tracking: 'ON', showProgress: 'ON' }) }
+    ]
+  });
+  const resolved = progressCommon.effectiveSettings(source).effective;
+  assert.equal(resolved.get('inherited').tracking, false);
+  assert.equal(resolved.get('inherited').showProgress, false);
+  assert.equal(resolved.get('override').tracking, true);
+  assert.equal(resolved.get('override').showProgress, true);
+});
+
+test('global progress OFF suppresses percentages but can keep open history', () => {
+  const off = catalog({ global: { tracking: 'OFF', showProgress: 'OFF', recordOpens: true } });
+  const opened = merge(null, {
+    materialId: 'slides', materialType: 'presentation', action: 'open', opened: true
+  }, { catalog: off });
+  assert.equal(opened.record.status, 'opened');
+  assert.equal(opened.record.openCount, 1);
+
+  const unchanged = merge(opened.record, {
+    materialId: 'slides', materialType: 'presentation', action: 'presentation',
+    details: { lastSlideId: '17', lastSlideIndex: 16, highestReachedSlide: 17, totalSlides: 25 }
+  }, { catalog: off });
+  assert.equal(unchanged.changed, false);
+  assert.equal(unchanged.record.progressPercent, 0);
+
+  const noOpens = catalog({ global: { tracking: 'OFF', showProgress: 'OFF', recordOpens: false } });
+  const ignored = merge(null, {
+    materialId: 'slides', materialType: 'presentation', action: 'open', opened: true
+  }, { catalog: noOpens });
+  assert.equal(ignored.changed, false);
+  assert.equal(ignored.record, null);
+});
+
+test('weighted course and nested accordion aggregation counts only effective leaves', () => {
+  const user = progressCommon.normalizeUserDocument({
+    userId: USER_ONE,
+    records: {
+      slides: { materialType: 'presentation', progressPercent: 100, completedAt: '2026-08-15T10:00:00Z' },
+      video: { materialType: 'video', progressPercent: 0 }
+    }
+  }, USER_ONE);
+  const aggregate = progressCommon.aggregateUser(user, catalog());
+  assert.equal(aggregate.course.progressPercent, 75);
+  assert.equal(aggregate.nodes.accordion.progressPercent, 100);
+  assert.equal(aggregate.nodes.alcohols.trackedCount, 2);
+  assert.equal(aggregate.course.completedCount, 1);
+});
+
+test('material inclusion flags remove it independently from section, department and course totals', () => {
+  const source = catalog({
+    nodes: [
+      { id: 'course', type: 'course', progress: progress({ tracking: 'ON' }) },
+      { id: 'dep', parentId: 'course', type: 'department', progress: progress() },
+      { id: 'sec', parentId: 'dep', type: 'section', progress: progress() },
+      { id: 'required', parentId: 'sec', type: 'pdf', progress: progress() },
+      { id: 'extra', parentId: 'sec', type: 'pdf', progress: progress({ includeInSection: false, includeInDepartment: false, includeInCourse: false }) }
+    ]
+  });
+  const user = progressCommon.normalizeUserDocument({ records: {
+    required: { progressPercent: 50 },
+    extra: { progressPercent: 100, completedAt: '2026-08-15T10:00:00Z' }
+  } }, USER_ONE);
+  const aggregate = progressCommon.aggregateUser(user, source);
+  assert.equal(aggregate.nodes.sec.progressPercent, 50);
+  assert.equal(aggregate.nodes.dep.progressPercent, 50);
+  assert.equal(aggregate.course.progressPercent, 50);
+});
+
+test('lesson percentage excludes optional steps and uses stable step IDs', () => {
+  const node = progressCommon.normalizeCatalog({ nodes: [{
+    id: 'lesson', type: 'lesson', progress: progress({ tracking: 'ON' }),
+    settings: {
+      navigation: 'sequential',
+      steps: [
+        { id: 'intro', includeInLesson: true },
+        { id: 'extra', includeInLesson: false },
+        { id: 'task', includeInLesson: true }
+      ]
+    }
+  }] }).nodes[0];
+  const result = merge(null, {
+    materialId: 'lesson', materialType: 'lesson', action: 'lesson_step',
+    details: { currentStepId: 'intro', completedStepIds: ['intro'] }
+  }, { node });
+  assert.equal(result.ok, true);
+  assert.equal(result.record.progressPercent, 50);
+  assert.equal(result.record.details.totalTrackedSteps, 2);
+  assert.deepEqual(result.record.details.completedStepIds, ['intro']);
+});
+
+test('server lesson navigation blocks jumps and honors per-user allow/deny/lock overrides', () => {
+  const node = progressCommon.normalizeCatalog({ nodes: [{
+    id: 'lesson', type: 'lesson', progress: progress({ tracking: 'ON' }),
+    settings: { navigation: 'sequential', steps: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] }
+  }] }).nodes[0];
+  const jump = merge(null, {
+    materialId: 'lesson', action: 'lesson_step', details: { currentStepId: 'c', completedStepIds: ['a', 'b'] }
+  }, { node });
+  assert.equal(jump.code, 'STEP_NOT_UNLOCKED');
+
+  const allowed = merge(null, {
+    materialId: 'lesson', action: 'lesson_step', details: { currentStepId: 'c' }
+  }, { node, preferences: { skipMode: 'ALLOW' } });
+  assert.equal(allowed.ok, true);
+
+  const freeNode = { ...node, settings: { ...node.settings, navigation: 'free' } };
+  const denied = merge(null, {
+    materialId: 'lesson', action: 'lesson_step', details: { currentStepId: 'c' }
+  }, { node: freeNode, preferences: { skipMode: 'DENY' } });
+  assert.equal(denied.code, 'STEP_NOT_UNLOCKED');
+
+  const locked = merge(null, {
+    materialId: 'lesson', action: 'lesson_step', details: { currentStepId: 'b', completedStepIds: ['a'] }
+  }, { node, preferences: { skipMode: 'ALLOW', lockedStepIds: ['b'] } });
+  assert.equal(locked.code, 'STEP_LOCKED');
+
+  const bypass = merge(null, {
+    materialId: 'lesson', action: 'complete', details: { currentStepId: 'c', completedStepIds: ['c'] }
+  }, { node });
+  assert.equal(bypass.code, 'LESSON_INCOMPLETE');
+  const finished = merge(null, {
+    materialId: 'lesson', action: 'complete', details: { currentStepId: 'c', completedStepIds: ['a', 'b', 'c'] }
+  }, { node });
+  assert.equal(finished.record.status, 'completed');
+  assert.deepEqual(finished.record.details.completedStepIds, ['a', 'b', 'c']);
+});
+
+test('presentation supports visited slides and preserves resumable position', () => {
+  const node = progressCommon.normalizeCatalog({ nodes: [{
+    id: 'deck', type: 'presentation', progress: progress({ tracking: 'ON' }),
+    settings: { presentationMode: 'visited' }
+  }] }).nodes[0];
+  const result = merge(null, {
+    materialId: 'deck', materialType: 'presentation', action: 'presentation',
+    details: { lastSlideId: 's17', lastSlideIndex: 16, highestReachedSlide: 17, visitedSlides: ['s1', 's17'], totalSlides: 25 }
+  }, { node });
+  assert.equal(result.record.progressPercent, 8);
+  assert.deepEqual(result.record.lastPosition, { slideId: 's17', slideIndex: 16 });
+  assert.equal(result.record.details.highestReachedSlide, 17);
+});
+
+test('video counts watched ranges instead of seek position and applies completion threshold', () => {
+  const node = progressCommon.normalizeCatalog({ nodes: [{
+    id: 'movie', type: 'video', progress: progress({ tracking: 'ON' }),
+    settings: { videoCompletionThreshold: 80 }
+  }] }).nodes[0];
+  const first = merge(null, {
+    materialId: 'movie', materialType: 'video', action: 'video',
+    details: { playbackStarted: true, duration: 100, lastPlaybackPosition: 99, watchedRanges: [[0, 40]] }
+  }, { node });
+  assert.equal(first.record.progressPercent, 40);
+  const second = merge(first.record, {
+    materialId: 'movie', materialType: 'video', action: 'video',
+    details: { duration: 100, lastPlaybackPosition: 80, watchedRanges: [[40, 80]] }
+  }, { node });
+  assert.equal(second.record.progressPercent, 100);
+  assert.equal(second.record.status, 'completed');
+  assert.deepEqual(second.record.details.watchedRanges, [[0, 80]]);
+});
+
+test('PDF progress is explicitly navigational and quiz progress differs from score', () => {
+  const pdf = merge(null, {
+    materialId: 'document', materialType: 'pdf', action: 'pdf',
+    details: { lastPage: 3, highestVisitedPage: 4, totalPages: 10 }
+  });
+  assert.equal(pdf.record.progressPercent, 40);
+  assert.equal(pdf.record.details.navigationOnly, true);
+  assert.deepEqual(pdf.record.lastPosition, { page: 3, totalPages: 10 });
+
+  const quiz = merge(null, {
+    materialId: 'quiz-one', materialType: 'quiz', action: 'quiz', progressPercent: 60,
+    details: { started: true, completed: false, scorePercent: 25, attempts: 2 }
+  });
+  assert.equal(quiz.record.progressPercent, 60);
+  assert.equal(quiz.record.details.scorePercent, 25);
+  assert.equal(quiz.record.details.attempts, 2);
+});
+
+class MemoryStore {
+  constructor() {
+    this.entries = new Map();
+    this.revision = 0;
+  }
+
+  async getWithMetadata(key) {
+    const entry = this.entries.get(key);
+    return entry ? { data: entry.data, etag: entry.etag, metadata: entry.metadata } : null;
+  }
+
+  async set(key, data, options = {}) {
+    const current = this.entries.get(key);
+    if (options.onlyIfNew && current) return { modified: false };
+    if (options.onlyIfMatch && current?.etag !== options.onlyIfMatch) return { modified: false };
+    this.revision += 1;
+    this.entries.set(key, { data, etag: `etag-${this.revision}`, metadata: options.metadata || {} });
+    return { modified: true };
+  }
+
+  async list(options = {}) {
+    const prefix = options.prefix || '';
+    return {
+      blobs: [...this.entries.keys()].filter((key) => key.startsWith(prefix)).sort().map((key) => ({ key })),
+      cursor: null
+    };
+  }
+}
+
+test('Blob listing is bounded and exposes a resumable cursor', async () => {
+  const store = new MemoryStore();
+  await store.set('users/a.json', JSON.stringify({ userId: 'a' }));
+  await store.set('users/b.json', JSON.stringify({ userId: 'b' }));
+  await store.set('users/c.json', JSON.stringify({ userId: 'c' }));
+  const first = await listEntries(store, { prefix: 'users/', limit: 2 });
+  assert.deepEqual(first.entries.map((entry) => entry.value.userId), ['a', 'b']);
+  assert.equal(first.cursor, 'offset:2');
+  const second = await listEntries(store, { prefix: 'users/', limit: 2, cursor: first.cursor });
+  assert.deepEqual(second.entries.map((entry) => entry.value.userId), ['c']);
+  assert.equal(second.cursor, null);
+});
+
+function contextFor(user) {
+  return { clientContext: { user, identity: { url: IDENTITY_URL } } };
+}
+
+function eventFor(method, body, query = {}) {
+  return {
+    httpMethod: method,
+    headers: {
+      authorization: 'Bearer signed-client-token',
+      accept: 'application/json',
+      'content-type': 'application/json',
+      origin: 'https://course.example',
+      host: 'course.example',
+      'x-forwarded-proto': 'https'
+    },
+    queryStringParameters: query,
+    ...(body === undefined ? {} : { body: JSON.stringify(body) })
+  };
+}
+
+function responseJson(body, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+}
+
+test('progress endpoints derive the learner from Identity, deny privilege escalation, reset and audit admin changes', async (t) => {
+  const store = new MemoryStore();
+  await store.set(CATALOG_KEY, JSON.stringify(catalog()), { onlyIfNew: true });
+  progressFunction._test.setStoreFactory(() => store);
+  adminProgressFunction._test.setStoreFactory(() => store);
+  t.after(() => {
+    progressFunction._test.setStoreFactory(null);
+    adminProgressFunction._test.setStoreFactory(null);
+  });
+
+  const originalFetch = global.fetch;
+  let canonical = { id: USER_ONE, email: 'jan@example.com', app_metadata: { roles: ['active'] } };
+  global.fetch = async () => responseJson(canonical);
+  t.after(() => { global.fetch = originalFetch; });
+
+  const userOneContext = contextFor(canonical);
+  const opened = await progressFunction.handler(eventFor('POST', {
+    materialId: 'slides', materialType: 'presentation', action: 'open', opened: true
+  }), userOneContext);
+  assert.equal(opened.statusCode, 200);
+  assert.equal(JSON.parse(opened.body).record.userId, USER_ONE);
+
+  const forged = await progressFunction.handler(eventFor('POST', {
+    userId: USER_TWO, materialId: 'slides', materialType: 'presentation', action: 'complete'
+  }), userOneContext);
+  assert.equal(forged.statusCode, 400);
+  assert.equal(JSON.parse(forged.body).error, 'UNEXPECTED_FIELDS');
+
+  const refusedForeignQuery = await progressFunction.handler(eventFor('GET', undefined, { userId: USER_TWO }), userOneContext);
+  assert.equal(refusedForeignQuery.statusCode, 400);
+  assert.equal(JSON.parse(refusedForeignQuery.body).error, 'UNEXPECTED_QUERY');
+  const ownRead = await progressFunction.handler(eventFor('GET'), userOneContext);
+  assert.equal(JSON.parse(ownRead.body).userId, USER_ONE);
+  assert.equal(JSON.parse(ownRead.body).records.slides.openCount, 1);
+
+  canonical = { id: USER_TWO, email: 'anna@example.com', app_metadata: { roles: ['active'] } };
+  const foreignRead = await progressFunction.handler(eventFor('GET', undefined, { userId: USER_ONE }), contextFor(canonical));
+  assert.equal(foreignRead.statusCode, 400);
+  const userTwoOwnRead = await progressFunction.handler(eventFor('GET'), contextFor(canonical));
+  assert.equal(JSON.parse(userTwoOwnRead.body).userId, USER_TWO);
+  assert.deepEqual(JSON.parse(userTwoOwnRead.body).records, {});
+
+  const notAdmin = await adminProgressFunction.handler(eventFor('GET', undefined, { view: 'user', userId: USER_ONE }), contextFor(canonical));
+  assert.equal(notAdmin.statusCode, 403);
+  assert.equal(JSON.parse(notAdmin.body).error, 'ADMIN_REQUIRED');
+
+  canonical = { id: ADMIN, email: 'admin@example.com', app_metadata: { roles: ['admin'] } };
+  const adminContext = contextFor(canonical);
+  const completed = await adminProgressFunction.handler(eventFor('PUT', {
+    action: 'mark_completed', targetUserId: USER_ONE, materialId: 'slides'
+  }), adminContext);
+  assert.equal(completed.statusCode, 200);
+  assert.equal(JSON.parse(completed.body).record.status, 'completed');
+
+  const reset = await adminProgressFunction.handler(eventFor('DELETE', {
+    targetUserId: USER_ONE, scope: 'material', materialId: 'slides'
+  }), adminContext);
+  assert.equal(reset.statusCode, 200);
+  assert.equal(JSON.parse(reset.body).removed, 1);
+
+  const report = await adminProgressFunction.handler(eventFor('GET', undefined, { view: 'user', userId: USER_ONE }), adminContext);
+  assert.equal(JSON.parse(report.body).user.records.slides, undefined);
+  const audit = await adminProgressFunction.handler(eventFor('GET', undefined, { view: 'audit' }), adminContext);
+  const actions = JSON.parse(audit.body).audit.map((entry) => entry.action);
+  assert.ok(actions.includes('progress.mark_completed'));
+  assert.ok(actions.includes('progress.reset.material'));
+});

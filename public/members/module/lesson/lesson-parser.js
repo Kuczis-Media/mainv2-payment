@@ -268,8 +268,18 @@
     let slideSettingsLines = null;
     let slideSettingsSeen = false;
     let transition = 'fade';
+    let stepMetadata = null;
 
     for (const line of lines) {
+      const metadataMatch = /^\s*<!--\s*chemdisk-step:(\{.*\})\s*-->\s*$/i.exec(line);
+      if (metadataMatch) {
+        if (stepMetadata) {
+          throw new LessonFormatError('MULTIPLE_STEP_METADATA', `Slajd ${index + 1}: dozwolony jest jeden identyfikator kroku.`);
+        }
+        try { stepMetadata = JSON.parse(metadataMatch[1]); }
+        catch (_) { throw new LessonFormatError('INVALID_STEP_METADATA', `Slajd ${index + 1}: ustawienia postępu są nieprawidłowe.`); }
+        continue;
+      }
       if (slideSettingsLines) {
         if (TASK_END.test(line)) {
           const values = directiveFields(slideSettingsLines.join('\n'));
@@ -332,17 +342,48 @@
       throw new LessonFormatError('EMPTY_SLIDE', `Slajd ${index + 1} jest pusty.`);
     }
     const heading = markdown.match(/^\s*#{1,3}\s+(.+?)\s*$/m);
+    const metadataId = typeof stepMetadata?.id === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(stepMetadata.id)
+      ? stepMetadata.id : stableStepId(markdown);
+    const include = ['ON', 'OFF', 'INHERIT'].includes(String(stepMetadata?.includeInLesson || '').toUpperCase())
+      ? String(stepMetadata.includeInLesson).toUpperCase() : 'INHERIT';
     return {
+      id: metadataId,
       markdown,
       html: renderMarkdown(markdown),
       title: heading ? stripMarkdown(heading[1]) : `Krok ${index + 1}`,
       transition,
-      task
+      task,
+      includeInLesson: include,
+      requiredToAdvance: stepMetadata?.requiredToAdvance !== false,
+      condition: normalizeStepCondition(stepMetadata?.condition)
+    };
+  }
+
+  function stableStepId(value) {
+    let hash = 2166136261;
+    const text = String(value || '').trim();
+    for (let index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return `step-${(hash >>> 0).toString(36)}`;
+  }
+
+  function normalizeStepCondition(input) {
+    const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+    const supported = new Set([
+      'next_click', 'previous_completed', 'material_completed', 'quiz_completed', 'correct_answer',
+      'exam_completed', 'exam_passed', 'minimum_score'
+    ]);
+    return {
+      type: supported.has(source.type) ? source.type : 'next_click',
+      materialId: typeof source.materialId === 'string' ? source.materialId.slice(0, 128) : null,
+      minimumScore: Math.max(0, Math.min(100, Number(source.minimumScore) || 0))
     };
   }
 
   function parseLesson(source, filename = 'lekcja.md') {
-    const text = String(source || '')
+    let text = String(source || '')
       .replace(/^\uFEFF/, '')
       .replace(/\r\n?/g, '\n');
     if (!text.trim()) throw new LessonFormatError('EMPTY_LESSON', 'Plik lekcji jest pusty.');
@@ -353,6 +394,12 @@
       throw new LessonFormatError('INVALID_LESSON', 'Plik lekcji zawiera niedozwolone znaki.');
     }
 
+    let lessonMetadata = null;
+    text = text.replace(/^\s*<!--\s*chemdisk-lesson:(\{.*\})\s*-->\s*$/im, (match, json) => {
+      try { lessonMetadata = JSON.parse(json); }
+      catch (_) { throw new LessonFormatError('INVALID_LESSON_METADATA', 'Ustawienia postępu lekcji są nieprawidłowe.'); }
+      return '';
+    });
     const parts = [];
     let current = [];
     let inCodeFence = false;
@@ -392,6 +439,7 @@
     return {
       title: firstHeading ? stripMarkdown(firstHeading[1]) : fallback,
       signature: lessonSignature(text),
+      navigation: lessonMetadata?.navigation === 'free' ? 'free' : 'sequential',
       slides
     };
   }

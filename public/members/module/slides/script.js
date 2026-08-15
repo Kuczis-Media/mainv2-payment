@@ -4,6 +4,7 @@
   const media = window.ChemMedia;
   const params = media.readParamsAndHide(window);
   const STORAGE_KEY = 'chemdisk.slides.v3';
+  const progressApi = window.ChemProgress;
 
   const fromUrl = params.has('id');
   const requestedType = media.normalizeType(params.get('type'), ['1', '2', '4', '5'], '1');
@@ -35,6 +36,9 @@
       : saved && media.isDriveId(saved.id)
         ? { id: saved.id, url: '', published: saved.published === true, type: savedType }
         : null;
+  const progressMaterialId = progressApi && state
+    ? progressApi.materialId('presentation', state.id || state.url, params.get('material') || '')
+    : '';
 
   const authState = await window.ChemAuth.ready;
   if (!authState?.authenticated || !authState.session?.ok) return;
@@ -160,6 +164,33 @@
     stage.classList.add('is-ready');
     retryTop.hidden = false;
     app.removeAttribute('aria-busy');
+    progressApi?.load().then(() => {
+      const saved = progressApi.record(progressMaterialId);
+      if (saved?.lastPosition) {
+        try { frame.contentWindow.postMessage({ type: 'chemdisk:resume', position: saved.lastPosition }, new URL(sourceUrl).origin); } catch (_) {}
+      }
+    }).catch(() => {});
+  });
+  window.addEventListener('message', (event) => {
+    if (!progressApi || !progressMaterialId || event.source !== frame.contentWindow) return;
+    let expectedOrigin = '';
+    try { expectedOrigin = new URL(sourceUrl).origin; } catch (_) {}
+    if (!expectedOrigin || event.origin !== expectedOrigin || event.data?.type !== 'chemdisk:slide') return;
+    const index = Math.max(0, Math.floor(Number(event.data.index) || 0));
+    const total = Math.max(0, Math.floor(Number(event.data.total) || 0));
+    progressApi.update({
+      materialId: progressMaterialId,
+      materialType: 'presentation',
+      action: 'presentation',
+      lastPosition: { slideId: String(event.data.id || index + 1), slideIndex: index },
+      details: {
+        lastSlideId: String(event.data.id || index + 1),
+        lastSlideIndex: index,
+        highestReachedSlide: index + 1,
+        visitedSlides: [String(event.data.id || index + 1)],
+        totalSlides: total
+      }
+    });
   });
   frame.addEventListener('error', () => showError(directEmbedMode
     ? 'Nie udało się osadzić podanego adresu HTTPS. Spróbuj trybu 5.'

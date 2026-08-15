@@ -1,0 +1,183 @@
+'use strict';
+
+const {
+  aggregateUser,
+  effectiveSettings,
+  mergeProgressEvent,
+  plainObject,
+  validMaterialId
+} = require('../progress-common.js');
+const {
+  getProgressStore,
+  readCatalog,
+  readUser,
+  setStoreFactory,
+  storageConfig,
+  updateUser
+} = require('../progress-storage.js');
+const {
+  json,
+  mutationGuard,
+  parseJsonBody,
+  requireCourseAccess,
+  responseForFailure
+} = require('../admin-common.js');
+
+const MAX_BODY_BYTES = 128 * 1024;
+const ALLOWED_EVENT_FIELDS = new Set([
+  'materialId', 'materialType', 'action', 'opened', 'progressPercent', 'lastPosition', 'details'
+]);
+
+exports.handler = async (event = {}, context = {}) => {
+  const method = String(event.httpMethod || '').toUpperCase();
+  if (method === 'OPTIONS') return emptyOptions();
+  if (!['GET', 'POST', 'DELETE'].includes(method)) {
+    return json({ error: 'METHOD_NOT_ALLOWED' }, 405, { Allow: 'GET, POST, DELETE, OPTIONS' });
+  }
+  if (method !== 'GET') {
+    const guard = mutationGuard(event, { maxBodyBytes: MAX_BODY_BYTES });
+    if (!guard.ok) return responseForFailure(guard);
+  }
+  const auth = await requireCourseAccess(event, context);
+  if (!auth.ok) return responseForFailure(auth);
+
+  let store;
+  try { store = getProgressStore(); }
+  catch (error) {
+    console.error('Progress Blob store initialization failed', safeErrorName(error));
+    return json({ error: 'PROGRESS_STORAGE_UNAVAILABLE' }, 503);
+  }
+
+  try {
+    if (method === 'GET') return await handleGet(event, store, auth);
+    if (method === 'POST') return await handleEvent(event, store, auth);
+    return await handleReset(event, store, auth);
+  } catch (error) {
+    console.error('progress function failed', safeErrorName(error));
+    if (error && error.code === 'PROGRESS_CONFLICT') return json({ error: 'PROGRESS_CONFLICT' }, 409);
+    return json({ error: 'PROGRESS_STORAGE_UNAVAILABLE' }, 503);
+  }
+};
+
+async function handleGet(event, store, auth) {
+  const query = event.queryStringParameters || {};
+  if (Object.keys(query).some((key) => key !== 'materialId')) {
+    return json({ error: 'UNEXPECTED_QUERY' }, 400);
+  }
+  const [catalog, stored] = await Promise.all([
+    readCatalog(store),
+    readUser(store, auth.userId, profileFrom(auth.user))
+  ]);
+  const materialId = String(query.materialId || '');
+  if (materialId && !validMaterialId(materialId)) return json({ error: 'INVALID_MATERIAL_ID' }, 400);
+  const user = stored.document;
+  const aggregate = aggregateUser(user, catalog);
+  return json({
+    version: 1,
+    userId: auth.userId,
+    catalog,
+    preferences: user.preferences,
+    records: materialId ? { [materialId]: user.records[materialId] || null } : user.records,
+    aggregate,
+    revision: user.revision
+  });
+}
+
+async function handleEvent(event, store, auth) {
+  const parsed = parseJsonBody(event);
+  if (!parsed.ok) return responseForFailure(parsed);
+  const validation = validateEvent(parsed.value);
+  if (!validation.ok) return json({ error: validation.code }, validation.status || 400);
+  const progressEvent = validation.value;
+  const catalog = await readCatalog(store);
+  const resolved = effectiveSettings(catalog);
+  const node = resolved.byId.get(progressEvent.materialId) || null;
+  const effective = node ? resolved.effective.get(node.id) : { tracking: true, showProgress: true };
+  let rejected = null;
+  const outcome = await updateUser(store, auth.userId, profileFrom(auth.user), (document) => {
+    const merged = mergeProgressEvent(document.records[progressEvent.materialId] || null, progressEvent, {
+      userId: auth.userId,
+      node,
+      effective,
+      global: catalog.global,
+      preferences: document.preferences,
+      records: document.records,
+      now: Date.now()
+    });
+    if (!merged.ok) {
+      rejected = merged;
+      return { abort: true, result: merged };
+    }
+    if (!merged.changed) return { abort: true, result: { record: merged.record, changed: false } };
+    if (!merged.record) delete document.records[progressEvent.materialId];
+    else document.records[progressEvent.materialId] = merged.record;
+    document.lastActivityAt = merged.record?.lastActivityAt || document.lastActivityAt;
+    return { document, result: { record: merged.record, changed: true } };
+  });
+  if (rejected) return json({ error: rejected.code }, rejected.status || 409);
+  const record = outcome.result?.record || null;
+  return json({
+    saved: outcome.modified,
+    record,
+    effective: {
+      tracking: catalog.global.tracking === 'ON' && effective.tracking !== false,
+      showProgress: catalog.global.showProgress === 'ON' && effective.showProgress !== false,
+      recordOpens: catalog.global.recordOpens
+    }
+  });
+}
+
+async function handleReset(event, store, auth) {
+  const parsed = parseJsonBody(event);
+  if (!parsed.ok) return responseForFailure(parsed);
+  const body = parsed.value;
+  if (Object.keys(body).some((key) => key !== 'materialId')) return json({ error: 'UNEXPECTED_FIELDS' }, 400);
+  if (!validMaterialId(body.materialId)) return json({ error: 'INVALID_MATERIAL_ID' }, 400);
+  const outcome = await updateUser(store, auth.userId, profileFrom(auth.user), (document) => {
+    const existed = Boolean(document.records[body.materialId]);
+    delete document.records[body.materialId];
+    return existed ? { document, result: { existed } } : { abort: true, result: { existed } };
+  });
+  return json({ reset: true, existed: Boolean(outcome.result?.existed) });
+}
+
+function validateEvent(body) {
+  if (!plainObject(body)) return { ok: false, code: 'INVALID_BODY' };
+  if (Object.keys(body).some((key) => !ALLOWED_EVENT_FIELDS.has(key))) {
+    return { ok: false, code: 'UNEXPECTED_FIELDS' };
+  }
+  if (!validMaterialId(body.materialId)) return { ok: false, code: 'INVALID_MATERIAL_ID' };
+  if (typeof body.action !== 'string') return { ok: false, code: 'INVALID_ACTION' };
+  if (body.lastPosition != null && !plainObject(body.lastPosition)) return { ok: false, code: 'INVALID_POSITION' };
+  if (body.details != null && !plainObject(body.details)) return { ok: false, code: 'INVALID_DETAILS' };
+  return { ok: true, value: body };
+}
+
+function profileFrom(user) {
+  const metadata = plainObject(user?.user_metadata) ? user.user_metadata : {};
+  const first = String(metadata.first_name || metadata.firstName || '').trim();
+  const last = String(metadata.last_name || metadata.lastName || '').trim();
+  return {
+    email: typeof user?.email === 'string' ? user.email : '',
+    name: String(metadata.full_name || metadata.fullName || `${first} ${last}`).trim()
+  };
+}
+
+function emptyOptions() {
+  return {
+    statusCode: 204,
+    headers: { Allow: 'GET, POST, DELETE, OPTIONS', 'Cache-Control': 'no-store', Vary: 'Origin' },
+    body: ''
+  };
+}
+
+function safeErrorName(error) {
+  return error && error.name ? String(error.name) : 'Error';
+}
+
+exports._test = {
+  profileFrom,
+  setStoreFactory,
+  storageConfig,
+  validateEvent
+};

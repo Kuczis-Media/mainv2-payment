@@ -28,8 +28,10 @@
 
   <link rel="icon" href="/members/favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="/members/dashboard.css" />
+  <link rel="stylesheet" href="/assets/progress.css" />
   <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
   <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/progress.js"></script>
   <script defer src="/assets/js/content-library.js"></script>
   <script defer src="/members/dashboard-parser.js"></script>
   <script defer src="/members/dashboard-navigation.js"></script>
@@ -162,6 +164,7 @@
               <span class="status-pill"><i aria-hidden="true"></i><span data-access-label>Konto aktywne</span></span>
               <span class="resource-count" id="resource-count" aria-live="polite"></span>
             </div>
+            <div class="course-progress" id="course-progress" aria-live="polite" hidden></div>
           </div>
           <div class="welcome-visual" aria-hidden="true">
             <span class="orb orb-one"></span>
@@ -304,6 +307,9 @@
         </button>
         <button class="admin-tab" id="admin-tab-content" type="button" role="tab" aria-selected="false" aria-controls="admin-panel-content" tabindex="-1" data-admin-tab="content">
           <span aria-hidden="true">◆</span> Materiały
+        </button>
+        <button class="admin-tab" id="admin-tab-progress" type="button" role="tab" aria-selected="false" aria-controls="admin-panel-progress" tabindex="-1" data-admin-tab="progress">
+          <span aria-hidden="true">◔</span> Postępy
         </button>
         <button class="admin-tab" id="admin-tab-payments" type="button" role="tab" aria-selected="false" aria-controls="admin-panel-payments" tabindex="-1" data-admin-tab="payments">
           <span aria-hidden="true">zł</span> Płatności
@@ -496,6 +502,34 @@ GITHUB_CONTENT_ROOT=</pre>
           <p class="admin-status" id="admin-content-status" role="status" aria-live="polite"></p>
           <button class="button button-primary" id="admin-content-refresh" type="button">Sprawdź ponownie</button>
         </div>
+      </section>
+
+      <section class="admin-tab-panel" id="admin-panel-progress" role="tabpanel" aria-labelledby="admin-tab-progress" data-admin-panel="progress" hidden>
+        <div class="admin-guidance">
+          <span aria-hidden="true">◔</span>
+          <p><strong>Postęp jest zapisywany po stronie serwera w Netlify Blobs.</strong> Wyłączenie śledzenia lub pasków nie usuwa historii. Pozycja PDF oznacza nawigację, nie dowód przeczytania.</p>
+        </div>
+        <div class="admin-progress-settings">
+          <label><span class="field-label">Śledzenie postępu ChemDisk</span><select class="text-field" id="admin-progress-global-tracking"><option value="ON">Włączone</option><option value="OFF">Wyłączone</option></select></label>
+          <label><span class="field-label">Paski postępu ucznia</span><select class="text-field" id="admin-progress-global-show"><option value="ON">Widoczne</option><option value="OFF">Ukryte</option></select></label>
+          <label class="admin-payment-switch"><input id="admin-progress-record-opens" type="checkbox" /><span><strong>Rejestruj otwarcia materiałów</strong><small>Działa niezależnie od liczenia procentów.</small></span></label>
+          <button class="button button-primary" id="admin-progress-save-settings" type="button">Zapisz ustawienia</button>
+        </div>
+        <div class="admin-progress-metrics" id="admin-progress-metrics" aria-live="polite"></div>
+        <div class="admin-toolbar admin-progress-toolbar">
+          <label class="admin-search"><span class="field-label">Znajdź ucznia</span><span class="admin-search-field"><span aria-hidden="true">⌕</span><input id="admin-progress-search" type="search" placeholder="Imię, e-mail lub ID" /></span></label>
+          <label><span class="field-label">Filtr</span><select class="text-field" id="admin-progress-filter"><option value="all">Wszyscy</option><option value="not_started">Nie rozpoczęli</option><option value="started">W trakcie</option><option value="completed">Ukończyli</option></select></label>
+          <label><span class="field-label">Sortowanie</span><select class="text-field" id="admin-progress-sort"><option value="lastActivityAt">Ostatnia aktywność</option><option value="progressPercent">Postęp</option><option value="name">Nazwa</option><option value="email">E-mail</option></select></label>
+          <button class="button button-secondary" id="admin-progress-refresh" type="button">Odśwież</button>
+        </div>
+        <div class="admin-status" id="admin-progress-status" role="status" aria-live="polite"></div>
+        <div class="admin-progress-user-list" id="admin-progress-user-list"></div>
+        <section class="admin-progress-detail" id="admin-progress-detail" hidden aria-live="polite"></section>
+        <details class="admin-progress-global-details">
+          <summary>Raporty globalne i audit log</summary>
+          <div id="admin-progress-global-report"></div>
+          <div id="admin-progress-audit"></div>
+        </details>
       </section>
 
       <section class="admin-tab-panel" id="admin-panel-payments" role="tabpanel" aria-labelledby="admin-tab-payments" data-admin-panel="payments" hidden>

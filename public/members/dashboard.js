@@ -8,6 +8,7 @@
   const ADMIN_DASHBOARD_URL = '/.netlify/functions/admin-dashboard';
   const PAYMENT_ADMIN_URL = '/.netlify/functions/payment-admin';
   const PAYMENT_CONFIG_URL = '/.netlify/functions/payment-config';
+  const ADMIN_PROGRESS_URL = '/.netlify/functions/admin-progress';
   const THEME_STORAGE_KEY = 'chem.theme';
   const SIDEBAR_STORAGE_KEY = 'chem.sidebar';
   const MOBILE_SIDEBAR_QUERY = '(max-width: 920px)';
@@ -198,6 +199,20 @@
     adminContentRefresh: document.getElementById('admin-content-refresh'),
     adminContentCopyEnv: document.getElementById('admin-content-copy-env'),
     adminContentEnvTemplate: document.getElementById('admin-content-env-template'),
+    adminProgressGlobalTracking: document.getElementById('admin-progress-global-tracking'),
+    adminProgressGlobalShow: document.getElementById('admin-progress-global-show'),
+    adminProgressRecordOpens: document.getElementById('admin-progress-record-opens'),
+    adminProgressSaveSettings: document.getElementById('admin-progress-save-settings'),
+    adminProgressMetrics: document.getElementById('admin-progress-metrics'),
+    adminProgressSearch: document.getElementById('admin-progress-search'),
+    adminProgressFilter: document.getElementById('admin-progress-filter'),
+    adminProgressSort: document.getElementById('admin-progress-sort'),
+    adminProgressRefresh: document.getElementById('admin-progress-refresh'),
+    adminProgressStatus: document.getElementById('admin-progress-status'),
+    adminProgressUserList: document.getElementById('admin-progress-user-list'),
+    adminProgressDetail: document.getElementById('admin-progress-detail'),
+    adminProgressGlobalReport: document.getElementById('admin-progress-global-report'),
+    adminProgressAudit: document.getElementById('admin-progress-audit'),
     adminPricesForm: document.getElementById('admin-prices-form'),
     adminPaymentCurrency: document.getElementById('admin-payment-currency'),
     adminPaymentDisabled: document.getElementById('admin-payment-disabled'),
@@ -248,6 +263,11 @@
   let adminContentRepositoryId = '';
   let adminPricesLoaded = false;
   let adminPricesEtag = null;
+  let adminProgressLoaded = false;
+  let adminProgressUsers = [];
+  let adminProgressActiveIds = new Set();
+  let adminProgressReport = null;
+  let adminProgressCatalog = null;
 
   function preferredTheme() {
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -404,6 +424,7 @@
     const card = document.createElement('article');
     card.className = 'resource-card';
     card.dataset.kind = resource.kind;
+    card.dataset.progressId = item.id || '';
     card.dataset.search = normalizeText(
       `${sectionTitle} ${groupTitle || ''} ${item.title} ${item.description} ${item.searchText || ''}`
     );
@@ -430,7 +451,13 @@
 
     const link = document.createElement('a');
     link.className = 'card-link';
-    link.href = parsedUrl.href;
+    if (!parsedUrl.external && item.id && /^\/members\/module\//.test(parsedUrl.pathname)) {
+      const trackedUrl = new URL(parsedUrl.href, window.location.origin);
+      trackedUrl.searchParams.set('material', item.id);
+      link.href = `${trackedUrl.pathname}${trackedUrl.search}${trackedUrl.hash}`;
+    } else {
+      link.href = parsedUrl.href;
+    }
     link.setAttribute('aria-label', `Otwórz: ${item.title}`);
     if (parsedUrl.external) {
       link.target = '_blank';
@@ -441,8 +468,22 @@
       externalMark.textContent = '↗';
       card.append(externalMark);
     }
+    const destinationTracksItself = !parsedUrl.external && /^\/members\/module\//.test(parsedUrl.pathname);
+    if (item.id && !destinationTracksItself) {
+      link.addEventListener('click', () => {
+        window.ChemProgress?.send({
+          materialId: item.id,
+          materialType: item.type || 'other',
+          action: 'open',
+          opened: true
+        }, { keepalive: true }).catch(() => {});
+      });
+    }
 
-    card.append(icon, title, description, openLabel, link);
+    const progressHost = document.createElement('div');
+    progressHost.className = 'card-progress-host';
+    progressHost.dataset.progressHost = item.id || '';
+    card.append(icon, title, description, progressHost, openLabel, link);
     return card;
   }
 
@@ -458,7 +499,12 @@
 
     const details = document.createElement('details');
     details.className = 'resource-accordion';
+    details.dataset.progressId = group.id || '';
     details.dataset.accordionDepth = String(depth);
+    details.addEventListener('toggle', () => {
+      if (!details.open || !group.id) return;
+      window.ChemProgress?.open({ materialId: group.id, materialType: group.type || 'other' }).catch(() => {});
+    });
 
     const summary = document.createElement('summary');
     const copy = document.createElement('span');
@@ -487,6 +533,10 @@
 
     const body = document.createElement('div');
     body.className = 'accordion-body';
+    const groupProgress = document.createElement('div');
+    groupProgress.className = 'container-progress-host';
+    groupProgress.dataset.progressHost = group.id || '';
+    body.append(groupProgress);
     group.notices.forEach((noticeText) => {
       const notice = document.createElement('p');
       notice.className = 'section-notice';
@@ -531,6 +581,7 @@
     sectionElement.className = 'course-section';
     sectionElement.id = id;
     sectionElement.dataset.sectionTitle = normalizeText(section.title);
+    sectionElement.dataset.progressId = section.id || '';
 
     const headingRow = document.createElement('div');
     headingRow.className = 'section-heading';
@@ -555,6 +606,10 @@
     total.className = 'section-total';
     total.dataset.sectionTotal = String(sectionCardCount);
     total.textContent = resourceLabel(sectionCardCount);
+    const sectionProgress = document.createElement('div');
+    sectionProgress.className = 'section-progress-host';
+    sectionProgress.dataset.progressHost = section.id || '';
+    headingCopy.append(sectionProgress);
     headingRow.append(headingCopy, total);
     sectionElement.append(headingRow);
 
@@ -642,6 +697,40 @@
     renderNavigation(renderedSections);
     filterResources();
     setupSectionTracking();
+    hydrateDashboardProgress(model);
+  }
+
+  async function hydrateDashboardProgress(model) {
+    const api = window.ChemProgress;
+    if (!api) return;
+    try {
+      const state = await api.load();
+      const nodes = state?.aggregate?.nodes || {};
+      document.querySelectorAll('[data-progress-host]').forEach((host) => {
+        const id = host.dataset.progressHost;
+        const aggregate = nodes[id];
+        host.replaceChildren();
+        if (!aggregate || aggregate.tracked === false || aggregate.showProgress === false) {
+          host.hidden = true;
+          return;
+        }
+        host.hidden = false;
+        host.append(api.progressView(aggregate.record || aggregate, { compact: true }));
+      });
+      const courseHost = document.getElementById('course-progress');
+      const course = state?.aggregate?.course;
+      if (courseHost) {
+        courseHost.replaceChildren();
+        courseHost.hidden = !course || course.tracked === false || course.showProgress === false;
+        if (!courseHost.hidden) {
+          const title = document.createElement('strong');
+          title.textContent = 'Twój postęp kursu';
+          courseHost.append(title, api.progressView(course));
+        }
+      }
+    } catch (error) {
+      console.warn('Nie udało się wczytać pasków postępu', error?.code || error?.message || error);
+    }
   }
 
   function showContentError(error) {
@@ -1874,6 +1963,12 @@
       adminUsers = Array.from(uniqueUsers.values());
       renderAdminUsers();
       setAdminExportDisabled(adminUsers.length === 0);
+      if (adminProgressLoaded) {
+        reconcileAdminProgressUsers();
+        renderAdminProgressUsers();
+        renderAdminProgressMetrics(adjustedAdminProgressReport());
+        renderAdminProgressGlobal(adjustedAdminProgressReport());
+      }
     } catch (error) {
       adminUsers = [];
       elements.adminEmpty.hidden = true;
@@ -2902,8 +2997,352 @@
     }
   }
 
+  function adminProgressPercent(value) {
+    return `${Math.round(Math.max(0, Math.min(100, Number(value) || 0)))}%`;
+  }
+
+  function reconcileAdminProgressUsers() {
+    const rows = new Map(adminProgressUsers.map((user) => [user.id, user]));
+    const parentIds = new Set((adminProgressCatalog?.nodes || []).map((node) => node.parentId).filter(Boolean));
+    const trackedLeaves = (adminProgressCatalog?.nodes || []).filter((node) => !parentIds.has(node.id)).length;
+    adminUsers.forEach((user) => {
+      const existing = rows.get(user.id);
+      const identityName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+      if (existing) {
+        if (!existing.name) existing.name = identityName;
+        if (!existing.email) existing.email = user.email || '';
+        return;
+      }
+      rows.set(user.id, {
+        id: user.id,
+        name: identityName,
+        email: user.email || '',
+        progressPercent: 0,
+        completed: 0,
+        started: 0,
+        notOpened: trackedLeaves,
+        lastActivityAt: null
+      });
+    });
+    adminProgressUsers = [...rows.values()];
+  }
+
+  function adjustedAdminProgressReport() {
+    const report = adminProgressReport || {};
+    const missing = adminUsers.filter((user) => !adminProgressActiveIds.has(user.id)).length;
+    if (!missing) return report;
+    const sourceUsers = Math.max(0, Number(report.users) || 0);
+    const users = sourceUsers + missing;
+    return {
+      ...report,
+      users,
+      averageProgress: users ? ((Number(report.averageProgress) || 0) * sourceUsers) / users : 0,
+      distribution: {
+        ...(report.distribution || {}),
+        '0-25': Number(report.distribution?.['0-25'] || 0) + missing
+      }
+    };
+  }
+
+  function renderAdminProgressUsers() {
+    const query = normalizeText(elements.adminProgressSearch?.value || '');
+    const filter = elements.adminProgressFilter?.value || 'all';
+    const sort = elements.adminProgressSort?.value || 'lastActivityAt';
+    let rows = adminProgressUsers.filter((user) => {
+      if (query && !normalizeText(`${user.name} ${user.email} ${user.id}`).includes(query)) return false;
+      if (filter === 'completed') return user.progressPercent >= 100;
+      if (filter === 'started') return user.progressPercent > 0 && user.progressPercent < 100;
+      if (filter === 'not_started') return user.progressPercent <= 0;
+      return true;
+    });
+    rows = [...rows].sort((left, right) => {
+      if (sort === 'progressPercent') return right.progressPercent - left.progressPercent;
+      return String(right[sort] || '').localeCompare(String(left[sort] || ''), 'pl', { sensitivity: 'base' });
+    });
+    const cards = rows.map((user) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'admin-progress-user';
+      const identity = document.createElement('span');
+      identity.append(
+        Object.assign(document.createElement('strong'), { textContent: user.name || user.email || user.id }),
+        Object.assign(document.createElement('small'), { textContent: `${user.email || 'Brak e-maila'} · ${user.id}` })
+      );
+      const stats = document.createElement('span');
+      stats.className = 'admin-progress-user-stats';
+      stats.append(
+        Object.assign(document.createElement('strong'), { textContent: adminProgressPercent(user.progressPercent) }),
+        Object.assign(document.createElement('small'), { textContent: `${user.completed} ukończonych · ${user.started} rozpoczętych · ${user.notOpened} nieotwartych` })
+      );
+      const activity = document.createElement('time');
+      activity.textContent = adminDateLabel(user.lastActivityAt, 'Brak aktywności');
+      button.append(identity, stats, activity);
+      button.addEventListener('click', () => loadAdminProgressUser(user.id));
+      return button;
+    });
+    elements.adminProgressUserList?.replaceChildren(...cards);
+  }
+
+  function renderAdminProgressMetrics(report) {
+    if (!elements.adminProgressMetrics) return;
+    const values = [
+      ['Średni postęp', adminProgressPercent(report?.averageProgress)],
+      ['Uczniowie', String(report?.users || 0)],
+      ['Rozpoczęcia', String(report?.starts || 0)],
+      ['Ukończenia', String(report?.completions || 0)]
+    ];
+    elements.adminProgressMetrics.replaceChildren(...values.map(([label, value]) => {
+      const card = document.createElement('span');
+      card.append(
+        Object.assign(document.createElement('strong'), { textContent: value }),
+        Object.assign(document.createElement('small'), { textContent: label })
+      );
+      return card;
+    }));
+  }
+
+  function renderAdminProgressGlobal(report) {
+    if (!elements.adminProgressGlobalReport) return;
+    const distribution = report?.distribution || {};
+    const section = document.createElement('section');
+    section.className = 'admin-progress-report-block';
+    const heading = document.createElement('h3');
+    heading.textContent = 'Rozkład postępu';
+    const distributionLine = document.createElement('p');
+    distributionLine.textContent = `0–25%: ${distribution['0-25'] || 0} · 25–50%: ${distribution['25-50'] || 0} · 50–75%: ${distribution['50-75'] || 0} · 75–100%: ${distribution['75-100'] || 0}`;
+    const list = document.createElement('ul');
+    (report?.mostUnopened || []).slice(0, 5).forEach((item) => {
+      const row = document.createElement('li');
+      row.textContent = `${item.title}: ${item.notOpened} nieotwarć`;
+      list.append(row);
+    });
+    section.append(heading, distributionLine, Object.assign(document.createElement('h4'), { textContent: 'Najczęściej nieotwierane' }), list);
+    const abandoned = document.createElement('ul');
+    (report?.mostAbandoned || []).slice(0, 5).forEach((item) => {
+      const row = document.createElement('li');
+      row.textContent = `${item.title}: ${item.abandoned} porzuceń${item.commonStop ? ` · częsty punkt: ${item.commonStop}` : ''}`;
+      abandoned.append(row);
+    });
+    section.append(Object.assign(document.createElement('h4'), { textContent: 'Najczęściej porzucane' }), abandoned);
+    elements.adminProgressGlobalReport.replaceChildren(section);
+  }
+
+  function renderAdminProgressAudit(entries) {
+    if (!elements.adminProgressAudit) return;
+    const section = document.createElement('section');
+    section.className = 'admin-progress-report-block';
+    section.append(Object.assign(document.createElement('h3'), { textContent: 'Ostatnie operacje administratorów' }));
+    const list = document.createElement('ul');
+    (entries || []).slice(0, 20).forEach((entry) => {
+      const item = document.createElement('li');
+      item.textContent = `${adminDateLabel(entry.timestamp)} · ${entry.adminId} · ${entry.action}${entry.targetUserId ? ` · uczeń ${entry.targetUserId}` : ''}${entry.materialId ? ` · ${entry.materialId}` : ''}`;
+      list.append(item);
+    });
+    section.append(list);
+    elements.adminProgressAudit.replaceChildren(section);
+  }
+
+  async function adminProgressRequest(method, body, query = '') {
+    const token = await getAdminToken();
+    const response = await fetch(`${ADMIN_PROGRESS_URL}${query}`, {
+      method,
+      cache: 'no-store',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...(body ? { 'Content-Type': 'application/json' } : {})
+      },
+      ...(body ? { body: JSON.stringify(body) } : {})
+    });
+    return readAdminResponse(response);
+  }
+
+  async function loadAdminProgress(force = false) {
+    if (adminProgressLoaded && !force) return;
+    setPanelStatus(elements.adminProgressStatus, 'Wczytywanie raportów…', 'loading');
+    try {
+      const [users, global, audit] = await Promise.all([
+        adminProgressRequest('GET', null, '?view=users&limit=200'),
+        adminProgressRequest('GET', null, '?view=global&limit=200'),
+        adminProgressRequest('GET', null, '?view=audit&limit=30')
+      ]);
+      adminProgressUsers = Array.isArray(users.users) ? users.users : [];
+      adminProgressActiveIds = new Set(adminProgressUsers.map((user) => user.id));
+      adminProgressReport = global.report || null;
+      adminProgressCatalog = users.catalog || adminProgressCatalog;
+      reconcileAdminProgressUsers();
+      const globalSettings = adminProgressCatalog?.global || {};
+      elements.adminProgressGlobalTracking.value = globalSettings.tracking === 'OFF' ? 'OFF' : 'ON';
+      elements.adminProgressGlobalShow.value = globalSettings.showProgress === 'OFF' ? 'OFF' : 'ON';
+      elements.adminProgressRecordOpens.checked = globalSettings.recordOpens !== false;
+      renderAdminProgressUsers();
+      renderAdminProgressMetrics(adjustedAdminProgressReport());
+      renderAdminProgressGlobal(adjustedAdminProgressReport());
+      renderAdminProgressAudit(audit.audit);
+      adminProgressLoaded = true;
+      setPanelStatus(elements.adminProgressStatus, `Wczytano ${adminProgressUsers.length} kont.`, 'success');
+    } catch (error) {
+      adminProgressLoaded = false;
+      setPanelStatus(elements.adminProgressStatus, error?.message || 'Nie udało się wczytać raportów.', 'error');
+    }
+  }
+
+  async function saveAdminProgressSettings() {
+    if (!adminProgressCatalog) return;
+    elements.adminProgressSaveSettings.disabled = true;
+    try {
+      const catalog = {
+        ...adminProgressCatalog,
+        global: {
+          ...adminProgressCatalog.global,
+          tracking: elements.adminProgressGlobalTracking.value,
+          showProgress: elements.adminProgressGlobalShow.value,
+          recordOpens: elements.adminProgressRecordOpens.checked
+        }
+      };
+      const payload = await adminProgressRequest('PUT', { action: 'catalog', catalog });
+      adminProgressCatalog = payload.catalog;
+      setPanelStatus(elements.adminProgressStatus, 'Ustawienia postępu zapisane.', 'success');
+      await window.ChemProgress?.load({ force: true }).catch(() => {});
+    } catch (error) {
+      setPanelStatus(elements.adminProgressStatus, error?.message || 'Nie udało się zapisać ustawień.', 'error');
+    } finally {
+      elements.adminProgressSaveSettings.disabled = false;
+    }
+  }
+
+  function recordDetailsLabel(node, record) {
+    if (!record) return 'Nieotwarty';
+    const details = record.details || {};
+    if (node.type === 'presentation') return `Slajd ${Number(details.lastSlideIndex) + 1 || '—'}/${details.totalSlides || '—'} · ${record.openCount} otwarć`;
+    if (node.type === 'video') return `Pozycja ${Math.round(Number(details.lastPlaybackPosition) || 0)} s / ${Math.round(Number(details.duration) || 0)} s`;
+    if (node.type === 'lesson') return `Krok ${Number(details.currentStepIndex) + 1 || '—'} · ukończone ${details.completedStepIds?.length || 0}/${details.totalTrackedSteps || '—'}`;
+    if (node.type === 'pdf') return `Strona ${details.lastPage || '—'}/${details.totalPages || '—'} · postęp nawigacyjny`;
+    if (node.type === 'quiz') return `Postęp ${adminProgressPercent(record.progressPercent)} · wynik ${details.scorePercent == null ? '—' : adminProgressPercent(details.scorePercent)} · próby ${details.attempts || 0}`;
+    return `${record.openCount || 0} otwarć`;
+  }
+
+  async function mutateAdminProgress(body, confirmation) {
+    if (confirmation && !window.confirm(confirmation)) return false;
+    await adminProgressRequest(body.scope ? 'DELETE' : 'PUT', body);
+    return true;
+  }
+
+  async function loadAdminProgressUser(userId) {
+    setPanelStatus(elements.adminProgressStatus, 'Wczytywanie raportu ucznia…', 'loading');
+    try {
+      const payload = await adminProgressRequest('GET', null, `?view=user&userId=${encodeURIComponent(userId)}`);
+      renderAdminProgressUser(payload);
+      setPanelStatus(elements.adminProgressStatus, 'Raport ucznia jest aktualny.', 'success');
+    } catch (error) {
+      setPanelStatus(elements.adminProgressStatus, error?.message || 'Nie udało się wczytać raportu ucznia.', 'error');
+    }
+  }
+
+  function renderAdminProgressUser(payload) {
+    const host = elements.adminProgressDetail;
+    const user = payload.user;
+    const aggregate = payload.aggregate;
+    host.hidden = false;
+    host.replaceChildren();
+    const header = document.createElement('header');
+    header.append(
+      Object.assign(document.createElement('h3'), { textContent: user.profile?.name || user.profile?.email || user.userId }),
+      Object.assign(document.createElement('p'), { textContent: `${user.profile?.email || 'Brak e-maila'} · ${user.userId} · ostatnia aktywność: ${adminDateLabel(user.lastActivityAt)}` }),
+      Object.assign(document.createElement('strong'), { textContent: `Postęp kursu: ${adminProgressPercent(aggregate.course.progressPercent)}` })
+    );
+    const close = document.createElement('button');
+    close.type = 'button'; close.className = 'button button-secondary'; close.textContent = 'Zamknij raport';
+    close.addEventListener('click', () => { host.hidden = true; });
+    header.append(close);
+    host.append(header);
+
+    const controls = document.createElement('div');
+    controls.className = 'admin-progress-manual-controls';
+    const skip = document.createElement('select');
+    skip.className = 'text-field';
+    [['DEFAULT', 'Według lekcji'], ['ALLOW', 'Pomijanie dozwolone'], ['DENY', 'Pomijanie zabronione']].forEach(([value, label]) => {
+      const option = document.createElement('option'); option.value = value; option.textContent = label; skip.append(option);
+    });
+    skip.value = user.preferences?.skipMode || 'DEFAULT';
+    const saveSkip = document.createElement('button'); saveSkip.type = 'button'; saveSkip.className = 'button button-secondary'; saveSkip.textContent = 'Zapisz pomijanie';
+    saveSkip.addEventListener('click', async () => {
+      await mutateAdminProgress({ action: 'preference', targetUserId: user.userId, preferences: { skipMode: skip.value } });
+      await loadAdminProgressUser(user.userId);
+    });
+    const resetCourse = document.createElement('button'); resetCourse.type = 'button'; resetCourse.className = 'button button-danger-soft'; resetCourse.textContent = 'Reset całego kursu';
+    resetCourse.addEventListener('click', async () => {
+      if (await mutateAdminProgress({ targetUserId: user.userId, scope: 'course' }, 'Zresetować cały postęp tego użytkownika? Historia materiałów zostanie usunięta, a operacja zapisana w audycie.')) {
+        await loadAdminProgressUser(user.userId);
+      }
+    });
+    controls.append(skip, saveSkip, resetCourse);
+    host.append(controls);
+
+    const list = document.createElement('div');
+    list.className = 'admin-progress-material-list';
+    payload.catalog.nodes.forEach((node) => {
+      if (node.type === 'course') return;
+      const data = aggregate.nodes[node.id];
+      const record = user.records[node.id] || null;
+      const card = document.createElement('article');
+      card.className = 'admin-progress-material';
+      const copy = document.createElement('div');
+      copy.append(
+        Object.assign(document.createElement('strong'), { textContent: `${node.title} — ${adminProgressPercent(data?.progressPercent)}` }),
+        Object.assign(document.createElement('small'), { textContent: `${record?.opened ? 'Otwarty' : 'Nieotwarty'} · ${window.ChemProgress?.statusLabel(record) || record?.status || 'Nie rozpoczęto'} · ${recordDetailsLabel(node, record)}` }),
+        Object.assign(document.createElement('small'), { textContent: `Pierwsze otwarcie: ${adminDateLabel(record?.firstOpenedAt)} · ostatnia aktywność: ${adminDateLabel(record?.lastActivityAt)}` })
+      );
+      const actions = document.createElement('div');
+      actions.className = 'admin-progress-material-actions';
+      if (!['department', 'section', 'subsection', 'course'].includes(node.type)) {
+        [['mark_completed', 'Oznacz ukończone'], ['mark_incomplete', 'Oznacz nieukończone']].forEach(([action, label]) => {
+          const button = document.createElement('button'); button.type = 'button'; button.className = 'button button-secondary'; button.textContent = label;
+          button.addEventListener('click', async () => {
+            await mutateAdminProgress({ action, targetUserId: user.userId, materialId: node.id });
+            await loadAdminProgressUser(user.userId);
+          });
+          actions.append(button);
+        });
+      }
+      if (node.type === 'lesson' && node.settings?.steps?.length) {
+        const step = document.createElement('select'); step.className = 'text-field';
+        node.settings.steps.forEach((item) => { const option = document.createElement('option'); option.value = item.id; option.textContent = item.title; step.append(option); });
+        step.value = record?.details?.currentStepId || node.settings.steps[0].id;
+        const setStep = document.createElement('button'); setStep.type = 'button'; setStep.className = 'button button-secondary'; setStep.textContent = 'Ustaw krok';
+        setStep.addEventListener('click', async () => {
+          await mutateAdminProgress({ action: 'set_step', targetUserId: user.userId, materialId: node.id, stepId: step.value });
+          await loadAdminProgressUser(user.userId);
+        });
+        const unlock = document.createElement('button'); unlock.type = 'button'; unlock.className = 'button button-secondary'; unlock.textContent = 'Odblokuj krok';
+        unlock.addEventListener('click', async () => {
+          await mutateAdminProgress({ action: 'unlock_step', targetUserId: user.userId, materialId: node.id, stepId: step.value });
+          await loadAdminProgressUser(user.userId);
+        });
+        const lock = document.createElement('button'); lock.type = 'button'; lock.className = 'button button-secondary'; lock.textContent = 'Zablokuj krok';
+        lock.addEventListener('click', async () => {
+          await mutateAdminProgress({ action: 'lock_step', targetUserId: user.userId, materialId: node.id, stepId: step.value });
+          await loadAdminProgressUser(user.userId);
+        });
+        actions.append(step, setStep, unlock, lock);
+      }
+      const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'button button-danger-soft'; reset.textContent = 'Reset';
+      const scope = node.type === 'department' ? 'department' : ['section', 'subsection'].includes(node.type) ? 'section' : 'material';
+      reset.addEventListener('click', async () => {
+        if (await mutateAdminProgress({ targetUserId: user.userId, scope, materialId: node.id }, `Zresetować „${node.title}” dla tego użytkownika?`)) {
+          await loadAdminProgressUser(user.userId);
+        }
+      });
+      actions.append(reset);
+      card.append(copy, actions);
+      list.append(card);
+    });
+    host.append(list);
+  }
+
   function activateAdminTab(name, focusTab) {
-    const allowed = new Set(['users', 'forms', 'dashboard', 'content', 'payments']);
+    const allowed = new Set(['users', 'forms', 'dashboard', 'content', 'progress', 'payments']);
     const activeName = allowed.has(name) ? name : 'users';
     elements.adminTabs.forEach((tab) => {
       const active = tab.dataset.adminTab === activeName;
@@ -2916,6 +3355,7 @@
     if (activeName === 'forms' && !adminFormsLoaded) loadAdminForms();
     if (activeName === 'dashboard' && !adminDashboardLoaded) loadAdminDashboardEditor();
     if (activeName === 'content' && !adminContentLoaded) loadAdminContentStatus(false);
+    if (activeName === 'progress' && !adminProgressLoaded) loadAdminProgress(false);
     if (activeName === 'payments' && !adminPricesLoaded) loadAdminPrices();
   }
 
@@ -3066,6 +3506,11 @@
     elements.adminDashboardPreviewButton.addEventListener('click', previewAdminDashboard);
     elements.adminDashboardSave.addEventListener('click', saveAdminDashboard);
     elements.adminContentRefresh.addEventListener('click', () => loadAdminContentStatus(true));
+    elements.adminProgressRefresh.addEventListener('click', () => loadAdminProgress(true));
+    elements.adminProgressSaveSettings.addEventListener('click', saveAdminProgressSettings);
+    elements.adminProgressSearch.addEventListener('input', renderAdminProgressUsers);
+    elements.adminProgressFilter.addEventListener('change', renderAdminProgressUsers);
+    elements.adminProgressSort.addEventListener('change', renderAdminProgressUsers);
     elements.adminContentRepositorySelect.addEventListener('change', () => {
       adminContentRepositoryId = elements.adminContentRepositorySelect.value;
       adminContentLoaded = false;

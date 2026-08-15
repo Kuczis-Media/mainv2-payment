@@ -1717,7 +1717,72 @@ Nie kopiuj sekretów do zwykłego dokumentu udostępnionego wielu osobom.
 - uruchom nowy deploy;
 - upewnij się, że oglądasz właściwy projekt i domenę.
 
-## 34. Bezpieczeństwo i ograniczenia
+## 34. Obsługa postępów uczniów
+
+### 34.1. Pierwsze uruchomienie
+
+Nie dodawaj nowej bazy ani zmiennych środowiskowych. Postęp korzysta z istniejących `NETLIFY_API_TOKEN` i `SITE_ID`. Po wdrożeniu:
+
+1. zaloguj się jako administrator;
+2. otwórz **Studio → Dashboard Builder**;
+3. kliknij tło dashboardu i ustaw globalne śledzenie, widoczność pasków oraz rejestrowanie otwarć;
+4. dla działów, harmonijek i materiałów ustaw `Dziedzicz`, `Włączone` albo `Wyłączone`, flagi agregacji i wagę;
+5. opublikuj dashboard — publikacja zapisze komentarze konfiguracyjne w Markdown i zsynchronizuje katalog postępu;
+6. dla lekcji otwórz Lesson Builder, ustaw tryb nawigacji oraz opcje poszczególnych kroków i opublikuj lekcję;
+7. otwórz materiał z konta testowego, a następnie sprawdź **Panel administratora → Postępy**.
+
+Brak nowych pól w starym dashboardzie lub lekcji używa bezpiecznych wartości domyślnych. Wyłączenie funkcji nie kasuje już zapisanych danych.
+
+### 34.2. Jak ustawiać dziedziczenie
+
+Kolejność to: ChemDisk → dział → sekcja/harmonijka → kolejna harmonijka → materiał. `INHERIT` przyjmuje ostatnie jawne `ON` lub `OFF`. Studio pokazuje obok kontrolki stan efektywny.
+
+Przykład: dział `ON`, sekcja `OFF`, prezentacja `INHERIT` oznacza efektywne `OFF`. Ustawienie tej prezentacji na `ON` włącza ją niezależnie. Widoczność paska jest osobnym ustawieniem: można ukryć pasek uczniowi i nadal liczyć postęp do raportu administratora.
+
+Flagi „Uwzględniaj” dotyczą osobno sekcji, działu i kursu. Waga określa wpływ materiału na średnią; materiał z wagą `3` wpływa trzy razy bardziej niż materiał z wagą `1`.
+
+### 34.3. Ustawienia lekcji
+
+W Lesson Builderze wybierz lekcję, aby ustawić nawigację swobodną lub sekwencyjną. Następnie wybierz krok i skonfiguruj:
+
+- stabilny `stepId`;
+- uwzględnianie w procencie lekcji;
+- osobną wymagalność do przejścia dalej;
+- warunek przejścia i opcjonalny minimalny wynik.
+
+Nie używaj numeru kroku jako ręcznego identyfikatora. `stepId` ma pozostać taki sam po zmianie kolejności. Krok dodatkowy może nie wpływać na procent, a nadal być wymagany — są to dwie różne opcje.
+
+W trybie sekwencyjnym serwer blokuje nieznane i zbyt odległe kroki. W raporcie użytkownika administrator może ustawić pomijanie według lekcji, dozwolone lub zabronione oraz ręcznie ustawić, odblokować albo zablokować krok. Warunki egzaminacyjne są zapisane w modelu, ale pełny Exam Engine nie należy do tego etapu.
+
+### 34.4. Czytanie raportu
+
+Lista użytkowników pokazuje konta Identity także wtedy, gdy nie mają jeszcze rekordu postępu. Można wyszukiwać po nazwie, e-mailu i ID, filtrować stan oraz sortować po aktywności, postępie, nazwie albo e-mailu.
+
+Po kliknięciu konta zobaczysz procent kursu i każdego kontenera oraz szczegóły materiałów. „Otwarto” znaczy wyłącznie, że użytkownik uruchomił materiał. Dla PDF procent oznacza najwyższą odwiedzoną stronę i nie jest dowodem przeczytania. Dla quizu wynik jest oddzielony od stopnia wypełnienia. Dla filmu wiarygodne są zakresy odtworzone przez kontrolowany player; samo ustawienie pozycji blisko końca nie zalicza filmu.
+
+Google Slides, Google Drive i Google Forms są obcymi iframe'ami. ChemDisk nie może samodzielnie odczytać ich wewnętrznej nawigacji. Zawsze zobaczysz otwarcie; dokładną pozycję lub wynik tylko dla odtwarzacza, który emituje zweryfikowane komunikaty integracyjne ChemDisk.
+
+### 34.5. Reset i ręczne zmiany
+
+W raporcie ucznia można oznaczyć materiał jako ukończony/nieukończony oraz zresetować materiał, sekcję, dział lub cały kurs. Reset wymaga potwierdzenia. Każda operacja administratora trafia do audit logu razem z administratorem, użytkownikiem, zakresem, poprzednią i nową wartością oraz czasem.
+
+Wyłączenie śledzenia nie jest resetem. Aby zachować historię, użyj przełącznika `OFF`; aby usunąć stan konkretnego użytkownika, użyj jawnej operacji resetu.
+
+### 34.6. Diagnostyka
+
+- brak zakładki **Postępy**: sprawdź świeżą rolę `admin` i ponowne logowanie;
+- `PROGRESS_STORAGE_UNAVAILABLE`: sprawdź `NETLIFY_API_TOKEN`, `SITE_ID` oraz dostęp tokenu do witryny;
+- materiał ma tylko „Otwarto”: sprawdź, czy jego player dostarcza zdarzenia pozycji oraz czy tracking jest efektywnie `ON`;
+- brak paska przy zapisanym procencie: sprawdź dziedziczone `showProgress`;
+- lekcja nie pozwala przejść dalej: sprawdź tryb sekwencyjny, warunek poprzedniego kroku oraz nadpisanie użytkownika;
+- nowy materiał nie wchodzi do procentu kursu: opublikuj ponownie Dashboard Builder, aby zsynchronizować katalog;
+- dane po `OFF` nadal są w raporcie: to prawidłowe — historia jest zachowywana.
+
+### 34.7. Kontrola przed produkcją
+
+Uruchom `npm test` i `npm run build`, a następnie przetestuj dwa różne konta. Próba wysłania `userId` do funkcji kursanta ma zostać odrzucona, zwykły użytkownik nie może wywołać endpointu administratora, a skok w lekcji sekwencyjnej ma zwrócić blokadę. Sprawdź też zapis otwarcia przy globalnym `OFF`, reset każdego zakresu, wagi, dziedziczenie i audit log.
+
+## 35. Bezpieczeństwo i ograniczenia
 
 - Prywatne repo chroni pliki przed przypadkowym publicznym odczytem, ale kursant z dostępem musi otrzymać treść lekcji, aby ją zobaczyć.
 - Maski PDF/YouTube utrudniają typowe kliknięcie lub pobranie, ale nie są DRM.
@@ -1730,7 +1795,7 @@ Nie kopiuj sekretów do zwykłego dokumentu udostępnionego wielu osobom.
 - Włącz 2FA we wszystkich usługach.
 - Nie publikuj danych osobowych kursantów w repozytoriach.
 
-## 35. Lista przed uruchomieniem produkcji
+## 36. Lista przed uruchomieniem produkcji
 
 - [ ] Mam dostęp do repozytorium aplikacji otrzymanego od właściciela.
 - [ ] Netlify publikuje `public` i uruchamia `netlify/functions`.
@@ -1748,10 +1813,13 @@ Nie kopiuj sekretów do zwykłego dokumentu udostępnionego wielu osobom.
 - [ ] Wszystkie moduły używane w dashboardzie zostały otwarte.
 - [ ] Wykonano test płatności i dostępu.
 - [ ] `npm test` i `npm run build` przechodzą.
+- [ ] Dashboard Builder opublikował katalog postępu, a ustawienia efektywne są zgodne z planem kursu.
+- [ ] Dwa konta testowe nie mogą odczytać swoich wzajemnych postępów.
+- [ ] Reset i ręczne oznaczenie ukończenia są widoczne w audit logu.
 - [ ] Produkcyjne sekrety są ograniczone do Production.
 - [ ] Utworzono kopię materiałów i zapisano procedurę odzyskania.
 
-## 36. Oficjalne źródła
+## 37. Oficjalne źródła
 
 - [Netlify — deploy z repozytorium](https://docs.netlify.com/start/quickstarts/deploy-from-repository/)
 - [Netlify — zmienne środowiskowe](https://docs.netlify.com/build/environment-variables/get-started/)

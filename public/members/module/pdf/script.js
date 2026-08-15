@@ -4,6 +4,7 @@
   const media = window.ChemMedia;
   const params = media.readParamsAndHide(window);
   const STORAGE_KEY = 'chemdisk.pdf.v3';
+  const progressApi = window.ChemProgress;
   const fromUrl = params.has('id');
   const requestedType = media.normalizeType(params.get('type'), ['1', '2', '3', '4', '5'], '1');
   const rawFromUrl = fromUrl ? params.get('id') : '';
@@ -28,6 +29,9 @@
       : saved && media.isDriveId(saved.id)
         ? { id: saved.id, url: '', type: savedType }
         : null;
+  const progressMaterialId = progressApi && state
+    ? progressApi.materialId('pdf', state.id || state.url, params.get('material') || '')
+    : '';
 
   const authState = await window.ChemAuth.ready;
   if (!authState?.authenticated || !authState.session?.ok) return;
@@ -159,6 +163,27 @@
     stage.classList.add('is-ready');
     retryTop.hidden = false;
     app.removeAttribute('aria-busy');
+    progressApi?.load().then(() => {
+      const saved = progressApi.record(progressMaterialId);
+      if (saved?.lastPosition) {
+        try { frame.contentWindow.postMessage({ type: 'chemdisk:resume', position: saved.lastPosition }, new URL(previewUrl).origin); } catch (_) {}
+      }
+    }).catch(() => {});
+  });
+  window.addEventListener('message', (event) => {
+    if (!progressApi || !progressMaterialId || event.source !== frame.contentWindow) return;
+    let expectedOrigin = '';
+    try { expectedOrigin = new URL(previewUrl).origin; } catch (_) {}
+    if (!expectedOrigin || event.origin !== expectedOrigin || event.data?.type !== 'chemdisk:pdf-page') return;
+    const page = Math.max(1, Math.floor(Number(event.data.page) || 1));
+    const total = Math.max(0, Math.floor(Number(event.data.totalPages) || 0));
+    progressApi.update({
+      materialId: progressMaterialId,
+      materialType: 'pdf',
+      action: 'pdf',
+      lastPosition: { page, totalPages: total },
+      details: { lastPage: page, highestVisitedPage: page, totalPages: total }
+    });
   });
   frame.addEventListener('error', () => showError(directEmbedMode
     ? 'Nie udało się osadzić podanego adresu HTTPS. Spróbuj trybu 5.'

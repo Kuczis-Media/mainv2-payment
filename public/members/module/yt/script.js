@@ -41,6 +41,10 @@
       };
 
       const videoId = extractVideoId(videoIdRaw);
+      const progressApi = window.ChemProgress;
+      const progressMaterialId = progressApi
+        ? progressApi.materialId('video', videoId || videoIdRaw, qs.get('material') || '')
+        : '';
 
       const shell = document.getElementById('playerShell');
       const controls = document.getElementById('controls');
@@ -65,7 +69,56 @@
       let muteSyncTimer = 0;
       let muteCommandVersion = 0;
       let lastAudibleVolume = 80;
+      let lastWatchSample = null;
+      let currentWatchRange = null;
+      let watchedRanges = [];
+      let lastProgressSync = 0;
       const CONTROLS_HIDE_DELAY = 3200;
+
+      const trackedRanges = () => [
+        ...watchedRanges,
+        ...(currentWatchRange ? [currentWatchRange] : [])
+      ];
+
+      const syncTrackedProgress = (immediate = false) => {
+        if (!progressApi || !progressMaterialId || !playerReady) return;
+        const duration = Number(player.getDuration()) || 0;
+        const position = Number(player.getCurrentTime()) || 0;
+        progressApi.update({
+          materialId: progressMaterialId,
+          materialType: 'video',
+          action: 'video',
+          lastPosition: { seconds: position, duration },
+          details: {
+            playbackStarted: true,
+            duration,
+            lastPlaybackPosition: position,
+            watchedRanges: trackedRanges()
+          }
+        }, { immediate, debounceMs: 2500 });
+        lastProgressSync = Date.now();
+      };
+
+      const collectWatchSample = (current) => {
+        if (!Number.isFinite(current) || current < 0) return;
+        if (lastWatchSample != null) {
+          const delta = current - lastWatchSample;
+          if (delta > 0 && delta <= 2.5) {
+            if (!currentWatchRange) currentWatchRange = [lastWatchSample, current];
+            else if (lastWatchSample <= currentWatchRange[1] + .5) currentWatchRange[1] = current;
+            else {
+              watchedRanges.push(currentWatchRange);
+              currentWatchRange = [lastWatchSample, current];
+            }
+          } else if (currentWatchRange) {
+            watchedRanges.push(currentWatchRange);
+            currentWatchRange = null;
+          }
+        }
+        lastWatchSample = current;
+        if (watchedRanges.length > 300) watchedRanges = watchedRanges.slice(-300);
+        if (Date.now() - lastProgressSync >= 5000) syncTrackedProgress(false);
+      };
 
       const resetControlsHideTimer = (keepVisible = false) => {
         shell.classList.remove('dimmed');
@@ -205,6 +258,7 @@
         if (!player || !playerReady || seeking) return;
         const duration = player.getDuration();
         const current = player.getCurrentTime();
+        if (player.getPlayerState() === YT.PlayerState.PLAYING) collectWatchSample(current);
         const ratio = duration ? (current / duration) : 0;
         progress.value = Math.max(0, Math.min(1000, Math.round(ratio * 1000)));
         updateRangeFill(progress, ratio * 100);
@@ -261,9 +315,18 @@
               updateMuteButton(desiredMuted);
               updateProgress();
               resetControlsHideTimer();
+              progressApi?.load().then(() => {
+                const saved = progressApi.record(progressMaterialId);
+                const savedPosition = Number(saved?.details?.lastPlaybackPosition);
+                if (Number.isFinite(savedPosition) && savedPosition > 0 && savedPosition < player.getDuration() - 2) {
+                  player.seekTo(savedPosition, true);
+                  updateProgress();
+                }
+              }).catch(() => {});
             },
             onStateChange: (event) => {
               if (event.data === YT.PlayerState.PLAYING) {
+                lastWatchSample = Number(player.getCurrentTime()) || 0;
                 updatePlayButton(true);
                 startSync();
                 resetControlsHideTimer();
@@ -271,12 +334,14 @@
                 updatePlayButton(false);
                 stopSync();
                 updateProgress();
+                syncTrackedProgress(true);
                 resetControlsHideTimer();
               } else if (event.data === YT.PlayerState.ENDED) {
                 updatePlayButton(false);
                 stopSync();
                 progress.value = 1000;
                 timeCurrent.textContent = formatTime(player.getDuration());
+                syncTrackedProgress(true);
                 resetControlsHideTimer();
               }
             },
@@ -349,6 +414,9 @@
         const duration = player.getDuration();
         const fraction = progress.valueAsNumber / 1000;
         player.seekTo(duration * fraction, true);
+        if (currentWatchRange) watchedRanges.push(currentWatchRange);
+        currentWatchRange = null;
+        lastWatchSample = duration * fraction;
         seeking = false;
         startSync();
         resetControlsHideTimer();
@@ -405,6 +473,7 @@
       });
 
       window.addEventListener('pagehide', () => {
+        syncTrackedProgress(true);
         window.clearTimeout(muteSyncTimer);
         window.clearTimeout(hideControlsTimer);
         cancelAnimationFrame(rafId);

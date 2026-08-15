@@ -2029,6 +2029,17 @@ button {
   gap: 15px;
 }
 
+.inspector-progress-settings {
+  display: grid;
+  gap: .8rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+}
+
+.inspector-progress-settings h3 { margin: 0; font-size: .92rem; }
+
 .inspector-form > header {
   padding-bottom: 14px;
   border-bottom: 1px solid var(--chem-line);

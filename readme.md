@@ -963,6 +963,73 @@ Każdy moduł ma stały element `<base>`, np.:
 
 Dzięki temu `style.css` i `script.js` są pobierane z katalogu modułu również wtedy, gdy Netlify obsłuży ładny adres bez `index.html`. Przy dodawaniu nowego modułu ustaw jego własny bezwzględny `<base>` i w dashboardzie linkuj najlepiej do ścieżki zakończonej `/`.
 
+## Centralny system postępu ucznia
+
+ChemDisk ma jeden wspólny system postępu dla dashboardu, lekcji, prezentacji, filmów, PDF-ów, quizów i pozostałych modułów. Nie jest to osobna aplikacja ani nowy framework: rozwiązanie rozszerza istniejące Netlify Functions, Netlify Identity, Netlify Blobs, Dashboard Builder i Lesson Builder.
+
+Źródłem prawdy jest store Netlify Blobs `chemdisk-progress`. `localStorage` i `sessionStorage` są wyłącznie krótkotrwałym cache'em interfejsu. Dokument kursanta jest zapisany pod kluczem `users/<base64url-user-id>.json`, konfiguracja pod `config/catalog.json`, a audyt pod prefiksem `audit/`. Zapisy dokumentów użytkownika i konfiguracji używają mocnego odczytu oraz warunkowych zapisów ETag z ponowieniem po konflikcie.
+
+Funkcja `progress` zawsze wyznacza użytkownika z aktualnie zweryfikowanej sesji Netlify Identity i wymaga aktywnego dostępu do kursu. Nie przyjmuje `userId` ani w treści, ani w query. Funkcja `admin-progress` wymaga świeżo zweryfikowanej roli `admin`. Te same role, czasowy dostęp Stripe i mechanizm jednej aktywnej sesji pozostają bez zmian.
+
+### Statusy i dane
+
+Status ma jedną z wartości: `not_started`, `opened`, `in_progress`, `completed`. Otwarcie nie kończy materiału. Wspólna część rekordu zawiera `materialId`, `materialType`, pierwsze i ostatnie otwarcie, `openCount`, procent, ostatnią pozycję, datę ukończenia i ostatnią aktywność. Pole `details` przechowuje dane typu materiału:
+
+- lekcja: bieżący i najwyższy krok, stabilne identyfikatory ukończonych kroków oraz liczba kroków śledzonych;
+- prezentacja: ostatni i najwyższy slajd, odwiedzone slajdy oraz łączna liczba slajdów;
+- film: czas trwania, ostatnia pozycja, rozpoczęcie odtwarzania i złączone zakresy rzeczywiście odtworzone;
+- PDF: ostatnia i najwyższa odwiedzona strona; jest to wyłącznie postęp nawigacyjny, nie dowód przeczytania;
+- quiz: osobne `progressPercent`, `scorePercent`, rozpoczęcie, ukończenie i liczba prób.
+
+### Konfiguracja w Dashboard Builderze
+
+W Studio wybierz Dashboard Builder, a następnie cały dashboard, dział, harmonijkę albo materiał. Sekcja „Postęp ucznia” udostępnia:
+
+- śledzenie `ON`, `OFF` lub `INHERIT`;
+- widoczność paska `ON`, `OFF` lub `INHERIT`;
+- osobne uwzględnianie w postępie sekcji, działu i całego kursu;
+- wagę, domyślnie `1`;
+- dla prezentacji sposób liczenia: najwyższy slajd, odwiedzone slajdy albo wymagane slajdy;
+- dla filmu próg ukończenia od 1 do 100%;
+- na poziomie całej platformy niezależne rejestrowanie otwarć.
+
+Studio pokazuje ustawienie efektywne. Dziedziczenie biegnie od całego kursu przez dział i kolejne harmonijki do materiału. `OFF` rodzica wyłącza element dziedziczący, ale jawne `ON` materiału jest nadpisaniem. Wyłączenie śledzenia lub paska nie usuwa historii.
+
+Konfiguracja i stabilne identyfikatory są zapisywane w niewidocznych, jednoliniowych komentarzach Markdown `chemdisk-progress`. Po opublikowaniu Dashboard Builder synchronizuje katalog postępu z funkcją administratora. Brak komentarza zachowuje bezpieczne ustawienia zgodne ze starym dashboardem.
+
+### Lekcje i blokada nawigacji
+
+Lesson Builder zapisuje stabilne `stepId`; zmiana kolejności nie usuwa zaliczeń przypisanych do istniejących kroków. Dla każdego kroku można niezależnie ustawić wpływ na procent, wymagalność do przejścia oraz warunek przejścia. Dostępne warunki obejmują kliknięcie „Dalej”, ukończenie poprzedniego kroku lub materiału, ukończenie quizu, poprawną odpowiedź, minimalny wynik oraz przygotowane warunki przyszłego egzaminu.
+
+Tryb lekcji może być swobodny albo sekwencyjny. Serwer odrzuca nieznany, zablokowany lub zbyt odległy krok, więc blokada nie opiera się wyłącznie na przyciskach w przeglądarce. Administrator może dla użytkownika wymusić `DEFAULT`, `ALLOW` lub `DENY`, a także ustawić, odblokować lub zablokować krok. Stary zapis sesyjny pozostaje cache'em awaryjnym, ale po załadowaniu pierwszeństwo ma stan serwera.
+
+### Paski i agregaty
+
+Dashboard wyświetla pasek całego kursu, działów, harmonijek i materiałów, o ile efektywne `showProgress` jest włączone. Procent kontenera jest średnią ważoną śledzonych liści, które są włączone do danego poziomu. Elementy wyłączone i materiały dodatkowe nie zwiększają mianownika. Gdy globalne śledzenie jest wyłączone, historia pozostaje w Blobs, procenty nie są aktualizowane, a paski są ukryte; rejestrowanie samych otwarć może nadal działać.
+
+### Panel administratora
+
+Zakładka **Postępy** zawiera ustawienia globalne, wyszukiwanie, sortowanie i filtry użytkowników, raport pojedynczego kursanta, agregaty globalne oraz audit log. Raport pokazuje otwarcia, procent, pozycję właściwą dla typu materiału, pierwsze otwarcie i ostatnią aktywność. Konta Identity bez aktywności są dołączane z postępem 0%.
+
+Administrator może oznaczyć materiał jako ukończony lub nieukończony, zmienić pomijanie kroków, ustawić/odblokować/zablokować krok i z potwierdzeniem zresetować materiał, sekcję, dział albo cały kurs. Każda taka operacja zapisuje `adminId`, `targetUserId`, akcję, materiał, poprzednią i nową wartość oraz czas.
+
+Raport globalny obejmuje średni postęp, rozpoczęcia, ukończenia, rozkład kwartylowy, materiały najczęściej nieotwierane i porzucane oraz najczęstszy punkt zatrzymania. Endpointy listujące dane są ograniczone i stronicowane; dokument użytkownika jest pobierany bezpośrednio po kluczu, a nie przez skanowanie store.
+
+### Integracje odtwarzaczy i iframe
+
+Moduł `yt` liczy zakresy odtwarzane w normalnym tempie i nie uznaje samego przewinięcia do końca. Aktualizacje są grupowane i wysyłane co kilka sekund zamiast przy każdym `timeupdate`.
+
+Google Slides, Google Drive PDF i Google Forms działają w obcych iframe'ach, których zawartości przeglądarka nie pozwala ChemDisk odczytać. Dla nich otwarcie jest zawsze rejestrowane, natomiast dokładny slajd, strona lub wynik pojawia się tylko wtedy, gdy użyty, kontrolowany odtwarzacz wysyła odpowiednio `chemdisk:slide`, `chemdisk:pdf-page`, `chemdisk:video` albo `chemdisk:quiz`. ChemDisk akceptuje komunikat wyłącznie z bieżącego iframe i jego oczekiwanego originu. Nie należy przedstawiać braku takich eventów jako potwierdzenia obejrzenia lub przeczytania materiału.
+
+### Endpointy
+
+- `GET /.netlify/functions/progress` — własny dokument, katalog i agregaty;
+- `POST /.netlify/functions/progress` — własne zdarzenie `open`, `progress`, `complete`, `lesson_step`, `presentation`, `video`, `pdf` lub `quiz`;
+- `DELETE /.netlify/functions/progress` — reset własnego materiału;
+- `GET|PUT|DELETE /.netlify/functions/admin-progress` — raporty, konfiguracja, ręczne operacje, reset i audyt administratora.
+
+Nie są potrzebne nowe zmienne środowiskowe. System używa istniejących `NETLIFY_API_TOKEN` i `SITE_ID`, które są już wymagane przez pozostałe store'y Blobs.
+
 ## Bezpieczeństwo i ograniczenia materiałów
 
 - Role są odczytywane wyłącznie z `app_metadata`; pola profilu nie mogą przyznać dostępu.
@@ -1018,4 +1085,11 @@ Przed publikacją wykonaj też krótki test ręczny:
 25. usunięcie testowego pliku wymaga potwierdzenia i tworzy commit widoczny w historii repo;
 26. zakładka **Materiały** pokazuje poprawne repo i liczby plików, wyszukiwarka Studio widzi lekcje i prompty, a odtwarzacz otwiera lekcję z repo;
 27. po zmianie pliku w repo materiałów nowa wersja jest widoczna bez deployu aplikacji po wygaśnięciu 20-sekundowego cache’u;
-28. linki Google i YouTube działają na docelowej domenie i przy docelowych ustawieniach udostępniania.
+28. linki Google i YouTube działają na docelowej domenie i przy docelowych ustawieniach udostępniania;
+29. zwykły użytkownik nie może podać cudzego `userId`, odczytać cudzego postępu ani wywołać `admin-progress`;
+30. otwarcie materiału daje status „Otwarto”, a nie „Ukończono”;
+31. ustawienia `ON/OFF/INHERIT`, osobne flagi agregacji i wagi dają oczekiwany procent działu i kursu;
+32. wyłączenie globalnego postępu zachowuje historię, a osobny przełącznik otwarć działa zgodnie z ustawieniem;
+33. lekcja sekwencyjna odrzuca skok do zablokowanego kroku, natomiast nadpisanie użytkownika działa;
+34. film YT nie zalicza przewiniętego fragmentu, PDF jest opisany jako nawigacyjny, a quiz pokazuje osobno postęp i wynik;
+35. reset i ręczna zmiana administratora pojawiają się w audit logu.

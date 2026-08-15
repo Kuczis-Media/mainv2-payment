@@ -3,6 +3,10 @@
 
     const initialParams = new URLSearchParams(location.search);
     const initialFromUrl = (initialParams.get('id') || '').trim();
+    const progressApi = window.ChemProgress;
+    const progressMaterialId = progressApi
+      ? progressApi.materialId('quiz', initialFromUrl, initialParams.get('material') || '')
+      : '';
     if (initialFromUrl) stripQuery();
 
     const authState = await window.ChemAuth.ready;
@@ -100,6 +104,24 @@
       stage.classList.add('ready');
       stage.removeAttribute('aria-busy');
       loader.hidden = true;
+    });
+    window.addEventListener('message', (event) => {
+      if (!progressApi || !progressMaterialId || event.source !== frame.contentWindow) return;
+      let expectedOrigin = '';
+      try { expectedOrigin = new URL(source).origin; } catch (_) {}
+      if (!expectedOrigin || event.origin !== expectedOrigin || event.data?.type !== 'chemdisk:quiz') return;
+      progressApi.update({
+        materialId: progressMaterialId,
+        materialType: 'quiz',
+        action: 'quiz',
+        progressPercent: Number(event.data.progressPercent) || 0,
+        details: {
+          started: event.data.started === true,
+          completed: event.data.completed === true,
+          scorePercent: event.data.scorePercent,
+          attempts: event.data.attempts
+        }
+      }, { immediate: event.data.completed === true });
     });
     retry.addEventListener('click', openForm);
 

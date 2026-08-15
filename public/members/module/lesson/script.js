@@ -5,6 +5,7 @@
   if (!authState?.authenticated || !authState.session?.ok) return;
 
   const parser = window.ChemLesson;
+  const progressApi = window.ChemProgress;
   const elements = {
     app: document.getElementById('app'),
     lessonTitle: document.getElementById('lesson-title'),
@@ -51,6 +52,7 @@
     index: 0,
     maxReached: 0,
     solved: new Set(),
+    completedStepIds: new Set(),
     completed: false,
     sequential: true,
     attempts: new Map(),
@@ -141,35 +143,91 @@
     return `chemdisk.lesson.v1:${state.repositoryId || 'default'}:${state.filename}`;
   }
 
-  function loadProgress() {
-    try {
-      const saved = JSON.parse(sessionStorage.getItem(progressKey()) || 'null');
-      if (!saved || !state.lesson || saved.signature !== state.lesson.signature) return;
-      const lastIndex = state.lesson.slides.length - 1;
-      state.index = Math.min(lastIndex, Math.max(0, Number(saved.index) || 0));
-      state.maxReached = Math.min(lastIndex, Math.max(state.index, Number(saved.maxReached) || 0));
-      state.solved = new Set(
-        Array.isArray(saved.solved)
-          ? saved.solved.filter((index) => Number.isSafeInteger(index) && index >= 0 && index <= lastIndex)
-          : []
-      );
-      state.completed = Boolean(saved.completed);
-      state.sequential = saved.sequential !== false;
-    } catch {}
+  function lessonMaterialId() {
+    if (state.materialId) return state.materialId;
+    const params = new URLSearchParams(window.location.search);
+    state.materialId = progressApi
+      ? progressApi.materialId('lesson', `${state.repositoryId || 'default'}:${state.filename}`, params.get('material') || '')
+      : '';
+    return state.materialId;
   }
 
-  function saveProgress() {
-    if (!state.lesson) return;
+  async function loadProgress() {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(progressKey()) || 'null');
+      if (saved && state.lesson && saved.signature === state.lesson.signature) {
+        const lastIndex = state.lesson.slides.length - 1;
+        state.index = Math.min(lastIndex, Math.max(0, Number(saved.index) || 0));
+        state.maxReached = Math.min(lastIndex, Math.max(state.index, Number(saved.maxReached) || 0));
+        state.solved = new Set(
+          Array.isArray(saved.solved)
+            ? saved.solved.filter((index) => Number.isSafeInteger(index) && index >= 0 && index <= lastIndex)
+            : []
+        );
+        state.completedStepIds = new Set(Array.isArray(saved.completedStepIds) ? saved.completedStepIds : []);
+        state.completed = Boolean(saved.completed);
+        state.sequential = saved.sequential !== false;
+      }
+    } catch {}
+    state.sequential = state.lesson?.navigation !== 'free';
+    if (!progressApi) return;
+    try {
+      await progressApi.load();
+      const record = progressApi.record(lessonMaterialId());
+      const details = record?.details || {};
+      const currentIndex = state.lesson.slides.findIndex((slide) => slide.id === details.currentStepId);
+      const highestIndex = state.lesson.slides.findIndex((slide) => slide.id === details.highestReachedStepId);
+      if (currentIndex >= 0) state.index = currentIndex;
+      if (highestIndex >= 0) state.maxReached = Math.max(state.index, highestIndex);
+      state.completedStepIds = new Set(Array.isArray(details.completedStepIds) ? details.completedStepIds : []);
+      state.solved = new Set(state.lesson.slides
+        .map((slide, index) => slide.task && state.completedStepIds.has(slide.id) ? index : -1)
+        .filter((index) => index >= 0));
+      state.completed = record?.status === 'completed';
+      const skipMode = progressApi.state?.preferences?.skipMode || 'DEFAULT';
+      if (skipMode === 'ALLOW') state.sequential = false;
+      if (skipMode === 'DENY') state.sequential = true;
+    } catch (_) {
+      // sessionStorage pozostaje wyłącznie awaryjnym cache'em interfejsu.
+    }
+  }
+
+  function trackedSlides() {
+    return state.lesson.slides.filter((slide) => slide.includeInLesson !== 'OFF');
+  }
+
+  function saveProgress(immediate = false) {
+    if (!state.lesson) return Promise.resolve(null);
     try {
       sessionStorage.setItem(progressKey(), JSON.stringify({
         index: state.index,
         maxReached: state.maxReached,
         solved: [...state.solved],
+        completedStepIds: [...state.completedStepIds],
         completed: state.completed,
         sequential: state.sequential,
         signature: state.lesson.signature
       }));
     } catch {}
+    if (progressApi && lessonMaterialId()) {
+      const slide = state.lesson.slides[state.index];
+      const tracked = trackedSlides();
+      const completedTrackedSteps = tracked.filter((step) => state.completedStepIds.has(step.id)).length;
+      return progressApi.update({
+        materialId: lessonMaterialId(),
+        materialType: 'lesson',
+        action: state.completed ? 'complete' : 'lesson_step',
+        lastPosition: { stepId: slide?.id || '', stepIndex: state.index },
+        details: {
+          currentStepId: slide?.id || '',
+          currentStepIndex: state.index,
+          completedStepIds: [...state.completedStepIds],
+          completedTrackedSteps,
+          totalTrackedSteps: tracked.length
+        }
+      }, { immediate, debounceMs: 1200 });
+    }
+    return Promise.resolve(null);
   }
 
   function initializeTheme() {
@@ -253,7 +311,7 @@
       state.completed = false;
       state.sequential = true;
       state.attempts = new Map();
-      loadProgress();
+      await loadProgress();
       updateSequenceControl();
 
       document.title = `${state.lesson.title} — ChemDisk`;
@@ -454,8 +512,9 @@
 
   function updateSequenceControl() {
     elements.sequenceToggle.checked = state.sequential;
+    elements.sequenceToggle.disabled = !state.isAdmin;
     elements.sequenceToggleHint.textContent = state.sequential
-      ? 'Wyłącz, aby otworzyć wszystkie kroki.'
+      ? (state.isAdmin ? 'Tryb ustawiony w Lesson Builderze; administrator może go podglądowo zmienić.' : 'Kroki są odblokowywane po kolei.')
       : 'Wszystkie kroki są dostępne.';
     elements.outlineTipCopy.textContent = state.sequential
       ? 'Zadanie trzeba rozwiązać, aby odblokować kolejny krok.'
@@ -485,7 +544,9 @@
   function renderSlide() {
     const slide = state.lesson.slides[state.index];
     const isSolved = state.solved.has(state.index);
-    const progress = ((state.index + 1) / state.lesson.slides.length) * 100;
+    const tracked = trackedSlides();
+    const completedTracked = tracked.filter((step) => state.completedStepIds.has(step.id)).length;
+    const progress = tracked.length ? (completedTracked / tracked.length) * 100 : 0;
 
     elements.error.hidden = true;
     elements.completion.hidden = true;
@@ -791,6 +852,7 @@
 
     const completeTask = () => {
       state.solved.add(state.index);
+      state.completedStepIds.add(state.lesson.slides[state.index].id);
       feedback.dataset.state = 'success';
       feedback.textContent = task.success;
       submit.disabled = true;
@@ -803,7 +865,7 @@
       elements.slideStatus.textContent = 'Zadanie rozwiązane';
       elements.slideStatus.dataset.state = 'complete';
       updateOutline();
-      saveProgress();
+      saveProgress(true);
       elements.next.focus();
     };
 
@@ -859,15 +921,17 @@
     elements.taskHost.appendChild(form);
   }
 
-  function goNext() {
+  async function goNext() {
     const slide = state.lesson.slides[state.index];
     if (state.sequential && slide.task && !state.solved.has(state.index)) return;
+    state.completedStepIds.add(slide.id);
     if (state.index === state.lesson.slides.length - 1) {
       state.completed = true;
-      saveProgress();
+      await saveProgress(true);
       showCompletion();
       return;
     }
+    await saveProgress(true);
     state.index += 1;
     state.maxReached = Math.max(state.maxReached, state.index);
     renderSlide();
@@ -881,6 +945,9 @@
 
   function showCompletion() {
     state.completed = true;
+    state.lesson.slides.forEach((slide) => {
+      if (!slide.task || state.solved.has(state.lesson.slides.indexOf(slide))) state.completedStepIds.add(slide.id);
+    });
     const unresolvedTasks = state.lesson.slides.filter(
       (slide, index) => slide.task && !state.solved.has(index)
     ).length;
@@ -894,7 +961,7 @@
       ? `Przejrzano wszystkie kroki. Pominięte zadania: ${unresolvedTasks}. Możesz powtórzyć lekcję i wrócić do nich później.`
       : 'Wszystkie kroki zostały przejrzane, a zadania rozwiązane poprawnie.';
     updateOutline();
-    saveProgress();
+    saveProgress(true);
     elements.restart.focus();
   }
 
@@ -903,9 +970,11 @@
     state.index = 0;
     state.maxReached = 0;
     state.solved = new Set();
+    state.completedStepIds = new Set();
     state.completed = false;
     state.sequential = true;
     state.attempts = new Map();
+    if (progressApi && lessonMaterialId()) progressApi.reset(lessonMaterialId()).catch(() => {});
     updateSequenceControl();
     renderSlide();
   }

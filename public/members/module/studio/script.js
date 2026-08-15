@@ -8,6 +8,7 @@
   const THEME_KEY = 'chem.theme';
   const HISTORY_LIMIT = 60;
   const MAX_IMPORT_BYTES = 512 * 1024;
+  const ADMIN_PROGRESS_URL = '/.netlify/functions/admin-progress';
   const dashboardModelApi = window.ChemDashboardStudioModel;
   const lessonModelApi = window.ChemLessonStudioModel;
   const promptModelApi = window.ChemPromptStudioModel;
@@ -1017,21 +1018,77 @@
     return footer;
   }
 
+  function effectiveDashboardProgress(found, key) {
+    let current = found && found.node;
+    while (current) {
+      const value = current.progress && current.progress[key];
+      if (value === 'ON' || value === 'OFF') return value;
+      const parent = current.uid === state.dashboard.model.uid
+        ? null
+        : dashboardModelApi.findNode(state.dashboard.model, current.uid)?.parent;
+      current = parent;
+    }
+    return 'ON';
+  }
+
+  function dashboardProgressFields(form, found) {
+    const node = found.node;
+    const progress = node.progress || {};
+    const isRoot = node.kind === 'dashboard';
+    const group = create('section', 'inspector-progress-settings');
+    group.append(create('h3', '', 'Postęp ucznia'));
+    group.append(field(
+      'Śledzenie postępu',
+      selectInput(progress.tracking || (isRoot ? 'ON' : 'INHERIT'), 'progressTracking', [
+        ...(!isRoot ? [{ value: 'INHERIT', label: 'Dziedzicz' }] : []),
+        { value: 'ON', label: 'Włączone' },
+        { value: 'OFF', label: 'Wyłączone' }
+      ]),
+      `Efektywnie: ${effectiveDashboardProgress(found, 'tracking') === 'ON' ? 'włączone' : 'wyłączone'}. Wyłączenie nie usuwa historii.`
+    ));
+    group.append(field(
+      'Pokazuj pasek uczniowi',
+      selectInput(progress.showProgress || (isRoot ? 'ON' : 'INHERIT'), 'progressShowProgress', [
+        ...(!isRoot ? [{ value: 'INHERIT', label: 'Dziedzicz' }] : []),
+        { value: 'ON', label: 'Tak' },
+        { value: 'OFF', label: 'Nie' }
+      ]),
+      `Efektywnie: ${effectiveDashboardProgress(found, 'showProgress') === 'ON' ? 'widoczny' : 'ukryty'}. Ukrycie nie wyłącza raportowania.`
+    ));
+    if (isRoot) {
+      const opens = create('label', 'check-field');
+      const input = textInput('', 'progressRecordOpens', { type: 'checkbox' });
+      input.checked = node.recordOpens !== false;
+      opens.append(input, create('span', '', 'Rejestruj otwarcia materiałów'));
+      group.append(opens);
+      form.append(group);
+      return;
+    }
+    const toggles = [
+      ['progressIncludeInSection', 'Uwzględniaj w postępie sekcji', progress.includeInSection !== false],
+      ['progressIncludeInDepartment', 'Uwzględniaj w postępie działu', progress.includeInDepartment !== false],
+      ['progressIncludeInCourse', 'Uwzględniaj w postępie całego kursu', progress.includeInCourse !== false]
+    ];
+    toggles.forEach(([fieldName, label, checked]) => {
+      const control = create('label', 'check-field');
+      const input = textInput('', fieldName, { type: 'checkbox' });
+      input.checked = checked;
+      control.append(input, create('span', '', label));
+      group.append(control);
+    });
+    group.append(field(
+      'Waga',
+      textInput(String(progress.weight || 1), 'progressWeight', { type: 'number' }),
+      'Domyślna waga to 1. Większa wartość zwiększa wpływ elementu na agregaty.'
+    ));
+    form.append(group);
+  }
+
   function renderDashboardInspector() {
     elements.dashboardInspector.replaceChildren();
     const found = state.dashboard.selectedUid
       ? dashboardModelApi.findNode(state.dashboard.model, state.dashboard.selectedUid)
-      : null;
-    if (!found) {
-      const empty = create('div', 'inspector-empty');
-      empty.append(
-        create('span', '', '◎'),
-        create('strong', '', 'Zaznacz klocek'),
-        create('p', '', 'Tutaj zmienisz jego treść, parametry modułu i ochronę.')
-      );
-      elements.dashboardInspector.append(empty);
-      return;
-    }
+      : { node: state.dashboard.model, parent: null, container: null, index: -1 };
     const node = found.node;
     if (node.kind === 'module' && ['lesson', 'chat'].includes(node.module)) {
       syncInspectorRepository(node.repositoryId);
@@ -1046,7 +1103,9 @@
         : 'Zmień nazwę i treść zaznaczonego klocka.'
     ));
 
-    if (node.kind === 'section' || node.kind === 'group') {
+    if (node.kind === 'dashboard') {
+      form.append(create('p', 'field-help', 'Ustawienia całej platformy. Wyłączenie postępu nie usuwa wcześniejszej historii.'));
+    } else if (node.kind === 'section' || node.kind === 'group') {
       form.append(field(
         node.kind === 'section' ? 'Nazwa działu' : 'Tytuł harmonijki',
         textInput(node.title, 'title', { maxLength: 120 })
@@ -1155,9 +1214,29 @@
           'Dozwolony jest pełny adres HTTPS albo wewnętrzna ścieżka zaczynająca się od /.'
         ));
       }
+      if (node.module === 'slides') {
+        form.append(field(
+          'Sposób liczenia prezentacji',
+          selectInput(node.presentationMode || 'highest', 'presentationMode', [
+            { value: 'highest', label: 'Najwyższy osiągnięty slajd' },
+            { value: 'visited', label: 'Odwiedzone slajdy' },
+            { value: 'required', label: 'Wszystkie wymagane slajdy' }
+          ]),
+          'Dokładne dane wymagają playera przekazującego zdarzenia slajdów; osadzony Google Slides raportuje samo otwarcie.'
+        ));
+      }
+      if (node.module === 'film' || node.module === 'yt') {
+        form.append(field(
+          'Próg ukończenia filmu (%)',
+          textInput(String(node.videoCompletionThreshold || 90), 'videoCompletionThreshold', { type: 'number' }),
+          'Zakres 1–100%. Przewinięcie bez odtworzenia nie zwiększa rzeczywiście obejrzanego zakresu.'
+        ));
+      }
     }
 
-    form.append(inspectorActions());
+    if (['dashboard', 'section', 'group', 'module'].includes(node.kind)) dashboardProgressFields(form, found);
+
+    if (node.kind !== 'dashboard') form.append(inspectorActions());
     elements.dashboardInspector.append(form);
   }
 
@@ -1566,6 +1645,23 @@
         state.dashboard.model,
         { ensureRequiredHelp: true }
       ).trim();
+      const progressResponse = await fetch(ADMIN_PROGRESS_URL, {
+        method: 'PUT',
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action: 'catalog',
+          catalog: dashboardModelApi.toProgressCatalog(state.dashboard.model)
+        })
+      });
+      if (!progressResponse.ok) {
+        const progressError = await responseJson(progressResponse);
+        throw new Error(`Dashboard zapisano, ale konfiguracja postępu wymaga ponowienia (${progressError?.error || progressResponse.status}).`);
+      }
       scheduleDraftSave('dashboard');
       renderDashboard();
       toast('Dashboard opublikowany', 'Nowy układ jest już aktywny dla kursantów.');
@@ -2810,8 +2906,55 @@
     if (found.kind === 'slide') {
       form.append(inspectorHeader('▤', 'Ustawienia slajdu', 'Nazwa pochodzi z pierwszego nagłówka tego slajdu.'));
       form.append(field(
+        'Nawigacja całej lekcji',
+        lessonSelect(state.lesson.model.navigation || 'sequential', 'lessonNavigation', [
+          { value: 'sequential', label: 'Sekwencyjna — kroki po kolei' },
+          { value: 'free', label: 'Swobodna — można pomijać' }
+        ]),
+        'To ustawienie jest wspólne dla lekcji. Indywidualny wyjątek ucznia ustawia administrator w raporcie postępów.'
+      ));
+      form.append(field(
         'Nazwa slajdu',
         lessonInput(slideTitle(found.node, found.index), 'slideTitle', { maxLength: 140 })
+      ));
+      form.append(field(
+        'Uwzględniaj krok w procencie lekcji',
+        lessonSelect(found.node.includeInLesson || 'INHERIT', 'includeInLesson', [
+          { value: 'INHERIT', label: 'Dziedzicz (domyślnie: tak)' },
+          { value: 'ON', label: 'Tak' },
+          { value: 'OFF', label: 'Nie — materiał dodatkowy' }
+        ]),
+        'Wpływ na procent i wymóg przejścia dalej są niezależnymi ustawieniami.'
+      ));
+      const required = create('label', 'check-field');
+      required.append(
+        lessonInput('', 'requiredToAdvance', { type: 'checkbox', checked: found.node.requiredToAdvance !== false }),
+        create('span', '', 'Krok wymagany do przejścia dalej')
+      );
+      form.append(required);
+      form.append(field(
+        'Warunek przejścia',
+        lessonSelect(found.node.condition?.type || 'next_click', 'conditionType', [
+          { value: 'next_click', label: 'Kliknięcie Dalej' },
+          { value: 'previous_completed', label: 'Ukończenie poprzedniego kroku' },
+          { value: 'material_completed', label: 'Obejrzenie / ukończenie materiału' },
+          { value: 'quiz_completed', label: 'Ukończenie quizu' },
+          { value: 'correct_answer', label: 'Poprawna odpowiedź' },
+          { value: 'exam_completed', label: 'Ukończenie egzaminu (przyszłe)' },
+          { value: 'exam_passed', label: 'Zaliczenie egzaminu (przyszłe)' },
+          { value: 'minimum_score', label: 'Minimalny wynik' }
+        ])
+      ));
+      if (found.node.condition?.type === 'minimum_score') {
+        form.append(field(
+          'Minimalny wynik (%)',
+          lessonInput(String(found.node.condition.minimumScore || 0), 'minimumScore', { type: 'number', min: 0, max: 100 })
+        ));
+      }
+      form.append(field(
+        'Stabilny stepId',
+        lessonInput(found.node.id, 'stepId', { maxLength: 128 }),
+        'Identyfikator pozostaje z krokiem po zmianie kolejności. Zmieniaj go tylko przed publikacją.'
       ));
       form.append(field(
         'Przejście przy otwieraniu slajdu',
@@ -4058,13 +4201,38 @@
   function handleDashboardInspectorInput(event) {
     const target = event.target.closest('[data-dashboard-field]');
     if (!target || target.readOnly) return;
-    const found = dashboardModelApi.findNode(state.dashboard.model, state.dashboard.selectedUid);
+    const found = state.dashboard.selectedUid
+      ? dashboardModelApi.findNode(state.dashboard.model, state.dashboard.selectedUid)
+      : { node: state.dashboard.model, parent: null, container: null, index: -1 };
     if (!found) return;
     beginEdit('dashboard');
     const fieldName = target.dataset.dashboardField;
     let value = target.type === 'checkbox' ? target.checked : target.value;
+    if (fieldName.startsWith('progress')) {
+      if (fieldName === 'progressRecordOpens') {
+        found.node.recordOpens = Boolean(value);
+        found.node.progressConfigured = true;
+      } else {
+      found.node.progress = found.node.progress || {};
+      const mapping = {
+        progressTracking: 'tracking',
+        progressShowProgress: 'showProgress',
+        progressIncludeInSection: 'includeInSection',
+        progressIncludeInDepartment: 'includeInDepartment',
+        progressIncludeInCourse: 'includeInCourse',
+        progressWeight: 'weight'
+      };
+      const key = mapping[fieldName];
+      if (key === 'weight') value = Math.max(.01, Math.min(10000, Number(value) || 1));
+      found.node.progress[key] = value;
+      found.node.progressConfigured = true;
+      }
+    } else {
+    if (fieldName === 'videoCompletionThreshold') value = Math.max(1, Math.min(100, Number(value) || 90));
+    if (['presentationMode', 'videoCompletionThreshold'].includes(fieldName)) found.node.progressConfigured = true;
     if (fieldName === 'point') value = String(Math.max(0, Number(value) || 0));
     found.node[fieldName] = value;
+    }
     if (fieldName === 'repositoryId') {
       const fallback = state.contentLibrary.repositories.find((repository) => repository.default)
         || state.contentLibrary.repositories[0];
@@ -4178,10 +4346,34 @@
     const checked = target.type === 'checkbox' ? target.checked : null;
     const raw = target.type === 'checkbox' ? checked : target.value;
 
-    if (found.kind === 'slide' && fieldName === 'slideTitle') {
+    if (found.kind === 'slide' && fieldName === 'lessonNavigation') {
+      state.lesson.model.navigation = raw === 'free' ? 'free' : 'sequential';
+      state.lesson.model.navigationConfigured = true;
+    } else if (found.kind === 'slide' && fieldName === 'slideTitle') {
       setSlideTitle(found.node, raw);
     } else if (found.kind === 'slide' && fieldName === 'transition') {
       found.node.transition = lessonModelApi.SLIDE_TRANSITIONS.includes(raw) ? raw : 'fade';
+    } else if (found.kind === 'slide' && fieldName === 'stepId') {
+      if (/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(raw)) {
+        found.node.id = raw;
+        state.lesson.selectedId = raw;
+      }
+      found.node.progressConfigured = true;
+    } else if (found.kind === 'slide' && fieldName === 'includeInLesson') {
+      found.node.includeInLesson = ['ON', 'OFF', 'INHERIT'].includes(raw) ? raw : 'INHERIT';
+      found.node.progressConfigured = true;
+    } else if (found.kind === 'slide' && fieldName === 'requiredToAdvance') {
+      found.node.requiredToAdvance = Boolean(raw);
+      found.node.progressConfigured = true;
+    } else if (found.kind === 'slide' && fieldName === 'conditionType') {
+      found.node.condition = { ...(found.node.condition || {}), type: raw };
+      found.node.progressConfigured = true;
+    } else if (found.kind === 'slide' && fieldName === 'minimumScore') {
+      found.node.condition = {
+        ...(found.node.condition || {}),
+        minimumScore: Math.max(0, Math.min(100, Number(raw) || 0))
+      };
+      found.node.progressConfigured = true;
     } else if (found.kind === 'task') {
       const task = found.node;
       if (fieldName === 'type') {
@@ -4763,6 +4955,8 @@
     state.lesson.saving = true;
     updateRepositoryButtons();
     try {
+      validation.lesson.navigationConfigured = true;
+      validation.lesson.slides.forEach((slide) => { slide.progressConfigured = true; });
       const result = await window.ChemContentLibrary.save('lesson', {
         filename,
         content: lessonModelApi.serializeLesson(validation.lesson),
@@ -4772,6 +4966,35 @@
       state.lesson.remoteFilename = filename;
       state.lesson.remoteSha = result.sha;
       state.lesson.remoteRepositoryId = result.repositoryId || repositoryId;
+      state.lesson.model = lessonModelApi.createLesson(validation.lesson);
+      const progressToken = await adminToken();
+      const manifestResponse = await fetch(ADMIN_PROGRESS_URL, {
+        method: 'PUT',
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${progressToken}`
+        },
+        body: JSON.stringify({
+          action: 'lesson_manifest',
+          filename,
+          manifest: {
+            navigation: validation.lesson.navigation,
+            steps: validation.lesson.slides.map((slide, index) => ({
+              id: slide.id,
+              title: slideTitle(slide, index),
+              includeInLesson: slide.includeInLesson !== 'OFF',
+              requiredToAdvance: slide.requiredToAdvance !== false,
+              condition: slide.condition
+            }))
+          }
+        })
+      });
+      if (!manifestResponse.ok) {
+        const progressError = await responseJson(manifestResponse);
+        throw new Error(`Lekcja została zapisana, ale manifest postępu wymaga ponowienia (${progressError?.error || manifestResponse.status}).`);
+      }
       toast(
         result.created ? 'Lekcja dodana do GitHuba' : 'Lekcja zaktualizowana',
         result.commitSha ? `Commit ${result.commitSha.slice(0, 7)} został zapisany.` : filename
@@ -5365,7 +5588,7 @@
       handleLessonInspectorInput(event);
       finishEdit();
       if (
-        ['type', 'mode', 'arrow', 'variant', 'repositoryId', 'promptFile', 'options', 'optionItem', 'gapLabel', 'gapSegment', 'useColor']
+        ['type', 'mode', 'arrow', 'variant', 'repositoryId', 'promptFile', 'options', 'optionItem', 'gapLabel', 'gapSegment', 'useColor', 'conditionType']
           .includes(event.target.dataset.lessonField)
       ) {
         renderLessonInspector();

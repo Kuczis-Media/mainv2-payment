@@ -4,6 +4,7 @@
   const media = window.ChemMedia;
   const params = media.readParamsAndHide(window);
   const STORAGE_KEY = 'chemdisk.film.v3';
+  const progressApi = window.ChemProgress;
   const fromUrl = params.has('id');
   const rawInput = fromUrl ? String(params.get('id') || '').trim() : '';
   const explicitType = params.has('type');
@@ -24,6 +25,9 @@
   const state = idFromUrl
     ? { id: idFromUrl, type: requestedType }
     : saved && savedIdIsValid ? { id: saved.id, type: savedType } : null;
+  const progressMaterialId = progressApi && state
+    ? progressApi.materialId('video', state.id, params.get('material') || '')
+    : '';
 
   const authState = await window.ChemAuth.ready;
   if (!authState?.authenticated || !authState.session?.ok) return;
@@ -146,6 +150,23 @@
     app.removeAttribute('aria-busy');
   });
   frame.addEventListener('error', () => showError('Nie udało się połączyć z dostawcą filmu.'));
+  window.addEventListener('message', (event) => {
+    if (!progressApi || !progressMaterialId || event.source !== frame.contentWindow) return;
+    let expectedOrigin = '';
+    try { expectedOrigin = new URL(sourceUrl).origin; } catch (_) {}
+    if (!expectedOrigin || event.origin !== expectedOrigin || event.data?.type !== 'chemdisk:video') return;
+    progressApi.update({
+      materialId: progressMaterialId,
+      materialType: 'video',
+      action: 'video',
+      details: {
+        playbackStarted: event.data.playbackStarted === true,
+        duration: event.data.duration,
+        lastPlaybackPosition: event.data.position,
+        watchedRanges: event.data.watchedRanges
+      }
+    });
+  });
 
   document.getElementById('keep-waiting').addEventListener('click', () => {
     slow.hidden = true;

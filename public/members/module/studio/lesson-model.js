@@ -484,6 +484,29 @@
     };
   }
 
+  function normalizeStepCondition(input) {
+    const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+    const supported = [
+      'next_click', 'previous_completed', 'material_completed', 'quiz_completed', 'correct_answer',
+      'exam_completed', 'exam_passed', 'minimum_score'
+    ];
+    return {
+      type: supported.includes(source.type) ? source.type : 'next_click',
+      materialId: oneLine(source.materialId).slice(0, 128),
+      minimumScore: Math.max(0, Math.min(100, Number(source.minimumScore) || 0))
+    };
+  }
+
+  function stableStepId(value) {
+    let hash = 2166136261;
+    const text = String(value || '').trim();
+    for (let index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return `step-${(hash >>> 0).toString(36)}`;
+  }
+
   function createSlide(seed) {
     const source = seed && typeof seed === 'object' ? seed : {};
     const blocks = Array.isArray(source.blocks) ? source.blocks.map((block) => createBlock(block)) : [];
@@ -496,7 +519,12 @@
         ? oneLine(source.transition).toLowerCase()
         : 'fade',
       blocks,
-      task: createTask(source.task)
+      task: createTask(source.task),
+      includeInLesson: ['ON', 'OFF', 'INHERIT'].includes(String(source.includeInLesson || '').toUpperCase())
+        ? String(source.includeInLesson).toUpperCase() : 'INHERIT',
+      requiredToAdvance: source.requiredToAdvance !== false,
+      condition: normalizeStepCondition(source.condition),
+      progressConfigured: source.progressConfigured === true
     };
   }
 
@@ -510,6 +538,8 @@
       id: oneLine(source.id) || nextId('lesson'),
       title,
       filename: validateFilename(source.filename) || slugify(title),
+      navigation: source.navigation === 'free' ? 'free' : 'sequential',
+      navigationConfigured: source.navigationConfigured === true,
       slides
     };
   }
@@ -945,6 +975,14 @@
         else blocks.unshift(createBlock('heading', { level: 1, text: lesson.title }));
       }
       const parts = blocks.map(serializeBlock).filter(Boolean);
+      if (slide.progressConfigured) {
+        parts.unshift(`<!-- chemdisk-step:${JSON.stringify({
+          id: slide.id,
+          includeInLesson: slide.includeInLesson,
+          requiredToAdvance: slide.requiredToAdvance,
+          condition: slide.condition
+        })} -->`);
+      }
       if (slide.transition !== 'fade') {
         parts.unshift([':::slide', `transition: ${slide.transition}`, ':::'].join('\n'));
       }
@@ -954,6 +992,9 @@
       }
       return parts.join('\n\n').trim();
     });
+    if (lesson.navigationConfigured || lesson.navigation === 'free') {
+      slides[0] = `<!-- chemdisk-lesson:${JSON.stringify({ navigation: lesson.navigation })} -->\n\n${slides[0]}`;
+    }
     return `${slides.join('\n\n---\n\n')}\n`;
   }
 
@@ -1289,7 +1330,13 @@
   }
 
   function parseSlide(source) {
-    const lines = normalizeNewlines(source).split('\n');
+    let stepMetadata = null;
+    const cleanedSource = normalizeNewlines(source).replace(/^\s*<!--\s*chemdisk-step:(\{.*\})\s*-->\s*$/im, (match, json) => {
+      try { stepMetadata = JSON.parse(json); }
+      catch (_) { throw new StudioLessonError('INVALID_STEP_METADATA', 'Ustawienia postępu kroku są nieprawidłowe.', 'slide.progress'); }
+      return '';
+    });
+    const lines = cleanedSource.split('\n');
     const content = [];
     let task = null;
     let taskLines = null;
@@ -1429,7 +1476,16 @@
         blocks.pop();
       }
     }
-    return createSlide({ blocks, task, transition });
+    return createSlide({
+      id: typeof stepMetadata?.id === 'string' ? stepMetadata.id : stableStepId(cleanedSource),
+      blocks,
+      task,
+      transition,
+      includeInLesson: stepMetadata?.includeInLesson,
+      requiredToAdvance: stepMetadata?.requiredToAdvance,
+      condition: stepMetadata?.condition,
+      progressConfigured: Boolean(stepMetadata)
+    });
   }
 
   function stripMarkdown(value) {
@@ -1445,11 +1501,17 @@
     if (raw.includes('\0')) {
       throw new StudioLessonError('INVALID_LESSON', 'Plik lekcji zawiera niedozwolone znaki.', '');
     }
-    const text = normalizeNewlines(raw);
+    let text = normalizeNewlines(raw);
     if (!text.trim()) throw new StudioLessonError('EMPTY_LESSON', 'Plik lekcji jest pusty.', '');
     if (text.length > MAX_SOURCE_CHARS) {
       throw new StudioLessonError('LESSON_TOO_LARGE', 'Plik lekcji jest zbyt duży.', '');
     }
+    let lessonMetadata = null;
+    text = text.replace(/^\s*<!--\s*chemdisk-lesson:(\{.*\})\s*-->\s*$/im, (match, json) => {
+      try { lessonMetadata = JSON.parse(json); }
+      catch (_) { throw new StudioLessonError('INVALID_LESSON_METADATA', 'Ustawienia postępu lekcji są nieprawidłowe.', 'lesson.navigation'); }
+      return '';
+    });
     const parts = splitSlides(text);
     if (!parts.length || parts.some((part) => !part.trim())) {
       throw new StudioLessonError('EMPTY_SLIDE', 'Lekcja zawiera pusty slajd.', 'slides');
@@ -1463,6 +1525,8 @@
     return createLesson({
       title: titleMatch ? stripMarkdown(titleMatch[1]) : fallback,
       filename: safeName || slugify(fallback),
+      navigation: lessonMetadata?.navigation === 'free' ? 'free' : 'sequential',
+      navigationConfigured: Boolean(lessonMetadata),
       slides: parts.map(parseSlide)
     });
   }

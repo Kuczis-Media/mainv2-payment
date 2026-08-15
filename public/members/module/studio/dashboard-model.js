@@ -180,6 +180,27 @@
     return `${prefix || 'node'}-${Date.now().toString(36)}-${uidSequence.toString(36)}`;
   }
 
+  function normalizeProgress(value, root) {
+    const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const state = (input, fallback) => ['ON', 'OFF', 'INHERIT'].includes(String(input || '').toUpperCase())
+      ? String(input).toUpperCase() : fallback;
+    return {
+      tracking: state(source.tracking, root ? 'ON' : 'INHERIT'),
+      showProgress: state(source.showProgress, root ? 'ON' : 'INHERIT'),
+      includeInSection: source.includeInSection !== false,
+      includeInDepartment: source.includeInDepartment !== false,
+      includeInCourse: source.includeInCourse !== false,
+      weight: Math.max(.01, Math.min(10000, Number(source.weight) || 1))
+    };
+  }
+
+  function progressMetadata(source, root) {
+    return {
+      progress: normalizeProgress(source && source.progress, root),
+      progressConfigured: source && source.progressConfigured === true
+    };
+  }
+
   function clampLevel(value, fallback) {
     const number = Number(value);
     return Number.isInteger(number) && number >= 3 && number <= 6 ? number : fallback;
@@ -280,6 +301,7 @@
     return {
       kind: 'module',
       uid: safeUid(source.uid, 'module'),
+      ...progressMetadata(source, false),
       module: canonical.module,
       variant,
       title: singleLine(source.title) || definition.label,
@@ -295,7 +317,10 @@
       formula: canonical.module === 'atonom' ? singleLine(source.formula) : '',
       href: singleLine(source.href),
       hash: singleLine(source.hash),
-      params: copyParams(source.params)
+      params: copyParams(source.params),
+      presentationMode: ['highest', 'visited', 'required'].includes(source.presentationMode)
+        ? source.presentationMode : 'highest',
+      videoCompletionThreshold: Math.max(1, Math.min(100, Number(source.videoCompletionThreshold) || 90))
     };
   }
 
@@ -315,6 +340,7 @@
     const group = {
       kind: 'group',
       uid: safeUid(source.uid, 'group'),
+      ...progressMetadata(source, false),
       level: requestedLevel > Number(parentLevel || 2) ? requestedLevel : fallbackLevel,
       title: singleLine(source.title) || 'Nowa harmonijka',
       blocks: []
@@ -335,6 +361,7 @@
     const section = {
       kind: 'section',
       uid: safeUid(source.uid, 'section'),
+      ...progressMetadata(source, false),
       title: singleLine(source.title) || 'Nowy dział',
       blocks: []
     };
@@ -361,6 +388,8 @@
       kind: 'dashboard',
       version: 1,
       uid: safeUid(source.uid, 'dashboard'),
+      ...progressMetadata(source, true),
+      recordOpens: source.recordOpens !== false,
       title: singleLine(source.title) || 'Panel kursanta',
       blocks: rootBlocks
         .map((block) => normalizeBlock(block, 1))
@@ -531,6 +560,7 @@
     }
     if (card.module === 'contact') add('internal', card.internal);
     if (card.module === 'atonom') add('formula', card.formula);
+    if (card.progressConfigured) add('material', card.uid);
 
     Object.keys(card.params).forEach((key) => {
       if (reserved.has(key)) return;
@@ -550,9 +580,16 @@
     let currentGroup = null;
     let groupStack = [];
     let insideComment = false;
+    let pendingProgress = null;
 
     stringValue(source).replace(/\r\n?/g, '\n').split('\n').forEach((rawLine) => {
       const line = rawLine.trim();
+      const progressMatch = line.match(/^<!--\s*chemdisk-progress:(\{.*\})\s*-->$/i);
+      if (progressMatch) {
+        try { pendingProgress = JSON.parse(progressMatch[1]); }
+        catch (_) { pendingProgress = null; }
+        return;
+      }
       if (insideComment) {
         if (line.includes('-->')) insideComment = false;
         return;
@@ -565,7 +602,13 @@
 
       const sectionMatch = line.match(/^##\s+(.+)$/);
       if (sectionMatch) {
-        currentSection = createSection({ title: sectionMatch[1] });
+        currentSection = createSection({
+          title: sectionMatch[1],
+          uid: pendingProgress && pendingProgress.id,
+          progress: pendingProgress && pendingProgress.progress,
+          progressConfigured: Boolean(pendingProgress)
+        });
+        pendingProgress = null;
         currentGroup = null;
         groupStack = [];
         model.sections.push(currentSection);
@@ -575,7 +618,14 @@
       const groupMatch = line.match(/^(#{3,6})\s+(.+)$/);
       if (groupMatch && currentSection) {
         const level = groupMatch[1].length;
-        const group = createGroup({ level, title: groupMatch[2] }, level - 1);
+        const group = createGroup({
+          level,
+          title: groupMatch[2],
+          uid: pendingProgress && pendingProgress.id,
+          progress: pendingProgress && pendingProgress.progress,
+          progressConfigured: Boolean(pendingProgress)
+        }, level - 1);
+        pendingProgress = null;
         while (groupStack.length && groupStack[groupStack.length - 1].level >= level) {
           groupStack.pop();
         }
@@ -589,6 +639,13 @@
       const titleMatch = line.match(/^#\s+(.+)$/);
       if (titleMatch) {
         model.title = singleLine(titleMatch[1]);
+        if (pendingProgress) {
+          model.uid = safeUid(pendingProgress.id, 'dashboard');
+          model.progress = normalizeProgress(pendingProgress.progress, true);
+          model.recordOpens = pendingProgress.settings?.recordOpens !== false;
+          model.progressConfigured = true;
+          pendingProgress = null;
+        }
         return;
       }
 
@@ -606,9 +663,15 @@
         const target = currentGroup ? currentGroup.blocks : currentSection.blocks;
         target.push(createModule({
           ...parseModuleHref(linkMatch[2]),
+          uid: pendingProgress && pendingProgress.id,
+          progress: pendingProgress && pendingProgress.progress,
+          progressConfigured: Boolean(pendingProgress),
+          presentationMode: pendingProgress?.settings?.presentationMode,
+          videoCompletionThreshold: pendingProgress?.settings?.videoCompletionThreshold,
           title: linkMatch[1],
           description: linkMatch[3] || ''
         }));
+        pendingProgress = null;
         return;
       }
 
@@ -618,7 +681,55 @@
         : currentSection ? currentSection.blocks : model.blocks;
       target.push(createText(cleanLine));
     });
+    assignStableProgressIds(model);
     return model;
+  }
+
+  function stableHash(value) {
+    let hash = 2166136261;
+    const text = String(value || '');
+    for (let index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(36);
+  }
+
+  function runtimeMaterialType(block) {
+    return ({
+      lesson: 'lesson', slides: 'presentation', film: 'video', yt: 'video', pdf: 'pdf', forms: 'quiz', chat: 'script'
+    })[block.module] || (block.module === 'link' ? 'embed' : 'other');
+  }
+
+  function assignStableProgressIds(model) {
+    if (!model.progressConfigured) model.uid = 'course';
+    const used = new Set([model.uid]);
+    const unique = (preferred, prefix, source) => {
+      let id = preferred || `${prefix}-${stableHash(source)}`;
+      let suffix = 2;
+      while (used.has(id)) id = `${prefix}-${stableHash(source)}-${suffix++}`;
+      used.add(id);
+      return id;
+    };
+    const visitBlocks = (blocks, parentId) => {
+      blocks.forEach((block) => {
+        if (block.kind === 'group') {
+          const type = block.level === 3 ? 'section' : block.level === 4 ? 'subsection' : 'other';
+          if (!block.progressConfigured) block.uid = unique('', type === 'section' ? 'section' : 'subsection', `${parentId}:${block.title}`);
+          else block.uid = unique(block.uid, 'subsection', `${parentId}:${block.title}`);
+          visitBlocks(block.blocks, block.uid);
+        } else if (block.kind === 'module') {
+          const type = runtimeMaterialType(block);
+          const href = moduleHref(block);
+          if (!block.progressConfigured) block.uid = unique('', type, `${parentId}:${href}:${block.title}`);
+          else block.uid = unique(block.uid, type, `${parentId}:${href}:${block.title}`);
+        }
+      });
+    };
+    model.sections.forEach((section) => {
+      section.uid = unique(section.progressConfigured ? section.uid : '', 'department', section.title);
+      visitBlocks(section.blocks, section.uid);
+    });
   }
 
   function safeHeading(value, fallback) {
@@ -641,16 +752,40 @@
     if (block.kind === 'notice') return `> ${singleLine(block.text)}`;
     if (block.kind === 'module') {
       const description = singleLine(block.description);
-      return `- [${safeLinkTitle(block.title)}](${moduleHref(block)})${description ? ` — ${description}` : ''}`;
+      const card = `- [${safeLinkTitle(block.title)}](${moduleHref(block)})${description ? ` — ${description}` : ''}`;
+      return block.progressConfigured ? `${serializeProgressMetadata(block, block.module)}\n${card}` : card;
     }
     return '';
+  }
+
+  function serializeProgressMetadata(node, type) {
+    return `<!-- chemdisk-progress:${JSON.stringify({
+      id: node.uid,
+      type: type || (node.kind === 'dashboard' ? 'course' : node.kind === 'section' ? 'department' : 'section'),
+      progress: normalizeProgress(node.progress, node.kind === 'dashboard'),
+      ...(node.kind === 'dashboard' ? {
+        settings: { recordOpens: node.recordOpens !== false }
+      } : {}),
+      ...(node.kind === 'module' ? {
+        settings: {
+          presentationMode: node.presentationMode,
+          videoCompletionThreshold: node.videoCompletionThreshold
+        }
+      } : {})
+    })} -->`;
   }
 
   function serializeContainer(container, level) {
     const heading = `${'#'.repeat(level)} ${safeHeading(container.title, level === 2 ? 'Nowy dział' : 'Nowa harmonijka')}`;
     const ownBlocks = container.blocks.filter((block) => block.kind !== 'group');
     const childGroups = container.blocks.filter((block) => block.kind === 'group');
-    const lines = [heading];
+    const lines = [
+      ...(container.progressConfigured ? [serializeProgressMetadata(
+        container,
+        container.kind === 'section' ? 'department' : container.level === 3 ? 'section' : 'subsection'
+      )] : []),
+      heading
+    ];
     const ownLines = ownBlocks.map(serializeBlock).filter(Boolean);
     if (ownLines.length) lines.push('', ...ownLines);
     childGroups.forEach((group) => {
@@ -661,7 +796,10 @@
 
   function serialize(model, options) {
     const normalized = normalizeModel(model);
-    const lines = [`# ${safeHeading(normalized.title, 'Panel kursanta')}`];
+    const lines = [
+      ...(normalized.progressConfigured ? [serializeProgressMetadata(normalized, 'course')] : []),
+      `# ${safeHeading(normalized.title, 'Panel kursanta')}`
+    ];
     const rootLines = normalized.blocks.map(serializeBlock).filter(Boolean);
     if (rootLines.length) lines.push('', ...rootLines);
     normalized.sections.forEach((section) => {
@@ -676,6 +814,9 @@
 
   function groupToDashboardModel(group) {
     const result = {
+      id: group.uid,
+      type: group.level === 3 ? 'section' : group.level === 4 ? 'subsection' : 'other',
+      progress: group.progress,
       level: group.level,
       title: group.title,
       description: [],
@@ -688,6 +829,9 @@
       else if (block.kind === 'notice') result.notices.push(block.text);
       else if (block.kind === 'module') {
         result.items.push({
+          id: block.uid,
+          type: runtimeMaterialType(block),
+          progress: block.progress,
           title: block.title,
           href: moduleHref(block),
           description: block.description
@@ -701,6 +845,9 @@
 
   function sectionToDashboardModel(section) {
     const result = {
+      id: section.uid,
+      type: 'department',
+      progress: section.progress,
       title: section.title,
       description: [],
       notices: [],
@@ -712,6 +859,9 @@
       else if (block.kind === 'notice') result.notices.push(block.text);
       else if (block.kind === 'module') {
         result.items.push({
+          id: block.uid,
+          type: runtimeMaterialType(block),
+          progress: block.progress,
           title: block.title,
           href: moduleHref(block),
           description: block.description
@@ -726,10 +876,58 @@
   function toDashboardModel(model) {
     const normalized = normalizeModel(model);
     return {
+      id: normalized.uid,
+      type: 'course',
+      progress: normalized.progress,
+      recordOpens: normalized.recordOpens !== false,
       title: normalized.title,
       intro: normalized.blocks.filter((block) => block.kind === 'text').map((block) => block.text),
       notices: normalized.blocks.filter((block) => block.kind === 'notice').map((block) => block.text),
       sections: normalized.sections.map(sectionToDashboardModel)
+    };
+  }
+
+  function toProgressCatalog(model) {
+    const normalized = normalizeModel(model);
+    const nodes = [];
+    const append = (node, parentId, type, title, settings) => {
+      nodes.push({
+        id: node.uid,
+        parentId: parentId || null,
+        type,
+        title,
+        progress: node.progress,
+        settings: settings || {}
+      });
+    };
+    append(normalized, null, 'course', normalized.title);
+    const visitBlocks = (blocks, parentId) => {
+      blocks.forEach((block) => {
+        if (block.kind === 'group') {
+          const type = block.level === 3 ? 'section' : block.level === 4 ? 'subsection' : 'other';
+          append(block, parentId, type, block.title);
+          visitBlocks(block.blocks, block.uid);
+        } else if (block.kind === 'module') {
+          append(block, parentId, runtimeMaterialType(block), block.title, {
+            presentationMode: block.presentationMode,
+            videoCompletionThreshold: block.videoCompletionThreshold,
+            contentFile: block.module === 'lesson' ? block.file : ''
+          });
+        }
+      });
+    };
+    normalized.sections.forEach((section) => {
+      append(section, normalized.uid, 'department', section.title);
+      visitBlocks(section.blocks, section.uid);
+    });
+    return {
+      version: 1,
+      global: {
+        tracking: normalized.progress.tracking === 'OFF' ? 'OFF' : 'ON',
+        showProgress: normalized.progress.showProgress === 'OFF' ? 'OFF' : 'ON',
+        recordOpens: normalized.recordOpens !== false
+      },
+      nodes
     };
   }
 
@@ -1108,6 +1306,7 @@
     removeNode,
     serialize,
     toDashboardModel,
+    toProgressCatalog,
     validate
   });
 });
