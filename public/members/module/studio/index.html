@@ -138,6 +138,29 @@
           </button>
         </div>
 
+        <section class="content-explorer" aria-labelledby="content-explorer-title">
+          <header class="content-explorer-heading">
+            <div>
+              <span class="eyebrow">Prywatne repozytorium GitHub</span>
+              <h2 id="content-explorer-title">Eksplorator treści</h2>
+              <p>Otwórz plik bezpośrednio we właściwym kreatorze — bez kopiowania ścieżek i ręcznego importu.</p>
+            </div>
+            <button class="button button-soft" id="content-explorer-refresh" type="button">↻ Odśwież pliki</button>
+          </header>
+          <div class="content-explorer-controls">
+            <label class="repository-picker">
+              <span>Repozytorium</span>
+              <select id="content-explorer-repository" aria-label="Repozytorium eksploratora treści"></select>
+            </label>
+            <label class="content-explorer-search">
+              <span class="sr-only">Szukaj plików</span>
+              <input id="content-explorer-search" type="search" placeholder="Szukaj po nazwie, pliku lub tagu…" autocomplete="off">
+            </label>
+          </div>
+          <p class="content-explorer-status" id="content-explorer-status" role="status" aria-live="polite">Łączenie z repozytorium…</p>
+          <div class="content-explorer-folders" id="content-explorer-folders"></div>
+        </section>
+
         <div class="feature-strip" aria-label="Możliwości Studia">
           <span><b>↕</b> Przeciąganie klocków</span>
           <span><b>◫</b> Podgląd na żywo</span>

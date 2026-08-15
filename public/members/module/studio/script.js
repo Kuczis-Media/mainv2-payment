@@ -26,6 +26,11 @@
     accessState: byId('access-state'),
     app: byId('studio-app'),
     home: byId('home-view'),
+    contentExplorerRepository: byId('content-explorer-repository'),
+    contentExplorerSearch: byId('content-explorer-search'),
+    contentExplorerRefresh: byId('content-explorer-refresh'),
+    contentExplorerStatus: byId('content-explorer-status'),
+    contentExplorerFolders: byId('content-explorer-folders'),
     modeSwitch: byId('mode-switch'),
     saveIndicator: byId('save-indicator'),
     saveIndicatorLabel: byId('save-indicator-label'),
@@ -128,6 +133,7 @@
       exams: [],
       loaded: false,
       loading: false,
+      error: '',
       requestId: 0
     },
     sourceMode: 'dashboard',
@@ -5337,6 +5343,65 @@
         ? `${promptAssets.length} pasujących promptów.`
         : 'Brak promptów pasujących do wyszukiwania.';
     }
+    renderContentExplorer();
+  }
+
+  function renderContentExplorer() {
+    if (!elements.contentExplorerFolders) return;
+    const library = window.ChemContentLibrary;
+    const query = elements.contentExplorerSearch?.value || '';
+    const groups = [
+      { kind: 'lesson', title: 'Lekcje', icon: 'L', assets: state.contentLibrary.lessons },
+      { kind: 'exam', title: 'Egzaminy', icon: 'E', assets: state.contentLibrary.exams },
+      { kind: 'prompt', title: 'Prompty', icon: 'P', assets: state.contentLibrary.prompts }
+    ];
+    elements.contentExplorerFolders.replaceChildren(...groups.map((group) => {
+      const visible = library?.search ? library.search(group.assets, query) : group.assets;
+      const folder = document.createElement('details');
+      folder.className = 'content-explorer-folder';
+      folder.open = true;
+      const summary = document.createElement('summary');
+      summary.append(
+        create('span', 'content-explorer-folder-icon', group.icon),
+        create('strong', '', group.title),
+        create('small', '', `${visible.length}/${group.assets.length}`),
+        create('span', 'content-explorer-chevron', '⌄')
+      );
+      const files = create('div', 'content-explorer-files');
+      visible.forEach((asset) => {
+        const button = create('button', 'content-explorer-file');
+        button.type = 'button';
+        button.dataset.explorerKind = group.kind;
+        button.dataset.explorerFilename = asset.filename;
+        button.dataset.explorerRepository = asset.repositoryId || state.contentLibrary.selectedRepositoryId;
+        const copy = create('span', 'content-explorer-file-copy');
+        copy.append(
+          create('strong', '', asset.title || asset.filename),
+          create('small', '', asset.path || asset.filename)
+        );
+        button.append(
+          create('span', `content-explorer-file-type is-${group.kind}`, group.kind === 'lesson' ? 'MD' : group.kind === 'exam' ? 'EXAM' : /\.txt$/i.test(asset.filename) ? 'TXT' : 'JSON'),
+          copy,
+          create('span', 'content-explorer-open', 'Otwórz →')
+        );
+        files.append(button);
+      });
+      if (!visible.length) files.append(create('p', 'content-explorer-empty', query ? 'Brak pasujących plików.' : 'Ten folder jest pusty.'));
+      folder.append(summary, files);
+      return folder;
+    }));
+    if (elements.contentExplorerStatus) {
+      const total = groups.reduce((sum, group) => sum + group.assets.length, 0);
+      const selected = selectedRepository();
+      elements.contentExplorerStatus.classList.toggle('is-error', Boolean(state.contentLibrary.error));
+      elements.contentExplorerStatus.textContent = state.contentLibrary.loading
+        ? 'Pobieranie plików z prywatnego repozytorium…'
+        : state.contentLibrary.error
+          ? state.contentLibrary.error
+          : state.contentLibrary.loaded
+            ? `${total} plików · ${selected?.label || selected?.repository || 'repozytorium'}`
+            : 'Biblioteka nie została jeszcze wczytana.';
+    }
   }
 
   function selectedRepository() {
@@ -5348,7 +5413,8 @@
   function renderRepositorySelectors() {
     const repositories = state.contentLibrary.repositories;
     const selectedId = state.contentLibrary.selectedRepositoryId;
-    [elements.dashboardRepository, elements.lessonRepository, elements.promptRepository].forEach((select) => {
+    [elements.dashboardRepository, elements.lessonRepository, elements.promptRepository, elements.contentExplorerRepository].forEach((select) => {
+      if (!select) return;
       select.replaceChildren(...repositories.map((repository) => {
         const option = document.createElement('option');
         option.value = repository.id;
@@ -5370,6 +5436,7 @@
     state.contentLibrary.prompts = [];
     state.contentLibrary.exams = [];
     state.contentLibrary.loaded = false;
+    state.contentLibrary.error = '';
     renderRepositorySelectors();
     renderRepositoryAssets();
     updateRepositoryButtons();
@@ -5388,14 +5455,21 @@
       elements.dashboardAssetStatus.textContent = 'Brakuje klienta biblioteki materiałów.';
       elements.lessonAssetStatus.textContent = 'Brakuje klienta biblioteki materiałów.';
       elements.promptAssetStatus.textContent = 'Brakuje klienta biblioteki materiałów.';
+      if (elements.contentExplorerStatus) elements.contentExplorerStatus.textContent = 'Brakuje klienta biblioteki materiałów.';
       return;
     }
     const requestId = ++state.contentLibrary.requestId;
     state.contentLibrary.loading = true;
+    state.contentLibrary.error = '';
     [elements.dashboardAssetStatus, elements.lessonAssetStatus, elements.promptAssetStatus].forEach((status) => {
       status.classList.remove('is-error');
       status.textContent = 'Pobieranie listy z prywatnego repozytorium…';
     });
+    if (elements.contentExplorerStatus) {
+      elements.contentExplorerStatus.classList.remove('is-error');
+      elements.contentExplorerStatus.textContent = 'Pobieranie plików z prywatnego repozytorium…';
+    }
+    renderContentExplorer();
     try {
       if (!state.contentLibrary.repositories.length) {
         state.contentLibrary.repositories = await library.repositories();
@@ -5426,20 +5500,28 @@
     } catch (error) {
       if (requestId !== state.contentLibrary.requestId) return;
       state.contentLibrary.loaded = false;
+      state.contentLibrary.error = error && error.message
+        ? error.message
+        : 'Nie udało się pobrać listy materiałów.';
       [elements.dashboardAssetStatus, elements.lessonAssetStatus, elements.promptAssetStatus].forEach((status) => {
         status.classList.add('is-error');
-        status.textContent = error && error.message
-          ? error.message
-          : 'Nie udało się pobrać listy materiałów.';
+        status.textContent = state.contentLibrary.error;
       });
+      if (elements.contentExplorerStatus) {
+        elements.contentExplorerStatus.classList.add('is-error');
+        elements.contentExplorerStatus.textContent = state.contentLibrary.error;
+      }
     } finally {
-      if (requestId === state.contentLibrary.requestId) state.contentLibrary.loading = false;
+      if (requestId === state.contentLibrary.requestId) {
+        state.contentLibrary.loading = false;
+        renderContentExplorer();
+      }
     }
   }
 
-  async function importRepositoryLesson(asset) {
+  async function importRepositoryLesson(asset, options = {}) {
     if (!asset || !asset.filename) return;
-    if (!window.confirm(`Wczytać „${asset.title || asset.filename}” i zastąpić bieżącą lekcję w builderze?`)) {
+    if (options.confirm !== false && !window.confirm(`Wczytać „${asset.title || asset.filename}” i zastąpić bieżącą lekcję w builderze?`)) {
       return;
     }
     elements.lessonAssetStatus.className = '';
@@ -5472,6 +5554,7 @@
           ? 'Uzupełnij szablon i kliknij „Zapisz zmiany w GitHubie”.'
           : 'Możesz ją edytować, podejrzeć i pobrać jako Markdown.'
       );
+      switchMode('lesson');
     } catch (error) {
       elements.lessonAssetStatus.className = 'is-error';
       elements.lessonAssetStatus.textContent = error && error.message
@@ -5480,9 +5563,9 @@
     }
   }
 
-  async function importRepositoryPrompt(asset) {
+  async function importRepositoryPrompt(asset, options = {}) {
     if (!asset || !asset.filename) return;
-    if (!window.confirm(`Wczytać „${asset.title || asset.filename}” i zastąpić bieżący prompt w builderze?`)) {
+    if (options.confirm !== false && !window.confirm(`Wczytać „${asset.title || asset.filename}” i zastąpić bieżący prompt w builderze?`)) {
       return;
     }
     elements.promptAssetStatus.className = 'prompt-repository-status';
@@ -5511,6 +5594,36 @@
       elements.promptAssetStatus.textContent = error && error.message
         ? error.message
         : 'Nie udało się wczytać promptu.';
+    }
+  }
+
+  async function openContentExplorerAsset(event) {
+    const button = event.target.closest('[data-explorer-kind][data-explorer-filename]');
+    if (!button || button.disabled) return;
+    const kind = button.dataset.explorerKind;
+    const collection = kind === 'lesson'
+      ? state.contentLibrary.lessons
+      : kind === 'exam' ? state.contentLibrary.exams : state.contentLibrary.prompts;
+    const asset = collection.find((entry) => (
+      entry.filename === button.dataset.explorerFilename
+      && (entry.repositoryId || state.contentLibrary.selectedRepositoryId) === button.dataset.explorerRepository
+    ));
+    if (!asset) return;
+    button.disabled = true;
+    elements.contentExplorerStatus.classList.remove('is-error');
+    elements.contentExplorerStatus.textContent = `Otwieranie ${asset.title || asset.filename}…`;
+    try {
+      if (kind === 'lesson') await importRepositoryLesson(asset, { confirm: false });
+      else if (kind === 'prompt') await importRepositoryPrompt(asset, { confirm: false });
+      else {
+        switchMode('exam');
+        await window.ChemExamBuilder?.openAsset?.(asset);
+      }
+    } catch (error) {
+      elements.contentExplorerStatus.classList.add('is-error');
+      elements.contentExplorerStatus.textContent = error?.message || 'Nie udało się otworzyć pliku.';
+    } finally {
+      button.disabled = false;
     }
   }
 
@@ -5566,7 +5679,11 @@
     elements.dashboardAssetSearch.addEventListener('input', renderRepositoryAssets);
     elements.lessonAssetSearch.addEventListener('input', renderRepositoryAssets);
     elements.promptAssetSearch.addEventListener('input', renderRepositoryAssets);
-    [elements.dashboardRepository, elements.lessonRepository, elements.promptRepository].forEach((select) => {
+    elements.contentExplorerSearch?.addEventListener('input', renderContentExplorer);
+    elements.contentExplorerFolders?.addEventListener('click', openContentExplorerAsset);
+    elements.contentExplorerRefresh?.addEventListener('click', () => loadRepositoryAssets(true));
+    [elements.dashboardRepository, elements.lessonRepository, elements.promptRepository, elements.contentExplorerRepository].forEach((select) => {
+      if (!select) return;
       select.addEventListener('change', () => selectContentRepository(select.value));
     });
 

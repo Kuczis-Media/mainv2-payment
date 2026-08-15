@@ -316,6 +316,48 @@ test('content repository deletes only an exact known SHA and maps GitHub conflic
   );
 });
 
+test('exam image upload is binary-safe and restricted to the exam photos folder', async () => {
+  const png = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    Buffer.from('safe-image-payload')
+  ]);
+  const requests = [];
+  const saved = await repository.saveExamMedia(
+    'egzamin-testowy',
+    'schemat-a1b2c3.png',
+    png.toString('base64'),
+    'image/png',
+    {
+      config: configured,
+      fetchImpl: async (url, options) => {
+        requests.push({ url: String(url), options });
+        return githubResponse({ content: { sha: 'a'.repeat(40) }, commit: { sha: 'b'.repeat(40) } });
+      }
+    }
+  );
+
+  assert.equal(saved.ref, 'photos/schemat-a1b2c3.png');
+  assert.equal(saved.mimeType, 'image/png');
+  assert.match(requests[0].url, /\/contents\/exams\/egzamin-testowy\/photos\/schemat-a1b2c3\.png$/);
+  const payload = JSON.parse(requests[0].options.body);
+  assert.deepEqual(Buffer.from(payload.content, 'base64'), png);
+  assert.equal(payload.branch, 'main');
+  await assert.rejects(
+    repository.saveExamMedia('egzamin-testowy', '../sekret.png', png.toString('base64'), 'image/png', { config: configured }),
+    (error) => error.code === 'INVALID_EXAM_MEDIA_REFERENCE'
+  );
+  await assert.rejects(
+    repository.saveExamMedia('egzamin-testowy', 'falszywy.jpg', png.toString('base64'), 'image/jpeg', { config: configured }),
+    (error) => error.code === 'EXAM_MEDIA_INVALID'
+  );
+  const validated = contentFunction._test.validateMutationBody({
+    kind: 'exam_media', examId: 'egzamin-testowy', filename: 'schemat-a1b2c3.png',
+    contentBase64: png.toString('base64'), mimeType: 'image/png', repositoryId: 'default'
+  }, 'PUT');
+  assert.equal(validated.ok, true);
+  assert.equal(contentFunction._test.validateMutationBody({ kind: 'exam_media' }, 'DELETE').ok, false);
+});
+
 test('content repository rejects malformed prompts and blind deletes before GitHub access', async () => {
   let requests = 0;
   const fetchImpl = async () => {
@@ -429,11 +471,19 @@ test('browser content client sends repository mutations only to the same-origin 
     expectedSha: 'a'.repeat(40),
     repositoryId: 'organiczna'
   });
+  await browserLibrary.uploadExamMedia({
+    examId: 'egzamin-testowy',
+    filename: 'schemat-a1b2c3.png',
+    contentBase64: 'iVBORw0KGgo=',
+    mimeType: 'image/png',
+    repositoryId: 'organiczna'
+  });
 
-  assert.equal(requests.length, 2);
+  assert.equal(requests.length, 3);
   assert.equal(requests[0].url, 'https://course.example/.netlify/functions/content-library');
   assert.equal(requests[0].options.method, 'PUT');
   assert.equal(requests[1].options.method, 'DELETE');
+  assert.equal(requests[2].options.method, 'PUT');
   assert.ok(requests.every(({ options }) => options.credentials === 'same-origin'));
   assert.ok(requests.every(({ options }) => options.headers.Authorization === 'Bearer identity-secret'));
   assert.ok(requests.every(({ options }) => !options.body.includes('identity-secret')));
@@ -441,6 +491,14 @@ test('browser content client sends repository mutations only to the same-origin 
     kind: 'lesson',
     filename: 'nowa.md',
     expectedSha: 'a'.repeat(40),
+    repositoryId: 'organiczna'
+  });
+  assert.deepEqual(JSON.parse(requests[2].options.body), {
+    kind: 'exam_media',
+    examId: 'egzamin-testowy',
+    filename: 'schemat-a1b2c3.png',
+    contentBase64: 'iVBORw0KGgo=',
+    mimeType: 'image/png',
     repositoryId: 'organiczna'
   });
   assert.equal(
@@ -708,4 +766,54 @@ test('an administrator can create a lesson through the guarded Function without 
   assert.equal(payload.sha, 'c'.repeat(40));
   assert.equal(githubRequest.options.headers.Authorization, 'Bearer github_pat_server_only');
   assert.doesNotMatch(response.body, /github_pat_server_only|identity-token/);
+});
+
+test('an administrator can upload an exam image through the guarded Function', async (t) => {
+  const originalFetch = global.fetch;
+  const originalToken = process.env.GITHUB_CONTENT_TOKEN;
+  const originalRepository = process.env.GITHUB_CONTENT_REPOSITORY;
+  t.after(() => {
+    global.fetch = originalFetch;
+    if (originalToken === undefined) delete process.env.GITHUB_CONTENT_TOKEN;
+    else process.env.GITHUB_CONTENT_TOKEN = originalToken;
+    if (originalRepository === undefined) delete process.env.GITHUB_CONTENT_REPOSITORY;
+    else process.env.GITHUB_CONTENT_REPOSITORY = originalRepository;
+  });
+  process.env.GITHUB_CONTENT_TOKEN = 'github_pat_server_only';
+  process.env.GITHUB_CONTENT_REPOSITORY = 'Kuczis-Media/chemdisk-content';
+  const githubRequests = [];
+  global.fetch = async (url, options) => {
+    const value = String(url);
+    if (value.includes('/.netlify/identity/user')) {
+      return githubResponse({ id: 'admin-1', app_metadata: { roles: ['admin'] } });
+    }
+    githubRequests.push({ url: value, options });
+    if (options.method === 'GET') return githubResponse('{"examId":"egzamin-testowy"}');
+    return githubResponse({ content: { sha: 'e'.repeat(40) }, commit: { sha: 'f'.repeat(40) } }, { status: 201 });
+  };
+  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('image')]);
+  const response = await contentFunction.handler({
+    httpMethod: 'PUT',
+    headers: {
+      authorization: 'Bearer identity-token', 'content-type': 'application/json',
+      origin: 'https://course.example', host: 'course.example', 'x-forwarded-proto': 'https'
+    },
+    body: JSON.stringify({
+      kind: 'exam_media', examId: 'egzamin-testowy', filename: 'schemat-a1b2c3.png',
+      contentBase64: png.toString('base64'), mimeType: 'image/png'
+    })
+  }, {
+    clientContext: {
+      user: { id: 'admin-1', app_metadata: { roles: ['admin'] } },
+      identity: { url: 'https://course.example/.netlify/identity' }
+    }
+  });
+  const payload = JSON.parse(response.body);
+
+  assert.equal(response.statusCode, 201);
+  assert.equal(payload.ref, 'photos/schemat-a1b2c3.png');
+  assert.equal(githubRequests.length, 2);
+  assert.match(githubRequests[0].url, /\/contents\/exams\/egzamin-testowy\/exam\.json\?ref=main$/);
+  assert.match(githubRequests[1].url, /\/contents\/exams\/egzamin-testowy\/photos\/schemat-a1b2c3\.png$/);
+  assert.doesNotMatch(response.body, /github_pat_server_only|identity-token|contentBase64/);
 });

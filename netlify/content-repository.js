@@ -11,6 +11,7 @@ const MAX_PROMPT_BYTES = 256 * 1024;
 const MAX_EXAM_BYTES = 2 * 1024 * 1024;
 const MAX_QUESTION_BANK_BYTES = 5 * 1024 * 1024;
 const MAX_EXAM_MEDIA_BYTES = 10 * 1024 * 1024;
+const MAX_EXAM_MEDIA_UPLOAD_BYTES = 4 * 1024 * 1024;
 const SAFE_REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const SAFE_REPOSITORY_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const SAFE_TOKEN_ENV = /^GITHUB_CONTENT_TOKEN(?:_[A-Z0-9][A-Z0-9_]*)?$/;
@@ -21,6 +22,7 @@ const SAFE_PROMPT_FILENAME = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.(json|
 const SAFE_EXAM_ID = /^[a-z0-9][a-z0-9-]{0,79}$/;
 const SAFE_QUESTION_BANK_FILENAME = /^question-bank\.json$/;
 const SAFE_EXAM_MEDIA_REF = /^photos\/(?!.*\.\.)(?:[A-Za-z0-9][A-Za-z0-9_.-]*\/)*[A-Za-z0-9][A-Za-z0-9_.-]{0,119}$/;
+const SAFE_EXAM_MEDIA_FILENAME = /^[a-z0-9][a-z0-9_.-]{0,99}\.(?:png|jpe?g|webp|gif)$/;
 const SAFE_SHA = /^[a-f0-9]{40,64}$/i;
 const PROMPT_POINT_HEADER = /^::punkt[ \t]+([1-9]\d{0,3})[ \t]*$/i;
 const SIMPLE_PROMPT_POINT_HEADER = /^([1-9]\d{0,3})[.)][ \t]+(.+)$/;
@@ -723,6 +725,73 @@ async function deleteAsset(kind, rawFilename, rawSha, options = {}) {
   });
 }
 
+function decodeExamMedia(rawFilename, rawBase64, rawMimeType) {
+  const filename = cleanString(rawFilename).toLowerCase();
+  const contentBase64 = cleanString(rawBase64);
+  const requestedMimeType = cleanString(rawMimeType).toLowerCase();
+  if (!SAFE_EXAM_MEDIA_FILENAME.test(filename)) {
+    throw new ContentRepositoryError('INVALID_EXAM_MEDIA_REFERENCE', 400);
+  }
+  if (
+    !contentBase64
+    || contentBase64.length > Math.ceil(MAX_EXAM_MEDIA_UPLOAD_BYTES * 4 / 3) + 8
+    || !/^[A-Za-z0-9+/]+={0,2}$/.test(contentBase64)
+  ) {
+    throw new ContentRepositoryError('EXAM_MEDIA_INVALID', 422);
+  }
+  const buffer = Buffer.from(contentBase64, 'base64');
+  if (!buffer.length) throw new ContentRepositoryError('EXAM_MEDIA_INVALID', 422);
+  if (buffer.byteLength > MAX_EXAM_MEDIA_UPLOAD_BYTES) {
+    throw new ContentRepositoryError('CONTENT_FILE_TOO_LARGE', 413);
+  }
+  let mimeType = '';
+  if (buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) mimeType = 'image/png';
+  else if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) mimeType = 'image/jpeg';
+  else if (['GIF87a', 'GIF89a'].includes(buffer.subarray(0, 6).toString('ascii'))) mimeType = 'image/gif';
+  else if (buffer.subarray(0, 4).toString('ascii') === 'RIFF' && buffer.subarray(8, 12).toString('ascii') === 'WEBP') mimeType = 'image/webp';
+  if (!mimeType || (requestedMimeType && requestedMimeType !== mimeType)) {
+    throw new ContentRepositoryError('EXAM_MEDIA_INVALID', 422);
+  }
+  const extension = filename.split('.').pop();
+  const validExtension = mimeType === 'image/jpeg'
+    ? ['jpg', 'jpeg'].includes(extension)
+    : extension === mimeType.split('/')[1];
+  if (!validExtension) throw new ContentRepositoryError('EXAM_MEDIA_INVALID', 422);
+  return { filename, buffer, mimeType };
+}
+
+async function saveExamMedia(rawExamId, rawFilename, rawBase64, rawMimeType, options = {}) {
+  const examId = validateFilename('exam', rawExamId);
+  const media = decodeExamMedia(rawFilename, rawBase64, rawMimeType);
+  const config = configFromOptions(options);
+  const reference = `photos/${media.filename}`;
+  return enqueueMutation(config, async () => {
+    const data = await githubMutationRequest(
+      config,
+      `exams/${examId}/${reference}`,
+      'PUT',
+      {
+        message: `Add exams/${examId}/${reference} from ChemDisk Studio`,
+        content: media.buffer.toString('base64'),
+        branch: config.ref
+      },
+      { ...options, creating: true, fileExpected: false }
+    );
+    return {
+      kind: 'exam_media',
+      repositoryId: config.id,
+      repositoryLabel: config.label,
+      examId,
+      filename: media.filename,
+      ref: reference,
+      mimeType: media.mimeType,
+      size: media.buffer.byteLength,
+      created: true,
+      ...mutationResult(data)
+    };
+  });
+}
+
 async function readExamMedia(rawExamId, rawReference, options = {}) {
   const examId = validateFilename('exam', rawExamId);
   const reference = cleanString(rawReference);
@@ -761,6 +830,7 @@ module.exports = {
   publicConfigurations,
   readAsset,
   readExamMedia,
+  saveExamMedia,
   repositoryConfig,
   repositoryConfigs,
   saveAsset,
@@ -770,6 +840,7 @@ module.exports = {
     assetDefinition,
     clearCache,
     decodeUtf8,
+    decodeExamMedia,
     extractJsonPrompt,
     mutationResult,
     normalizeMetadata,

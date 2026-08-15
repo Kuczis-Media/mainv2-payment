@@ -124,15 +124,17 @@ async function handlePost(event, auth) {
   if (!access.ok) return json({ error: access.error, ...access.details }, access.status);
 
   if (body.action === 'open') {
-    await updateExamProgress({
-      userId: auth.userId,
-      user: auth.user,
-      repositoryId: reference.repositoryId,
-      examId: reference.examId,
-      materialId: validMaterialId(body.materialId),
-      action: 'open',
-      opened: true
-    });
+    if (!preview) {
+      await updateExamProgress({
+        userId: auth.userId,
+        user: auth.user,
+        repositoryId: reference.repositoryId,
+        examId: reference.examId,
+        materialId: validMaterialId(body.materialId),
+        action: 'open',
+        opened: true
+      });
+    }
     return json({ opened: true, exam: publicMetadata(loaded.definition) });
   }
   const store = getExamStore();

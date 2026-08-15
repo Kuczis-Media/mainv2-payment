@@ -41,6 +41,8 @@
     INVALID_CONTENT_REPOSITORY: 'Wybrane repozytorium jest nieprawidłowe albo nie zostało skonfigurowane.',
     PROMPT_FILE_INVALID: 'Prompt ma nieprawidłowy format albo przekracza limit.',
     EXAM_FILE_INVALID: 'Definicja egzaminu jest nieprawidłowa.',
+    EXAM_MEDIA_INVALID: 'Plik nie jest prawidłowym obrazem PNG, JPG, WEBP lub GIF.',
+    INVALID_EXAM_MEDIA_REFERENCE: 'Nazwa albo ścieżka obrazu jest nieprawidłowa.',
     QUESTION_BANK_INVALID: 'Bank pytań jest nieprawidłowy.',
     SESSION_CHECK_UNAVAILABLE: 'Nie udało się potwierdzić sesji.'
   });
@@ -214,6 +216,28 @@
     });
   }
 
+  async function uploadExamMedia(input = {}) {
+    const examId = validateFilename('exam', input.examId);
+    const filename = typeof input.filename === 'string' ? input.filename.trim().toLowerCase() : '';
+    if (!/^[a-z0-9][a-z0-9_.-]{0,99}\.(?:png|jpe?g|webp|gif)$/.test(filename)) {
+      throw new ContentLibraryError('INVALID_EXAM_MEDIA_REFERENCE', 400);
+    }
+    if (typeof input.contentBase64 !== 'string' || !input.contentBase64) {
+      throw new ContentLibraryError('EXAM_MEDIA_INVALID', 422);
+    }
+    return request({}, {
+      method: 'PUT',
+      body: {
+        kind: 'exam_media',
+        examId,
+        filename,
+        contentBase64: input.contentBase64,
+        mimeType: typeof input.mimeType === 'string' ? input.mimeType : '',
+        repositoryId: validateRepositoryId(input.repositoryId)
+      }
+    });
+  }
+
   async function status(options = {}) {
     return request({
       action: 'status',
@@ -274,6 +298,7 @@
     save,
     search,
     status,
+    uploadExamMedia,
     lessonUrl,
     examUrl,
     validateFilename,

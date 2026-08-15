@@ -300,6 +300,13 @@ test('Exam Function provides autosave, resume, timer-safe result and blocks IDOR
   canonical = { id: ADMIN, email: 'admin@example.com', app_metadata: { roles: ['admin'] } };
   const draftPreview = await examFunction.handler(eventFor('GET', undefined, { repo: 'default', exam: 'egzamin-testowy', preview: '1' }), studentContext());
   assert.equal(draftPreview.statusCode, 200);
+  const progressBeforePreviewOpen = await progressStore.list({ prefix: 'users/' });
+  const previewOpen = await examFunction.handler(eventFor('POST', {
+    action: 'open', repositoryId: 'default', examId: 'egzamin-testowy', materialId: 'preview-only', preview: true
+  }), studentContext());
+  assert.equal(previewOpen.statusCode, 200);
+  const progressAfterPreviewOpen = await progressStore.list({ prefix: 'users/' });
+  assert.equal(progressAfterPreviewOpen.blobs.length, progressBeforePreviewOpen.blobs.length);
 
   currentDefinition = definition();
   canonical = { id: USER_A, email: 'uczen@example.com', app_metadata: { roles: ['active'] } };

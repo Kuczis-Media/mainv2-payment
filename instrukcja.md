@@ -815,6 +815,8 @@ Studio jest dostępne tylko dla konta z rolą `admin`. Zawiera:
 3. **Prompt Builder**
 4. **Exam Builder**
 
+Na stronie głównej Studio działa **Eksplorator treści**. Wybierz repozytorium, rozwiń folder **Lekcje**, **Egzaminy** albo **Prompty**, a następnie kliknij plik. Studio automatycznie przełączy się do odpowiedniego Buildera i pobierze bieżącą wersję z GitHuba. Nad folderami można wyszukiwać po nazwie, ścieżce i tagach oraz ręcznie odświeżyć listę.
+
 W każdym builderze:
 
 - lewa biblioteka, górne narzędzia oraz prawy panel mogą być zwijane niezależnie;
@@ -1842,7 +1844,9 @@ Obsługiwane są: jedna odpowiedź, wiele odpowiedzi, prawda/fałsz, krótki tek
 
 Bank pozwala tworzyć, edytować, duplikować, usuwać, wyszukiwać, tagować i kategoryzować pytania. Dołączenie pytania z banku zapisuje odwołanie, a nie drugą kopię. Pytanie usunięte z banku trzeba również usunąć z listy odwołań egzaminu; Builder nie opublikuje brakującej referencji.
 
-Przy obrazie wpisz stabilną ścieżkę `photos/nazwa.webp` i ALT. Plik dodaj ręcznie do `exams/<examId>/photos/`. Dla wielu obrazów użyj osobnych pozycji. Nie wklejaj tymczasowego adresu z sesji GitHuba. Obsługiwane są bezpieczne formaty rastrowe; SVG jest celowo odrzucany w chronionym proxy.
+Najpierw zapisz draft, aby w repozytorium istniał `exams/<examId>/exam.json`. Następnie w zakładce **Informacje** lub przy edycji pytania przeciągnij obraz na pole wgrywania, kliknij to pole i wybierz plik albo wklej obraz przez `Ctrl+V`/`Cmd+V`. Przy pytaniu wybierz wcześniej cel: treść pytania, konkretną odpowiedź, lewą/prawą stronę dopasowania albo element kolejności. Studio zapisze plik w `exams/<examId>/photos/` i pokaże jego miniaturę oraz pole ALT. Na końcu ponownie kliknij **Zapisz draft**, aby utrwalić referencję w `exam.json`.
+
+Jednorazowo można wgrać do ośmiu obrazów pytania albo jedną okładkę. Każdy plik może mieć maksymalnie 4 MB i musi być prawidłowym PNG, JPG/JPEG, WEBP lub GIF. Serwer sprawdza rzeczywistą sygnaturę pliku i nie przyjmuje SVG ani ścieżek wychodzących poza folder egzaminu. Usunięcie obrazu w edytorze usuwa referencję z definicji, ale nie kasuje samego pliku z repozytorium.
 
 ### 35.4. Najważniejsze ustawienia
 

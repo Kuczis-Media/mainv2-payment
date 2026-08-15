@@ -116,6 +116,19 @@ async function mutateContent(event) {
 
   try {
     if (event.httpMethod === 'PUT') {
+      if (validation.value.kind === 'exam_media') {
+        await contentRepository.readAsset('exam', validation.value.examId, {
+          repositoryId: validation.value.repositoryId
+        });
+        const savedMedia = await contentRepository.saveExamMedia(
+          validation.value.examId,
+          validation.value.filename,
+          validation.value.contentBase64,
+          validation.value.mimeType,
+          { repositoryId: validation.value.repositoryId }
+        );
+        return json(savedMedia, 201);
+      }
       if (validation.value.kind === 'exam') {
         await validateExamQuestionReferences(validation.value.content, validation.value.repositoryId);
       }
@@ -180,6 +193,29 @@ async function validateExamQuestionReferences(rawContent, repositoryId) {
 
 function validateMutationBody(value, method) {
   if (!plainObject(value)) return { ok: false, code: 'INVALID_CONTENT_REQUEST' };
+  if (value.kind === 'exam_media') {
+    const allowed = new Set(['kind', 'examId', 'filename', 'contentBase64', 'mimeType', 'repositoryId']);
+    if (
+      method !== 'PUT'
+      || Object.keys(value).some((key) => !allowed.has(key))
+      || typeof value.examId !== 'string'
+      || typeof value.filename !== 'string'
+      || typeof value.contentBase64 !== 'string'
+      || typeof value.mimeType !== 'string'
+      || (value.repositoryId != null && typeof value.repositoryId !== 'string')
+    ) return { ok: false, code: 'INVALID_CONTENT_REQUEST' };
+    return {
+      ok: true,
+      value: {
+        kind: 'exam_media',
+        examId: value.examId,
+        filename: value.filename,
+        contentBase64: value.contentBase64,
+        mimeType: value.mimeType,
+        repositoryId: typeof value.repositoryId === 'string' ? value.repositoryId : ''
+      }
+    };
+  }
   const allowed = method === 'PUT'
     ? new Set(['kind', 'filename', 'content', 'expectedSha', 'repositoryId'])
     : new Set(['kind', 'filename', 'expectedSha', 'repositoryId']);

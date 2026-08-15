@@ -63,6 +63,7 @@ test('Studio exposes dashboard, lesson, exam and prompt authoring workflows', ()
   const script = read('public/members/module/studio/script.js');
   const styles = read('public/members/module/studio/style.css');
   const examBuilder = read('public/members/module/studio/exam-builder.js');
+  const examStyles = read('public/members/module/exam/style.css');
   const mathJaxConfig = read('public/members/module/mathjax-config.js');
 
   assert.ok(fs.existsSync(path.join(studioRoot, 'dashboard-model.js')));
@@ -78,12 +79,22 @@ test('Studio exposes dashboard, lesson, exam and prompt authoring workflows', ()
   assert.match(html, /id=["']lesson-repository-delete-button["']/);
   assert.match(html, /id=["']prompt-workspace["']/);
   assert.match(html, /id=["']exam-workspace["']/);
+  assert.match(html, /id=["']content-explorer-folders["']/);
+  assert.match(html, /id=["']content-explorer-search["']/);
+  assert.match(script, /openContentExplorerAsset/);
+  assert.match(examBuilder, /openAsset/);
   assert.match(html, /data-exam-tab=["']questions["']/);
   assert.match(html, /data-exam-tab=["']reports["']/);
   assert.match(examBuilder, /resultVisibility\.feedbackMode/);
   assert.match(examBuilder, /\/\.netlify\/functions\/admin-users/);
   assert.match(examBuilder, /Szukaj po imieniu, nazwisku, e-mailu lub ID/);
   assert.match(styles, /\.exam-audience-picker/);
+  assert.match(styles, /\.content-explorer-folder/);
+  assert.match(examBuilder, /uploadExamMedia/);
+  assert.match(examBuilder, /handleMediaPaste/);
+  assert.match(examBuilder, /handleMediaDrop/);
+  assert.match(styles, /\.exam-media-dropzone/);
+  assert.match(examStyles, /\[hidden\]\s*\{\s*display:\s*none\s*!important/);
   assert.match(styles, /\.exam-builder-shell\s*\{[\s\S]*?height:\s*calc\(100dvh\s*-\s*var\(--studio-header-height\)\s*-\s*var\(--workspace-toolbar-height\)\)/);
   assert.match(styles, /\.exam-editor-panel,[\s\S]*?\.exam-summary-panel\s*\{[\s\S]*?overflow-y:\s*auto/);
   assert.match(html, /id=["']prompt-download-button["']/);

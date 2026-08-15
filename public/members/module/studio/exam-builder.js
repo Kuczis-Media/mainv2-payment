@@ -25,6 +25,7 @@
   const state = {
     initialized: false,
     loaded: false,
+    activationPromise: null,
     tab: 'information',
     exam: null,
     bank: null,
@@ -34,6 +35,7 @@
     repositoryId: '',
     assets: [],
     remoteSha: '',
+    remoteExamId: '',
     bankSha: '',
     bankDirty: false,
     saving: false,
@@ -49,7 +51,10 @@
     usersPromise: null,
     usersError: '',
     userQuery: '',
-    userSearchTimer: 0
+    userSearchTimer: 0,
+    mediaUploading: false,
+    mediaTarget: 'question',
+    mediaObjectUrls: []
   };
 
   function create(tag, className, text) {
@@ -169,10 +174,17 @@
     });
     elements.editor.addEventListener('input', handleInput);
     elements.editor.addEventListener('change', handleInput);
+    elements.editor.addEventListener('change', handleMediaControl);
     elements.editor.addEventListener('click', handleAction);
+    elements.editor.addEventListener('dragover', handleMediaDragOver);
+    elements.editor.addEventListener('dragleave', handleMediaDragLeave);
+    elements.editor.addEventListener('drop', handleMediaDrop);
+    elements.editor.addEventListener('paste', handleMediaPaste);
+    elements.editor.addEventListener('keydown', handleMediaKeydown);
     elements.repository.addEventListener('change', async () => {
       state.repositoryId = elements.repository.value;
       state.remoteSha = '';
+      state.remoteExamId = '';
       state.bankSha = '';
       await loadAssets(true);
     });
@@ -191,19 +203,27 @@
 
   async function activate() {
     initialize();
-    if (state.loaded) return;
-    elements.status.textContent = 'Pobieranie egzaminów i banku pytań…';
-    try {
-      state.repositories = await library.repositories();
-      const preferred = state.repositories.find((repository) => repository.default) || state.repositories[0];
-      state.repositoryId = state.repositoryId || preferred?.id || '';
-      renderRepositorySelector();
-      await loadAssets(false);
-      state.loaded = true;
-    } catch (error) {
-      elements.status.textContent = error.message || 'Nie udało się pobrać biblioteki egzaminów.';
-      elements.status.classList.add('is-error');
-    }
+    if (state.loaded) return true;
+    if (state.activationPromise) return state.activationPromise;
+    state.activationPromise = (async () => {
+      elements.status.textContent = 'Pobieranie egzaminów i banku pytań…';
+      try {
+        state.repositories = await library.repositories();
+        const preferred = state.repositories.find((repository) => repository.default) || state.repositories[0];
+        state.repositoryId = state.repositoryId || preferred?.id || '';
+        renderRepositorySelector();
+        await loadAssets(false);
+        state.loaded = true;
+        return true;
+      } catch (error) {
+        elements.status.textContent = error.message || 'Nie udało się pobrać biblioteki egzaminów.';
+        elements.status.classList.add('is-error');
+        return false;
+      } finally {
+        state.activationPromise = null;
+      }
+    })();
+    return state.activationPromise;
   }
 
   function renderRepositorySelector() {
@@ -255,13 +275,14 @@
     if (!assets.length) elements.library.append(create('p', 'exam-library-empty', query ? 'Brak pasujących egzaminów.' : 'Brak egzaminów w tym repozytorium.'));
   }
 
-  async function loadExam(examId) {
-    if (!window.confirm('Wczytać egzamin z GitHuba i zastąpić bieżący lokalny draft?')) return;
+  async function loadExam(examId, options = {}) {
+    if (options.confirm !== false && !window.confirm('Wczytać egzamin z GitHuba i zastąpić bieżący lokalny draft?')) return;
     elements.status.textContent = `Pobieranie ${examId}…`;
     try {
       const result = await library.readExam(examId, { repositoryId: state.repositoryId });
       state.exam = modelApi.createExam(JSON.parse(result.content));
       state.remoteSha = result.sha || '';
+      state.remoteExamId = state.exam.examId;
       state.selectedQuestionId = state.exam.questions[0]?.questionId || '';
       state.tab = 'information';
       state.report = null;
@@ -272,13 +293,33 @@
       elements.status.textContent = `Wczytano ${examId}.`;
     } catch (error) {
       elements.status.textContent = error.message || 'Nie udało się wczytać egzaminu.';
+      if (options.propagate) throw error;
     }
+  }
+
+  async function openAsset(asset) {
+    if (!asset?.filename) return;
+    if (!await activate()) throw new Error('Nie udało się wczytać biblioteki egzaminów.');
+    const repositoryId = asset.repositoryId || state.repositoryId;
+    if (repositoryId && repositoryId !== state.repositoryId) {
+      if (!state.repositories.some((repository) => repository.id === repositoryId)) {
+        throw new Error('Repozytorium tego egzaminu nie jest już dostępne.');
+      }
+      state.repositoryId = repositoryId;
+      state.remoteSha = '';
+      state.remoteExamId = '';
+      state.bankSha = '';
+      renderRepositorySelector();
+      await loadAssets(false);
+    }
+    await loadExam(asset.filename, { confirm: false, propagate: true });
   }
 
   function newExam() {
     if (!window.confirm('Utworzyć nowy egzamin? Bieżący draft pozostanie tylko w historii przeglądarki.')) return;
     state.exam = modelApi.createExam();
     state.remoteSha = '';
+    state.remoteExamId = '';
     state.selectedQuestionId = state.exam.questions[0]?.questionId || '';
     state.report = null;
     state.attemptReport = null;
@@ -290,6 +331,7 @@
 
   function render() {
     if (!state.exam || !elements.editor) return;
+    state.mediaObjectUrls.splice(0).forEach((url) => URL.revokeObjectURL(url));
     elements.tabs.querySelectorAll('[data-exam-tab]').forEach((button) => {
       const active = button.dataset.examTab === state.tab;
       button.classList.toggle('is-active', active);
@@ -313,6 +355,118 @@
     elements.publish.disabled = state.saving;
   }
 
+  function questionMediaTargets(question) {
+    const targets = [{ value: 'question', label: 'Treść pytania' }];
+    (question.options || []).forEach((option, index) => targets.push({
+      value: `answer:${option.answerId}`,
+      label: `Odpowiedź ${index + 1}: ${option.text || option.answerId}`
+    }));
+    (question.pairs || []).forEach((pair, index) => {
+      targets.push({ value: `pair-left:${pair.pairId}`, label: `Dopasowanie ${index + 1} — lewa strona` });
+      targets.push({ value: `pair-right:${pair.pairId}`, label: `Dopasowanie ${index + 1} — prawa strona` });
+    });
+    (question.items || []).forEach((item, index) => targets.push({
+      value: `item:${item.itemId}`,
+      label: `Kolejność ${index + 1}: ${item.text || item.itemId}`
+    }));
+    return targets;
+  }
+
+  function imagesForTarget(question, target) {
+    if (!question) return [];
+    if (target === 'question') return question.images;
+    const separator = target.indexOf(':');
+    const type = separator < 0 ? '' : target.slice(0, separator);
+    const id = separator < 0 ? '' : target.slice(separator + 1);
+    if (type === 'answer') return question.options?.find((option) => option.answerId === id)?.images || null;
+    if (type === 'item') return question.items?.find((item) => item.itemId === id)?.images || null;
+    const pair = question.pairs?.find((item) => item.pairId === id);
+    if (type === 'pair-left') return pair?.leftImages || null;
+    if (type === 'pair-right') return pair?.rightImages || null;
+    return null;
+  }
+
+  function mediaPanel(scope, question = null) {
+    const panel = create('div', 'exam-media-panel');
+    panel.dataset.examMediaScope = scope;
+    if (question) panel.dataset.questionId = question.questionId;
+    const targets = scope === 'cover'
+      ? [{ value: 'cover', label: 'Okładka egzaminu' }]
+      : questionMediaTargets(question);
+    if (!targets.some((target) => target.value === state.mediaTarget)) state.mediaTarget = targets[0].value;
+    const heading = create('div', 'exam-media-heading');
+    const headingCopy = create('div');
+    headingCopy.append(
+      create('strong', '', scope === 'cover' ? 'Obraz okładki' : 'Obrazy pytania i odpowiedzi'),
+      create('small', '', 'PNG, JPG, WEBP lub GIF · maksymalnie 4 MB')
+    );
+    heading.append(headingCopy);
+    if (targets.length > 1) {
+      const target = document.createElement('select');
+      target.dataset.examMediaTarget = '1';
+      targets.forEach((entry) => {
+        const option = document.createElement('option');
+        option.value = entry.value; option.textContent = entry.label; target.append(option);
+      });
+      target.value = state.mediaTarget;
+      heading.append(target);
+    }
+    const inputNode = document.createElement('input');
+    inputNode.type = 'file';
+    inputNode.accept = 'image/png,image/jpeg,image/webp,image/gif';
+    inputNode.hidden = true;
+    inputNode.dataset.examMediaInput = '1';
+    inputNode.multiple = scope !== 'cover';
+    const dropzone = create('div', 'exam-media-dropzone');
+    dropzone.tabIndex = 0;
+    dropzone.setAttribute('role', 'button');
+    dropzone.dataset.examAction = 'choose-media';
+    dropzone.append(
+      create('span', 'exam-media-drop-icon', '⇧'),
+      create('strong', '', state.mediaUploading ? 'Wysyłanie obrazu…' : 'Przeciągnij obraz tutaj'),
+      create('small', '', 'albo kliknij i wybierz plik · możesz też wkleić przez Ctrl/Cmd+V')
+    );
+    dropzone.setAttribute('aria-disabled', String(state.mediaUploading));
+    const list = create('div', 'exam-media-list');
+    const entries = scope === 'cover'
+      ? (state.exam.metadata.cover?.ref ? [{ target: 'cover', label: 'Okładka', image: state.exam.metadata.cover }] : [])
+      : targets.flatMap((target) => (imagesForTarget(question, target.value) || []).map((image) => ({ ...target, target: target.value, image })));
+    entries.forEach((entry) => {
+      const item = create('div', 'exam-media-item');
+      const preview = document.createElement('img');
+      preview.alt = ''; preview.hidden = true;
+      preview.setAttribute('aria-hidden', 'true');
+      if (state.remoteSha) void loadMediaThumbnail(preview, entry.image.ref);
+      const copy = create('div', 'exam-media-copy');
+      copy.append(create('small', '', entry.label), create('code', '', entry.image.ref));
+      const alt = document.createElement('input');
+      alt.type = 'text'; alt.value = entry.image.alt || ''; alt.placeholder = 'Opis ALT';
+      alt.dataset.examMediaAlt = '1'; alt.dataset.mediaTarget = entry.target; alt.dataset.mediaRef = entry.image.ref;
+      copy.append(alt);
+      const remove = create('button', 'mini-button is-danger', scope === 'cover' ? 'Usuń okładkę' : 'Usuń z pytania');
+      remove.type = 'button'; remove.dataset.examAction = 'remove-media-reference';
+      remove.dataset.mediaTarget = entry.target; remove.dataset.mediaRef = entry.image.ref;
+      item.append(preview, copy, remove); list.append(item);
+    });
+    if (!entries.length) list.append(create('p', 'exam-media-empty', 'Nie dodano jeszcze obrazu.'));
+    panel.append(heading, inputNode, dropzone, list, create('p', 'exam-media-note', 'Usunięcie tutaj usuwa referencję z egzaminu, ale nie kasuje samego pliku z repozytorium.'));
+    return panel;
+  }
+
+  async function loadMediaThumbnail(image, ref) {
+    try {
+      const token = await window.ChemAuth.getAccessToken();
+      const url = new URL('/.netlify/functions/exam', window.location.origin);
+      url.search = new URLSearchParams({ action: 'image', repo: state.repositoryId, exam: state.exam.examId, ref, preview: '1' });
+      const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store', headers: { Authorization: `Bearer ${token}` } });
+      if (!response.ok) return;
+      const objectUrl = URL.createObjectURL(await response.blob());
+      if (!image.isConnected) { URL.revokeObjectURL(objectUrl); return; }
+      state.mediaObjectUrls.push(objectUrl);
+      image.src = objectUrl; image.hidden = false;
+    } catch (_) {}
+  }
+
   function renderInformation() {
     const main = section('Definicja egzaminu', 'Identyfikator jest częścią stabilnej ścieżki w prywatnym repozytorium.');
     main.append(
@@ -332,10 +486,8 @@
     messages.append(
       field('Przed rozpoczęciem', textarea('metadata.beforeStartMessage', state.exam.metadata.beforeStartMessage, { rows: 4 })),
       field('Po zakończeniu', textarea('metadata.afterFinishMessage', state.exam.metadata.afterFinishMessage, { rows: 4 })),
-      row(
-        field('Okładka — referencja pliku', input('metadata.cover.ref', state.exam.metadata.cover?.ref || '', { placeholder: 'photos/okladka.webp' }), 'Stabilna ścieżka wewnątrz folderu egzaminu.'),
-        field('ALT okładki', input('metadata.cover.alt', state.exam.metadata.cover?.alt || '', { placeholder: 'Opis okładki' }))
-      )
+      mediaPanel('cover'),
+      field('ALT okładki', input('metadata.cover.alt', state.exam.metadata.cover?.alt || '', { placeholder: 'Opis okładki' }))
     );
     elements.editor.append(main, messages);
   }
@@ -402,7 +554,9 @@
         field('Punkty', input('@points', question.points, { type: 'number', min: 0, max: 10000, step: .1 })),
         field('Punkty ujemne', input('@negativePoints', question.negativePoints, { type: 'number', min: 0, max: 10000, step: .1 }))
       ),
-      field('Obrazy', textarea('@images', imagesToText(question.images), { rows: 3, placeholder: 'photos/schemat.png | Opis ALT' }), 'Jedna stabilna referencja i ALT w wierszu.'),
+      scope === 'exam'
+        ? mediaPanel('question', question)
+        : field('Obrazy', textarea('@images', imagesToText(question.images), { rows: 3, placeholder: 'photos/schemat.png | Opis ALT' }), 'Jedna stabilna referencja i ALT w wierszu.'),
       ...questionTypeFields(question),
       field('Wyjaśnienie po wyniku', textarea('@explanation', question.explanation, { rows: 4 }))
     );
@@ -943,10 +1097,21 @@
     } else if (fieldName === 'pairs') {
       question.pairs = String(raw).split('\n').map((line, index) => {
         const parts = line.split(/\s*=>\s*/, 2);
-        return { pairId: `${question.questionId}-pair-${index + 1}`, left: parts[0]?.trim() || '', right: parts[1]?.trim() || '', leftImages: [], rightImages: [] };
+        const previous = question.pairs[index];
+        return {
+          pairId: previous?.pairId || `${question.questionId}-pair-${index + 1}`,
+          left: parts[0]?.trim() || '',
+          right: parts[1]?.trim() || '',
+          leftImages: previous?.leftImages || [],
+          rightImages: previous?.rightImages || []
+        };
       }).filter((pair) => pair.left || pair.right);
     } else if (fieldName === 'items') {
-      question.items = String(raw).split('\n').map((entry, index) => ({ itemId: `${question.questionId}-item-${index + 1}`, text: entry.trim(), images: [] })).filter((item) => item.text);
+      question.items = String(raw).split('\n').map((entry, index) => ({
+        itemId: question.items[index]?.itemId || `${question.questionId}-item-${index + 1}`,
+        text: entry.trim(),
+        images: question.items[index]?.images || []
+      })).filter((item) => item.text);
       question.correctOrder = question.items.map((item) => item.itemId);
     } else if (fieldName === 'blanks') {
       question.blanks = String(raw).split('\n').map((line, index) => {
@@ -957,12 +1122,179 @@
     if (editor.dataset.questionScope === 'bank') state.bankDirty = true;
   }
 
+  function mediaQuestion(panel) {
+    if (!panel || panel.dataset.examMediaScope !== 'question') return null;
+    return state.exam.questions.find((question) => question.questionId === panel.dataset.questionId) || null;
+  }
+
+  function handleMediaControl(event) {
+    const targetSelect = event.target.closest('[data-exam-media-target]');
+    if (targetSelect) {
+      state.mediaTarget = targetSelect.value;
+      return;
+    }
+    const alt = event.target.closest('[data-exam-media-alt]');
+    if (alt) {
+      const panel = alt.closest('[data-exam-media-scope]');
+      const value = String(alt.value || '').trim().slice(0, 300) || 'Ilustracja do pytania';
+      if (panel?.dataset.examMediaScope === 'cover') {
+        if (state.exam.metadata.cover?.ref === alt.dataset.mediaRef) state.exam.metadata.cover.alt = value;
+      } else {
+        const images = imagesForTarget(mediaQuestion(panel), alt.dataset.mediaTarget);
+        const image = images?.find((entry) => entry.ref === alt.dataset.mediaRef);
+        if (image) image.alt = value;
+      }
+      saveDrafts(); elements.badge.textContent = 'Niezapisane zmiany';
+      return;
+    }
+    const fileInput = event.target.closest('[data-exam-media-input]');
+    if (fileInput?.files?.length) {
+      void uploadExamMediaFiles(Array.from(fileInput.files), fileInput.closest('[data-exam-media-scope]'));
+      fileInput.value = '';
+    }
+  }
+
+  function handleMediaDragOver(event) {
+    const dropzone = event.target.closest('.exam-media-dropzone');
+    if (!dropzone) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+    dropzone.classList.add('is-dragover');
+  }
+
+  function handleMediaDragLeave(event) {
+    const dropzone = event.target.closest('.exam-media-dropzone');
+    if (dropzone && !dropzone.contains(event.relatedTarget)) dropzone.classList.remove('is-dragover');
+  }
+
+  function handleMediaDrop(event) {
+    const dropzone = event.target.closest('.exam-media-dropzone');
+    if (!dropzone) return;
+    event.preventDefault();
+    dropzone.classList.remove('is-dragover');
+    const files = Array.from(event.dataTransfer?.files || []).filter((file) => file.type.startsWith('image/'));
+    if (files.length) void uploadExamMediaFiles(files, dropzone.closest('[data-exam-media-scope]'));
+  }
+
+  function handleMediaPaste(event) {
+    const files = Array.from(event.clipboardData?.items || [])
+      .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+      .map((item) => item.getAsFile())
+      .filter(Boolean);
+    if (!files.length) return;
+    const panel = event.target.closest('[data-exam-media-scope]') || elements.editor.querySelector('[data-exam-media-scope]');
+    if (!panel) return;
+    event.preventDefault();
+    void uploadExamMediaFiles(files, panel);
+  }
+
+  function handleMediaKeydown(event) {
+    const dropzone = event.target.closest('.exam-media-dropzone');
+    if (!dropzone || !['Enter', ' '].includes(event.key)) return;
+    event.preventDefault();
+    if (!state.mediaUploading) {
+      dropzone.closest('[data-exam-media-scope]')?.querySelector('[data-exam-media-input]')?.click();
+    }
+  }
+
+  function mediaFilename(file) {
+    const extensions = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
+    const extension = extensions[file.type] || '';
+    const original = String(file.name || 'obraz').replace(/\.[^.]+$/, '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const stem = original.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 55) || 'obraz';
+    const suffix = cryptoId().replace(/[^a-z0-9]/gi, '').toLowerCase().slice(-10);
+    return `${stem}-${suffix}.${extension}`;
+  }
+
+  function fileBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Nie udało się odczytać obrazu.'));
+      reader.onload = () => resolve(String(reader.result || '').split(',', 2)[1] || '');
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function defaultImageAlt(file) {
+    return String(file.name || 'Ilustracja').replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim().slice(0, 300) || 'Ilustracja';
+  }
+
+  function addUploadedMedia(panel, target, media, file) {
+    const image = { ref: media.ref, alt: defaultImageAlt(file) };
+    if (panel.dataset.examMediaScope === 'cover') {
+      state.exam.metadata.cover = image;
+      return;
+    }
+    const question = mediaQuestion(panel);
+    const images = imagesForTarget(question, target) || imagesForTarget(question, 'question');
+    if (images && !images.some((entry) => entry.ref === image.ref)) images.push(image);
+  }
+
+  async function uploadExamMediaFiles(files, panel) {
+    if (!panel || state.mediaUploading) return;
+    if (!state.remoteSha || state.remoteExamId !== state.exam.examId) {
+      elements.status.className = 'exam-builder-status is-error';
+      elements.status.textContent = 'Najpierw zapisz draft egzaminu. Dzięki temu obraz trafi do właściwego folderu photos.';
+      return;
+    }
+    const allowed = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
+    const selected = files.slice(0, panel.dataset.examMediaScope === 'cover' ? 1 : 8);
+    const invalid = selected.find((file) => !allowed.has(file.type) || file.size <= 0 || file.size > 4 * 1024 * 1024);
+    if (invalid) {
+      elements.status.className = 'exam-builder-status is-error';
+      elements.status.textContent = 'Wybierz prawidłowy obraz PNG, JPG, WEBP lub GIF o rozmiarze do 4 MB.';
+      return;
+    }
+    const target = panel.dataset.examMediaScope === 'cover'
+      ? 'cover'
+      : panel.querySelector('[data-exam-media-target]')?.value || state.mediaTarget || 'question';
+    state.mediaUploading = true;
+    elements.status.className = 'exam-builder-status';
+    let uploadedCount = 0;
+    try {
+      for (let index = 0; index < selected.length; index += 1) {
+        const file = selected[index];
+        elements.status.textContent = `Wysyłanie obrazu ${index + 1}/${selected.length}: ${file.name || 'obraz'}…`;
+        const media = await library.uploadExamMedia({
+          examId: state.exam.examId,
+          filename: mediaFilename(file),
+          contentBase64: await fileBase64(file),
+          mimeType: file.type,
+          repositoryId: state.repositoryId
+        });
+        addUploadedMedia(panel, target, media, file);
+        uploadedCount += 1;
+      }
+      elements.status.textContent = selected.length === 1
+        ? 'Obraz zapisano w GitHubie i dodano do egzaminu. Zapisz draft, aby utrwalić referencję.'
+        : `${selected.length} obrazów zapisano w GitHubie. Zapisz draft, aby utrwalić referencje.`;
+    } catch (error) {
+      elements.status.classList.add('is-error');
+      elements.status.textContent = error.message || 'Nie udało się wysłać obrazu.';
+    } finally {
+      if (uploadedCount) saveDrafts();
+      state.mediaUploading = false;
+      render();
+      elements.badge.textContent = 'Niezapisane zmiany';
+    }
+  }
+
   function handleAction(event) {
     const button = event.target.closest('[data-exam-action]');
     if (!button) return;
     const action = button.dataset.examAction;
     const questionId = button.dataset.questionId;
-    if (action === 'add-question') {
+    if (action === 'choose-media') {
+      if (!state.mediaUploading) button.closest('[data-exam-media-scope]')?.querySelector('[data-exam-media-input]')?.click();
+    } else if (action === 'remove-media-reference') {
+      const panel = button.closest('[data-exam-media-scope]');
+      if (panel?.dataset.examMediaScope === 'cover') state.exam.metadata.cover = null;
+      else {
+        const images = imagesForTarget(mediaQuestion(panel), button.dataset.mediaTarget);
+        if (images) images.splice(0, images.length, ...images.filter((image) => image.ref !== button.dataset.mediaRef));
+      }
+      render();
+    } else if (action === 'add-question') {
       const question = modelApi.createQuestion(); state.exam.questions.push(question); state.selectedQuestionId = question.questionId; render();
     } else if (action === 'select-question') { state.selectedQuestionId = questionId; render(); }
     else if (action === 'duplicate-question') duplicateQuestion(state.exam.questions, questionId, false);
@@ -1065,7 +1397,7 @@
     state.exam.status = status;
     const validation = modelApi.validateExam(state.exam);
     if (!validation.valid) { render(); elements.status.textContent = validation.errors[0].message; return; }
-    const renamed = state.remoteSha && !state.assets.some((asset) => asset.filename === state.exam.examId);
+    const renamed = state.remoteSha && state.remoteExamId !== state.exam.examId;
     if (renamed && !window.confirm('ID wskazuje nową ścieżkę. Utworzyć nowy egzamin i pozostawić poprzedni bez zmian?')) return;
     state.saving = true; render();
     try {
@@ -1086,6 +1418,7 @@
         repositoryId: state.repositoryId
       });
       state.remoteSha = saved.sha || '';
+      state.remoteExamId = state.exam.examId;
       saveDrafts();
       elements.status.textContent = status === 'published' ? 'Egzamin został opublikowany.' : 'Draft został zapisany w GitHubie.';
       await loadAssets(true);
@@ -1097,7 +1430,7 @@
 
   function previewExam() {
     const validation = modelApi.validateExam(state.exam);
-    if (!validation.valid || !state.remoteSha) {
+    if (!validation.valid || !state.remoteSha || state.remoteExamId !== state.exam.examId) {
       elements.status.textContent = validation.valid ? 'Zapisz egzamin przed podglądem.' : validation.errors[0].message;
       return;
     }
@@ -1119,6 +1452,7 @@
       if (!window.confirm(`${warning}Usunąć exam.json z GitHuba? Commit będzie możliwy do odzyskania z historii.`)) return;
       await library.remove('exam', { filename: state.exam.examId, expectedSha: state.remoteSha, repositoryId: state.repositoryId });
       state.remoteSha = '';
+      state.remoteExamId = '';
       elements.status.textContent = 'Egzamin usunięto z GitHuba. Lokalny draft pozostał w Builderze.';
       await loadAssets(true);
     } catch (error) { elements.status.textContent = error.message || 'Nie udało się usunąć egzaminu.'; }
@@ -1215,6 +1549,6 @@
     return minutes ? `${minutes} min ${value % 60} s` : `${value} s`;
   }
 
-  window.ChemExamBuilder = { activate, flush: saveDrafts };
+  window.ChemExamBuilder = { activate, flush: saveDrafts, openAsset };
   document.addEventListener('DOMContentLoaded', initialize);
 })();
