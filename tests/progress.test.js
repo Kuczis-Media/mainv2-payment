@@ -130,7 +130,7 @@ test('opening a non-lesson leaf completes it while lessons and containers keep e
   assert.equal(completedWithoutOpenTelemetry.record.openCount, 0);
 });
 
-test('weighted course and nested accordion aggregation counts only effective leaves', () => {
+test('hierarchical aggregation weights enabled direct children at every level', () => {
   const user = progressCommon.normalizeUserDocument({
     userId: USER_ONE,
     records: {
@@ -139,13 +139,13 @@ test('weighted course and nested accordion aggregation counts only effective lea
     }
   }, USER_ONE);
   const aggregate = progressCommon.aggregateUser(user, catalog());
-  assert.equal(aggregate.course.progressPercent, 75);
+  assert.equal(aggregate.course.progressPercent, 50);
   assert.equal(aggregate.nodes.accordion.progressPercent, 100);
   assert.equal(aggregate.nodes.alcohols.trackedCount, 2);
   assert.equal(aggregate.course.completedCount, 1);
 });
 
-test('material inclusion flags remove it independently from section, department and course totals', () => {
+test('legacy inclusion flags are ignored and every enabled child contributes to all ancestors', () => {
   const source = catalog({
     nodes: [
       { id: 'course', type: 'course', progress: progress({ tracking: 'ON' }) },
@@ -160,9 +160,24 @@ test('material inclusion flags remove it independently from section, department 
     extra: { progressPercent: 100, completedAt: '2026-08-15T10:00:00Z' }
   } }, USER_ONE);
   const aggregate = progressCommon.aggregateUser(user, source);
-  assert.equal(aggregate.nodes.sec.progressPercent, 50);
-  assert.equal(aggregate.nodes.dep.progressPercent, 50);
-  assert.equal(aggregate.course.progressPercent, 50);
+  assert.equal(aggregate.nodes.sec.progressPercent, 75);
+  assert.equal(aggregate.nodes.dep.progressPercent, 75);
+  assert.equal(aggregate.course.progressPercent, 75);
+});
+
+test('containers with no enabled descendants have zero tracked items', () => {
+  const source = catalog({
+    nodes: [
+      { id: 'course', type: 'course', progress: progress({ tracking: 'ON' }) },
+      { id: 'sec', parentId: 'course', type: 'section', progress: progress() },
+      { id: 'one', parentId: 'sec', type: 'pdf', progress: progress({ tracking: 'OFF' }) },
+      { id: 'two', parentId: 'sec', type: 'video', progress: progress({ tracking: 'OFF' }) }
+    ]
+  });
+  const aggregate = progressCommon.aggregateUser({ userId: USER_ONE }, source);
+  assert.equal(aggregate.nodes.sec.trackedCount, 0);
+  assert.equal(aggregate.course.trackedCount, 0);
+  assert.equal(aggregate.course.progressPercent, 0);
 });
 
 test('lesson percentage excludes optional steps and uses stable step IDs', () => {
@@ -431,4 +446,60 @@ test('progress endpoints derive the learner from Identity, deny privilege escala
   const actions = JSON.parse(audit.body).audit.map((entry) => entry.action);
   assert.ok(actions.includes('progress.mark_completed'));
   assert.ok(actions.includes('progress.reset.material'));
+});
+
+test('removing a dashboard node invalidates learner records without scanning every user Blob', async (t) => {
+  const store = new MemoryStore();
+  await store.set(CATALOG_KEY, JSON.stringify(catalog()), { onlyIfNew: true });
+  progressFunction._test.setStoreFactory(() => store);
+  adminProgressFunction._test.setStoreFactory(() => store);
+  t.after(() => {
+    progressFunction._test.setStoreFactory(null);
+    adminProgressFunction._test.setStoreFactory(null);
+  });
+
+  const originalFetch = global.fetch;
+  let canonical = { id: USER_ONE, email: 'jan@example.com', app_metadata: { roles: ['active'] } };
+  global.fetch = async () => responseJson(canonical);
+  t.after(() => { global.fetch = originalFetch; });
+
+  const userContext = contextFor(canonical);
+  await progressFunction.handler(eventFor('POST', {
+    materialId: 'slides', materialType: 'presentation', action: 'open', opened: true
+  }), userContext);
+
+  canonical = { id: ADMIN, email: 'admin@example.com', app_metadata: { roles: ['admin'] } };
+  const adminContext = contextFor(canonical);
+  const withoutSlides = catalog({
+    nodes: catalog().nodes.filter((node) => node.id !== 'slides')
+  });
+  const removed = await adminProgressFunction.handler(eventFor('PUT', {
+    action: 'catalog', catalog: withoutSlides
+  }), adminContext);
+  assert.equal(removed.statusCode, 200);
+  assert.equal(JSON.parse(removed.body).removedCount, 1);
+  assert.ok(JSON.parse(removed.body).catalog.invalidatedAt.slides);
+
+  canonical = { id: USER_ONE, email: 'jan@example.com', app_metadata: { roles: ['active'] } };
+  const afterRemoval = await progressFunction.handler(eventFor('GET'), contextFor(canonical));
+  assert.equal(JSON.parse(afterRemoval.body).records.slides, undefined);
+  const retiredWrite = await progressFunction.handler(eventFor('POST', {
+    materialId: 'slides', materialType: 'presentation', action: 'open', opened: true
+  }), contextFor(canonical));
+  assert.equal(JSON.parse(retiredWrite.body).saved, false);
+  assert.equal(JSON.parse(retiredWrite.body).record, null);
+
+  canonical = { id: ADMIN, email: 'admin@example.com', app_metadata: { roles: ['admin'] } };
+  await adminProgressFunction.handler(eventFor('PUT', {
+    action: 'catalog', catalog: catalog()
+  }), contextFor(canonical));
+
+  canonical = { id: USER_ONE, email: 'jan@example.com', app_metadata: { roles: ['active'] } };
+  const afterReadding = await progressFunction.handler(eventFor('GET'), contextFor(canonical));
+  assert.equal(JSON.parse(afterReadding.body).records.slides, undefined);
+  await progressFunction.handler(eventFor('POST', {
+    materialId: 'slides', materialType: 'presentation', action: 'open', opened: true
+  }), contextFor(canonical));
+  const freshProgress = await progressFunction.handler(eventFor('GET'), contextFor(canonical));
+  assert.equal(JSON.parse(freshProgress.body).records.slides.progressPercent, 100);
 });

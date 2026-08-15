@@ -189,9 +189,9 @@
     return {
       tracking: root && tracking === 'INHERIT' ? 'ON' : tracking,
       showProgress: root && showProgress === 'INHERIT' ? 'ON' : showProgress,
-      includeInSection: source.includeInSection !== false,
-      includeInDepartment: source.includeInDepartment !== false,
-      includeInCourse: source.includeInCourse !== false,
+      includeInSection: true,
+      includeInDepartment: true,
+      includeInCourse: true,
       weight: Math.max(.01, Math.min(10000, Number(source.weight) || 1))
     };
   }
@@ -716,7 +716,7 @@
     const visitBlocks = (blocks, parentId) => {
       blocks.forEach((block) => {
         if (block.kind === 'group') {
-          const type = block.level === 3 ? 'section' : block.level === 4 ? 'subsection' : 'other';
+          const type = block.level === 3 ? 'section' : 'subsection';
           if (!block.progressConfigured) block.uid = unique('', type === 'section' ? 'section' : 'subsection', `${parentId}:${block.title}`);
           else block.uid = unique(block.uid, 'subsection', `${parentId}:${block.title}`);
           visitBlocks(block.blocks, block.uid);

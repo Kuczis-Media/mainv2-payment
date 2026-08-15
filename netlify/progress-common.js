@@ -10,6 +10,7 @@ const MATERIAL_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
 const STRUCTURAL_MATERIAL_TYPES = new Set(['lesson', 'lesson_step', 'section', 'subsection', 'department', 'course']);
 const MAX_RECORDS = 5_000;
 const MAX_VISITED = 1_000;
+const MAX_INVALIDATIONS = 10_000;
 
 function plainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -98,9 +99,9 @@ function normalizeNode(input, index = 0) {
     progress: {
       tracking: trackingState(progress.tracking),
       showProgress: trackingState(progress.showProgress),
-      includeInSection: progress.includeInSection !== false,
-      includeInDepartment: progress.includeInDepartment !== false,
-      includeInCourse: progress.includeInCourse !== false,
+      includeInSection: true,
+      includeInDepartment: true,
+      includeInCourse: true,
       weight: clamp(progress.weight || 1, 0.01, 10_000)
     },
     settings: {
@@ -143,6 +144,15 @@ function normalizeCatalog(input) {
       parentId = byId.get(parentId)?.parentId || null;
     }
   });
+  const invalidatedAt = {};
+  if (plainObject(source.invalidatedAt)) {
+    Object.entries(source.invalidatedAt)
+      .map(([id, timestamp]) => [id, isoDate(timestamp)])
+      .filter(([id, timestamp]) => validMaterialId(id) && timestamp)
+      .sort((left, right) => String(right[1]).localeCompare(String(left[1])))
+      .slice(0, MAX_INVALIDATIONS)
+      .forEach(([id, timestamp]) => { invalidatedAt[id] = timestamp; });
+  }
   return {
     version: 1,
     updatedAt: isoDate(source.updatedAt),
@@ -151,6 +161,7 @@ function normalizeCatalog(input) {
       recordOpens: global.recordOpens !== false,
       showProgress: trackingState(global.showProgress, 'ON') === 'OFF' ? 'OFF' : 'ON'
     },
+    invalidatedAt,
     nodes
   };
 }
@@ -258,6 +269,30 @@ function normalizeRecord(input, userId, id) {
     lastActivityAt: isoDate(source.lastActivityAt),
     details: plainObject(source.details) ? safeObject(source.details) : {}
   };
+}
+
+function activeUserDocument(input, catalogInput) {
+  const catalog = normalizeCatalog(catalogInput);
+  const sourceUserId = input?.userId || 'unknown';
+  const user = normalizeUserDocument(input, sourceUserId);
+  let removed = false;
+  Object.entries(user.records).forEach(([id, record]) => {
+    const invalidated = catalog.invalidatedAt[id];
+    if (!invalidated) return;
+    const activity = record.lastActivityAt || record.completedAt || record.lastOpenedAt || record.firstOpenedAt;
+    if (!activity || Date.parse(activity) <= Date.parse(invalidated)) {
+      delete user.records[id];
+      removed = true;
+    }
+  });
+  if (removed) {
+    user.lastActivityAt = Object.values(user.records)
+      .map((record) => record.lastActivityAt)
+      .filter(Boolean)
+      .sort()
+      .at(-1) || null;
+  }
+  return user;
 }
 
 function safeObject(input, depth = 0) {
@@ -542,16 +577,9 @@ function recordProgress(record) {
   return record ? clamp(record.progressPercent) : 0;
 }
 
-function includeForAncestor(node, ancestor) {
-  if (!node || !ancestor) return true;
-  if (ancestor.type === 'course') return node.progress.includeInCourse;
-  if (ancestor.type === 'department') return node.progress.includeInDepartment;
-  return node.progress.includeInSection;
-}
-
 function aggregateUser(userInput, catalogInput) {
-  const user = normalizeUserDocument(userInput, userInput?.userId || 'unknown');
   const { catalog, byId, effective } = effectiveSettings(catalogInput);
+  const user = activeUserDocument(userInput, catalog);
   const children = new Map();
   catalog.nodes.forEach((node) => {
     const parent = node.parentId || '__root__';
@@ -559,20 +587,12 @@ function aggregateUser(userInput, catalogInput) {
     children.get(parent).push(node);
   });
   const result = {};
-  const descendants = (ancestor) => {
-    const leaves = [];
-    const visit = (node) => {
-      const nested = children.get(node.id) || [];
-      if (!nested.length) leaves.push(node);
-      else nested.forEach(visit);
-    };
-    (children.get(ancestor?.id || '__root__') || []).forEach(visit);
-    return leaves;
-  };
-  catalog.nodes.forEach((node) => {
+  const calculate = (node) => {
+    if (result[node.id]) return result[node.id];
     const nested = children.get(node.id) || [];
     if (!nested.length) {
       const record = user.records[node.id] || null;
+      const tracked = effective.get(node.id)?.tracking !== false && !STRUCTURAL_MATERIAL_TYPES.has(node.type);
       result[node.id] = {
         materialId: node.id,
         title: node.title,
@@ -580,19 +600,22 @@ function aggregateUser(userInput, catalogInput) {
         progressPercent: recordProgress(record),
         status: record?.status || 'not_started',
         opened: Boolean(record?.opened),
-        tracked: effective.get(node.id)?.tracking !== false,
+        tracked,
         showProgress: effective.get(node.id)?.showProgress !== false,
-        completedCount: record?.status === 'completed' ? 1 : 0,
-        trackedCount: effective.get(node.id)?.tracking === false ? 0 : 1,
+        completedCount: tracked && record?.status === 'completed' ? 1 : 0,
+        trackedCount: tracked ? 1 : 0,
         record
       };
-      return;
+      return result[node.id];
     }
-    const leaves = descendants(node).filter((leaf) => (
-      effective.get(leaf.id)?.tracking !== false && includeForAncestor(leaf, node)
-    ));
-    const denominator = leaves.reduce((sum, leaf) => sum + leaf.progress.weight, 0);
-    const numerator = leaves.reduce((sum, leaf) => sum + recordProgress(user.records[leaf.id]) * leaf.progress.weight, 0);
+    const contributions = nested
+      .map((child) => ({ node: child, aggregate: calculate(child) }))
+      .filter((item) => item.aggregate.trackedCount > 0);
+    const denominator = contributions.reduce((sum, item) => sum + item.node.progress.weight, 0);
+    const numerator = contributions.reduce(
+      (sum, item) => sum + item.aggregate.progressPercent * item.node.progress.weight,
+      0
+    );
     const percent = denominator > 0 ? clamp(numerator / denominator) : 0;
     result[node.id] = {
       materialId: node.id,
@@ -600,33 +623,39 @@ function aggregateUser(userInput, catalogInput) {
       materialType: node.type,
       progressPercent: percent,
       status: percent >= 100 ? 'completed' : percent > 0 ? 'in_progress' : 'not_started',
-      opened: leaves.some((leaf) => user.records[leaf.id]?.opened),
+      opened: contributions.some((item) => item.aggregate.opened),
       tracked: effective.get(node.id)?.tracking !== false,
       showProgress: effective.get(node.id)?.showProgress !== false,
-      completedCount: leaves.filter((leaf) => user.records[leaf.id]?.status === 'completed').length,
-      trackedCount: leaves.length,
+      completedCount: contributions.reduce((sum, item) => sum + item.aggregate.completedCount, 0),
+      trackedCount: contributions.reduce((sum, item) => sum + item.aggregate.trackedCount, 0),
       record: null
     };
-  });
+    return result[node.id];
+  };
+  catalog.nodes.forEach(calculate);
   const courseNode = catalog.nodes.find((node) => node.type === 'course' && !node.parentId);
   let course = courseNode ? result[courseNode.id] : null;
   if (!course) {
-    const leaves = catalog.nodes.filter((node) => !(children.get(node.id) || []).length)
-      .filter((node) => effective.get(node.id)?.tracking !== false && node.progress.includeInCourse);
-    const denominator = leaves.reduce((sum, node) => sum + node.progress.weight, 0);
-    const numerator = leaves.reduce((sum, node) => sum + recordProgress(user.records[node.id]) * node.progress.weight, 0);
+    const roots = (children.get('__root__') || [])
+      .map((node) => ({ node, aggregate: calculate(node) }))
+      .filter((item) => item.aggregate.trackedCount > 0);
+    const denominator = roots.reduce((sum, item) => sum + item.node.progress.weight, 0);
+    const numerator = roots.reduce((sum, item) => sum + item.aggregate.progressPercent * item.node.progress.weight, 0);
     const percent = denominator > 0 ? clamp(numerator / denominator) : 0;
     course = {
       materialId: 'course', title: 'ChemDisk', materialType: 'course', progressPercent: percent,
       status: percent >= 100 ? 'completed' : percent > 0 ? 'in_progress' : 'not_started',
-      opened: Object.values(user.records).some((record) => record.opened), tracked: catalog.global.tracking === 'ON',
+      opened: roots.some((item) => item.aggregate.opened), tracked: catalog.global.tracking === 'ON',
       showProgress: catalog.global.showProgress === 'ON',
-      completedCount: leaves.filter((node) => user.records[node.id]?.status === 'completed').length,
-      trackedCount: leaves.length, record: null
+      completedCount: roots.reduce((sum, item) => sum + item.aggregate.completedCount, 0),
+      trackedCount: roots.reduce((sum, item) => sum + item.aggregate.trackedCount, 0), record: null
     };
     result.course = course;
   }
-  const records = Object.values(user.records);
+  const trackedLeafIds = new Set(catalog.nodes
+    .filter((node) => !(children.get(node.id) || []).length && effective.get(node.id)?.tracking !== false)
+    .map((node) => node.id));
+  const records = Object.values(user.records).filter((record) => trackedLeafIds.has(record.materialId));
   return {
     course,
     nodes: result,
@@ -649,7 +678,10 @@ function distributionBucket(percent) {
 }
 
 function globalReport(users, catalog) {
-  const reports = (Array.isArray(users) ? users : []).map((user) => ({ user, aggregate: aggregateUser(user, catalog) }));
+  const reports = (Array.isArray(users) ? users : []).map((input) => {
+    const user = activeUserDocument(input, catalog);
+    return { user, aggregate: aggregateUser(user, catalog) };
+  });
   const distribution = { '0-25': 0, '25-50': 0, '50-75': 0, '75-100': 0 };
   reports.forEach(({ aggregate }) => { distribution[distributionBucket(aggregate.course.progressPercent)] += 1; });
   const total = reports.length;
@@ -690,6 +722,7 @@ module.exports = {
   STATUS_VALUES,
   TRACKING_STATES,
   aggregateUser,
+  activeUserDocument,
   clamp,
   defaultGlobalSettings,
   defaultNodeProgress,

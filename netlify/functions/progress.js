@@ -1,6 +1,7 @@
 'use strict';
 
 const {
+  activeUserDocument,
   aggregateUser,
   effectiveSettings,
   mergeProgressEvent,
@@ -70,7 +71,7 @@ async function handleGet(event, store, auth) {
   ]);
   const materialId = String(query.materialId || '');
   if (materialId && !validMaterialId(materialId)) return json({ error: 'INVALID_MATERIAL_ID' }, 400);
-  const user = stored.document;
+  const user = activeUserDocument(stored.document, catalog);
   const aggregate = aggregateUser(user, catalog);
   return json({
     version: 1,
@@ -92,10 +93,20 @@ async function handleEvent(event, store, auth) {
   const catalog = await readCatalog(store);
   const resolved = effectiveSettings(catalog);
   const node = resolved.byId.get(progressEvent.materialId) || null;
+  if (!node && catalog.invalidatedAt[progressEvent.materialId]) {
+    return json({
+      saved: false,
+      record: null,
+      effective: { tracking: false, showProgress: false, recordOpens: catalog.global.recordOpens }
+    });
+  }
   const effective = node ? resolved.effective.get(node.id) : { tracking: true, showProgress: true };
   const isLeaf = !node || !catalog.nodes.some((candidate) => candidate.parentId === node.id);
   let rejected = null;
   const outcome = await updateUser(store, auth.userId, profileFrom(auth.user), (document) => {
+    const active = activeUserDocument(document, catalog);
+    document.records = active.records;
+    document.lastActivityAt = active.lastActivityAt;
     const merged = mergeProgressEvent(document.records[progressEvent.materialId] || null, progressEvent, {
       userId: auth.userId,
       node,

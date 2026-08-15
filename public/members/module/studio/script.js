@@ -1064,22 +1064,10 @@
       form.append(group);
       return;
     }
-    const toggles = [
-      ['progressIncludeInSection', 'Uwzględniaj w postępie sekcji', progress.includeInSection !== false],
-      ['progressIncludeInDepartment', 'Uwzględniaj w postępie działu', progress.includeInDepartment !== false],
-      ['progressIncludeInCourse', 'Uwzględniaj w postępie całego kursu', progress.includeInCourse !== false]
-    ];
-    toggles.forEach(([fieldName, label, checked]) => {
-      const control = create('label', 'check-field');
-      const input = textInput('', fieldName, { type: 'checkbox' });
-      input.checked = checked;
-      control.append(input, create('span', '', label));
-      group.append(control);
-    });
     group.append(field(
       'Waga',
       textInput(String(progress.weight || 1), 'progressWeight', { type: 'number' }),
-      'Domyślna waga to 1. Większa wartość zwiększa wpływ elementu na agregaty.'
+      'Domyślna waga to 1. Element z włączonym śledzeniem automatycznie wpływa na postęp wszystkich swoich rodziców.'
     ));
     form.append(group);
   }
@@ -4217,9 +4205,6 @@
       const mapping = {
         progressTracking: 'tracking',
         progressShowProgress: 'showProgress',
-        progressIncludeInSection: 'includeInSection',
-        progressIncludeInDepartment: 'includeInDepartment',
-        progressIncludeInCourse: 'includeInCourse',
         progressWeight: 'weight'
       };
       const key = mapping[fieldName];

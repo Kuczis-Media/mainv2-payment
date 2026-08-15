@@ -762,7 +762,7 @@
         const id = host.dataset.progressHost;
         const aggregate = nodes[id];
         host.replaceChildren();
-        if (!aggregate || aggregate.tracked === false || aggregate.showProgress === false) {
+        if (!aggregate || aggregate.tracked === false || aggregate.showProgress === false || aggregate.trackedCount <= 0) {
           host.hidden = true;
           return;
         }
@@ -774,7 +774,7 @@
       const course = state?.aggregate?.course;
       if (courseHost) {
         courseHost.replaceChildren();
-        courseHost.hidden = !course || course.tracked === false || course.showProgress === false;
+        courseHost.hidden = !course || course.tracked === false || course.showProgress === false || course.trackedCount <= 0;
         if (!courseHost.hidden) {
           const title = document.createElement('strong');
           title.textContent = 'Twój postęp kursu';

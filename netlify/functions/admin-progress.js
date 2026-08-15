@@ -1,6 +1,7 @@
 'use strict';
 
 const {
+  activeUserDocument,
   aggregateUser,
   globalReport,
   normalizeCatalog,
@@ -71,7 +72,8 @@ async function handleGet(event, store) {
     const targetUserId = validateTargetUserId(query.userId);
     if (!targetUserId.ok) return json({ error: targetUserId.code }, 400);
     const stored = await readUser(store, targetUserId.value);
-    return json({ user: stored.document, aggregate: aggregateUser(stored.document, catalog), catalog });
+    const user = activeUserDocument(stored.document, catalog);
+    return json({ user, aggregate: aggregateUser(user, catalog), catalog });
   }
   if (view === 'audit') {
     const page = await listEntries(store, {
@@ -157,7 +159,13 @@ async function updateLessonManifest(body, store, auth) {
 async function updateCatalog(body, store, auth) {
   if (!plainObject(body.catalog)) return json({ error: 'INVALID_CATALOG' }, 400);
   const previous = await readCatalog(store);
-  const catalog = normalizeCatalog(body.catalog);
+  const incoming = normalizeCatalog(body.catalog);
+  const nextIds = new Set(incoming.nodes.map((node) => node.id));
+  const removedIds = previous.nodes.map((node) => node.id).filter((id) => !nextIds.has(id));
+  const invalidatedAt = { ...previous.invalidatedAt, ...incoming.invalidatedAt };
+  const removedAt = new Date().toISOString();
+  removedIds.forEach((id) => { invalidatedAt[id] = removedAt; });
+  const catalog = normalizeCatalog({ ...incoming, invalidatedAt });
   if (catalog.nodes.length > 10_000) return json({ error: 'CATALOG_TOO_LARGE' }, 400);
   await writeCatalog(store, catalog, auth.userId);
   await appendAudit(store, {
@@ -166,9 +174,9 @@ async function updateCatalog(body, store, auth) {
     action: 'progress.catalog.update',
     materialId: null,
     previousValue: { global: previous.global, nodeCount: previous.nodes.length },
-    newValue: { global: catalog.global, nodeCount: catalog.nodes.length }
+    newValue: { global: catalog.global, nodeCount: catalog.nodes.length, removedCount: removedIds.length }
   });
-  return json({ saved: true, catalog });
+  return json({ saved: true, catalog, removedCount: removedIds.length });
 }
 
 async function updateTarget(body, store, auth, targetUserId) {
@@ -176,6 +184,9 @@ async function updateTarget(body, store, auth, targetUserId) {
   let audit = null;
   let validationError = null;
   const outcome = await updateUser(store, targetUserId, {}, (document) => {
+    const active = activeUserDocument(document, catalog);
+    document.records = active.records;
+    document.lastActivityAt = active.lastActivityAt;
     const result = applyAdminAction(document, body, catalog);
     if (!result.ok) {
       validationError = result;

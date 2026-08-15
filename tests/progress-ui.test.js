@@ -41,10 +41,13 @@ test('student progress labels never round a positive value down to zero', () => 
 test('course progress remains legible and refreshes after a cached back navigation', () => {
   const css = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.css'), 'utf8');
   const dashboard = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.js'), 'utf8');
+  const studio = fs.readFileSync(path.join(root, 'public', 'members', 'module', 'studio', 'script.js'), 'utf8');
   const html = fs.readFileSync(path.join(root, 'public', 'members', 'index.html'), 'utf8');
   assert.match(css, /\.course-progress\s*\{[^}]*--progress-text:\s*#ffffff[^}]*background:\s*rgba\(5, 28, 40, \.72\)/s);
   assert.match(dashboard, /addEventListener\('pageshow',[\s\S]*event\.persisted[\s\S]*hydrateDashboardProgress\(null, true\)/);
   assert.match(dashboard, /api\.resetAll\(\)/);
   assert.match(dashboard, /studentResetButton\('Resetuj'/);
+  assert.match(dashboard, /aggregate\.trackedCount <= 0/);
+  assert.doesNotMatch(studio, /Uwzględniaj w postępie (?:sekcji|działu|całego kursu)/);
   assert.match(html, /id="profile-reset-progress"/);
 });

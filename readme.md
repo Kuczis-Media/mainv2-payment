@@ -987,13 +987,12 @@ W Studio wybierz Dashboard Builder, a następnie cały dashboard, dział, harmon
 
 - śledzenie `ON`, `OFF` lub `INHERIT`;
 - widoczność paska `ON`, `OFF` lub `INHERIT`;
-- osobne uwzględnianie w postępie sekcji, działu i całego kursu;
 - wagę, domyślnie `1`;
 - dla prezentacji sposób liczenia: najwyższy slajd, odwiedzone slajdy albo wymagane slajdy;
 - dla filmu próg ukończenia od 1 do 100%;
 - na poziomie całej platformy niezależne rejestrowanie otwarć.
 
-Studio pokazuje ustawienie efektywne. Dziedziczenie biegnie od całego kursu przez dział i kolejne harmonijki do materiału. `OFF` rodzica wyłącza element dziedziczący, ale jawne `ON` materiału jest nadpisaniem. Wyłączenie śledzenia lub paska nie usuwa historii.
+Studio pokazuje ustawienie efektywne. Dziedziczenie biegnie od całego kursu przez dział i kolejne harmonijki do materiału. `OFF` rodzica wyłącza element dziedziczący, ale jawne `ON` materiału jest nadpisaniem. Każdy efektywnie włączony element automatycznie uczestniczy w postępie wszystkich swoich rodziców — nie ma osobnych, rozbieżnych flag sekcji, działu i kursu. Wyłączenie śledzenia lub paska nie usuwa historii.
 
 Konfiguracja i stabilne identyfikatory są zapisywane w niewidocznych, jednoliniowych komentarzach Markdown `chemdisk-progress`. Po opublikowaniu Dashboard Builder synchronizuje katalog postępu z funkcją administratora. Brak komentarza zachowuje bezpieczne ustawienia zgodne ze starym dashboardem.
 
@@ -1005,7 +1004,9 @@ Tryb lekcji może być swobodny albo sekwencyjny. Serwer odrzuca nieznany, zablo
 
 ### Paski i agregaty
 
-Dashboard wyświetla pasek całego kursu, działów, harmonijek i materiałów, o ile efektywne `showProgress` jest włączone. Procent kontenera jest średnią ważoną śledzonych liści, które są włączone do danego poziomu. Elementy wyłączone i materiały dodatkowe nie zwiększają mianownika. Gdy globalne śledzenie jest wyłączone, historia pozostaje w Blobs, procenty nie są aktualizowane, a paski są ukryte; rejestrowanie samych otwarć może nadal działać.
+Dashboard wyświetla pasek całego kursu, działów, harmonijek i materiałów, o ile efektywne `showProgress` jest włączone. Agregacja jest hierarchiczna: sekcja liczy wszystkie swoje efektywnie włączone dzieci, dział liczy włączone sekcje, a kurs liczy włączone działy. Waga zmienia wpływ elementu na jego bezpośredniego rodzica. Wyłączone elementy nie zwiększają mianownika, a kontener bez ani jednego włączonego potomka nie pokazuje uczniowi paska. Gdy globalne śledzenie jest wyłączone, historia pozostaje w Blobs, procenty nie są aktualizowane, a paski są ukryte; rejestrowanie samych otwarć może nadal działać.
+
+Usunięcie elementu w Dashboard Builderze i opublikowanie dashboardu zapisuje w katalogu znacznik unieważnienia. Od tej chwili jego stary rekord nie jest zwracany ani liczony żadnemu uczniowi. Nie wymaga to skanowania wszystkich Blobów użytkowników podczas publikacji; rekord jest odfiltrowywany i sprzątany przy najbliższej operacji danego konta. Ponowne dodanie tego samego stabilnego ID zaczyna postęp od zera.
 
 Kursant może po potwierdzeniu zresetować pojedynczy materiał przy jego pasku albo cały własny kurs z karty postępu i ustawień profilu. Endpoint zawsze bierze właściciela danych z uwierzytelnionej sesji; reset kursanta nie przyjmuje `userId`.
 
@@ -1090,7 +1091,7 @@ Przed publikacją wykonaj też krótki test ręczny:
 28. linki Google i YouTube działają na docelowej domenie i przy docelowych ustawieniach udostępniania;
 29. zwykły użytkownik nie może podać cudzego `userId`, odczytać cudzego postępu ani wywołać `admin-progress`;
 30. otwarcie materiału innego niż lekcja daje 100%, lekcja nadal wylicza procent z kroków, a otwarcie kontenera nie zalicza jego dzieci;
-31. ustawienia `ON/OFF/INHERIT`, osobne flagi agregacji i wagi dają oczekiwany procent działu i kursu;
+31. ustawienia `ON/OFF/INHERIT` i wagi dają hierarchiczny procent sekcji, działu i kursu bez osobnych flag agregacji;
 32. wyłączenie globalnego postępu zachowuje historię, a osobny przełącznik otwarć działa zgodnie z ustawieniem;
 33. lekcja sekwencyjna odrzuca skok do zablokowanego kroku, natomiast nadpisanie użytkownika działa;
 34. film YT nie zalicza przewiniętego fragmentu, PDF jest opisany jako nawigacyjny, a quiz pokazuje osobno postęp i wynik;

@@ -158,9 +158,9 @@
       progress: {
         tracking: state(progress.tracking),
         showProgress: state(progress.showProgress),
-        includeInSection: progress.includeInSection !== false,
-        includeInDepartment: progress.includeInDepartment !== false,
-        includeInCourse: progress.includeInCourse !== false,
+        includeInSection: true,
+        includeInDepartment: true,
+        includeInCourse: true,
         weight: Math.max(.01, Math.min(10000, Number(progress.weight) || 1))
       }
     };

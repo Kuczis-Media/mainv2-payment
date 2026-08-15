@@ -1726,7 +1726,7 @@ Nie dodawaj nowej bazy ani zmiennych środowiskowych. Postęp korzysta z istniej
 1. zaloguj się jako administrator;
 2. otwórz **Studio → Dashboard Builder**;
 3. kliknij tło dashboardu i ustaw globalne śledzenie, widoczność pasków oraz rejestrowanie otwarć;
-4. dla działów, harmonijek i materiałów ustaw `Dziedzicz`, `Włączone` albo `Wyłączone`, flagi agregacji i wagę;
+4. dla działów, harmonijek i materiałów ustaw `Dziedzicz`, `Włączone` albo `Wyłączone` oraz opcjonalną wagę;
 5. opublikuj dashboard — publikacja zapisze komentarze konfiguracyjne w Markdown i zsynchronizuje katalog postępu;
 6. dla lekcji otwórz Lesson Builder, ustaw tryb nawigacji oraz opcje poszczególnych kroków i opublikuj lekcję;
 7. otwórz materiał z konta testowego, a następnie sprawdź **Panel administratora → Postępy**.
@@ -1739,7 +1739,7 @@ Kolejność to: ChemDisk → dział → sekcja/harmonijka → kolejna harmonijka
 
 Przykład: dział `ON`, sekcja `OFF`, prezentacja `INHERIT` oznacza efektywne `OFF`. Ustawienie tej prezentacji na `ON` włącza ją niezależnie. Widoczność paska jest osobnym ustawieniem: można ukryć pasek uczniowi i nadal liczyć postęp do raportu administratora.
 
-Flagi „Uwzględniaj” dotyczą osobno sekcji, działu i kursu. Waga określa wpływ materiału na średnią; materiał z wagą `3` wpływa trzy razy bardziej niż materiał z wagą `1`.
+Nie ma osobnych flag „Uwzględniaj” dla sekcji, działu i kursu. Efektywnie włączony element automatycznie wpływa na każdego rodzica. Sekcja liczy włączone dzieci, dział liczy włączone sekcje, a kurs liczy włączone działy. Waga określa wpływ elementu na jego bezpośredniego rodzica; element z wagą `3` wpływa trzy razy bardziej niż sąsiedni element z wagą `1`.
 
 ### 34.3. Ustawienia lekcji
 
@@ -1767,6 +1767,8 @@ Google Slides, Google Drive i Google Forms są obcymi iframe'ami. ChemDisk nie m
 W raporcie ucznia można oznaczyć materiał jako ukończony/nieukończony oraz zresetować materiał, sekcję, dział lub cały kurs. Reset wymaga potwierdzenia. Każda operacja administratora trafia do audit logu razem z administratorem, użytkownikiem, zakresem, poprzednią i nową wartością oraz czasem.
 
 Kursant może zresetować pojedynczy własny materiał przy pasku na dashboardzie albo cały własny kurs z karty postępu lub ustawień profilu. Funkcja używa wyłącznie zalogowanej sesji i nie pozwala wskazać innego użytkownika.
+
+Usunięcie elementu w Dashboard Builderze zaczyna obowiązywać po publikacji. Jego rekordy zostają logicznie unieważnione dla wszystkich kursantów i przestają wpływać na raporty oraz agregaty. System nie skanuje przy tym całego magazynu Blobs; sprząta wpis danego użytkownika przy jego następnym odczycie lub zapisie. Ponowne użycie tego samego ID nie przywraca starego postępu.
 
 Wyłączenie śledzenia nie jest resetem. Aby zachować historię, użyj przełącznika `OFF`; aby usunąć stan konkretnego użytkownika, użyj jawnej operacji resetu.
 
