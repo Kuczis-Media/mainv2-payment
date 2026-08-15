@@ -1012,7 +1012,7 @@ Kursant może po potwierdzeniu zresetować pojedynczy materiał przy jego pasku 
 
 ### Panel administratora
 
-Zakładka **Postępy** zawiera ustawienia globalne, wyszukiwanie, sortowanie i filtry użytkowników, raport pojedynczego kursanta, agregaty globalne oraz audit log. Raport pokazuje otwarcia, procent, pozycję właściwą dla typu materiału, pierwsze otwarcie i ostatnią aktywność. Konta Identity bez aktywności są dołączane z postępem 0%.
+Zakładka **Postępy** zawiera ustawienia globalne, wyszukiwanie, sortowanie i filtry użytkowników, raport pojedynczego kursanta, agregaty globalne oraz audit log. Raport ucznia jest kompaktowym, zagnieżdżonym drzewem: początkowo pokazuje tylko najwyższy poziom, a szczegóły, akcje i kolejne dzieci tworzy dopiero przy pierwszym rozwinięciu wiersza. Raport pokazuje otwarcia, procent, pozycję właściwą dla typu materiału, pierwsze otwarcie i ostatnią aktywność. Konta Identity bez aktywności są dołączane z postępem 0%. Rozwijana sekcja globalna objaśnia sposób liczenia metryk, pokazuje rozkład na kartach, rankingi materiałów oraz czytelną historię zmian z polskimi nazwami operacji, użytkownikiem, materiałem, administratorem i podsumowaniem zmiany.
 
 Administrator może oznaczyć materiał jako ukończony lub nieukończony, zmienić pomijanie kroków, ustawić/odblokować/zablokować krok i z potwierdzeniem zresetować materiał, sekcję, dział albo cały kurs. Każda taka operacja zapisuje `adminId`, `targetUserId`, akcję, materiał, poprzednią i nową wartość oraz czas.
 

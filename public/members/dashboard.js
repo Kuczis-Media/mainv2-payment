@@ -3117,7 +3117,10 @@
       distribution: {
         ...(report.distribution || {}),
         '0-25': Number(report.distribution?.['0-25'] || 0) + missing
-      }
+      },
+      mostUnopened: (report.mostUnopened || [])
+        .map((item) => ({ ...item, notOpened: Number(item.notOpened || 0) + missing }))
+        .sort((left, right) => right.notOpened - left.notOpened)
     };
   }
 
@@ -3178,41 +3181,242 @@
     }));
   }
 
+  function adminProgressCountShare(count, total) {
+    const value = Math.max(0, Number(count) || 0);
+    const all = Math.max(0, Number(total) || 0);
+    return all ? Math.round((value / all) * 100) : 0;
+  }
+
+  function adminProgressStopLabel(item) {
+    if (item?.commonStop == null || item.commonStop === '') return '';
+    const node = adminProgressCatalog?.nodes?.find((candidate) => candidate.id === item.materialId);
+    if (node?.type === 'lesson') {
+      const step = node.settings?.steps?.find((candidate) => candidate.id === item.commonStop);
+      return `Najczęstszy ostatni krok: ${step?.title || item.commonStop}`;
+    }
+    if (node?.type === 'presentation') return `Najczęstszy ostatni slajd: ${item.commonStop}`;
+    if (node?.type === 'video') {
+      const seconds = Math.max(0, Math.round(Number(item.commonStop) || 0));
+      return `Najczęstsza ostatnia pozycja: ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+    }
+    return `Najczęstszy punkt zatrzymania: ${item.commonStop}`;
+  }
+
+  function createAdminProgressRanking(title, description, items, valueKey, emptyLabel) {
+    const section = document.createElement('section');
+    section.className = 'admin-progress-insight-card';
+    const header = document.createElement('header');
+    header.append(
+      Object.assign(document.createElement('h4'), { textContent: title }),
+      Object.assign(document.createElement('p'), { textContent: description })
+    );
+    section.append(header);
+    const rows = (items || []).filter((item) => Number(item?.[valueKey]) > 0).slice(0, 5);
+    if (!rows.length) {
+      const empty = document.createElement('p');
+      empty.className = 'admin-progress-report-empty';
+      empty.textContent = emptyLabel;
+      section.append(empty);
+      return section;
+    }
+    const list = document.createElement('ol');
+    list.className = 'admin-progress-ranking';
+    rows.forEach((item, index) => {
+      const row = document.createElement('li');
+      const rank = document.createElement('span');
+      rank.className = 'admin-progress-ranking-position';
+      rank.textContent = String(index + 1);
+      const copy = document.createElement('span');
+      copy.className = 'admin-progress-ranking-copy';
+      copy.append(Object.assign(document.createElement('strong'), { textContent: item.title || item.materialId || 'Materiał' }));
+      const stopLabel = valueKey === 'abandoned' ? adminProgressStopLabel(item) : '';
+      if (stopLabel) copy.append(Object.assign(document.createElement('small'), { textContent: stopLabel }));
+      const value = document.createElement('strong');
+      value.className = 'admin-progress-ranking-value';
+      value.textContent = String(Number(item[valueKey]) || 0);
+      value.title = valueKey === 'notOpened' ? 'Liczba uczniów bez otwarcia' : 'Liczba uczniów bez ukończenia';
+      row.append(rank, copy, value);
+      list.append(row);
+    });
+    section.append(list);
+    return section;
+  }
+
   function renderAdminProgressGlobal(report) {
     if (!elements.adminProgressGlobalReport) return;
     const distribution = report?.distribution || {};
     const section = document.createElement('section');
-    section.className = 'admin-progress-report-block';
-    const heading = document.createElement('h3');
-    heading.textContent = 'Rozkład postępu';
-    const distributionLine = document.createElement('p');
-    distributionLine.textContent = `0–25%: ${distribution['0-25'] || 0} · 25–50%: ${distribution['25-50'] || 0} · 50–75%: ${distribution['50-75'] || 0} · 75–100%: ${distribution['75-100'] || 0}`;
-    const list = document.createElement('ul');
-    (report?.mostUnopened || []).slice(0, 5).forEach((item) => {
-      const row = document.createElement('li');
-      row.textContent = `${item.title}: ${item.notOpened} nieotwarć`;
-      list.append(row);
+    section.className = 'admin-progress-report-block admin-progress-global-report';
+    const heading = document.createElement('header');
+    heading.className = 'admin-progress-report-heading';
+    heading.append(
+      Object.assign(document.createElement('h3'), { textContent: 'Jak uczniowie przechodzą kurs' }),
+      Object.assign(document.createElement('p'), { textContent: `Każde z ${Number(report?.users) || 0} kont trafia do jednego przedziału według aktualnego postępu całego kursu. Konto bez aktywności znajduje się w grupie 0–25%.` })
+    );
+    section.append(heading);
+
+    const distributionGrid = document.createElement('div');
+    distributionGrid.className = 'admin-progress-distribution';
+    [
+      ['0-25', '0–25%', 'Początek'],
+      ['25-50', '25–50%', 'Pierwsza połowa'],
+      ['50-75', '50–75%', 'Druga połowa'],
+      ['75-100', '75–100%', 'Blisko ukończenia']
+    ].forEach(([key, range, label], index) => {
+      const count = Number(distribution[key]) || 0;
+      const share = adminProgressCountShare(count, report?.users);
+      const card = document.createElement('article');
+      card.className = `admin-progress-distribution-card is-range-${index + 1}`;
+      const top = document.createElement('span');
+      top.append(
+        Object.assign(document.createElement('small'), { textContent: range }),
+        Object.assign(document.createElement('strong'), { textContent: String(count) })
+      );
+      const bar = document.createElement('span');
+      bar.className = 'admin-progress-distribution-bar';
+      bar.setAttribute('role', 'progressbar');
+      bar.setAttribute('aria-label', `${label}: ${share}% wszystkich kont`);
+      bar.setAttribute('aria-valuemin', '0');
+      bar.setAttribute('aria-valuemax', '100');
+      bar.setAttribute('aria-valuenow', String(share));
+      const fill = document.createElement('span');
+      fill.style.width = `${share}%`;
+      bar.append(fill);
+      card.append(
+        top,
+        Object.assign(document.createElement('p'), { textContent: label }),
+        bar,
+        Object.assign(document.createElement('small'), { textContent: `${share}% wszystkich kont` })
+      );
+      distributionGrid.append(card);
     });
-    section.append(heading, distributionLine, Object.assign(document.createElement('h4'), { textContent: 'Najczęściej nieotwierane' }), list);
-    const abandoned = document.createElement('ul');
-    (report?.mostAbandoned || []).slice(0, 5).forEach((item) => {
-      const row = document.createElement('li');
-      row.textContent = `${item.title}: ${item.abandoned} porzuceń${item.commonStop ? ` · częsty punkt: ${item.commonStop}` : ''}`;
-      abandoned.append(row);
-    });
-    section.append(Object.assign(document.createElement('h4'), { textContent: 'Najczęściej porzucane' }), abandoned);
+    section.append(distributionGrid);
+
+    const explanation = document.createElement('div');
+    explanation.className = 'admin-progress-report-note';
+    explanation.append(
+      Object.assign(document.createElement('strong'), { textContent: 'Jak czytać te dane?' }),
+      Object.assign(document.createElement('p'), { textContent: 'Średni postęp u góry jest średnią wyników wszystkich kont. Rozpoczęcie oznacza co najmniej jedno zarejestrowane otwarcie, a ukończenie — 100% postępu kursu. Lista pozostawionych materiałów jest wskaźnikiem pomocniczym: liczy materiały otwarte, ale jeszcze nieukończone; nie jest dowodem, że uczeń z nich zrezygnował.' })
+    );
+    section.append(explanation);
+
+    const insights = document.createElement('div');
+    insights.className = 'admin-progress-insight-grid';
+    insights.append(
+      createAdminProgressRanking(
+        'Najczęściej nieotwierane',
+        'Liczba kont, na których materiał nie ma ani jednego zarejestrowanego otwarcia.',
+        report?.mostUnopened, 'notOpened', 'Wszystkie raportowane materiały zostały już przez kogoś otwarte.'
+      ),
+      createAdminProgressRanking(
+        'Otwarte, ale nieukończone',
+        'Materiały rozpoczęte bez statusu ukończenia. Punkt zatrzymania pokazujemy tylko wtedy, gdy odtwarzacz przekazał wiarygodną pozycję.',
+        report?.mostAbandoned, 'abandoned', 'Brak otwartych materiałów pozostawionych bez ukończenia.'
+      )
+    );
+    section.append(insights);
     elements.adminProgressGlobalReport.replaceChildren(section);
+  }
+
+  function adminProgressIdentityLabel(userId) {
+    if (!userId) return '';
+    const user = adminUsers.find((candidate) => candidate.id === userId);
+    const name = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : '';
+    const progressUser = adminProgressUsers.find((candidate) => candidate.id === userId);
+    return name || user?.email || progressUser?.name || progressUser?.email || userId;
+  }
+
+  function adminProgressMaterialLabel(materialId) {
+    if (!materialId) return '';
+    return adminProgressCatalog?.nodes?.find((node) => node.id === materialId)?.title || materialId;
+  }
+
+  function adminProgressAuditActionLabel(action) {
+    return ({
+      'progress.catalog.update': 'Zmieniono konfigurację postępu',
+      'progress.lesson_manifest.update': 'Zaktualizowano strukturę lekcji',
+      'progress.preference.update': 'Zmieniono zasady pomijania kroków',
+      'progress.mark_completed': 'Oznaczono materiał jako ukończony',
+      'progress.mark_incomplete': 'Oznaczono materiał jako nieukończony',
+      'progress.set_step': 'Ustawiono bieżący krok lekcji',
+      'progress.unlock_step': 'Ręcznie odblokowano krok',
+      'progress.lock_step': 'Ręcznie zablokowano krok',
+      'progress.reset.material': 'Zresetowano materiał',
+      'progress.reset.section': 'Zresetowano sekcję',
+      'progress.reset.department': 'Zresetowano dział',
+      'progress.reset.course': 'Zresetowano cały kurs'
+    })[action] || 'Wykonano operację administracyjną';
+  }
+
+  function adminProgressSkipModeLabel(mode) {
+    return ({ DEFAULT: 'według lekcji', ALLOW: 'dozwolone', DENY: 'zabronione' })[mode] || 'według lekcji';
+  }
+
+  function adminProgressAuditChangeLabel(entry) {
+    const previous = entry?.previousValue || {};
+    const next = entry?.newValue || {};
+    if (entry.action === 'progress.catalog.update') {
+      const removed = Number(next.removedCount) || 0;
+      return `Materiały w katalogu: ${Number(previous.nodeCount) || 0} → ${Number(next.nodeCount) || 0}${removed ? ` · usunięte: ${removed}` : ''}.`;
+    }
+    if (entry.action === 'progress.lesson_manifest.update') {
+      return `Plik: ${next.filename || previous.filename || '—'} · liczba kroków: ${Number(next.stepCount) || 0}.`;
+    }
+    if (entry.action === 'progress.preference.update') {
+      return `Pomijanie kroków: ${adminProgressSkipModeLabel(previous.skipMode)} → ${adminProgressSkipModeLabel(next.skipMode)}.`;
+    }
+    if (entry.action === 'progress.mark_completed' || entry.action === 'progress.mark_incomplete') {
+      return `Postęp: ${adminProgressPercent(previous.progressPercent)} → ${adminProgressPercent(next.progressPercent)}.`;
+    }
+    if (entry.action === 'progress.set_step') {
+      return `Krok: ${previous.details?.currentStepId || '—'} → ${next.details?.currentStepId || '—'}.`;
+    }
+    if (entry.action === 'progress.unlock_step') return 'Wskazany krok dodano do indywidualnych odblokowań ucznia.';
+    if (entry.action === 'progress.lock_step') return 'Wskazany krok dodano do indywidualnych blokad ucznia.';
+    if (String(entry.action || '').startsWith('progress.reset.')) {
+      const count = previous && typeof previous === 'object' ? Object.keys(previous).length : 0;
+      return `Usunięte rekordy postępu: ${count}.`;
+    }
+    return 'Zmiana została zapisana w historii administratora.';
   }
 
   function renderAdminProgressAudit(entries) {
     if (!elements.adminProgressAudit) return;
     const section = document.createElement('section');
-    section.className = 'admin-progress-report-block';
-    section.append(Object.assign(document.createElement('h3'), { textContent: 'Ostatnie operacje administratorów' }));
-    const list = document.createElement('ul');
-    (entries || []).slice(0, 20).forEach((entry) => {
+    section.className = 'admin-progress-report-block admin-progress-audit-report';
+    const header = document.createElement('header');
+    header.className = 'admin-progress-report-heading';
+    header.append(
+      Object.assign(document.createElement('h3'), { textContent: 'Historia zmian administratorów' }),
+      Object.assign(document.createElement('p'), { textContent: 'Tutaj widać ręczne zmiany postępu, resety i publikacje konfiguracji. Wpisu nie tworzy zwykła aktywność ucznia.' })
+    );
+    section.append(header);
+    const rows = (entries || []).slice(0, 20);
+    if (!rows.length) {
+      section.append(Object.assign(document.createElement('p'), { className: 'admin-progress-report-empty', textContent: 'Nie zapisano jeszcze żadnej operacji administratora.' }));
+      elements.adminProgressAudit.replaceChildren(section);
+      return;
+    }
+    const list = document.createElement('ol');
+    list.className = 'admin-progress-audit-list';
+    rows.forEach((entry) => {
       const item = document.createElement('li');
-      item.textContent = `${adminDateLabel(entry.timestamp)} · ${entry.adminId} · ${entry.action}${entry.targetUserId ? ` · uczeń ${entry.targetUserId}` : ''}${entry.materialId ? ` · ${entry.materialId}` : ''}`;
+      const marker = document.createElement('span');
+      marker.className = 'admin-progress-audit-marker';
+      marker.setAttribute('aria-hidden', 'true');
+      const copy = document.createElement('div');
+      copy.className = 'admin-progress-audit-copy';
+      copy.append(Object.assign(document.createElement('strong'), { textContent: adminProgressAuditActionLabel(entry.action) }));
+      const context = [
+        entry.targetUserId ? `Uczeń: ${adminProgressIdentityLabel(entry.targetUserId)}` : '',
+        entry.materialId ? `Materiał: ${adminProgressMaterialLabel(entry.materialId)}` : ''
+      ].filter(Boolean).join(' · ');
+      if (context) copy.append(Object.assign(document.createElement('p'), { textContent: context }));
+      copy.append(
+        Object.assign(document.createElement('p'), { className: 'admin-progress-audit-change', textContent: adminProgressAuditChangeLabel(entry) }),
+        Object.assign(document.createElement('small'), { textContent: `${adminDateLabel(entry.timestamp)} · administrator: ${adminProgressIdentityLabel(entry.adminId)}` })
+      );
+      item.append(marker, copy);
       list.append(item);
     });
     section.append(list);
@@ -3300,6 +3504,23 @@
     return `${record.openCount || 0} otwarć`;
   }
 
+  function adminProgressNodeTypeLabel(type) {
+    return ({
+      department: 'Dział',
+      section: 'Sekcja',
+      subsection: 'Podsekcja',
+      lesson: 'Lekcja',
+      lesson_step: 'Krok lekcji',
+      presentation: 'Prezentacja',
+      video: 'Film',
+      pdf: 'PDF',
+      quiz: 'Quiz',
+      script: 'Skrypt',
+      iframe: 'Osadzony materiał',
+      other: 'Materiał'
+    })[type] || 'Materiał';
+  }
+
   async function mutateAdminProgress(body, confirmation) {
     if (confirmation && !window.confirm(confirmation)) return false;
     await adminProgressRequest(body.scope ? 'DELETE' : 'PUT', body);
@@ -3335,6 +3556,10 @@
     header.append(close);
     host.append(header);
 
+    const accountSettings = document.createElement('details');
+    accountSettings.className = 'admin-progress-account-settings';
+    const accountSummary = document.createElement('summary');
+    accountSummary.textContent = 'Ustawienia ucznia i reset całego kursu';
     const controls = document.createElement('div');
     controls.className = 'admin-progress-manual-controls';
     const skip = document.createElement('select');
@@ -3355,24 +3580,21 @@
       }
     });
     controls.append(skip, saveSkip, resetCourse);
-    host.append(controls);
+    accountSettings.append(accountSummary, controls);
+    host.append(accountSettings);
 
     const list = document.createElement('div');
-    list.className = 'admin-progress-material-list';
-    payload.catalog.nodes.forEach((node) => {
-      if (node.type === 'course') return;
-      const data = aggregate.nodes[node.id];
-      const record = user.records[node.id] || null;
-      const card = document.createElement('article');
-      card.className = 'admin-progress-material';
-      const copy = document.createElement('div');
-      copy.append(
-        Object.assign(document.createElement('strong'), { textContent: `${node.title} — ${adminProgressPercent(data?.progressPercent)}` }),
-        Object.assign(document.createElement('small'), { textContent: `${record?.opened ? 'Otwarty' : 'Nieotwarty'} · ${window.ChemProgress?.statusLabel(record) || record?.status || 'Nie rozpoczęto'} · ${recordDetailsLabel(node, record)}` }),
-        Object.assign(document.createElement('small'), { textContent: `Pierwsze otwarcie: ${adminDateLabel(record?.firstOpenedAt)} · ostatnia aktywność: ${adminDateLabel(record?.lastActivityAt)}` })
-      );
-      const actions = document.createElement('div');
-      actions.className = 'admin-progress-material-actions';
+    list.className = 'admin-progress-material-tree';
+    const nodes = (payload.catalog?.nodes || []).filter((node) => node.type !== 'course');
+    const nodesById = new Map(nodes.map((node) => [node.id, node]));
+    const childrenByParent = new Map();
+    nodes.forEach((node) => {
+      const parentId = nodesById.has(node.parentId) ? node.parentId : '__root__';
+      if (!childrenByParent.has(parentId)) childrenByParent.set(parentId, []);
+      childrenByParent.get(parentId).push(node);
+    });
+
+    const appendMaterialActions = (actions, node, record) => {
       if (!['department', 'section', 'subsection', 'course'].includes(node.type)) {
         [['mark_completed', 'Oznacz ukończone'], ['mark_incomplete', 'Oznacz nieukończone']].forEach(([action, label]) => {
           const button = document.createElement('button'); button.type = 'button'; button.className = 'button button-secondary'; button.textContent = label;
@@ -3412,9 +3634,75 @@
         }
       });
       actions.append(reset);
-      card.append(copy, actions);
-      list.append(card);
-    });
+    };
+
+    const createMaterialRow = (node) => {
+      const data = aggregate.nodes[node.id];
+      const record = user.records[node.id] || null;
+      const nested = childrenByParent.get(node.id) || [];
+      const isContainer = nested.length > 0 || ['department', 'section', 'subsection'].includes(node.type);
+      const card = document.createElement('details');
+      card.className = 'admin-progress-material';
+      const summary = document.createElement('summary');
+      const copy = document.createElement('span');
+      copy.className = 'admin-progress-material-copy';
+      copy.append(
+        Object.assign(document.createElement('strong'), { textContent: node.title }),
+        Object.assign(document.createElement('small'), { textContent: `${adminProgressNodeTypeLabel(node.type)}${nested.length ? ` · ${nested.length} ${nested.length === 1 ? 'element' : 'elementy'}` : ''}` })
+      );
+      const state = document.createElement('span');
+      state.className = 'admin-progress-material-state';
+      state.textContent = isContainer
+        ? `${data?.completedCount || 0}/${data?.trackedCount || 0} ukończonych`
+        : (window.ChemProgress?.statusLabel(record) || record?.status || 'Nie rozpoczęto');
+      const percent = document.createElement('strong');
+      percent.className = 'admin-progress-material-percent';
+      percent.textContent = adminProgressPercent(data?.progressPercent);
+      const chevron = document.createElement('span');
+      chevron.className = 'admin-progress-material-chevron';
+      chevron.setAttribute('aria-hidden', 'true');
+      chevron.textContent = '›';
+      summary.append(copy, state, percent, chevron);
+      card.append(summary);
+
+      let hydrated = false;
+      card.addEventListener('toggle', () => {
+        if (!card.open || hydrated) return;
+        hydrated = true;
+        const body = document.createElement('div');
+        body.className = 'admin-progress-material-body';
+        const facts = document.createElement('div');
+        facts.className = 'admin-progress-material-facts';
+        if (isContainer) {
+          facts.append(
+            Object.assign(document.createElement('small'), { textContent: `Postęp: ${adminProgressPercent(data?.progressPercent)} · ukończone materiały: ${data?.completedCount || 0}/${data?.trackedCount || 0}` }),
+            Object.assign(document.createElement('small'), { textContent: nested.length ? 'Rozwiń poniższe wiersze, aby zobaczyć ich parametry.' : 'Ten kontener nie ma materiałów.' })
+          );
+        } else {
+          facts.append(
+            Object.assign(document.createElement('small'), { textContent: `${record?.opened ? 'Otwarty' : 'Nieotwarty'} · ${window.ChemProgress?.statusLabel(record) || record?.status || 'Nie rozpoczęto'} · ${recordDetailsLabel(node, record)}` }),
+            Object.assign(document.createElement('small'), { textContent: `Pierwsze otwarcie: ${adminDateLabel(record?.firstOpenedAt)} · ostatnia aktywność: ${adminDateLabel(record?.lastActivityAt)}` })
+          );
+        }
+        const actions = document.createElement('div');
+        actions.className = 'admin-progress-material-actions';
+        appendMaterialActions(actions, node, record);
+        body.append(facts, actions);
+        if (nested.length) {
+          const childList = document.createElement('div');
+          childList.className = 'admin-progress-material-children';
+          nested.forEach((child) => childList.append(createMaterialRow(child)));
+          body.append(childList);
+        }
+        card.append(body);
+      });
+      return card;
+    };
+
+    (childrenByParent.get('__root__') || []).forEach((node) => list.append(createMaterialRow(node)));
+    if (!list.childElementCount) {
+      list.append(Object.assign(document.createElement('p'), { className: 'admin-empty', textContent: 'Brak materiałów w katalogu postępu.' }));
+    }
     host.append(list);
   }
 

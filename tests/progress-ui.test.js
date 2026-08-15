@@ -51,3 +51,28 @@ test('course progress remains legible and refreshes after a cached back navigati
   assert.doesNotMatch(studio, /Uwzględniaj w postępie (?:sekcji|działu|całego kursu)/);
   assert.match(html, /id="profile-reset-progress"/);
 });
+
+test('admin student report renders a compact, lazily expanded material tree', () => {
+  const css = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.css'), 'utf8');
+  const dashboard = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.js'), 'utf8');
+  assert.match(dashboard, /accountSettings\.className = 'admin-progress-account-settings'/);
+  assert.match(dashboard, /card = document\.createElement\('details'\)/);
+  assert.match(dashboard, /card\.addEventListener\('toggle',[\s\S]*if \(!card\.open \|\| hydrated\) return;[\s\S]*admin-progress-material-body/);
+  assert.match(dashboard, /childrenByParent[\s\S]*admin-progress-material-children[\s\S]*createMaterialRow\(child\)/);
+  assert.match(css, /\.admin-progress-material > summary\s*\{[\s\S]*min-height:\s*54px/);
+  assert.match(css, /\.admin-progress-material-children\s*\{/);
+});
+
+test('global progress report explains metrics and renders readable audit entries', () => {
+  const css = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.css'), 'utf8');
+  const dashboard = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.js'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'public', 'members', 'index.html'), 'utf8');
+  assert.match(html, /Raporty globalne i historia zmian/);
+  assert.match(html, /Zbiorcze wyniki kursantów oraz operacje wykonane przez administratorów/);
+  assert.match(dashboard, /Jak uczniowie przechodzą kurs/);
+  assert.match(dashboard, /wskaźnikiem pomocniczym:[\s\S]*nie jest dowodem/);
+  assert.match(dashboard, /adminProgressAuditActionLabel[\s\S]*Zresetowano cały kurs/);
+  assert.match(dashboard, /administrator: \$\{adminProgressIdentityLabel\(entry\.adminId\)\}/);
+  assert.match(css, /\.admin-progress-distribution\s*\{[\s\S]*repeat\(4/);
+  assert.match(css, /\.admin-progress-audit-list li:not\(:last-child\)::before/);
+});

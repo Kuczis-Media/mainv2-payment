@@ -1758,9 +1758,11 @@ W trybie sekwencyjnym serwer blokuje nieznane i zbyt odległe kroki. W raporcie 
 
 Lista użytkowników pokazuje konta Identity także wtedy, gdy nie mają jeszcze rekordu postępu. Można wyszukiwać po nazwie, e-mailu i ID, filtrować stan oraz sortować po aktywności, postępie, nazwie albo e-mailu.
 
-Po kliknięciu konta zobaczysz procent kursu i każdego kontenera oraz szczegóły materiałów. Otwarcie materiału innego niż lekcja zalicza go na 100%; lekcja nadal wylicza dokładny procent z wykonanych kroków. Dla PDF, prezentacji, quizu i filmu zachowane dane szczegółowe trzeba interpretować osobno: ukończenie przy otwarciu nie jest dowodem przeczytania, obejrzenia ani uzyskania wyniku. Dla filmu wiarygodne są zakresy odtworzone przez kontrolowany player, a wynik quizu pozostaje oddzielony od postępu.
+Po kliknięciu konta zobaczysz procent kursu i kompaktową listę najwyższych działów. Kliknij wiersz, aby wczytać jego szczegóły, przyciski administracyjne i bezpośrednie dzieci; kolejne poziomy rozwija się tak samo. Ustawienia ucznia i reset całego kursu są schowane w osobnym rozwijanym bloku. Otwarcie materiału innego niż lekcja zalicza go na 100%; lekcja nadal wylicza dokładny procent z wykonanych kroków. Dla PDF, prezentacji, quizu i filmu zachowane dane szczegółowe trzeba interpretować osobno: ukończenie przy otwarciu nie jest dowodem przeczytania, obejrzenia ani uzyskania wyniku. Dla filmu wiarygodne są zakresy odtworzone przez kontrolowany player, a wynik quizu pozostaje oddzielony od postępu.
 
 Google Slides, Google Drive i Google Forms są obcymi iframe'ami. ChemDisk nie może samodzielnie odczytać ich wewnętrznej nawigacji. Moduł zostanie zaliczony przy otwarciu, ale dokładną pozycję lub wynik zobaczysz tylko dla odtwarzacza, który emituje zweryfikowane komunikaty integracyjne ChemDisk.
+
+Sekcja **Raporty globalne i historia zmian** pokazuje rozkład kont w czterech przedziałach wraz z ich udziałem procentowym. „Otwarte, ale nieukończone” jest wskaźnikiem pomocniczym, a nie dowodem porzucenia nauki: oznacza wyłącznie zapisane otwarcie bez statusu ukończenia. Historia zmian obejmuje operacje administratorów, nie zwykłą aktywność kursantów; każdy wpis opisuje czynność, ucznia, materiał, zmianę wartości, czas i administratora.
 
 ### 34.5. Reset i ręczne zmiany
 

@@ -536,9 +536,15 @@ GITHUB_CONTENT_ROOT=</pre>
         <div class="admin-progress-user-list" id="admin-progress-user-list"></div>
         <section class="admin-progress-detail" id="admin-progress-detail" hidden aria-live="polite"></section>
         <details class="admin-progress-global-details">
-          <summary>Raporty globalne i audit log</summary>
-          <div id="admin-progress-global-report"></div>
-          <div id="admin-progress-audit"></div>
+          <summary class="admin-progress-global-summary">
+            <span class="admin-progress-global-icon" aria-hidden="true">∑</span>
+            <span><strong>Raporty globalne i historia zmian</strong><small>Zbiorcze wyniki kursantów oraz operacje wykonane przez administratorów.</small></span>
+            <span class="admin-progress-global-chevron" aria-hidden="true">›</span>
+          </summary>
+          <div class="admin-progress-global-content">
+            <div id="admin-progress-global-report"></div>
+            <div id="admin-progress-audit"></div>
+          </div>
         </details>
       </section>
 
