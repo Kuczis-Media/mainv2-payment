@@ -321,7 +321,7 @@
       elements.loading.hidden = true;
       elements.resetProgress.disabled = false;
       elements.app.removeAttribute('aria-busy');
-      if (state.completed) showCompletion();
+      if (state.completed) showCompletion(false);
       else renderSlide();
     } catch (error) {
       console.error('Nie udało się wczytać lekcji', error);
@@ -484,9 +484,10 @@
       button.append(marker, label);
       button.addEventListener('click', () => {
         if ((state.sequential && index > state.maxReached) || state.completed) return;
+        if (index === state.index) return;
+        completeCurrentStepForNavigation();
         state.index = index;
         state.maxReached = Math.max(state.maxReached, index);
-        saveProgress();
         renderSlide();
       });
       item.appendChild(button);
@@ -499,8 +500,7 @@
       const slide = state.lesson.slides[index];
       const accessible = (!state.sequential || index <= state.maxReached) && !state.completed;
       const current = index === state.index && !state.completed;
-      const complete = state.solved.has(index)
-        || ((!slide.task || state.solved.has(index)) && (state.completed || index < state.maxReached));
+      const complete = state.completedStepIds.has(slide.id) || state.solved.has(index);
       button.disabled = !accessible;
       button.classList.toggle('is-current', current);
       button.classList.toggle('is-complete', complete);
@@ -546,6 +546,15 @@
     saveProgress();
   }
 
+  function completeCurrentStepForNavigation() {
+    const slide = state.lesson?.slides?.[state.index];
+    if (!slide) return false;
+    if (!currentExamGate().satisfied) return false;
+    if (state.sequential && slide.task && !state.solved.has(state.index)) return false;
+    state.completedStepIds.add(slide.id);
+    return true;
+  }
+
   function renderSlide() {
     const slide = state.lesson.slides[state.index];
     const isSolved = state.solved.has(state.index);
@@ -560,6 +569,16 @@
     elements.slideNumber.textContent = `Krok ${state.index + 1} z ${state.lesson.slides.length}`;
     elements.lessonPosition.textContent = `Krok ${state.index + 1} z ${state.lesson.slides.length}`;
     elements.progressBar.style.width = `${progress}%`;
+    elements.slideCard.dataset.lessonBackground = [
+      'default', 'paper', 'grid', 'dots', 'mint', 'sky', 'lavender', 'sand', 'gradient', 'night', 'custom'
+    ].includes(slide.background) ? slide.background : 'default';
+    elements.slideCard.dataset.lessonDecoration = ['none', 'molecules', 'bubbles', 'glow'].includes(slide.decoration)
+      ? slide.decoration
+      : 'none';
+    elements.slideCard.dataset.lessonTone = ['auto', 'dark', 'light'].includes(slide.textTone)
+      ? slide.textTone
+      : 'auto';
+    elements.slideCard.style.setProperty('--lesson-slide-color', slide.backgroundColor || '#f8fafc');
     clearTypesetMath(elements.slideContent);
     state.mediaObjectUrls.splice(0).forEach((url) => URL.revokeObjectURL(url));
     elements.slideContent.classList.toggle('is-canvas-layout', slide.layout === 'canvas');
@@ -1093,16 +1112,40 @@
 
   async function goNext() {
     const slide = state.lesson.slides[state.index];
-    await refreshExamProgress(true);
-    if (state.sequential && (slide.task && !state.solved.has(state.index) || !currentExamGate().satisfied)) return;
+    if (state.sequential) {
+      await refreshExamProgress(true);
+      if ((slide.task && !state.solved.has(state.index)) || !currentExamGate().satisfied) return;
+    }
     const previousIndex = state.index;
     const wasCompleted = state.completed;
-    state.completedStepIds.add(slide.id);
+    completeCurrentStepForNavigation();
     if (state.index === state.lesson.slides.length - 1) {
+      const remaining = state.lesson.slides.filter((step) => (
+        step.includeInLesson !== 'OFF' || step.requiredToAdvance !== false
+      ) && !state.completedStepIds.has(step.id));
+      if (remaining.length) {
+        elements.navigationHint.textContent = remaining.length === 1
+          ? 'Odwiedź jeszcze jeden liczony krok, aby ukończyć lekcję.'
+          : `Odwiedź jeszcze ${remaining.length} liczone kroki, aby ukończyć lekcję.`;
+        updateOutline();
+        saveProgress();
+        return;
+      }
       state.completed = true;
+      if (!state.sequential) {
+        showCompletion(false);
+        void saveProgress(true, true).catch((error) => {
+          state.completed = wasCompleted;
+          renderSlide();
+          elements.navigationHint.textContent = error?.code === 'LESSON_INCOMPLETE'
+            ? 'Nie wszystkie wymagane kroki i egzaminy są ukończone.'
+            : 'Postęp jest zapisany lokalnie, ale synchronizacja nie powiodła się. Spróbuj zakończyć ponownie.';
+        });
+        return;
+      }
       try {
         await saveProgress(true, true);
-        showCompletion();
+        showCompletion(false);
       } catch (error) {
         state.completed = wasCompleted;
         elements.navigationHint.textContent = error?.code === 'LESSON_INCOMPLETE'
@@ -1114,6 +1157,10 @@
     }
     state.index += 1;
     state.maxReached = Math.max(state.maxReached, state.index);
+    if (!state.sequential) {
+      renderSlide();
+      return;
+    }
     try {
       await saveProgress(true, true);
       renderSlide();
@@ -1128,15 +1175,13 @@
 
   function goPrevious() {
     if (state.index === 0) return;
+    completeCurrentStepForNavigation();
     state.index -= 1;
     renderSlide();
   }
 
-  function showCompletion() {
+  function showCompletion(persist = true) {
     state.completed = true;
-    state.lesson.slides.forEach((slide) => {
-      if (!slide.task || state.solved.has(state.lesson.slides.indexOf(slide))) state.completedStepIds.add(slide.id);
-    });
     const unresolvedTasks = state.lesson.slides.filter(
       (slide, index) => slide.task && !state.solved.has(index)
     ).length;
@@ -1150,7 +1195,7 @@
       ? `Przejrzano wszystkie kroki. Pominięte zadania: ${unresolvedTasks}. Możesz powtórzyć lekcję i wrócić do nich później.`
       : 'Wszystkie kroki zostały przejrzane, a zadania rozwiązane poprawnie.';
     updateOutline();
-    saveProgress(true);
+    if (persist) saveProgress(true);
     elements.restart.focus();
   }
 

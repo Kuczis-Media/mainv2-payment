@@ -2992,6 +2992,9 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
 }
 
 .lesson-preview-shell {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   min-height: 100%;
   padding: 19px;
   background: var(--chem-surface);
@@ -2999,6 +3002,46 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
   border-radius: 18px;
   box-shadow: var(--chem-shadow-sm);
 }
+
+.lesson-preview-shell > * { position: relative; z-index: 1; }
+.lesson-preview-shell[data-lesson-background="paper"] { background-color: #fffef8; background-image: repeating-linear-gradient(0deg, transparent 0 21px, rgba(75, 113, 146, .14) 22px); }
+.lesson-preview-shell[data-lesson-background="grid"] { background-color: #fbfdfd; background-image: linear-gradient(rgba(26, 116, 104, .105) 1px, transparent 1px), linear-gradient(90deg, rgba(26, 116, 104, .105) 1px, transparent 1px); background-size: 19px 19px; }
+.lesson-preview-shell[data-lesson-background="dots"] { background-color: #fdfefd; background-image: radial-gradient(circle, rgba(46, 97, 109, .19) 1px, transparent 1.1px); background-size: 16px 16px; }
+.lesson-preview-shell[data-lesson-background="mint"] { background: linear-gradient(145deg, #edf9f4, #dff3ed); }
+.lesson-preview-shell[data-lesson-background="sky"] { background: linear-gradient(145deg, #f0f8ff, #ddecfa); }
+.lesson-preview-shell[data-lesson-background="lavender"] { background: linear-gradient(145deg, #faf5ff, #ece2f8); }
+.lesson-preview-shell[data-lesson-background="sand"] { background: linear-gradient(145deg, #fffaf0, #f5ead3); }
+.lesson-preview-shell[data-lesson-background="gradient"] { background: linear-gradient(135deg, #e8f7f1 0%, #eff6ff 52%, #f5edff 100%); }
+.lesson-preview-shell[data-lesson-background="night"] { background: linear-gradient(145deg, #122638, #123f45 58%, #175b52); }
+.lesson-preview-shell[data-lesson-background="custom"] { background: var(--lesson-slide-color, #f8fafc); }
+
+.lesson-preview-shell[data-lesson-tone="dark"],
+.lesson-preview-shell[data-lesson-tone="auto"]:not([data-lesson-background="default"]):not([data-lesson-background="night"]) {
+  --chem-text: #17233a;
+  --chem-muted: #52627b;
+  --chem-subtle: #6a7890;
+  --chem-line: rgba(55, 75, 98, .18);
+  --chem-surface: #ffffff;
+  --chem-surface-soft: rgba(255, 255, 255, .68);
+}
+
+.lesson-preview-shell[data-lesson-tone="light"],
+.lesson-preview-shell[data-lesson-background="night"][data-lesson-tone="auto"] {
+  --chem-text: #f7fbff;
+  --chem-muted: #c8d8e7;
+  --chem-subtle: #aec5d6;
+  --chem-line: rgba(221, 240, 244, .22);
+  --chem-surface: #173b43;
+  --chem-surface-soft: rgba(236, 250, 249, .11);
+  --chem-primary: #79ddca;
+  --chem-primary-soft: rgba(121, 221, 202, .16);
+}
+
+.lesson-preview-shell::before { position: absolute; z-index: 0; content: ""; pointer-events: none; }
+.lesson-preview-shell[data-lesson-decoration="molecules"]::before { top: -36px; right: -24px; width: 170px; height: 155px; opacity: .22; background: radial-gradient(circle at 22% 58%, var(--chem-primary) 0 5px, transparent 6px), radial-gradient(circle at 51% 31%, var(--chem-primary) 0 7px, transparent 8px), radial-gradient(circle at 78% 62%, var(--chem-primary) 0 6px, transparent 7px), linear-gradient(33deg, transparent 42%, var(--chem-primary) 43% 44%, transparent 45%) 20px 41px / 78px 58px no-repeat, linear-gradient(-28deg, transparent 43%, var(--chem-primary) 44% 45%, transparent 46%) 76px 37px / 65px 61px no-repeat; }
+.lesson-preview-shell[data-lesson-decoration="bubbles"]::before { inset: 0; opacity: .23; background: radial-gradient(circle at 91% 18%, transparent 0 28px, var(--chem-primary) 29px 30px, transparent 31px), radial-gradient(circle at 82% 31%, transparent 0 12px, var(--chem-primary) 13px 14px, transparent 15px), radial-gradient(circle at 8% 86%, transparent 0 20px, var(--chem-primary) 21px 22px, transparent 23px); }
+.lesson-preview-shell[data-lesson-decoration="glow"]::before { inset: -25%; opacity: .3; background: radial-gradient(circle at 86% 20%, var(--chem-primary-soft), transparent 24%), radial-gradient(circle at 7% 90%, var(--chem-primary-soft), transparent 22%); }
+.lesson-preview-shell .lesson-preview-body.is-canvas-layout { background-color: transparent; background-image: none; }
 
 .lesson-preview-meta {
   display: flex;

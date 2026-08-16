@@ -3186,6 +3186,44 @@
           : 'Układ automatyczny zachowuje pełną zgodność ze starszymi lekcjami.'
       ));
       form.append(field(
+        'Tło slajdu',
+        lessonSelect(found.node.background || 'default', 'slideBackground', [
+          { value: 'default', label: 'Domyślne — zgodne z motywem' },
+          { value: 'paper', label: 'Papier w linie' },
+          { value: 'grid', label: 'Kratka laboratoryjna' },
+          { value: 'dots', label: 'Papier w kropki' },
+          { value: 'mint', label: 'Miętowe' },
+          { value: 'sky', label: 'Błękitne' },
+          { value: 'lavender', label: 'Lawendowe' },
+          { value: 'sand', label: 'Piaskowe' },
+          { value: 'gradient', label: 'Gradient ChemDisk' },
+          { value: 'night', label: 'Nocne laboratorium' },
+          { value: 'custom', label: 'Własny kolor' }
+        ]),
+        'Bezpieczny preset zapisuje się razem z tym slajdem i działa również w ciemnym motywie.'
+      ));
+      if (found.node.background === 'custom') {
+        form.append(field(
+          'Własny kolor tła',
+          lessonInput(found.node.backgroundColor || '#f8fafc', 'slideBackgroundColor', { type: 'color' })
+        ));
+      }
+      const visualRow = create('div', 'field-row');
+      visualRow.append(
+        field('Dekoracja', lessonSelect(found.node.decoration || 'none', 'slideDecoration', [
+          { value: 'none', label: 'Brak' },
+          { value: 'molecules', label: 'Cząsteczki' },
+          { value: 'bubbles', label: 'Bąbelki' },
+          { value: 'glow', label: 'Świetlna poświata' }
+        ])),
+        field('Kontrast tekstu', lessonSelect(found.node.textTone || 'auto', 'slideTextTone', [
+          { value: 'auto', label: 'Automatyczny' },
+          { value: 'dark', label: 'Ciemny tekst' },
+          { value: 'light', label: 'Jasny tekst' }
+        ]))
+      );
+      form.append(visualRow);
+      form.append(field(
         'Uwzględniaj krok w procencie lekcji',
         lessonSelect(found.node.includeInLesson || 'INHERIT', 'includeInLesson', [
           { value: 'INHERIT', label: 'Dziedzicz (domyślnie: tak)' },
@@ -4109,6 +4147,16 @@
       ? slide.transition
       : 'fade';
     shell.dataset.transition = transition;
+    shell.dataset.lessonBackground = lessonModelApi.SLIDE_BACKGROUNDS.includes(slide.background)
+      ? slide.background
+      : 'default';
+    shell.dataset.lessonDecoration = lessonModelApi.SLIDE_DECORATIONS.includes(slide.decoration)
+      ? slide.decoration
+      : 'none';
+    shell.dataset.lessonTone = lessonModelApi.SLIDE_TEXT_TONES.includes(slide.textTone)
+      ? slide.textTone
+      : 'auto';
+    shell.style.setProperty('--lesson-slide-color', slide.backgroundColor || '#f8fafc');
     shell.classList.toggle('is-entering', Boolean(animateTransition) && transition !== 'none');
     const meta = create('div', 'lesson-preview-meta');
     meta.append(
@@ -4960,6 +5008,14 @@
     } else if (found.kind === 'slide' && fieldName === 'slideLayout') {
       found.node.layout = raw === 'canvas' ? 'canvas' : 'flow';
       if (found.node.layout === 'canvas') ensureLessonCanvasLayout(found.node);
+    } else if (found.kind === 'slide' && fieldName === 'slideBackground') {
+      found.node.background = lessonModelApi.SLIDE_BACKGROUNDS.includes(raw) ? raw : 'default';
+    } else if (found.kind === 'slide' && fieldName === 'slideBackgroundColor') {
+      found.node.backgroundColor = /^#[0-9a-f]{6}$/i.test(raw) ? raw.toLowerCase() : '#f8fafc';
+    } else if (found.kind === 'slide' && fieldName === 'slideDecoration') {
+      found.node.decoration = lessonModelApi.SLIDE_DECORATIONS.includes(raw) ? raw : 'none';
+    } else if (found.kind === 'slide' && fieldName === 'slideTextTone') {
+      found.node.textTone = lessonModelApi.SLIDE_TEXT_TONES.includes(raw) ? raw : 'auto';
     } else if (found.kind === 'slide' && fieldName === 'transition') {
       found.node.transition = lessonModelApi.SLIDE_TRANSITIONS.includes(raw) ? raw : 'fade';
     } else if (found.kind === 'slide' && fieldName === 'stepId') {
@@ -6769,7 +6825,7 @@
       handleLessonInspectorInput(event);
       finishEdit();
       if (
-        ['type', 'mode', 'arrow', 'variant', 'repositoryId', 'promptFile', 'examId', 'requirement', 'options', 'optionItem', 'gapLabel', 'gapSegment', 'useColor', 'conditionType', 'slideLayout']
+        ['type', 'mode', 'arrow', 'variant', 'repositoryId', 'promptFile', 'examId', 'requirement', 'options', 'optionItem', 'gapLabel', 'gapSegment', 'useColor', 'conditionType', 'slideLayout', 'slideBackground']
           .includes(event.target.dataset.lessonField)
       ) {
         renderLessonInspector();

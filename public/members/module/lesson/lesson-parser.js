@@ -20,6 +20,11 @@
   const SAFE_STYLE_COLOR = /^#[0-9a-f]{6}$/i;
   const LINK_ICONS = new Set(['link', 'book', 'video', 'chemistry', 'math', 'file', 'external']);
   const SLIDE_TRANSITIONS = new Set(['none', 'fade', 'rise', 'slide', 'zoom']);
+  const SLIDE_BACKGROUNDS = new Set([
+    'default', 'paper', 'grid', 'dots', 'mint', 'sky', 'lavender', 'sand', 'gradient', 'night', 'custom'
+  ]);
+  const SLIDE_DECORATIONS = new Set(['none', 'molecules', 'bubbles', 'glow']);
+  const SLIDE_TEXT_TONES = new Set(['auto', 'dark', 'light']);
   const STYLE_FONTS = new Set([
     'sans',
     'arial',
@@ -271,6 +276,10 @@
     let slideSettingsSeen = false;
     let transition = 'fade';
     let layout = 'flow';
+    let background = 'default';
+    let backgroundColor = '#f8fafc';
+    let decoration = 'none';
+    let textTone = 'auto';
     let stepMetadata = null;
 
     for (const line of lines) {
@@ -289,6 +298,15 @@
           const requested = String(values.transition || '').trim().toLowerCase();
           transition = SLIDE_TRANSITIONS.has(requested) ? requested : 'fade';
           layout = String(values.layout || '').trim().toLowerCase() === 'canvas' ? 'canvas' : 'flow';
+          const requestedBackground = String(values.background || '').trim().toLowerCase();
+          const requestedDecoration = String(values.decoration || '').trim().toLowerCase();
+          const requestedTextTone = String(values.text_tone || '').trim().toLowerCase();
+          background = SLIDE_BACKGROUNDS.has(requestedBackground) ? requestedBackground : 'default';
+          backgroundColor = SAFE_STYLE_COLOR.test(String(values.background_color || '').trim())
+            ? String(values.background_color).trim().toLowerCase()
+            : '#f8fafc';
+          decoration = SLIDE_DECORATIONS.has(requestedDecoration) ? requestedDecoration : 'none';
+          textTone = SLIDE_TEXT_TONES.has(requestedTextTone) ? requestedTextTone : 'auto';
           slideSettingsLines = null;
         } else {
           slideSettingsLines.push(line);
@@ -357,6 +375,10 @@
       title: heading ? stripMarkdown(heading[1]) : `Krok ${index + 1}`,
       transition,
       layout,
+      background,
+      backgroundColor,
+      decoration,
+      textTone,
       task,
       includeInLesson: include,
       requiredToAdvance: stepMetadata?.requiredToAdvance !== false,

@@ -1,7 +1,5 @@
 import contentRepository from '../content-repository.js';
-
-const MODEL_DEFAULT = 'gemini-2.5-flash';
-const API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+import aiRouter from '../ai-router.js';
 
 const DEFAULT_SYSTEM_PROMPT = [
   'Jesteś asystentem ChemDisk wspierającym naukę chemii i matematyki.',
@@ -18,7 +16,6 @@ const MAX_TOTAL_MESSAGE_CHARS = 45_000;
 const MAX_PROMPT_FILE_BYTES = 256 * 1024;
 const MAX_PROMPT_CHARS = 10_000;
 const IDENTITY_TIMEOUT_MS = 5_000;
-const MODEL_TIMEOUT_MS = 45_000;
 const USER_RATE_WINDOW_MS = 60_000;
 const USER_RATE_LIMIT = 12;
 // Base64 is roughly 4/3 of the source size. Keeping this below 4 MiB also
@@ -60,9 +57,6 @@ export const handler = async (event, context = {}) => {
     );
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return json({ error: 'SERVICE_UNAVAILABLE' }, 503);
-
   let body;
   try {
     body = JSON.parse(event.body || '{}');
@@ -94,65 +88,21 @@ export const handler = async (event, context = {}) => {
     }
     return json({ error: 'PROMPT_UNAVAILABLE' }, 503);
   }
-  const contents = [];
-
-  for (const message of messages.slice(0, -1)) {
-    contents.push({
-      role: message.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: message.content }]
-    });
-  }
-
-  const last = messages[messages.length - 1];
-  const lastParts = [];
-  if (last.content) lastParts.push({ text: last.content });
-  if (attachmentInline) {
-    lastParts.push({
-      inlineData: {
-        mimeType: attachmentInline.mimeType,
-        data: attachmentInline.data
-      }
-    });
-  }
-  contents.push({ role: 'user', parts: lastParts });
-
-  const payload = {
-    contents,
-    generationConfig: { temperature, maxOutputTokens: 4096 }
-  };
-  if (system) {
-    payload.systemInstruction = {
-      role: 'user',
-      parts: [{ text: system }]
-    };
-  }
-
   try {
-    const url = `${API_BASE}/models/${MODEL_DEFAULT}:generateContent`;
-    const response = await fetchWithTimeout(url, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-goog-api-key': apiKey
-      },
-      body: JSON.stringify(payload)
-    }, MODEL_TIMEOUT_MS);
-
-    if (!response.ok) {
-      // Read the response to let the connection be reused, but do not expose
-      // upstream diagnostics or request details to the browser.
-      await safeText(response);
-      return json({ error: 'MODEL_UNAVAILABLE' }, 502);
-    }
-
-    const data = await response.json();
-    const text = (data?.candidates?.[0]?.content?.parts || [])
-      .map((part) => typeof part.text === 'string' ? part.text : '')
-      .join('');
-
-    if (!text) return json({ error: 'EMPTY_MODEL_RESPONSE' }, 502);
-    return json({ text });
-  } catch {
+    const response = await aiRouter.sendRequest({
+      module: 'chat',
+      userId: authorization.user.id || authorization.user.sub || null,
+      system,
+      messages,
+      attachments: attachmentInline ? [attachmentInline] : [],
+      temperature,
+      maxOutputTokens: 4096
+    });
+    return json({ text: response.text });
+  } catch (error) {
+    if (error && error.code === 'AI_NOT_CONFIGURED') return json({ error: 'SERVICE_UNAVAILABLE' }, 503);
+    if (error && error.code === 'AI_RATE_LIMITED') return json({ error: 'RATE_LIMITED' }, 429);
+    if (error && error.code === 'EMPTY_MODEL_RESPONSE') return json({ error: 'EMPTY_MODEL_RESPONSE' }, 502);
     return json({ error: 'MODEL_UNAVAILABLE' }, 502);
   }
 };
@@ -529,10 +479,6 @@ function json(body, statusCode = 200, extraHeaders = {}) {
     },
     body: JSON.stringify(body)
   };
-}
-
-async function safeText(response) {
-  try { return await response.text(); } catch { return ''; }
 }
 
 // Export small pure helpers for the local test suite without changing the

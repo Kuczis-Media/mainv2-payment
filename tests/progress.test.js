@@ -335,6 +335,27 @@ test('server lesson navigation blocks jumps and honors per-user allow/deny/lock 
   assert.deepEqual(finished.record.details.completedStepIds, ['a', 'b', 'c']);
 });
 
+test('free lesson navigation counts completed stable steps in any order', () => {
+  const node = progressCommon.normalizeCatalog({ nodes: [{
+    id: 'lesson-free', type: 'lesson', progress: progress({ tracking: 'ON' }),
+    settings: { navigation: 'free', steps: [{ id: 'a' }, { id: 'b' }, { id: 'c' }] }
+  }] }).nodes[0];
+  const firstJump = merge(null, {
+    materialId: 'lesson-free', action: 'lesson_step',
+    details: { currentStepId: 'c', completedStepIds: ['a'] }
+  }, { node });
+  assert.equal(firstJump.ok, true);
+  assert.equal(Math.round(firstJump.record.progressPercent), 33);
+
+  const secondJump = merge(firstJump.record, {
+    materialId: 'lesson-free', action: 'lesson_step',
+    details: { currentStepId: 'b', completedStepIds: ['a', 'c'] }
+  }, { node });
+  assert.equal(secondJump.ok, true);
+  assert.equal(Math.round(secondJump.record.progressPercent), 67);
+  assert.deepEqual(secondJump.record.details.completedStepIds, ['a', 'c']);
+});
+
 test('lesson exam conditions stay locked after a failed attempt and unlock after pass or minimum score', () => {
   const examMaterialId = 'exam:default:egzamin-testowy';
   const node = progressCommon.normalizeCatalog({ nodes: [{

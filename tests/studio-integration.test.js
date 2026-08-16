@@ -265,6 +265,9 @@ test('Studio exposes dashboard, lesson, exam and prompt authoring workflows', ()
   assert.match(script, /studio-material-picker-option/);
   assert.doesNotMatch(script, /createElement\(['"]datalist['"]\)/);
   assert.match(script, /slideLayout/);
+  assert.match(script, /slideBackground/);
+  assert.match(script, /slideDecoration/);
+  assert.match(script, /slideTextTone/);
   assert.match(script, /bindLessonPreviewCanvasControls/);
   assert.match(script, /scientificNotationToolbar/);
 
@@ -311,6 +314,10 @@ test('lesson authoring extensions are rendered through strict, non-HTML directiv
   assert.match(styles, /\.lesson-support-card/);
   assert.match(styles, /\.lesson-contact-card/);
   assert.match(styles, /\.slide-card\.is-entering\[data-transition=["']zoom["']\]/);
+  assert.match(styles, /data-lesson-background=["']grid["']/);
+  assert.match(styles, /data-lesson-decoration=["']molecules["']/);
+  assert.match(player, /function completeCurrentStepForNavigation/);
+  assert.match(player, /if \(state\.sequential\) \{\s*await refreshExamProgress\(true\)/);
   assert.match(styles, /\.lesson-font-rounded/);
   assert.match(styles, /\.lesson-accordion\[open\]/);
   assert.match(styles, /\.lesson-flashcard/);

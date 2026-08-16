@@ -31,6 +31,11 @@
   const STYLE_COLOR = /^#[0-9a-f]{6}$/i;
   const LINK_ICONS = Object.freeze(['link', 'book', 'video', 'chemistry', 'math', 'file', 'external']);
   const SLIDE_TRANSITIONS = Object.freeze(['none', 'fade', 'rise', 'slide', 'zoom']);
+  const SLIDE_BACKGROUNDS = Object.freeze([
+    'default', 'paper', 'grid', 'dots', 'mint', 'sky', 'lavender', 'sand', 'gradient', 'night', 'custom'
+  ]);
+  const SLIDE_DECORATIONS = Object.freeze(['none', 'molecules', 'bubbles', 'glow']);
+  const SLIDE_TEXT_TONES = Object.freeze(['auto', 'dark', 'light']);
   const FORMULA_ARROWS = Object.freeze(['', '->', '<-', '<->', '<=>', '<=>>', '<<=>']);
   const SAFE_MATH_COMMANDS = new Set([
     'alpha', 'beta', 'gamma', 'delta', 'Delta', 'theta', 'lambda', 'mu', 'pi', 'rho', 'sigma',
@@ -573,6 +578,18 @@
       transition: SLIDE_TRANSITIONS.includes(oneLine(source.transition).toLowerCase())
         ? oneLine(source.transition).toLowerCase()
         : 'fade',
+      background: SLIDE_BACKGROUNDS.includes(oneLine(source.background).toLowerCase())
+        ? oneLine(source.background).toLowerCase()
+        : 'default',
+      backgroundColor: STYLE_COLOR.test(oneLine(source.backgroundColor || source.background_color))
+        ? oneLine(source.backgroundColor || source.background_color).toLowerCase()
+        : '#f8fafc',
+      decoration: SLIDE_DECORATIONS.includes(oneLine(source.decoration).toLowerCase())
+        ? oneLine(source.decoration).toLowerCase()
+        : 'none',
+      textTone: SLIDE_TEXT_TONES.includes(oneLine(source.textTone || source.text_tone).toLowerCase())
+        ? oneLine(source.textTone || source.text_tone).toLowerCase()
+        : 'auto',
       blocks,
       task: createTask(source.task),
       includeInLesson: ['ON', 'OFF', 'INHERIT'].includes(String(source.includeInLesson || '').toUpperCase())
@@ -1096,9 +1113,19 @@
           condition: slide.condition
         })} -->`);
       }
-      if (slide.transition !== 'fade' || slide.layout === 'canvas') {
+      if (
+        slide.transition !== 'fade'
+        || slide.layout === 'canvas'
+        || slide.background !== 'default'
+        || slide.decoration !== 'none'
+        || slide.textTone !== 'auto'
+      ) {
         const settings = [':::slide', `transition: ${slide.transition}`];
         if (slide.layout === 'canvas') settings.push('layout: canvas');
+        if (slide.background !== 'default') settings.push(`background: ${slide.background}`);
+        if (slide.background === 'custom') settings.push(`background_color: ${slide.backgroundColor}`);
+        if (slide.decoration !== 'none') settings.push(`decoration: ${slide.decoration}`);
+        if (slide.textTone !== 'auto') settings.push(`text_tone: ${slide.textTone}`);
         settings.push(':::');
         parts.unshift(settings.join('\n'));
       }
@@ -1517,6 +1544,10 @@
     let slideSettingsSeen = false;
     let transition = 'fade';
     let layout = 'flow';
+    let background = 'default';
+    let backgroundColor = '#f8fafc';
+    let decoration = 'none';
+    let textTone = 'auto';
     let containerDepth = 0;
     let inCode = false;
     lines.forEach((line, index) => {
@@ -1544,6 +1575,18 @@
             ? oneLine(values.transition).toLowerCase()
             : 'fade';
           layout = oneLine(values.layout).toLowerCase() === 'canvas' ? 'canvas' : 'flow';
+          background = SLIDE_BACKGROUNDS.includes(oneLine(values.background).toLowerCase())
+            ? oneLine(values.background).toLowerCase()
+            : 'default';
+          backgroundColor = STYLE_COLOR.test(oneLine(values.background_color))
+            ? oneLine(values.background_color).toLowerCase()
+            : '#f8fafc';
+          decoration = SLIDE_DECORATIONS.includes(oneLine(values.decoration).toLowerCase())
+            ? oneLine(values.decoration).toLowerCase()
+            : 'none';
+          textTone = SLIDE_TEXT_TONES.includes(oneLine(values.text_tone).toLowerCase())
+            ? oneLine(values.text_tone).toLowerCase()
+            : 'auto';
           slideSettingsLines = null;
         } else slideSettingsLines.push(line);
         return;
@@ -1653,6 +1696,10 @@
       task,
       transition,
       layout,
+      background,
+      backgroundColor,
+      decoration,
+      textTone,
       includeInLesson: stepMetadata?.includeInLesson,
       requiredToAdvance: stepMetadata?.requiredToAdvance,
       condition: stepMetadata?.condition,
@@ -1739,6 +1786,9 @@
     styleSizes: STYLE_SIZES,
     styleAligns: STYLE_ALIGNS,
     slideTransitions: SLIDE_TRANSITIONS,
+    slideBackgrounds: SLIDE_BACKGROUNDS,
+    slideDecorations: SLIDE_DECORATIONS,
+    slideTextTones: SLIDE_TEXT_TONES,
     styleColorFormat: '#RRGGBB',
     requiresLessonParserContainers: true
   });
@@ -1753,6 +1803,9 @@
     FORMULA_ARROWS,
     LINK_ICONS,
     SLIDE_TRANSITIONS,
+    SLIDE_BACKGROUNDS,
+    SLIDE_DECORATIONS,
+    SLIDE_TEXT_TONES,
     TASK_TYPES,
     StudioLessonError,
     capabilities,

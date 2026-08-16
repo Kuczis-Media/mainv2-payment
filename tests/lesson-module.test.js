@@ -307,6 +307,9 @@ test('lesson renderer shows safe link tiles and preserves per-slide transitions'
     '',
     ':::slide',
     'transition: zoom',
+    'background: grid',
+    'decoration: molecules',
+    'text_tone: dark',
     ':::',
     '',
     ':::linkcard',
@@ -324,6 +327,9 @@ test('lesson renderer shows safe link tiles and preserves per-slide transitions'
     '',
     ':::slide',
     'transition: none',
+    'background: custom',
+    'background_color: #123456',
+    'text_tone: light',
     ':::',
     '',
     'Treść drugiego slajdu.'
@@ -331,6 +337,12 @@ test('lesson renderer shows safe link tiles and preserves per-slide transitions'
 
   assert.equal(lesson.slides[0].transition, 'zoom');
   assert.equal(lesson.slides[1].transition, 'none');
+  assert.equal(lesson.slides[0].background, 'grid');
+  assert.equal(lesson.slides[0].decoration, 'molecules');
+  assert.equal(lesson.slides[0].textTone, 'dark');
+  assert.equal(lesson.slides[1].background, 'custom');
+  assert.equal(lesson.slides[1].backgroundColor, '#123456');
+  assert.equal(lesson.slides[1].textTone, 'light');
   assert.match(lesson.slides[0].html, /class="lesson-link-card"/);
   assert.match(lesson.slides[0].html, /href="\/members\/module\/board\/"/);
   assert.match(lesson.slides[0].html, /--link-card-color:#7c3aed/);

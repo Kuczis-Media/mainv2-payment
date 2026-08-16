@@ -321,6 +321,9 @@
         <button class="admin-tab" id="admin-tab-progress" type="button" role="tab" aria-selected="false" aria-controls="admin-panel-progress" tabindex="-1" data-admin-tab="progress">
           <span aria-hidden="true">◔</span> Postępy
         </button>
+        <button class="admin-tab" id="admin-tab-ai" type="button" role="tab" aria-selected="false" aria-controls="admin-panel-ai" tabindex="-1" data-admin-tab="ai">
+          <span aria-hidden="true">✦</span> AI / Modele
+        </button>
         <button class="admin-tab" id="admin-tab-payments" type="button" role="tab" aria-selected="false" aria-controls="admin-panel-payments" tabindex="-1" data-admin-tab="payments">
           <span aria-hidden="true">zł</span> Płatności
         </button>
@@ -546,6 +549,55 @@ GITHUB_CONTENT_ROOT=</pre>
             <div id="admin-progress-audit"></div>
           </div>
         </details>
+      </section>
+
+      <section class="admin-tab-panel" id="admin-panel-ai" role="tabpanel" aria-labelledby="admin-tab-ai" data-admin-panel="ai" hidden>
+        <div class="admin-guidance">
+          <span aria-hidden="true">✦</span>
+          <p><strong>Klucze API pozostają wyłącznie po stronie serwera.</strong> Panel pokazuje tylko stan klucza i jego cztery ostatnie znaki. Wartość nie jest ponownie pobierana do przeglądarki ani zapisywana w localStorage.</p>
+        </div>
+
+        <div class="admin-ai-layout">
+          <section class="admin-ai-editor" aria-labelledby="admin-ai-editor-title">
+            <div class="admin-ai-section-heading">
+              <div><span class="eyebrow">Konfiguracja</span><h3 id="admin-ai-editor-title">Dodaj dostawcę AI</h3></div>
+              <button class="button button-secondary" id="admin-ai-new" type="button">Nowa konfiguracja</button>
+            </div>
+            <form id="admin-ai-config-form">
+              <input id="admin-ai-config-id" type="hidden" />
+              <div class="admin-ai-form-grid">
+                <label><span class="field-label">Nazwa konfiguracji</span><input class="text-field" id="admin-ai-name" maxlength="100" placeholder="Np. Główny czat" required /></label>
+                <label><span class="field-label">Dostawca</span><select class="text-field" id="admin-ai-provider"><option value="gemini">Google Gemini</option><option value="openai">OpenAI</option></select></label>
+                <label class="admin-ai-model-field"><span class="field-label">Identyfikator modelu</span><span class="admin-ai-model-input"><input class="text-field" id="admin-ai-model" list="admin-ai-model-list" maxlength="160" placeholder="Np. gemini-2.5-flash" required /><button class="button button-secondary" id="admin-ai-models-refresh" type="button">Pobierz modele</button></span><small>Możesz zawsze wpisać identyfikator ręcznie — lista nie jest zamknięta.</small></label>
+                <label class="admin-ai-description-field"><span class="field-label">Opis</span><textarea class="text-field" id="admin-ai-description" maxlength="500" rows="3" placeholder="Do czego używana jest ta konfiguracja?"></textarea></label>
+              </div>
+              <datalist id="admin-ai-model-list"></datalist>
+              <div class="admin-ai-editor-actions"><p class="admin-status" id="admin-ai-status" role="status" aria-live="polite"></p><button class="button button-primary" id="admin-ai-save" type="submit">Zapisz konfigurację</button></div>
+            </form>
+
+            <div class="admin-ai-secret-box" id="admin-ai-secret-box" hidden>
+              <div><strong>Klucz API</strong><small id="admin-ai-secret-state">Nie ustawiono klucza.</small></div>
+              <label><span class="field-label">Nowy klucz</span><input class="text-field" id="admin-ai-secret" type="password" maxlength="4096" autocomplete="new-password" placeholder="Wklej klucz — nie będzie można go ponownie odczytać" /></label>
+              <div class="admin-ai-secret-actions">
+                <button class="button button-primary" id="admin-ai-secret-save" type="button">Ustaw / zmień klucz</button>
+                <button class="button button-secondary button-danger-soft" id="admin-ai-secret-remove" type="button">Usuń klucz</button>
+              </div>
+            </div>
+          </section>
+
+          <aside class="admin-ai-routing" aria-labelledby="admin-ai-routing-title">
+            <span class="eyebrow">Routing</span>
+            <h3 id="admin-ai-routing-title">Konfiguracje modułów</h3>
+            <p>Brak wyboru oznacza użycie konfiguracji domyślnej.</p>
+            <label><span class="field-label">Chat</span><select class="text-field" id="admin-ai-module-chat"></select></label>
+            <label><span class="field-label">Sprawdzanie AI</span><select class="text-field" id="admin-ai-module-grader"></select></label>
+            <label><span class="field-label">Formularze AI</span><select class="text-field" id="admin-ai-module-forms"></select></label>
+          </aside>
+        </div>
+
+        <div class="admin-ai-list-heading"><div><span class="eyebrow">Aktywne integracje</span><h3>Konfiguracje OpenAI i Gemini</h3></div><button class="button button-secondary" id="admin-ai-refresh" type="button">Odśwież</button></div>
+        <div class="admin-ai-list" id="admin-ai-list" aria-busy="false"></div>
+        <div class="admin-empty" id="admin-ai-empty" hidden><span aria-hidden="true">✦</span><strong>Brak konfiguracji AI</strong><p>Dodaj pierwszą konfigurację. Dotychczasowy klucz ENV pozostanie awaryjnym źródłem.</p></div>
       </section>
 
       <section class="admin-tab-panel" id="admin-panel-payments" role="tabpanel" aria-labelledby="admin-tab-payments" data-admin-panel="payments" hidden>

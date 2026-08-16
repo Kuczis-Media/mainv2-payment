@@ -531,6 +531,9 @@ test('studio round-trips link tiles and a separate transition for every slide', 
     slides: [
       {
         transition: 'rise',
+        background: 'grid',
+        decoration: 'molecules',
+        textTone: 'dark',
         blocks: [
           { type: 'heading', level: 2, text: 'Czytaj dalej' },
           {
@@ -546,14 +549,17 @@ test('studio round-trips link tiles and a separate transition for every slide', 
       },
       {
         transition: 'none',
+        background: 'custom',
+        backgroundColor: '#123456',
+        textTone: 'light',
         blocks: [{ type: 'text', text: 'Ten slajd pojawia się bez animacji.' }]
       }
     ]
   });
 
   const markdown = studio.serializeLesson(lesson);
-  assert.match(markdown, /:::slide\ntransition: rise\n:::/);
-  assert.match(markdown, /:::slide\ntransition: none\n:::/);
+  assert.match(markdown, /:::slide\ntransition: rise\nbackground: grid\ndecoration: molecules\ntext_tone: dark\n:::/);
+  assert.match(markdown, /:::slide\ntransition: none\nbackground: custom\nbackground_color: #123456\ntext_tone: light\n:::/);
   assert.match(markdown, /:::linkcard\n[\s\S]*title: Tablica wzorów/);
   assert.match(markdown, /url: https:\/\/example\.com\/wzory/);
   assert.match(markdown, /icon: math/);
@@ -562,6 +568,11 @@ test('studio round-trips link tiles and a separate transition for every slide', 
   const imported = studio.parseLesson(markdown, lesson.filename);
   assert.equal(imported.slides[0].transition, 'rise');
   assert.equal(imported.slides[1].transition, 'none');
+  assert.equal(imported.slides[0].background, 'grid');
+  assert.equal(imported.slides[0].decoration, 'molecules');
+  assert.equal(imported.slides[1].background, 'custom');
+  assert.equal(imported.slides[1].backgroundColor, '#123456');
+  assert.equal(imported.slides[1].textTone, 'light');
   const link = imported.slides[0].blocks.find((block) => block.type === 'link');
   assert.equal(link.title, 'Tablica wzorów');
   assert.equal(link.icon, 'math');
@@ -571,6 +582,9 @@ test('studio round-trips link tiles and a separate transition for every slide', 
   const published = lessonParser.parseLesson(markdown, lesson.filename);
   assert.equal(published.slides[0].transition, 'rise');
   assert.equal(published.slides[1].transition, 'none');
+  assert.equal(published.slides[0].background, 'grid');
+  assert.equal(published.slides[0].decoration, 'molecules');
+  assert.equal(published.slides[1].backgroundColor, '#123456');
   assert.match(published.slides[0].html, /class="lesson-link-card"/);
   assert.match(published.slides[0].html, /target="_blank" rel="noopener noreferrer"/);
   assert.match(published.slides[0].html, /--link-card-color:#2563eb/);

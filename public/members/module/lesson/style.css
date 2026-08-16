@@ -486,7 +486,99 @@ fieldset:focus-within {
 }
 
 .slide-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   padding: clamp(32px, 5vw, 72px);
+}
+
+.slide-card > * { position: relative; z-index: 1; }
+
+.slide-card[data-lesson-background="paper"] {
+  background-color: #fffef8;
+  background-image: repeating-linear-gradient(0deg, transparent 0 31px, rgba(75, 113, 146, .14) 32px);
+}
+
+.slide-card[data-lesson-background="grid"] {
+  background-color: #fbfdfd;
+  background-image:
+    linear-gradient(rgba(26, 116, 104, .105) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(26, 116, 104, .105) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.slide-card[data-lesson-background="dots"] {
+  background-color: #fdfefd;
+  background-image: radial-gradient(circle, rgba(46, 97, 109, .19) 1.4px, transparent 1.5px);
+  background-size: 23px 23px;
+}
+
+.slide-card[data-lesson-background="mint"] { background: linear-gradient(145deg, #edf9f4, #dff3ed); }
+.slide-card[data-lesson-background="sky"] { background: linear-gradient(145deg, #f0f8ff, #ddecfa); }
+.slide-card[data-lesson-background="lavender"] { background: linear-gradient(145deg, #faf5ff, #ece2f8); }
+.slide-card[data-lesson-background="sand"] { background: linear-gradient(145deg, #fffaf0, #f5ead3); }
+.slide-card[data-lesson-background="gradient"] { background: linear-gradient(135deg, #e8f7f1 0%, #eff6ff 52%, #f5edff 100%); }
+.slide-card[data-lesson-background="night"] { background: linear-gradient(145deg, #122638, #123f45 58%, #175b52); }
+.slide-card[data-lesson-background="custom"] { background: var(--lesson-slide-color, #f8fafc); }
+
+.slide-card[data-lesson-tone="dark"],
+.slide-card[data-lesson-tone="auto"]:not([data-lesson-background="default"]):not([data-lesson-background="night"]) {
+  --text: #17233a;
+  --muted: #52627b;
+  --line: rgba(55, 75, 98, .18);
+  --surface: #ffffff;
+  --surface-soft: rgba(255, 255, 255, .68);
+}
+
+.slide-card[data-lesson-tone="light"],
+.slide-card[data-lesson-background="night"][data-lesson-tone="auto"] {
+  --text: #f7fbff;
+  --muted: #c8d8e7;
+  --line: rgba(221, 240, 244, .22);
+  --surface: #173b43;
+  --surface-soft: rgba(236, 250, 249, .11);
+  --accent: #79ddca;
+  --accent-strong: #a2ebdd;
+  --accent-soft: rgba(121, 221, 202, .16);
+}
+
+.slide-card::before,
+.slide-card::after {
+  position: absolute;
+  z-index: 0;
+  content: "";
+  pointer-events: none;
+}
+
+.slide-card[data-lesson-decoration="molecules"]::before {
+  top: -55px;
+  right: -36px;
+  width: 250px;
+  height: 230px;
+  opacity: .22;
+  background:
+    radial-gradient(circle at 22% 58%, var(--accent) 0 7px, transparent 8px),
+    radial-gradient(circle at 51% 31%, var(--accent) 0 10px, transparent 11px),
+    radial-gradient(circle at 78% 62%, var(--accent) 0 8px, transparent 9px),
+    linear-gradient(33deg, transparent 42%, var(--accent) 43% 44%, transparent 45%) 29px 61px / 115px 85px no-repeat,
+    linear-gradient(-28deg, transparent 43%, var(--accent) 44% 45%, transparent 46%) 112px 55px / 95px 90px no-repeat;
+}
+
+.slide-card[data-lesson-decoration="bubbles"]::before {
+  inset: 0;
+  opacity: .23;
+  background:
+    radial-gradient(circle at 91% 18%, transparent 0 42px, var(--accent) 43px 44px, transparent 45px),
+    radial-gradient(circle at 82% 31%, transparent 0 18px, var(--accent) 19px 20px, transparent 21px),
+    radial-gradient(circle at 8% 86%, transparent 0 30px, var(--accent) 31px 32px, transparent 33px);
+}
+
+.slide-card[data-lesson-decoration="glow"]::before {
+  inset: -25%;
+  opacity: .28;
+  background:
+    radial-gradient(circle at 86% 20%, var(--accent-soft), transparent 24%),
+    radial-gradient(circle at 7% 90%, var(--accent-soft), transparent 22%);
 }
 
 .slide-card.is-entering[data-transition="fade"] { animation: lesson-fade 260ms ease-out both; }

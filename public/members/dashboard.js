@@ -10,6 +10,7 @@
   const PAYMENT_ADMIN_URL = '/.netlify/functions/payment-admin';
   const PAYMENT_CONFIG_URL = '/.netlify/functions/payment-config';
   const ADMIN_PROGRESS_URL = '/.netlify/functions/admin-progress';
+  const ADMIN_AI_URL = '/.netlify/functions/admin-ai';
   const THEME_STORAGE_KEY = 'chem.theme';
   const SIDEBAR_STORAGE_KEY = 'chem.sidebar';
   const MOBILE_SIDEBAR_QUERY = '(max-width: 920px)';
@@ -53,6 +54,16 @@
     ACCESS_REQUIRED: 'To konto nie ma aktywnego dostępu do kursu.',
     AUTH_EXPIRED: 'Sesja administratora wygasła. Zaloguj się ponownie.',
     AUTH_REQUIRED: 'Zaloguj się ponownie, aby zarządzać kontami.',
+    AI_CONFIG_CONFLICT: 'Konfiguracja AI została zmieniona równocześnie. Odśwież listę i spróbuj ponownie.',
+    AI_CONFIG_NOT_FOUND: 'Nie znaleziono tej konfiguracji AI.',
+    AI_INVALID_KEY: 'Dostawca odrzucił klucz API.',
+    AI_MODEL_UNAVAILABLE: 'Wybrany model jest niedostępny dla tego klucza.',
+    AI_NOT_CONFIGURED: 'Nie skonfigurowano jeszcze dostawcy AI.',
+    AI_PROVIDER_ERROR: 'Dostawca AI jest chwilowo niedostępny.',
+    AI_RATE_LIMITED: 'Dostawca AI ograniczył liczbę żądań. Spróbuj ponownie później.',
+    AI_SECRET_MISSING: 'Najpierw ustaw klucz API dla tej konfiguracji.',
+    AI_STORAGE_INVALID: 'Zapisana konfiguracja AI jest uszkodzona.',
+    AI_STORAGE_UNAVAILABLE: 'Magazyn konfiguracji AI jest chwilowo niedostępny.',
     CANNOT_DELETE_SELF: 'Nie możesz usunąć własnego konta administratora.',
     CANNOT_REMOVE_OWN_ADMIN: 'Nie możesz odebrać roli administratora własnemu kontu.',
     CONTENT_CATALOG_INVALID: 'Plik catalog.json w repozytorium materiałów jest nieprawidłowy.',
@@ -216,6 +227,29 @@
     adminProgressDetail: document.getElementById('admin-progress-detail'),
     adminProgressGlobalReport: document.getElementById('admin-progress-global-report'),
     adminProgressAudit: document.getElementById('admin-progress-audit'),
+    adminAiConfigForm: document.getElementById('admin-ai-config-form'),
+    adminAiConfigId: document.getElementById('admin-ai-config-id'),
+    adminAiName: document.getElementById('admin-ai-name'),
+    adminAiProvider: document.getElementById('admin-ai-provider'),
+    adminAiModel: document.getElementById('admin-ai-model'),
+    adminAiModelList: document.getElementById('admin-ai-model-list'),
+    adminAiDescription: document.getElementById('admin-ai-description'),
+    adminAiEditorTitle: document.getElementById('admin-ai-editor-title'),
+    adminAiStatus: document.getElementById('admin-ai-status'),
+    adminAiSave: document.getElementById('admin-ai-save'),
+    adminAiNew: document.getElementById('admin-ai-new'),
+    adminAiRefresh: document.getElementById('admin-ai-refresh'),
+    adminAiModelsRefresh: document.getElementById('admin-ai-models-refresh'),
+    adminAiSecretBox: document.getElementById('admin-ai-secret-box'),
+    adminAiSecretState: document.getElementById('admin-ai-secret-state'),
+    adminAiSecret: document.getElementById('admin-ai-secret'),
+    adminAiSecretSave: document.getElementById('admin-ai-secret-save'),
+    adminAiSecretRemove: document.getElementById('admin-ai-secret-remove'),
+    adminAiModuleChat: document.getElementById('admin-ai-module-chat'),
+    adminAiModuleGrader: document.getElementById('admin-ai-module-grader'),
+    adminAiModuleForms: document.getElementById('admin-ai-module-forms'),
+    adminAiList: document.getElementById('admin-ai-list'),
+    adminAiEmpty: document.getElementById('admin-ai-empty'),
     adminPricesForm: document.getElementById('admin-prices-form'),
     adminPaymentCurrency: document.getElementById('admin-payment-currency'),
     adminPaymentDisabled: document.getElementById('admin-payment-disabled'),
@@ -271,6 +305,8 @@
   let adminProgressActiveIds = new Set();
   let adminProgressReport = null;
   let adminProgressCatalog = null;
+  let adminAiLoaded = false;
+  let adminAiSettings = null;
 
   function preferredTheme() {
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
