@@ -40,6 +40,9 @@ exports.handler = async (event = {}, context = {}) => {
 
   try {
     if (method === 'GET') {
+      const view = String(event.queryStringParameters && event.queryStringParameters.view || 'settings');
+      if (view === 'audit') return json({ audit: await manager.listAudit(stores.metadata, 50) });
+      if (view !== 'settings') throw apiError('INVALID_VIEW', 400);
       const { settings } = await manager.readSettings(stores.metadata);
       return json(manager.publicSettings(settings));
     }
@@ -102,7 +105,7 @@ exports.handler = async (event = {}, context = {}) => {
       const normalized = normalizeError(error);
       const next = await manager.updateConnectionStatus(stores, aiConfigId, normalized.status, auth.userId);
       await manager.appendAudit(stores.metadata, { adminId: auth.userId, action: 'ai.connection.tested', aiConfigId, previousValue: config.connectionStatus, newValue: normalized.status });
-      return json({ ...manager.publicSettings(next), test: normalized }, normalized.status === 'rate_limited' ? 429 : 400);
+      return json({ ...manager.publicSettings(next), error: normalized.code, test: normalized }, normalized.status === 'rate_limited' ? 429 : 400);
     }
   } catch (error) {
     return errorResponse(error);

@@ -598,6 +598,10 @@ GITHUB_CONTENT_ROOT=</pre>
         <div class="admin-ai-list-heading"><div><span class="eyebrow">Aktywne integracje</span><h3>Konfiguracje OpenAI i Gemini</h3></div><button class="button button-secondary" id="admin-ai-refresh" type="button">Odśwież</button></div>
         <div class="admin-ai-list" id="admin-ai-list" aria-busy="false"></div>
         <div class="admin-empty" id="admin-ai-empty" hidden><span aria-hidden="true">✦</span><strong>Brak konfiguracji AI</strong><p>Dodaj pierwszą konfigurację. Dotychczasowy klucz ENV pozostanie awaryjnym źródłem.</p></div>
+        <details class="admin-ai-audit" id="admin-ai-audit">
+          <summary><span><strong>Historia zmian AI</strong><small>Zmiany konfiguracji, modeli, kluczy, routingu i testy połączenia — bez wartości sekretów.</small></span><span aria-hidden="true">›</span></summary>
+          <div class="admin-ai-audit-list" id="admin-ai-audit-list">Rozwiń sekcję, aby pobrać historię.</div>
+        </details>
       </section>
 
       <section class="admin-tab-panel" id="admin-panel-payments" role="tabpanel" aria-labelledby="admin-tab-payments" data-admin-panel="payments" hidden>

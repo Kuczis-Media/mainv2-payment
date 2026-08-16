@@ -75,29 +75,34 @@ const geminiAdapter = Object.freeze({
 const openAiAdapter = Object.freeze({
   id: 'openai',
   async sendRequest(config, request, runtime = {}) {
-    const messages = [];
-    if (request.system) messages.push({ role: 'system', content: request.system });
-    request.messages.forEach((message, index) => {
+    const input = request.messages.map((message, index) => {
       if (index === request.messages.length - 1 && (request.attachments || []).length) {
         const content = [];
-        if (message.content) content.push({ type: 'text', text: message.content });
+        if (message.content) content.push({ type: 'input_text', text: message.content });
         (request.attachments || []).forEach((attachment) => content.push({
-          type: 'image_url', image_url: { url: `data:${attachment.mimeType};base64,${attachment.data}` }
+          type: 'input_image', image_url: `data:${attachment.mimeType};base64,${attachment.data}`
         }));
-        messages.push({ role: message.role, content });
-      } else {
-        messages.push({ role: message.role, content: message.content });
+        return { role: message.role, content };
       }
+      return { role: message.role, content: message.content };
     });
-    const response = await providerFetch('https://api.openai.com/v1/chat/completions', {
+    const response = await providerFetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: { 'content-type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
-      body: JSON.stringify({ model: config.model, messages, temperature: request.temperature, max_tokens: request.maxOutputTokens })
+      body: JSON.stringify({
+        model: config.model,
+        instructions: request.system || undefined,
+        input,
+        max_output_tokens: request.maxOutputTokens,
+        store: false
+      })
     }, runtime);
     const data = await readProviderJson(response);
     if (!response.ok) throw errorFromResponse(response);
-    const raw = data?.choices?.[0]?.message?.content;
-    const text = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw.map((part) => part && part.text || '').join('') : '';
+    const text = (Array.isArray(data?.output) ? data.output : [])
+      .flatMap((item) => Array.isArray(item?.content) ? item.content : [])
+      .map((part) => part?.type === 'output_text' && typeof part.text === 'string' ? part.text : '')
+      .join('');
     if (!text) throw new AiProviderError('EMPTY_MODEL_RESPONSE', 502);
     return { text, usage: normalizeOpenAiUsage(data?.usage) };
   },
@@ -174,8 +179,8 @@ function normalizeGeminiUsage(value) {
 
 function normalizeOpenAiUsage(value) {
   return {
-    inputTokens: finiteInteger(value?.prompt_tokens),
-    outputTokens: finiteInteger(value?.completion_tokens),
+    inputTokens: finiteInteger(value?.input_tokens),
+    outputTokens: finiteInteger(value?.output_tokens),
     totalTokens: finiteInteger(value?.total_tokens)
   };
 }

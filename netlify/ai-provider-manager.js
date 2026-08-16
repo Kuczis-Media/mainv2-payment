@@ -143,12 +143,13 @@ async function saveConfig(stores, raw, adminId) {
   const result = await updateSettings(stores.metadata, adminId, (settings) => {
     const index = settings.configs.findIndex((item) => item.aiConfigId === input.aiConfigId);
     const previous = index >= 0 ? settings.configs[index] : null;
+    const providerChanged = Boolean(previous && previous.provider !== input.provider);
     const next = {
       ...previous,
       ...input,
       isDefault: previous ? previous.isDefault : settings.configs.length === 0,
-      secretConfigured: previous ? previous.secretConfigured : false,
-      secretHint: previous ? previous.secretHint : '',
+      secretConfigured: previous && !providerChanged ? previous.secretConfigured : false,
+      secretHint: previous && !providerChanged ? previous.secretHint : '',
       connectionStatus: previous && previous.provider === input.provider && previous.model === input.model
         ? previous.connectionStatus : 'untested',
       lastTestedAt: previous && previous.provider === input.provider && previous.model === input.model
@@ -158,11 +159,15 @@ async function saveConfig(stores, raw, adminId) {
     };
     if (index >= 0) settings.configs[index] = next;
     else settings.configs.push(next);
-    return { settings, result: { previous, config: next } };
+    return { settings, result: { previous, config: next, providerChanged } };
   });
+  if (result.result.providerChanged) await stores.secrets.delete(secretKey(input.aiConfigId));
+  const auditAction = result.result.previous && result.result.previous.model !== input.model
+    ? 'ai.model.changed'
+    : result.result.previous ? 'ai.config.updated' : 'ai.config.created';
   await appendAudit(stores.metadata, {
     adminId,
-    action: result.result.previous ? 'ai.config.updated' : 'ai.config.created',
+    action: auditAction,
     aiConfigId: input.aiConfigId,
     previousValue: safeConfigSnapshot(result.result.previous),
     newValue: safeConfigSnapshot(result.result.config)
@@ -305,6 +310,27 @@ async function appendAudit(metadataStore, raw) {
   await metadataStore.set(key, JSON.stringify(entry), { onlyIfNew: true, metadata: { action: entry.action, timestamp } });
 }
 
+async function listAudit(metadataStore, limit = 30) {
+  const requested = Math.max(1, Math.min(100, Number(limit) || 30));
+  const listing = metadataStore.list({ prefix: 'audit/', paginate: true });
+  const pages = listing && typeof listing[Symbol.asyncIterator] === 'function' ? listing : [await listing];
+  const keys = [];
+  outer: for await (const page of pages) {
+    const blobs = Array.isArray(page) ? page : Array.isArray(page?.blobs) ? page.blobs : [];
+    for (const blob of blobs) {
+      const key = typeof blob === 'string' ? blob : blob?.key;
+      if (key) keys.push(key);
+      if (keys.length >= requested) break outer;
+    }
+  }
+  const entries = [];
+  for (const key of keys) {
+    const entry = await readEntry(metadataStore, key);
+    if (entry && plainObject(entry.value)) entries.push(entry.value);
+  }
+  return entries;
+}
+
 function safeConfigSnapshot(config) {
   if (!config) return null;
   return { aiConfigId: config.aiConfigId, name: config.name, provider: config.provider, model: config.model, isDefault: config.isDefault, secretConfigured: config.secretConfigured };
@@ -341,6 +367,7 @@ module.exports = {
   deleteConfig,
   emptySettings,
   getAiStores,
+  listAudit,
   normalizeSettings,
   publicSettings,
   readSecret,

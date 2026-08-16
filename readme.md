@@ -47,7 +47,7 @@ netlify/functions/
 ├── presentation.js                    # opublikowana definicja natywnej prezentacji
 ├── exam.js                            # definicja dla ucznia i cykl życia próby
 ├── admin-exams.js                     # raporty, analiza pytań i reset prób
-└── chat.mjs                           # chronione połączenie z Gemini i limit Netlify
+└── chat.mjs                           # chroniony chat przez centralny router AI i limit Netlify
 netlify/admin-common.js                # wspólna kanoniczna autoryzacja
 netlify/content-repository.js           # serwerowy klient GitHub Contents API
 netlify/presentation-common.js          # walidacja modelu prezentacji i bezpiecznych mediów
@@ -97,6 +97,9 @@ cp .env.example .env
 
 ```dotenv
 GEMINI_API_KEY=klucz_z_Google_AI_Studio
+GEMINI_MODEL=gemini-2.5-flash
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4.1-mini
 NETLIFY_API_TOKEN=osobisty_token_Netlify
 SITE_ID=id_witryny_Netlify
 GITHUB_CONTENT_TOKEN=github_pat_...
@@ -108,7 +111,7 @@ STRIPE_SECRET_KEY=sk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 ```
 
-Nie umieszczaj kluczy w `public`, plikach JavaScript przeglądarki, `dashboard.md` ani `netlify.toml`. `GITHUB_CONTENT_TOKEN` jest używany wyłącznie przez Functions i nigdy nie jest zwracany do przeglądarki. `SITE_ID` jest ustawiane automatycznie na wdrożeniu Netlify; ręcznie jest potrzebne tylko lokalnie.
+Nie umieszczaj kluczy w `public`, plikach JavaScript przeglądarki, `dashboard.md` ani `netlify.toml`. Klucze `GEMINI_API_KEY` i `OPENAI_API_KEY` są opcjonalnym mechanizmem awaryjnym; po pierwszym uruchomieniu dostawców AI konfiguruje się bez deployu w **Panel administratora → AI / Modele**. `GITHUB_CONTENT_TOKEN` jest używany wyłącznie przez Functions i nigdy nie jest zwracany do przeglądarki. `SITE_ID` jest ustawiane automatycznie na wdrożeniu Netlify; ręcznie jest potrzebne tylko lokalnie.
 
 `SITE_ID` i `NETLIFY_API_TOKEN` wskazują konkretną witrynę oraz jej site-wide Blobs. Jeżeli wpiszesz w lokalnym `.env` dane produkcyjne, funkcje uruchomione przez `netlify dev` mogą odczytać lub zmienić prawdziwy dashboard, konfigurację cen i księgi zakupów. Do prób administracyjnych i Stripe używaj osobnej witryny testowej z osobnym Identity, Blobs oraz kluczami Stripe test mode. Samo uruchomienie lokalne nie izoluje magazynów otwieranych z jawnymi poświadczeniami.
 
@@ -116,14 +119,14 @@ Nie umieszczaj kluczy w `public`, plikach JavaScript przeglądarki, `dashboard.m
 
 1. Utwórz witrynę z tego repozytorium. Ustawienia publikacji i funkcji są już zapisane w `netlify.toml` (`public` oraz `netlify/functions`).
 2. Włącz Netlify Identity. W ustawieniach rejestracji wybierz rejestrację otwartą albo tylko na zaproszenie, zależnie od sposobu sprzedaży kursu. Jeśli wymagane jest potwierdzenie e-maila, pozostaw włączone wiadomości potwierdzające.
-3. Dodaj `GEMINI_API_KEY` oraz `NETLIFY_API_TOKEN` w zmiennych środowiskowych witryny i ustaw ich zakres na **Functions**. Token Netlify umożliwia zakładce administracyjnej obsługę zgłoszeń Forms oraz silnie spójny dostęp do Netlify Blobs (dashboard, ceny i księgi zakupów); traktuj go jak sekret. Musi należeć do konta mającego dostęp do witryny wskazanej przez `SITE_ID`. `SITE_ID` Netlify ustawia automatycznie na deployu.
+3. Dodaj `NETLIFY_API_TOKEN` w zmiennych środowiskowych witryny i ustaw zakres **Functions**. Token umożliwia panelowi administracyjnemu obsługę Forms oraz silnie spójny dostęp do Netlify Blobs, w tym metadanych i sekretów konfiguracji AI; traktuj go jak sekret. Musi należeć do konta mającego dostęp do witryny wskazanej przez automatyczne `SITE_ID`. Opcjonalnie dodaj `GEMINI_API_KEY` lub `OPENAI_API_KEY` jako awaryjny fallback dla chatu.
 4. Utwórz i podłącz prywatne repozytorium lub repozytoria materiałów według instrukcji poniżej. Zmienne `GITHUB_CONTENT_*` również ustaw z zakresem **Functions**.
 5. Skonfiguruj Stripe według osobnej instrukcji poniżej i dodaj `STRIPE_SECRET_KEY` oraz `STRIPE_WEBHOOK_SECRET` z zakresem **Functions**. Klucze live ogranicz do kontekstu Production; Preview/Branch powinny otrzymywać wyłącznie dane Stripe test mode i poświadczenia osobnej witryny testowej.
 6. Pierwszemu administratorowi przypisz ręcznie rolę `admin` w `app_metadata` w panelu Netlify Identity. Kolejnymi kontami można już zarządzać z panelu administratora w dashboardzie.
 7. Nowe konto bez roli może się uwierzytelnić i zobaczy cennik, ale nie otworzy `/members/`. Po udanej płatności rola i dokładny termin są nadawane automatycznie. Administrator nadal może przyznać dostęp ręcznie.
 8. Udostępnij osadzane pliki Google odbiorcom, którzy mają je oglądać. Aplikacja nie omija uprawnień Dysku, Prezentacji ani Formularzy Google.
 9. Jeżeli używasz własnej domeny, ustaw ją jako główną domenę witryny, włącz HTTPS i sprawdź na niej link potwierdzający oraz zaproszenie Identity. Kod korzysta ze ścieżek same-origin i `location.origin`, więc nie wymaga zamiany `chemdisk.netlify.app` na `chemdisk.pl` w plikach.
-10. Po pierwszym deployu sprawdź logowanie, sześć zakładek panelu administratora, status biblioteki materiałów, testową płatność, formularz kontaktowy, czat, testowy egzamin oraz po jednym materiale Google i YouTube na docelowej domenie.
+10. Po pierwszym deployu sprawdź logowanie, zakładki panelu administratora, test połączenia w **AI / Modele**, status biblioteki materiałów, testową płatność, formularz kontaktowy, czat, testowy egzamin oraz po jednym materiale Google i YouTube na docelowej domenie.
 
 Deploy Preview tej samej witryny może widzieć site-wide store `chemdisk-dashboard` oraz `chemdisk-payments`, jeśli udostępnisz mu produkcyjny token i `SITE_ID`. Publikacja dashboardu, edycja cen, usuwanie użytkownika lub test Checkoutu z takiego podglądu mogą zmienić realne dane. Nie wykonuj mutacji administracyjnych na Preview podłączonym do produkcyjnych Blobs.
 
@@ -1132,11 +1135,21 @@ Raport ucznia w **Panel administratora → Postępy** ma przy egzaminie drugi zw
 
 Exam Engine i Media Manager nie dodają nowych zmiennych środowiskowych. Nie implementują AI ani nie przedstawiają zdarzeń przeglądarki jako niezawodnego proctoringu.
 
+## AI Provider Manager
+
+Zakładka **Panel administratora → AI / Modele** zarządza wieloma konfiguracjami Google Gemini i OpenAI. Każda konfiguracja ma stabilne `aiConfigId`, nazwę, opis, dostawcę, ręcznie wpisany identyfikator modelu, stan testu i status klucza. Przycisk **Pobierz modele** odczytuje bieżącą listę bezpośrednio od dostawcy, ale nie blokuje ręcznego użycia nowego modelu. Jedna konfiguracja jest domyślna, a chat, przyszłe sprawdzanie AI i formularze AI mogą mieć własny override.
+
+Metadane znajdują się w store `chemdisk-ai-config`, a wartości kluczy w osobnym `chemdisk-ai-secrets`. Odczyt administracyjny zwraca wyłącznie `secretConfigured` oraz cztery ostatnie znaki zapisane podczas zmiany klucza — Function nie pobiera pełnego sekretu tylko po to, aby go zamaskować. Utworzenie i usunięcie konfiguracji, zmiana modelu, klucza, domyślnej konfiguracji, routingu oraz test połączenia trafiają do audit logu bez wartości sekretów.
+
+Centralny `netlify/ai-router.js` wybiera konfigurację modułu, pobiera sekret wyłącznie server-side i wywołuje adapter `sendRequest`. Adaptery Gemini i OpenAI mają wspólne operacje wysyłania, testowania, pobierania modeli, normalizacji zużycia oraz błędów. Rozszerzenie o kolejnego dostawcę wymaga dodania adaptera, a nie zmiany kodu przeglądarki. Obecny chat korzysta z routingu `chat`; jeśli w Blobs nie ma kompletnej konfiguracji, zachowuje kompatybilny fallback do `GEMINI_API_KEY`/`GEMINI_MODEL`, a następnie `OPENAI_API_KEY`/`OPENAI_MODEL`.
+
+Test połączenia wykonuje minimalny odczyt wybranego modelu po stronie serwera i zwraca tylko jeden ze stanów: działa, nieprawidłowy klucz, model niedostępny, limit dostawcy lub błąd dostawcy. Zwykły kursant nie ma dostępu do endpointu `/.netlify/functions/admin-ai`; wszystkie mutacje wymagają aktualnej kanonicznej sesji administratora i żądania JSON same-origin.
+
 ## Bezpieczeństwo i ograniczenia materiałów
 
 - Role są odczytywane wyłącznie z `app_metadata`; pola profilu nie mogą przyznać dostępu.
 - `/members/*` otrzymuje nagłówki `no-store`, `noindex`, `nosniff` i ochronę przed osadzaniem ChemDisk w obcej stronie.
-- Funkcja Gemini wymaga zalogowanego użytkownika z aktualnym dostępem, ma limity wywołań, czasu odpowiedzi, długości wyniku, historii i załączników oraz nie zwraca diagnostyki dostawcy. Przeglądarka przesyła obrazy JPEG, PNG, WebP lub GIF do około 3 MB.
+- Funkcja chatu wymaga zalogowanego użytkownika z aktualnym dostępem, ma limity wywołań, czasu odpowiedzi, długości wyniku, historii i załączników oraz nie zwraca diagnostyki OpenAI ani Gemini. Przeglądarka przesyła obrazy JPEG, PNG, WebP lub GIF do około 3 MB.
 - Identyfikatory i pełne linki wejściowe są walidowane względem oczekiwanych domen Google lub YouTube.
 - Moduły Forms, Slides, PDF, Film i YT po odczytaniu parametrów zapisują stan w `sessionStorage` i czyszczą zapytanie z paska adresu. Odświeżenie działa w tej samej karcie, ale czysty adres bez ID nie przeniesie materiału do nowej karty lub przeglądarki.
 - Wartość `internal` formularza kontaktowego jest stała w interfejsie, lecz pochodzi z adresu URL. Nie używaj jej jako zaufanego identyfikatora ceny, uprawnień ani użytkownika.

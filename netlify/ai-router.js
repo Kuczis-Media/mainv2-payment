@@ -14,9 +14,12 @@ async function resolveConfig(moduleName = 'chat', options = {}) {
     const stores = storesFactory();
     const { settings } = await manager.readSettings(stores.metadata);
     const assignedId = settings.moduleAssignments[moduleName];
-    const config = settings.configs.find((item) => item.aiConfigId === assignedId)
-      || settings.configs.find((item) => item.isDefault);
-    if (config && config.secretConfigured) {
+    const candidates = [
+      settings.configs.find((item) => item.aiConfigId === assignedId),
+      settings.configs.find((item) => item.isDefault)
+    ].filter((item, index, list) => item && list.findIndex((other) => other.aiConfigId === item.aiConfigId) === index);
+    for (const config of candidates) {
+      if (!config.secretConfigured) continue;
       const apiKey = await manager.readSecret(stores.secrets, config.aiConfigId);
       if (apiKey) return { ...config, apiKey, source: 'panel' };
     }

@@ -64,6 +64,13 @@
     AI_SECRET_MISSING: 'Najpierw ustaw klucz API dla tej konfiguracji.',
     AI_STORAGE_INVALID: 'Zapisana konfiguracja AI jest uszkodzona.',
     AI_STORAGE_UNAVAILABLE: 'Magazyn konfiguracji AI jest chwilowo niedostępny.',
+    INVALID_AI_ACTION: 'Wybrano nieprawidłową operację AI.',
+    INVALID_AI_CONFIG: 'Uzupełnij nazwę, dostawcę i poprawny identyfikator modelu.',
+    INVALID_AI_CONFIG_ID: 'Identyfikator konfiguracji AI jest nieprawidłowy.',
+    INVALID_AI_MODULE: 'Wybrano nieprawidłowy moduł AI.',
+    INVALID_AI_PROVIDER: 'Wybrano nieobsługiwanego dostawcę AI.',
+    INVALID_AI_SECRET: 'Klucz API ma nieprawidłowy format.',
+    UNEXPECTED_FIELDS: 'Żądanie zawiera nieobsługiwane pola.',
     CANNOT_DELETE_SELF: 'Nie możesz usunąć własnego konta administratora.',
     CANNOT_REMOVE_OWN_ADMIN: 'Nie możesz odebrać roli administratora własnemu kontu.',
     CONTENT_CATALOG_INVALID: 'Plik catalog.json w repozytorium materiałów jest nieprawidłowy.',
@@ -250,6 +257,8 @@
     adminAiModuleForms: document.getElementById('admin-ai-module-forms'),
     adminAiList: document.getElementById('admin-ai-list'),
     adminAiEmpty: document.getElementById('admin-ai-empty'),
+    adminAiAudit: document.getElementById('admin-ai-audit'),
+    adminAiAuditList: document.getElementById('admin-ai-audit-list'),
     adminPricesForm: document.getElementById('admin-prices-form'),
     adminPaymentCurrency: document.getElementById('admin-payment-currency'),
     adminPaymentDisabled: document.getElementById('admin-payment-disabled'),
@@ -3842,8 +3851,324 @@
     host.append(list);
   }
 
+  function adminAiStatusLabel(status) {
+    return ({
+      ok: 'Połączenie działa',
+      invalid_key: 'Nieprawidłowy klucz',
+      model_unavailable: 'Model niedostępny',
+      rate_limited: 'Limit dostawcy',
+      provider_error: 'Błąd dostawcy',
+      untested: 'Nie przetestowano'
+    })[status] || 'Nie przetestowano';
+  }
+
+  function adminAiProviderLabel(provider) {
+    return provider === 'openai' ? 'OpenAI' : 'Google Gemini';
+  }
+
+  async function adminAiRequest(method, body, query) {
+    const token = await getAdminToken();
+    const response = await fetch(`${ADMIN_AI_URL}${query || ''}`, {
+      method,
+      cache: 'no-store',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...(body ? { 'Content-Type': 'application/json' } : {})
+      },
+      ...(body ? { body: JSON.stringify(body) } : {})
+    });
+    return readAdminResponse(response);
+  }
+
+  function adminAiAuditLabel(entry) {
+    return ({
+      'ai.config.created': 'Utworzono konfigurację',
+      'ai.config.updated': 'Zmieniono konfigurację',
+      'ai.model.changed': 'Zmieniono model',
+      'ai.secret.changed': 'Ustawiono lub zastąpiono klucz',
+      'ai.secret.removed': 'Usunięto klucz',
+      'ai.default.changed': 'Zmieniono konfigurację domyślną',
+      'ai.module.changed': 'Zmieniono routing modułu',
+      'ai.config.removed': 'Usunięto konfigurację',
+      'ai.connection.tested': 'Przetestowano połączenie'
+    })[entry.action] || 'Zmieniono ustawienia AI';
+  }
+
+  async function loadAdminAiAudit() {
+    if (!elements.adminAiAudit.open) return;
+    elements.adminAiAuditList.textContent = 'Wczytywanie historii…';
+    try {
+      const payload = await adminAiRequest('GET', null, '?view=audit');
+      const audit = Array.isArray(payload.audit) ? payload.audit : [];
+      if (!audit.length) {
+        elements.adminAiAuditList.textContent = 'Historia zmian jest jeszcze pusta.';
+        return;
+      }
+      const list = document.createElement('ol');
+      audit.forEach((entry) => {
+        const item = document.createElement('li');
+        const copy = document.createElement('span');
+        copy.append(
+          Object.assign(document.createElement('strong'), { textContent: adminAiAuditLabel(entry) }),
+          Object.assign(document.createElement('small'), { textContent: `${entry.aiConfigId || 'ustawienia globalne'}${entry.module ? ` · ${entry.module}` : ''}` }),
+          Object.assign(document.createElement('small'), { textContent: `${entry.timestamp ? new Date(entry.timestamp).toLocaleString('pl-PL') : 'brak daty'} · admin ${entry.adminId || '—'}` })
+        );
+        item.append(Object.assign(document.createElement('span'), { className: 'admin-ai-audit-marker', textContent: '•' }), copy);
+        list.append(item);
+      });
+      elements.adminAiAuditList.replaceChildren(list);
+    } catch (error) {
+      elements.adminAiAuditList.textContent = error?.message || 'Nie udało się wczytać historii zmian AI.';
+    }
+  }
+
+  function setAdminAiBusy(busy) {
+    [elements.adminAiSave, elements.adminAiNew, elements.adminAiRefresh, elements.adminAiModelsRefresh,
+      elements.adminAiSecretSave].forEach((button) => {
+      if (button) button.disabled = Boolean(busy);
+    });
+    if (elements.adminAiSecretRemove) {
+      const selected = (adminAiSettings?.configs || []).find((config) => config.aiConfigId === elements.adminAiConfigId.value);
+      elements.adminAiSecretRemove.disabled = Boolean(busy) || !selected?.secretConfigured;
+    }
+    if (elements.adminAiList) elements.adminAiList.setAttribute('aria-busy', busy ? 'true' : 'false');
+  }
+
+  function resetAdminAiEditor() {
+    elements.adminAiConfigForm.reset();
+    elements.adminAiConfigId.value = '';
+    elements.adminAiProvider.value = 'gemini';
+    elements.adminAiModel.value = 'gemini-2.5-flash';
+    elements.adminAiEditorTitle.textContent = 'Dodaj dostawcę AI';
+    elements.adminAiSecretBox.hidden = true;
+    elements.adminAiSecret.value = '';
+    setPanelStatus(elements.adminAiStatus, 'Nowa konfiguracja nie wpływa na chat, dopóki jej nie zapiszesz.', 'info');
+  }
+
+  function editAdminAiConfig(config) {
+    elements.adminAiConfigId.value = config.aiConfigId;
+    elements.adminAiName.value = config.name;
+    elements.adminAiProvider.value = config.provider;
+    elements.adminAiModel.value = config.model;
+    elements.adminAiDescription.value = config.description || '';
+    elements.adminAiEditorTitle.textContent = `Edytuj: ${config.name}`;
+    elements.adminAiSecretBox.hidden = false;
+    elements.adminAiSecret.value = '';
+    elements.adminAiSecretState.textContent = config.secretConfigured
+      ? `Klucz ustawiony · końcówka ••••${config.secretHint || ''}`
+      : 'Nie ustawiono klucza.';
+    elements.adminAiSecretRemove.disabled = !config.secretConfigured;
+    setPanelStatus(elements.adminAiStatus, `Wybrano ${adminAiProviderLabel(config.provider)} · ${config.model}.`, 'info');
+  }
+
+  function fillAdminAiModuleSelect(select, moduleName) {
+    if (!select) return;
+    const current = adminAiSettings?.moduleAssignments?.[moduleName] || '';
+    const options = [Object.assign(document.createElement('option'), { value: '', textContent: 'Konfiguracja domyślna' })];
+    (adminAiSettings?.configs || []).forEach((config) => {
+      options.push(Object.assign(document.createElement('option'), {
+        value: config.aiConfigId,
+        textContent: `${config.name} · ${adminAiProviderLabel(config.provider)}`
+      }));
+    });
+    select.replaceChildren(...options);
+    select.value = current;
+  }
+
+  function renderAdminAi() {
+    const configs = Array.isArray(adminAiSettings?.configs) ? adminAiSettings.configs : [];
+    elements.adminAiList.replaceChildren();
+    elements.adminAiEmpty.hidden = configs.length > 0;
+    fillAdminAiModuleSelect(elements.adminAiModuleChat, 'chat');
+    fillAdminAiModuleSelect(elements.adminAiModuleGrader, 'aiGrader');
+    fillAdminAiModuleSelect(elements.adminAiModuleForms, 'aiForms');
+    configs.forEach((config) => {
+      const card = document.createElement('article');
+      card.className = `admin-ai-card${config.isDefault ? ' is-default' : ''}`;
+      const heading = document.createElement('div');
+      heading.className = 'admin-ai-card-heading';
+      const title = document.createElement('div');
+      title.append(
+        Object.assign(document.createElement('strong'), { textContent: config.name }),
+        Object.assign(document.createElement('small'), { textContent: `${adminAiProviderLabel(config.provider)} · ${config.model}` })
+      );
+      const badges = document.createElement('span');
+      badges.className = 'admin-ai-badges';
+      if (config.isDefault) badges.append(Object.assign(document.createElement('span'), { className: 'admin-ai-badge is-default', textContent: 'Domyślna' }));
+      badges.append(Object.assign(document.createElement('span'), {
+        className: `admin-ai-badge is-${config.connectionStatus || 'untested'}`,
+        textContent: adminAiStatusLabel(config.connectionStatus)
+      }));
+      heading.append(title, badges);
+      const details = document.createElement('p');
+      details.textContent = config.description || 'Bez dodatkowego opisu.';
+      const keyState = document.createElement('small');
+      keyState.className = 'admin-ai-key-state';
+      keyState.textContent = config.secretConfigured
+        ? `Klucz ustawiony · ••••${config.secretHint || ''}${config.lastTestedAt ? ` · test ${new Date(config.lastTestedAt).toLocaleString('pl-PL')}` : ''}`
+        : 'Brak klucza w bezpiecznym magazynie';
+      const actions = document.createElement('div');
+      actions.className = 'admin-ai-card-actions';
+      const button = (label, className, handler) => {
+        const node = document.createElement('button');
+        node.type = 'button';
+        node.className = className;
+        node.textContent = label;
+        node.addEventListener('click', handler);
+        return node;
+      };
+      actions.append(
+        button('Edytuj / klucz', 'button button-secondary', () => editAdminAiConfig(config)),
+        button('Testuj', 'button button-secondary', () => testAdminAiConnection(config.aiConfigId)),
+        button('Ustaw domyślną', 'button button-secondary', () => setAdminAiDefault(config.aiConfigId)),
+        button('Usuń', 'button button-secondary button-danger-soft', () => deleteAdminAiConfig(config))
+      );
+      card.append(heading, details, keyState, actions);
+      elements.adminAiList.append(card);
+    });
+  }
+
+  async function loadAdminAi(force) {
+    if (adminAiLoaded && !force) return;
+    setAdminAiBusy(true);
+    setPanelStatus(elements.adminAiStatus, 'Wczytywanie konfiguracji AI…', 'loading');
+    try {
+      adminAiSettings = await adminAiRequest('GET');
+      adminAiLoaded = true;
+      renderAdminAi();
+      const selected = adminAiSettings.configs.find((config) => config.aiConfigId === elements.adminAiConfigId.value);
+      if (selected) editAdminAiConfig(selected);
+      else resetAdminAiEditor();
+    } catch (error) {
+      adminAiLoaded = false;
+      setPanelStatus(elements.adminAiStatus, error?.message || 'Nie udało się wczytać konfiguracji AI.', 'error');
+    } finally {
+      setAdminAiBusy(false);
+    }
+  }
+
+  async function saveAdminAiConfig(event) {
+    event.preventDefault();
+    const before = new Set((adminAiSettings?.configs || []).map((config) => config.aiConfigId));
+    const config = {
+      aiConfigId: elements.adminAiConfigId.value || undefined,
+      name: elements.adminAiName.value.trim(),
+      provider: elements.adminAiProvider.value,
+      model: elements.adminAiModel.value.trim(),
+      description: elements.adminAiDescription.value.trim()
+    };
+    setAdminAiBusy(true);
+    setPanelStatus(elements.adminAiStatus, 'Zapisywanie konfiguracji…', 'loading');
+    try {
+      adminAiSettings = await adminAiRequest('POST', { action: 'save-config', config });
+      const selectedId = config.aiConfigId || adminAiSettings.configs.find((item) => !before.has(item.aiConfigId))?.aiConfigId;
+      renderAdminAi();
+      const selected = adminAiSettings.configs.find((item) => item.aiConfigId === selectedId);
+      if (selected) editAdminAiConfig(selected);
+      setPanelStatus(elements.adminAiStatus, 'Konfiguracja zapisana. Teraz możesz ustawić klucz i przetestować połączenie.', 'info');
+    } catch (error) {
+      setPanelStatus(elements.adminAiStatus, error?.message || 'Nie udało się zapisać konfiguracji.', 'error');
+    } finally { setAdminAiBusy(false); }
+  }
+
+  async function saveAdminAiSecret() {
+    const aiConfigId = elements.adminAiConfigId.value;
+    const secret = elements.adminAiSecret.value;
+    if (!aiConfigId) return setPanelStatus(elements.adminAiStatus, 'Najpierw zapisz konfigurację.', 'error');
+    if (!secret.trim()) return setPanelStatus(elements.adminAiStatus, 'Wklej klucz API.', 'error');
+    setAdminAiBusy(true);
+    setPanelStatus(elements.adminAiStatus, 'Bezpieczne zapisywanie klucza…', 'loading');
+    try {
+      adminAiSettings = await adminAiRequest('POST', { action: 'set-secret', aiConfigId, secret });
+      elements.adminAiSecret.value = '';
+      renderAdminAi();
+      editAdminAiConfig(adminAiSettings.configs.find((item) => item.aiConfigId === aiConfigId));
+      setPanelStatus(elements.adminAiStatus, 'Klucz zapisany po stronie serwera. Jego pełna wartość nie wróciła do przeglądarki.', 'info');
+    } catch (error) { setPanelStatus(elements.adminAiStatus, error?.message || 'Nie udało się zapisać klucza.', 'error'); }
+    finally { setAdminAiBusy(false); }
+  }
+
+  async function removeAdminAiSecret() {
+    const aiConfigId = elements.adminAiConfigId.value;
+    if (!aiConfigId || !window.confirm('Usunąć klucz API tej konfiguracji? Chat użyje innej konfiguracji lub awaryjnego klucza ENV.')) return;
+    setAdminAiBusy(true);
+    try {
+      adminAiSettings = await adminAiRequest('POST', { action: 'remove-secret', aiConfigId });
+      renderAdminAi();
+      editAdminAiConfig(adminAiSettings.configs.find((item) => item.aiConfigId === aiConfigId));
+      setPanelStatus(elements.adminAiStatus, 'Klucz został usunięty z magazynu sekretów.', 'info');
+    } catch (error) { setPanelStatus(elements.adminAiStatus, error?.message || 'Nie udało się usunąć klucza.', 'error'); }
+    finally { setAdminAiBusy(false); }
+  }
+
+  async function testAdminAiConnection(aiConfigId) {
+    setAdminAiBusy(true);
+    setPanelStatus(elements.adminAiStatus, 'Sprawdzanie klucza i dostępności modelu…', 'loading');
+    try {
+      adminAiSettings = await adminAiRequest('POST', { action: 'test-connection', aiConfigId });
+      renderAdminAi();
+      setPanelStatus(elements.adminAiStatus, 'Połączenie działa, a wybrany model jest dostępny.', 'info');
+    } catch (error) {
+      await loadAdminAi(true);
+      setPanelStatus(elements.adminAiStatus, error?.message || 'Test połączenia nie powiódł się.', 'error');
+    } finally { setAdminAiBusy(false); }
+  }
+
+  async function refreshAdminAiModels() {
+    const aiConfigId = elements.adminAiConfigId.value;
+    if (!aiConfigId) return setPanelStatus(elements.adminAiStatus, 'Najpierw zapisz konfigurację i ustaw jej klucz.', 'error');
+    setAdminAiBusy(true);
+    setPanelStatus(elements.adminAiStatus, 'Pobieranie modeli od dostawcy…', 'loading');
+    try {
+      const payload = await adminAiRequest('POST', { action: 'list-models', aiConfigId });
+      const options = (payload.models || []).map((model) => Object.assign(document.createElement('option'), { value: model.id, label: model.name || model.id }));
+      elements.adminAiModelList.replaceChildren(...options);
+      setPanelStatus(elements.adminAiStatus, `Pobrano ${options.length} modeli. Możesz wybrać z podpowiedzi albo wpisać ID ręcznie.`, 'info');
+      elements.adminAiModel.focus();
+    } catch (error) { setPanelStatus(elements.adminAiStatus, error?.message || 'Nie udało się pobrać modeli.', 'error'); }
+    finally { setAdminAiBusy(false); }
+  }
+
+  async function setAdminAiDefault(aiConfigId) {
+    setAdminAiBusy(true);
+    try {
+      adminAiSettings = await adminAiRequest('POST', { action: 'set-default', aiConfigId });
+      renderAdminAi();
+      setPanelStatus(elements.adminAiStatus, 'Zmieniono domyślną konfigurację AI.', 'info');
+    } catch (error) { setPanelStatus(elements.adminAiStatus, error?.message || 'Nie udało się zmienić konfiguracji domyślnej.', 'error'); }
+    finally { setAdminAiBusy(false); }
+  }
+
+  async function setAdminAiModule(moduleName, aiConfigId) {
+    [elements.adminAiModuleChat, elements.adminAiModuleGrader, elements.adminAiModuleForms].forEach((select) => { select.disabled = true; });
+    try {
+      adminAiSettings = await adminAiRequest('POST', { action: 'set-module', module: moduleName, aiConfigId: aiConfigId || null });
+      renderAdminAi();
+      setPanelStatus(elements.adminAiStatus, 'Routing modułu zapisany.', 'info');
+    } catch (error) {
+      renderAdminAi();
+      setPanelStatus(elements.adminAiStatus, error?.message || 'Nie udało się zapisać routingu.', 'error');
+    } finally {
+      [elements.adminAiModuleChat, elements.adminAiModuleGrader, elements.adminAiModuleForms].forEach((select) => { select.disabled = false; });
+    }
+  }
+
+  async function deleteAdminAiConfig(config) {
+    if (!window.confirm(`Usunąć konfigurację „${config.name}” wraz z zapisanym kluczem?`)) return;
+    setAdminAiBusy(true);
+    try {
+      adminAiSettings = await adminAiRequest('DELETE', { aiConfigId: config.aiConfigId });
+      renderAdminAi();
+      resetAdminAiEditor();
+      setPanelStatus(elements.adminAiStatus, 'Konfiguracja i jej klucz zostały usunięte.', 'info');
+    } catch (error) { setPanelStatus(elements.adminAiStatus, error?.message || 'Nie udało się usunąć konfiguracji.', 'error'); }
+    finally { setAdminAiBusy(false); }
+  }
+
   function activateAdminTab(name, focusTab) {
-    const allowed = new Set(['users', 'forms', 'dashboard', 'content', 'progress', 'payments']);
+    const allowed = new Set(['users', 'forms', 'dashboard', 'content', 'progress', 'ai', 'payments']);
     const activeName = allowed.has(name) ? name : 'users';
     elements.adminTabs.forEach((tab) => {
       const active = tab.dataset.adminTab === activeName;
@@ -3857,6 +4182,7 @@
     if (activeName === 'dashboard' && !adminDashboardLoaded) loadAdminDashboardEditor();
     if (activeName === 'content' && !adminContentLoaded) loadAdminContentStatus(false);
     if (activeName === 'progress' && !adminProgressLoaded) loadAdminProgress(false);
+    if (activeName === 'ai' && !adminAiLoaded) loadAdminAi(false);
     if (activeName === 'payments' && !adminPricesLoaded) loadAdminPrices();
   }
 
@@ -4022,6 +4348,22 @@
       loadAdminContentStatus(false);
     });
     elements.adminContentCopyEnv.addEventListener('click', copyContentEnvironmentTemplate);
+    elements.adminAiConfigForm.addEventListener('submit', saveAdminAiConfig);
+    elements.adminAiNew.addEventListener('click', resetAdminAiEditor);
+    elements.adminAiRefresh.addEventListener('click', () => loadAdminAi(true));
+    elements.adminAiModelsRefresh.addEventListener('click', refreshAdminAiModels);
+    elements.adminAiSecretSave.addEventListener('click', saveAdminAiSecret);
+    elements.adminAiSecretRemove.addEventListener('click', removeAdminAiSecret);
+    elements.adminAiProvider.addEventListener('change', () => {
+      const current = elements.adminAiModel.value.trim();
+      if (!current || current === 'gemini-2.5-flash' || current === 'gpt-4.1-mini') {
+        elements.adminAiModel.value = elements.adminAiProvider.value === 'openai' ? 'gpt-4.1-mini' : 'gemini-2.5-flash';
+      }
+    });
+    elements.adminAiModuleChat.addEventListener('change', () => setAdminAiModule('chat', elements.adminAiModuleChat.value));
+    elements.adminAiModuleGrader.addEventListener('change', () => setAdminAiModule('aiGrader', elements.adminAiModuleGrader.value));
+    elements.adminAiModuleForms.addEventListener('change', () => setAdminAiModule('aiForms', elements.adminAiModuleForms.value));
+    elements.adminAiAudit.addEventListener('toggle', loadAdminAiAudit);
     elements.adminPricesForm.addEventListener('submit', saveAdminPrices);
     elements.adminPricesReload.addEventListener('click', loadAdminPrices);
     elements.adminDashboardSource.addEventListener('input', () => {

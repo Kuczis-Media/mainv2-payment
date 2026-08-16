@@ -210,7 +210,10 @@ Nie wpisuj ról do `user_metadata`. Uprawnienia aplikacji pochodzą wyłącznie 
 
 | Zmienna | Czy obowiązkowa | Skąd ją wziąć | Do czego służy |
 | --- | --- | --- | --- |
-| `GEMINI_API_KEY` | Dla czatu AI | Google AI Studio | Wywołania modelu `gemini-2.5-flash` |
+| `GEMINI_API_KEY` | Opcjonalny fallback AI | Google AI Studio | Awaryjne wywołania Gemini, gdy panel nie ma kompletnej konfiguracji |
+| `GEMINI_MODEL` | Opcjonalna | Identyfikator modelu Google | Model fallbacku Gemini; domyślnie `gemini-2.5-flash` |
+| `OPENAI_API_KEY` | Opcjonalny fallback AI | OpenAI Platform | Awaryjne wywołania OpenAI, gdy nie ma konfiguracji Gemini |
+| `OPENAI_MODEL` | Opcjonalna | Identyfikator modelu OpenAI | Model fallbacku OpenAI; domyślnie `gpt-4.1-mini` |
 | `GITHUB_CONTENT_TOKEN` | Dla repo materiałów | GitHub fine-grained PAT | Odczyt, zapis i usuwanie lekcji/promptów |
 | `GITHUB_CONTENT_REPOSITORY` | Przy jednym repo | Właściciel i nazwa repo GitHub | Wskazuje repo, np. `login/nazwa-repo` |
 | `GITHUB_CONTENT_REF` | Zalecana | Nazwa gałęzi | Zwykle `main` |
@@ -426,11 +429,25 @@ Plik jest opcjonalny. Bez niego aplikacja użyje nazwy pliku.
 
 Token prywatnego repo lekcji nie pobiera obrazów. Obrazy muszą być dostępne przez publiczny HTTPS.
 
-## 10. Klucz Gemini
+## 10. Dostawcy AI — Gemini i OpenAI
 
-Aplikacja używa Gemini tylko po stronie Netlify Function. Kursant nie otrzymuje klucza.
+Aplikacja używa Gemini lub OpenAI tylko po stronie Netlify Functions. Kursant nie otrzymuje klucza, identyfikatora konfiguracji ani diagnostyki dostawcy.
 
-### 10.1. Utworzenie klucza
+### 10.1. Konfiguracja w panelu administratora
+
+1. Otwórz dashboard jako administrator.
+2. Wejdź w **Panel administratora → AI / Modele**.
+3. Kliknij **Nowa konfiguracja**, wpisz nazwę i wybierz Google Gemini albo OpenAI.
+4. Wpisz identyfikator modelu ręcznie i zapisz konfigurację. Lista modeli nie jest zamknięta.
+5. W sekcji klucza wklej API key i kliknij **Ustaw / zmień klucz**. Pełna wartość zostanie wysłana bezpośrednio do chronionej Function i zapisana w osobnym store sekretów; panel nie potrafi jej później odczytać.
+6. Kliknij **Testuj**. Otrzymasz znormalizowany stan bez treści odpowiedzi i bez szczegółów mogących ujawnić sekret.
+7. W razie potrzeby ustaw konfigurację jako domyślną albo przypisz ją tylko do chatu.
+
+Klucz można zastąpić lub usunąć bez deployu. Panel pokazuje wyłącznie informację, czy klucz istnieje, i cztery ostatnie znaki zapamiętane podczas zapisu. Usunięcie konfiguracji usuwa również jej sekret i przypisania modułów. Zmiany trafiają do audit logu bez wartości klucza.
+
+### 10.2. Klucz Gemini
+
+#### Utworzenie klucza
 
 1. Zaloguj się na konto Google.
 2. Otwórz [Google AI Studio](https://aistudio.google.com/apikey).
@@ -440,33 +457,43 @@ Aplikacja używa Gemini tylko po stronie Netlify Function. Kursant nie otrzymuje
 6. Jeśli klucza nie ma, kliknij **Create API key**.
 7. Wybierz istniejący projekt Google Cloud albo utwórz nowy.
 8. Skopiuj wygenerowany klucz.
-9. W Netlify dodaj:
+9. Wklej klucz w **Panel administratora → AI / Modele**. Opcjonalnie, jako fallback zgodny ze starszą konfiguracją, dodaj w Netlify:
 
    ```dotenv
    GEMINI_API_KEY=TUTAJ_WKLEJ_KLUCZ
    ```
 
-10. Wykonaj nowy deploy.
+10. Deploy jest potrzebny tylko po zmianie fallbacku ENV; zmiana klucza w panelu działa bez deployu.
 
 Aktualne klucze tworzone w AI Studio mogą być kluczami autoryzacyjnymi powiązanymi z kontem usługi. Jest to prawidłowe. Oficjalna instrukcja: [klucze Gemini API](https://ai.google.dev/gemini-api/docs/api-key).
 
-### 10.2. Limity i koszty
+#### Limity i koszty
 
 - Wywołania korzystają z limitów projektu Google.
-- Kod używa modelu `gemini-2.5-flash`.
+- Model wybiera administrator; fallback ENV używa `GEMINI_MODEL` albo `gemini-2.5-flash`.
 - Funkcja ma dodatkowy limit 12 żądań na minutę na użytkownika w danej instancji.
 - Netlify nakłada również limit 30 żądań na minutę według IP i domeny.
 - Włączenie płatnego poziomu Gemini może powodować koszty. Ustaw budżet i alerty w Google Cloud.
 - W Google AI Studio sprawdzaj **Usage** oraz stan limitów.
 
-### 10.3. Test
+### 10.3. Klucz OpenAI
+
+1. Utwórz klucz API na koncie OpenAI z dostępem tylko do potrzebnego projektu.
+2. Dodaj konfigurację OpenAI w **AI / Modele**, wpisz aktualny identyfikator modelu i zapisz.
+3. Ustaw klucz, uruchom **Testuj**, a następnie ustaw konfigurację jako domyślną lub przypisz do wybranego modułu.
+4. Kontroluj Usage, budżet i limity po stronie OpenAI. ChemDisk normalizuje informację o tokenach, ale dostawca pozostaje źródłem prawdy dla kosztów.
+
+Opcjonalny fallback Netlify to `OPENAI_API_KEY` oraz `OPENAI_MODEL`. Jest sprawdzany po fallbacku Gemini, aby dotychczasowe wdrożenia nie zmieniły dostawcy samoczynnie.
+
+### 10.4. Test chatu
 
 1. Utwórz prompt w `prompts/`.
 2. Dodaj w dashboardzie kartę **Asystent AI**.
 3. Zaloguj się kontem z aktywnym dostępem.
 4. Wyślij krótkie pytanie.
 5. Jeśli pojawia się błąd usługi:
-   - sprawdź nazwę `GEMINI_API_KEY`;
+   - sprawdź status i test konfiguracji w **AI / Modele**;
+   - przy fallbacku ENV sprawdź nazwę `GEMINI_API_KEY` albo `OPENAI_API_KEY`;
    - sprawdź, czy klucz nie został cofnięty;
    - sprawdź limity i rozliczenia projektu Google;
    - sprawdź log funkcji `chat` w Netlify;
@@ -753,7 +780,7 @@ To nadal są dane osobowe. Udostępniaj plik tylko osobom, które muszą go otrz
 
 ## 16. Panel administratora
 
-Panel ma sześć zakładek.
+Panel ma siedem zakładek.
 
 ### Użytkownicy
 
@@ -796,6 +823,15 @@ Panel ma sześć zakładek.
 - próby egzaminów ładowane dopiero po rozwinięciu wybranego egzaminu;
 - raporty globalne i audit log;
 - ręczne ukończenie, reset i ustawienia nawigacji użytkownika.
+
+### AI / Modele
+
+- wiele konfiguracji Google Gemini i OpenAI;
+- bezpieczne ustawianie, zastępowanie i usuwanie klucza bez deployu;
+- ręczny identyfikator modelu lub lista pobrana od dostawcy;
+- test klucza i dostępności modelu wykonywany server-side;
+- konfiguracja domyślna oraz osobne przypisanie dla chatu i przyszłych modułów AI;
+- pełny klucz nigdy nie wraca do przeglądarki.
 
 ### Płatności
 
@@ -974,7 +1010,7 @@ Wybierz:
 /members/module/chat/?repo=organiczna&prompt=organiczna.json
 ```
 
-Czat wymaga `GEMINI_API_KEY`, aktywnego dostępu użytkownika i poprawnego promptu.
+Czat wymaga kompletnej konfiguracji w **AI / Modele** albo awaryjnego `GEMINI_API_KEY`/`OPENAI_API_KEY`, aktywnego dostępu użytkownika i poprawnego promptu.
 
 ### 19.8. Kalkulator naukowy
 
@@ -1967,7 +2003,7 @@ Po wdrożeniu przetestuj pełny obieg na dwóch kontach: Dashboard → start →
 - [ ] Prywatne repo materiałów ma `lessons`, `prompts` i `exams`.
 - [ ] Token GitHub ma dostęp tylko do wybranych repo.
 - [ ] `GITHUB_CONTENT_REPOSITORY` albo `GITHUB_CONTENT_REPOSITORIES` jest ustawione.
-- [ ] `GEMINI_API_KEY` działa.
+- [ ] Co najmniej jedna konfiguracja w **AI / Modele** przechodzi test albo działa awaryjny klucz ENV.
 - [ ] `NETLIFY_API_TOKEN` należy do konta z dostępem do projektu.
 - [ ] Stripe sandbox i webhook przechodzą test.
 - [ ] Wszystkie formularze są widoczne.
