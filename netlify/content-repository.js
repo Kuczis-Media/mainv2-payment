@@ -9,9 +9,11 @@ const MAX_CATALOG_BYTES = 256 * 1024;
 const MAX_LESSON_BYTES = 512 * 1024;
 const MAX_PROMPT_BYTES = 256 * 1024;
 const MAX_EXAM_BYTES = 2 * 1024 * 1024;
+const MAX_PRESENTATION_BYTES = 2 * 1024 * 1024;
+const MAX_QUIZ_BYTES = 2 * 1024 * 1024;
 const MAX_QUESTION_BANK_BYTES = 5 * 1024 * 1024;
-const MAX_EXAM_MEDIA_BYTES = 10 * 1024 * 1024;
-const MAX_EXAM_MEDIA_UPLOAD_BYTES = 4 * 1024 * 1024;
+const MAX_MEDIA_BYTES = 10 * 1024 * 1024;
+const MAX_MEDIA_UPLOAD_BYTES = 4 * 1024 * 1024;
 const SAFE_REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const SAFE_REPOSITORY_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const SAFE_TOKEN_ENV = /^GITHUB_CONTENT_TOKEN(?:_[A-Z0-9][A-Z0-9_]*)?$/;
@@ -21,8 +23,10 @@ const SAFE_LESSON_FILENAME = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.md$/i;
 const SAFE_PROMPT_FILENAME = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.(json|txt)$/i;
 const SAFE_EXAM_ID = /^[a-z0-9][a-z0-9-]{0,79}$/;
 const SAFE_QUESTION_BANK_FILENAME = /^question-bank\.json$/;
-const SAFE_EXAM_MEDIA_REF = /^photos\/(?!.*\.\.)(?:[A-Za-z0-9][A-Za-z0-9_.-]*\/)*[A-Za-z0-9][A-Za-z0-9_.-]{0,119}$/;
-const SAFE_EXAM_MEDIA_FILENAME = /^[a-z0-9][a-z0-9_.-]{0,99}\.(?:png|jpe?g|webp|gif)$/;
+const SAFE_MEDIA_ID = /^[a-z0-9][a-z0-9-]{0,79}$/;
+const SAFE_MEDIA_FILENAME = /^[a-z0-9][a-z0-9_.-]{0,99}\.(?:png|jpe?g|webp|gif|svg)$/;
+const SAFE_LOCAL_MEDIA_REF = /^photos\/[a-z0-9][a-z0-9_.-]{0,99}\.(?:png|jpe?g|webp|gif|svg)$/;
+const SAFE_SHARED_MEDIA_REF = /^assets\/shared\/[a-z0-9][a-z0-9_.-]{0,99}\.(?:png|jpe?g|webp|gif|svg)$/;
 const SAFE_SHA = /^[a-f0-9]{40,64}$/i;
 const PROMPT_POINT_HEADER = /^::punkt[ \t]+([1-9]\d{0,3})[ \t]*$/i;
 const SIMPLE_PROMPT_POINT_HEADER = /^([1-9]\d{0,3})[.)][ \t]+(.+)$/;
@@ -196,6 +200,22 @@ function assetDefinition(kind) {
       maxBytes: MAX_EXAM_BYTES,
       pattern: SAFE_EXAM_ID,
       nestedFilename: 'exam.json'
+    };
+  }
+  if (kind === 'presentation') {
+    return {
+      directory: 'presentations',
+      maxBytes: MAX_PRESENTATION_BYTES,
+      pattern: SAFE_EXAM_ID,
+      nestedFilename: 'presentation.json'
+    };
+  }
+  if (kind === 'quiz') {
+    return {
+      directory: 'quizzes',
+      maxBytes: MAX_QUIZ_BYTES,
+      pattern: SAFE_EXAM_ID,
+      nestedFilename: 'quiz.json'
     };
   }
   if (kind === 'question_bank') {
@@ -415,11 +435,7 @@ async function listAssets(kind, options = {}) {
     ...options,
     notFoundCode: 'CONTENT_DIRECTORY_NOT_FOUND'
   }).catch((error) => {
-    if (
-      definition.directory === 'exams'
-      && error instanceof ContentRepositoryError
-      && error.code === 'CONTENT_DIRECTORY_NOT_FOUND'
-    ) return null;
+    if (definition.nestedFilename && error instanceof ContentRepositoryError && error.code === 'CONTENT_DIRECTORY_NOT_FOUND') return null;
     throw error;
   });
   const [response, catalog] = await Promise.all([
@@ -441,12 +457,12 @@ async function listAssets(kind, options = {}) {
   }
   let usableEntries = entries.filter((entry) => {
     if (!entry || !definition.pattern.test(entry.name || '')) return false;
-    if (kind === 'exam') return entry.type === 'dir';
+    if (definition.nestedFilename) return entry.type === 'dir';
     return entry.type === 'file'
       && Number.isFinite(Number(entry.size))
       && Number(entry.size) <= definition.maxBytes;
   });
-  if (kind === 'exam') {
+  if (definition.nestedFilename) {
     const verified = [];
     for (let offset = 0; offset < usableEntries.length; offset += 12) {
       const batch = await Promise.all(usableEntries.slice(offset, offset + 12).map(async (entry) => {
@@ -470,8 +486,8 @@ async function listAssets(kind, options = {}) {
   }
   const assets = usableEntries
     .map((entry) => {
-      const path = kind === 'exam'
-        ? `${definition.directory}/${entry.name}/exam.json`
+      const path = definition.nestedFilename
+        ? `${definition.directory}/${entry.name}/${definition.nestedFilename}`
         : `${definition.directory}/${entry.name}`;
       const metadata = normalizeMetadata(catalog[path]);
       return {
@@ -484,8 +500,8 @@ async function listAssets(kind, options = {}) {
         title: metadata.title || titleFromFilename(entry.name),
         description: metadata.description,
         tags: metadata.tags,
-        size: kind === 'exam' ? Number(entry.examFile.size) : Number(entry.size),
-        sha: cleanString(kind === 'exam' ? entry.examFile.sha : entry.sha)
+        size: definition.nestedFilename ? Number(entry.examFile.size) : Number(entry.size),
+        sha: cleanString(definition.nestedFilename ? entry.examFile.sha : entry.sha)
       };
     })
     .sort((left, right) => left.title.localeCompare(right.title, 'pl', { sensitivity: 'base' }));
@@ -623,6 +639,22 @@ function validateAssetContent(kind, filename, rawContent) {
     if (!validation.valid) {
       throw new ContentRepositoryError(validation.errors[0]?.code || 'QUESTION_BANK_INVALID', 422);
     }
+  } else if (kind === 'presentation') {
+    let parsed;
+    try { parsed = JSON.parse(rawContent.replace(/^\uFEFF/, '')); }
+    catch { throw new ContentRepositoryError('PRESENTATION_FILE_INVALID', 422); }
+    const { validateDefinition } = require('./presentation-common.js');
+    const validation = validateDefinition(parsed, filename);
+    if (!validation.valid) {
+      throw new ContentRepositoryError(validation.errors[0]?.code || 'PRESENTATION_FILE_INVALID', 422);
+    }
+  } else if (kind === 'quiz') {
+    let parsed;
+    try { parsed = JSON.parse(rawContent.replace(/^\uFEFF/, '')); }
+    catch { throw new ContentRepositoryError('QUIZ_FILE_INVALID', 422); }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || cleanString(parsed.quizId).toLowerCase() !== filename) {
+      throw new ContentRepositoryError('QUIZ_FILE_INVALID', 422);
+    }
   }
   return rawContent;
 }
@@ -725,23 +757,100 @@ async function deleteAsset(kind, rawFilename, rawSha, options = {}) {
   });
 }
 
-function decodeExamMedia(rawFilename, rawBase64, rawMimeType) {
+function mediaMimeType(rawFilename) {
+  const extension = (cleanString(rawFilename).match(/\.([A-Za-z0-9]+)$/) || [])[1]?.toLowerCase();
+  return ({
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    webp: 'image/webp',
+    gif: 'image/gif',
+    svg: 'image/svg+xml'
+  })[extension] || '';
+}
+
+function mediaLocation(rawScope, rawMaterialKind, rawMaterialId) {
+  const scope = cleanString(rawScope).toLowerCase() || 'local';
+  if (scope === 'shared') {
+    return {
+      scope,
+      materialKind: 'shared',
+      materialId: '',
+      directory: 'assets/shared',
+      referencePrefix: 'assets/shared/'
+    };
+  }
+  if (scope !== 'local') throw new ContentRepositoryError('INVALID_MEDIA_SCOPE', 400);
+  const materialKind = cleanString(rawMaterialKind).toLowerCase();
+  let materialId;
+  let directory;
+  if (materialKind === 'exam') {
+    materialId = validateFilename('exam', rawMaterialId);
+    directory = `exams/${materialId}/photos`;
+  } else if (materialKind === 'lesson') {
+    materialId = validateFilename('lesson', rawMaterialId);
+    directory = `lessons/${materialId.replace(/\.md$/i, '')}/photos`;
+  } else if (['presentation', 'quiz'].includes(materialKind)) {
+    materialId = cleanString(rawMaterialId).toLowerCase();
+    if (!SAFE_MEDIA_ID.test(materialId)) {
+      throw new ContentRepositoryError('INVALID_MEDIA_OWNER', 400);
+    }
+    directory = `${materialKind === 'presentation' ? 'presentations' : 'quizzes'}/${materialId}/photos`;
+  } else {
+    throw new ContentRepositoryError('INVALID_MEDIA_OWNER', 400);
+  }
+  return { scope, materialKind, materialId, directory, referencePrefix: 'photos/' };
+}
+
+function validateMediaReference(location, rawReference) {
+  const reference = cleanString(rawReference).toLowerCase();
+  const valid = location.scope === 'shared'
+    ? SAFE_SHARED_MEDIA_REF.test(reference)
+    : SAFE_LOCAL_MEDIA_REF.test(reference);
+  if (!valid || !reference.startsWith(location.referencePrefix)) {
+    throw new ContentRepositoryError('INVALID_MEDIA_REFERENCE', 400);
+  }
+  return reference;
+}
+
+function safeSvg(buffer) {
+  let source;
+  try {
+    source = new TextDecoder('utf-8', { fatal: true }).decode(buffer).replace(/^\uFEFF/, '').trim();
+  } catch {
+    throw new ContentRepositoryError('MEDIA_INVALID', 422);
+  }
+  if (!/^<svg(?:\s|>)/i.test(source)) throw new ContentRepositoryError('MEDIA_INVALID', 422);
+  const unsafe = [
+    /<\s*(?:script|foreignObject|iframe|object|embed|audio|video|style|link|meta)\b/i,
+    /\son[a-z]+\s*=/i,
+    /(?:href|xlink:href)\s*=\s*["']\s*(?:https?:|\/\/|data:|javascript:)/i,
+    /(?:url\s*\(|@import|javascript:|data:text\/html)/i,
+    /<!DOCTYPE|<!ENTITY/i
+  ];
+  if (unsafe.some((pattern) => pattern.test(source))) {
+    throw new ContentRepositoryError('MEDIA_SVG_UNSAFE', 422);
+  }
+  return Buffer.from(source, 'utf8');
+}
+
+function decodeMedia(rawFilename, rawBase64, rawMimeType) {
   const filename = cleanString(rawFilename).toLowerCase();
   const contentBase64 = cleanString(rawBase64);
   const requestedMimeType = cleanString(rawMimeType).toLowerCase();
-  if (!SAFE_EXAM_MEDIA_FILENAME.test(filename)) {
-    throw new ContentRepositoryError('INVALID_EXAM_MEDIA_REFERENCE', 400);
+  if (!SAFE_MEDIA_FILENAME.test(filename)) {
+    throw new ContentRepositoryError('INVALID_MEDIA_REFERENCE', 400);
   }
   if (
     !contentBase64
-    || contentBase64.length > Math.ceil(MAX_EXAM_MEDIA_UPLOAD_BYTES * 4 / 3) + 8
+    || contentBase64.length > Math.ceil(MAX_MEDIA_UPLOAD_BYTES * 4 / 3) + 8
     || !/^[A-Za-z0-9+/]+={0,2}$/.test(contentBase64)
   ) {
-    throw new ContentRepositoryError('EXAM_MEDIA_INVALID', 422);
+    throw new ContentRepositoryError('MEDIA_INVALID', 422);
   }
-  const buffer = Buffer.from(contentBase64, 'base64');
-  if (!buffer.length) throw new ContentRepositoryError('EXAM_MEDIA_INVALID', 422);
-  if (buffer.byteLength > MAX_EXAM_MEDIA_UPLOAD_BYTES) {
+  let buffer = Buffer.from(contentBase64, 'base64');
+  if (!buffer.length) throw new ContentRepositoryError('MEDIA_INVALID', 422);
+  if (buffer.byteLength > MAX_MEDIA_UPLOAD_BYTES) {
     throw new ContentRepositoryError('CONTENT_FILE_TOO_LARGE', 413);
   }
   let mimeType = '';
@@ -749,41 +858,90 @@ function decodeExamMedia(rawFilename, rawBase64, rawMimeType) {
   else if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) mimeType = 'image/jpeg';
   else if (['GIF87a', 'GIF89a'].includes(buffer.subarray(0, 6).toString('ascii'))) mimeType = 'image/gif';
   else if (buffer.subarray(0, 4).toString('ascii') === 'RIFF' && buffer.subarray(8, 12).toString('ascii') === 'WEBP') mimeType = 'image/webp';
+  else if (/^\s*(?:<\?xml[^>]*>\s*)?<svg(?:\s|>)/i.test(buffer.subarray(0, Math.min(buffer.length, 512)).toString('utf8'))) {
+    mimeType = 'image/svg+xml';
+    buffer = safeSvg(buffer);
+  }
   if (!mimeType || (requestedMimeType && requestedMimeType !== mimeType)) {
-    throw new ContentRepositoryError('EXAM_MEDIA_INVALID', 422);
+    throw new ContentRepositoryError('MEDIA_INVALID', 422);
   }
   const extension = filename.split('.').pop();
   const validExtension = mimeType === 'image/jpeg'
     ? ['jpg', 'jpeg'].includes(extension)
-    : extension === mimeType.split('/')[1];
-  if (!validExtension) throw new ContentRepositoryError('EXAM_MEDIA_INVALID', 422);
+    : mimeType === 'image/svg+xml'
+      ? extension === 'svg'
+      : extension === mimeType.split('/')[1];
+  if (!validExtension) throw new ContentRepositoryError('MEDIA_INVALID', 422);
   return { filename, buffer, mimeType };
 }
 
-async function saveExamMedia(rawExamId, rawFilename, rawBase64, rawMimeType, options = {}) {
-  const examId = validateFilename('exam', rawExamId);
-  const media = decodeExamMedia(rawFilename, rawBase64, rawMimeType);
+async function listMedia(rawScope, rawMaterialKind, rawMaterialId, options = {}) {
+  const location = mediaLocation(rawScope, rawMaterialKind, rawMaterialId);
   const config = configFromOptions(options);
-  const reference = `photos/${media.filename}`;
+  let response;
+  try {
+    response = await githubRequest(config, location.directory, {
+      ...options,
+      notFoundCode: 'MEDIA_DIRECTORY_NOT_FOUND'
+    });
+  } catch (error) {
+    if (error instanceof ContentRepositoryError && error.code === 'MEDIA_DIRECTORY_NOT_FOUND') return [];
+    throw error;
+  }
+  let entries;
+  try { entries = await response.json(); }
+  catch { throw new ContentRepositoryError('CONTENT_REPOSITORY_RESPONSE_INVALID', 503); }
+  if (!Array.isArray(entries)) throw new ContentRepositoryError('CONTENT_REPOSITORY_RESPONSE_INVALID', 503);
+  return entries
+    .filter((entry) => entry?.type === 'file' && SAFE_MEDIA_FILENAME.test(cleanString(entry.name).toLowerCase()))
+    .map((entry) => {
+      const filename = cleanString(entry.name).toLowerCase();
+      return {
+        id: `${location.scope}:${location.materialKind}:${location.materialId}:${filename}`,
+        scope: location.scope,
+        materialKind: location.materialKind,
+        materialId: location.materialId,
+        repositoryId: config.id,
+        repositoryLabel: config.label,
+        filename,
+        reference: `${location.referencePrefix}${filename}`,
+        path: `${location.directory}/${filename}`,
+        mimeType: mediaMimeType(filename),
+        size: Number(entry.size) || 0,
+        sha: cleanString(entry.sha)
+      };
+    })
+    .sort((left, right) => left.filename.localeCompare(right.filename, 'pl', { sensitivity: 'base' }));
+}
+
+async function saveMedia(rawScope, rawMaterialKind, rawMaterialId, rawFilename, rawBase64, rawMimeType, options = {}) {
+  const location = mediaLocation(rawScope, rawMaterialKind, rawMaterialId);
+  const media = decodeMedia(rawFilename, rawBase64, rawMimeType);
+  const config = configFromOptions(options);
+  const reference = `${location.referencePrefix}${media.filename}`;
   return enqueueMutation(config, async () => {
     const data = await githubMutationRequest(
       config,
-      `exams/${examId}/${reference}`,
+      `${location.directory}/${media.filename}`,
       'PUT',
       {
-        message: `Add exams/${examId}/${reference} from ChemDisk Studio`,
+        message: `Add ${location.directory}/${media.filename} from ChemDisk Media Manager`,
         content: media.buffer.toString('base64'),
         branch: config.ref
       },
       { ...options, creating: true, fileExpected: false }
     );
     return {
-      kind: 'exam_media',
+      kind: 'media',
+      scope: location.scope,
+      materialKind: location.materialKind,
+      materialId: location.materialId,
       repositoryId: config.id,
       repositoryLabel: config.label,
-      examId,
       filename: media.filename,
+      reference,
       ref: reference,
+      path: `${location.directory}/${media.filename}`,
       mimeType: media.mimeType,
       size: media.buffer.byteLength,
       created: true,
@@ -792,25 +950,88 @@ async function saveExamMedia(rawExamId, rawFilename, rawBase64, rawMimeType, opt
   });
 }
 
-async function readExamMedia(rawExamId, rawReference, options = {}) {
-  const examId = validateFilename('exam', rawExamId);
-  const reference = cleanString(rawReference);
-  if (!SAFE_EXAM_MEDIA_REF.test(reference)) {
-    throw new ContentRepositoryError('INVALID_EXAM_MEDIA_REFERENCE', 400);
-  }
+async function readMedia(rawScope, rawMaterialKind, rawMaterialId, rawReference, options = {}) {
+  const location = mediaLocation(rawScope, rawMaterialKind, rawMaterialId);
+  const reference = validateMediaReference(location, rawReference);
   const config = configFromOptions(options);
-  const response = await githubRequest(config, `exams/${examId}/${reference}`, {
+  const filename = reference.slice(location.referencePrefix.length);
+  const response = await githubRequest(config, `${location.directory}/${filename}`, {
     ...options,
     raw: true,
     notFoundCode: 'CONTENT_FILE_NOT_FOUND'
   });
-  const buffer = await readResponseBytes(response, MAX_EXAM_MEDIA_BYTES);
-  const extension = (reference.match(/\.([A-Za-z0-9]+)$/) || [])[1]?.toLowerCase();
-  const mimeType = ({
-    png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif'
-  })[extension] || '';
-  if (!mimeType) throw new ContentRepositoryError('INVALID_EXAM_MEDIA_REFERENCE', 400);
-  return { buffer, mimeType, reference, examId, repositoryId: config.id };
+  const buffer = await readResponseBytes(response, MAX_MEDIA_BYTES);
+  const mimeType = mediaMimeType(filename);
+  if (!mimeType) throw new ContentRepositoryError('INVALID_MEDIA_REFERENCE', 400);
+  return {
+    buffer,
+    mimeType,
+    reference,
+    scope: location.scope,
+    materialKind: location.materialKind,
+    materialId: location.materialId,
+    repositoryId: config.id
+  };
+}
+
+async function deleteMedia(rawScope, rawMaterialKind, rawMaterialId, rawReference, rawSha, options = {}) {
+  const location = mediaLocation(rawScope, rawMaterialKind, rawMaterialId);
+  const reference = validateMediaReference(location, rawReference);
+  const expectedSha = validateExpectedSha(rawSha, true);
+  const config = configFromOptions(options);
+  const filename = reference.slice(location.referencePrefix.length);
+  return enqueueMutation(config, async () => {
+    const data = await githubMutationRequest(
+      config,
+      `${location.directory}/${filename}`,
+      'DELETE',
+      {
+        message: `Delete ${location.directory}/${filename} from ChemDisk Media Manager`,
+        sha: expectedSha,
+        branch: config.ref
+      },
+      { ...options, fileExpected: true }
+    );
+    return {
+      kind: 'media',
+      deleted: true,
+      scope: location.scope,
+      materialKind: location.materialKind,
+      materialId: location.materialId,
+      repositoryId: config.id,
+      repositoryLabel: config.label,
+      filename,
+      reference,
+      ...mutationResult(data)
+    };
+  });
+}
+
+async function saveExamMedia(rawExamId, rawFilename, rawBase64, rawMimeType, options = {}) {
+  try {
+    const result = await saveMedia('local', 'exam', rawExamId, rawFilename, rawBase64, rawMimeType, options);
+    return { ...result, kind: 'exam_media', examId: result.materialId };
+  } catch (error) {
+    if (error instanceof ContentRepositoryError && error.code === 'INVALID_MEDIA_REFERENCE') {
+      throw new ContentRepositoryError('INVALID_EXAM_MEDIA_REFERENCE', error.status);
+    }
+    if (error instanceof ContentRepositoryError && ['MEDIA_INVALID', 'MEDIA_SVG_UNSAFE'].includes(error.code)) {
+      throw new ContentRepositoryError('EXAM_MEDIA_INVALID', error.status);
+    }
+    throw error;
+  }
+}
+
+async function readExamMedia(rawExamId, rawReference, options = {}) {
+  try {
+    const result = await readMedia('local', 'exam', rawExamId, rawReference, options);
+    return { ...result, examId: result.materialId };
+  } catch (error) {
+    if (error instanceof ContentRepositoryError && error.code === 'INVALID_MEDIA_REFERENCE') {
+      throw new ContentRepositoryError('INVALID_EXAM_MEDIA_REFERENCE', error.status);
+    }
+    throw error;
+  }
 }
 
 function cleanString(value) {
@@ -825,12 +1046,16 @@ module.exports = {
   ContentRepositoryError,
   GITHUB_API_VERSION,
   deleteAsset,
+  deleteMedia,
   listAssets,
+  listMedia,
   publicConfiguration,
   publicConfigurations,
   readAsset,
   readExamMedia,
+  readMedia,
   saveExamMedia,
+  saveMedia,
   repositoryConfig,
   repositoryConfigs,
   saveAsset,
@@ -840,11 +1065,14 @@ module.exports = {
     assetDefinition,
     clearCache,
     decodeUtf8,
-    decodeExamMedia,
+    decodeExamMedia: decodeMedia,
+    decodeMedia,
     extractJsonPrompt,
     mutationResult,
     normalizeMetadata,
     publicConfig,
+    mediaLocation,
+    mediaMimeType,
     repositoryPath,
     titleFromFilename,
     validateAssetContent,

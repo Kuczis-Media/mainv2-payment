@@ -733,7 +733,14 @@ async function imageResponse(reference, rawRef, auth, preview) {
   const loaded = await loadDefinition(reference.repositoryId, reference.examId);
   const access = definitionAccess(loaded.definition, auth, preview);
   if (!access.ok) return json({ error: access.error }, access.status);
-  const media = await contentRepository.readExamMedia(reference.examId, rawRef, { repositoryId: reference.repositoryId });
+  const shared = String(rawRef || '').startsWith('assets/shared/');
+  const media = await contentRepository.readMedia(
+    shared ? 'shared' : 'local',
+    shared ? '' : 'exam',
+    shared ? '' : reference.examId,
+    rawRef,
+    { repositoryId: reference.repositoryId }
+  );
   return {
     statusCode: 200,
     headers: {

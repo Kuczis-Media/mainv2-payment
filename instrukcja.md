@@ -2,7 +2,7 @@
 
 Ta instrukcja jest przeznaczona dla osoby, która nie musi znać programowania. Prowadzi od założenia kont, przez wdrożenie aplikacji, aż do codziennego dodawania lekcji, użytkowników i płatności.
 
-Stan instrukcji: 15 sierpnia 2026 r. Nazwy pojedynczych przycisków w GitHubie, Netlify, Google lub Stripe mogą z czasem zostać lekko zmienione, ale opisane miejsca i zasady pozostają takie same.
+Stan instrukcji: 16 sierpnia 2026 r. Nazwy pojedynczych przycisków w GitHubie, Netlify, Google lub Stripe mogą z czasem zostać lekko zmienione, ale opisane miejsca i zasady pozostają takie same.
 
 ## 1. Najważniejsze pojęcia
 
@@ -20,9 +20,9 @@ Kursant nie musi mieć konta GitHub, Netlify ani Stripe. Kursant ma zwykłe kont
 ### Repozytoria
 
 - **Repozytorium aplikacji** zawiera kod ChemDisk. Otrzymujesz do niego od właściciela oprogramowania link GitHub. W tej instrukcji nie podajemy konkretnego adresu, ponieważ właściciel może go zmienić.
-- **Repozytorium materiałów** tworzysz osobno. Zawiera lekcje `.md`, prompty `.json`/`.txt`, bank pytań i definicje egzaminów. Może być prywatne.
+- **Repozytorium materiałów** tworzysz osobno. Zawiera lekcje `.md`, prompty `.json`/`.txt`, bank pytań, egzaminy, natywne prezentacje i ich obrazy. Może być prywatne.
 - Można podłączyć jedno albo kilka repozytoriów materiałów.
-- Repozytorium obrazów może być publiczne. Lekcja używa wtedy zwykłych adresów HTTPS do obrazów.
+- Obrazy można trzymać prywatnie razem z materiałem w `photos/` albo współdzielić z wielu materiałów przez `assets/shared/`. Starsze publiczne adresy HTTPS w lekcjach nadal działają.
 
 ### Co oznacza deploy
 
@@ -814,8 +814,13 @@ Studio jest dostępne tylko dla konta z rolą `admin`. Zawiera:
 2. **Lesson Builder**
 3. **Prompt Builder**
 4. **Exam Builder**
+5. **Presentation Studio**
 
-Na stronie głównej Studio działa **Eksplorator treści**. Wybierz repozytorium, rozwiń folder **Lekcje**, **Egzaminy** albo **Prompty**, a następnie kliknij plik. Studio automatycznie przełączy się do odpowiedniego Buildera i pobierze bieżącą wersję z GitHuba. Nad folderami można wyszukiwać po nazwie, ścieżce i tagach oraz ręcznie odświeżyć listę.
+Na stronie głównej Studio działa **Eksplorator treści**. Wybierz repozytorium i rozwiń folder **Lekcje**, **Egzaminy**, **Prezentacje**, **Quizy**, **Prompty** albo **Media wspólne**. Każdy materiał jest osobnym zwijanym folderem. Po jego otwarciu zobaczysz definicję oraz folder `photos`; zdjęcia są pobierane dopiero w tej chwili, dzięki czemu duże repozytorium nie tworzy od razu ogromnej listy ani wielu zapytań. Kliknij **Otwórz**, aby wczytać plik do odpowiedniego Buildera. **Duplikuj** poprosi o nową nazwę i skopiuje definicję razem z lokalnym `photos`; media wspólne pozostaną współdzielonymi referencjami. Quiz bez aktywnego Buildera można na razie przeglądać i obsługiwać jego zdjęcia w eksploratorze.
+
+Przycisk **Usuń** przy definicji wymaga potwierdzenia i aktualnej wersji SHA. Jeśli materiał zawiera lokalne obrazy, drugie pytanie pozwala usunąć również `photos` albo zachować ten folder. Przy egzaminie najpierw zobaczysz wykryte odwołania z Dashboardu i lekcji. Usunięcie nie kasuje lokalnego draftu, historii postępu ani kart odwołujących się do pliku. Pliki z **Media wspólne** nigdy nie są automatycznie usuwane razem z materiałem.
+
+W rozwiniętym `photos` możesz usunąć pojedynczy niepotrzebny obraz albo kliknąć **Zarządzaj**, aby otworzyć Media Manager. Pokazuje on miniatury, rozmiar, lokalną liczbę użyć i wyszukiwarkę. Obsługuje przeciąganie, wybór wielu plików oraz wklejanie obrazów przez `Ctrl+V`/`Cmd+V`. Usuwanie zapisuje odwracalny commit GitHub. Dla pliku wspólnego zawsze pojawia się mocne ostrzeżenie, bo może być używany w wielu materiałach. Przy kasowaniu całego materiału wybierasz osobno, czy usunąć także jego lokalne zdjęcia; `assets/shared` nigdy nie jest wtedy kasowane.
 
 W każdym builderze:
 
@@ -865,6 +870,21 @@ Każdą kartę dodaje się tak samo:
 3. Wpisz tytuł i opis.
 4. Uzupełnij pola specyficzne dla modułu.
 5. Sprawdź wygenerowany adres i podgląd.
+
+### 19.0. Natywna prezentacja ChemDisk
+
+1. Otwórz **Studio treści → Prezentacja**.
+2. Wybierz repozytorium i kliknij **Nowa**, albo otwórz prezentację z biblioteki po lewej.
+3. Ustaw trwałe `presentationId`, tytuł, motyw, proporcje i sposób liczenia postępu.
+4. Dodawaj slajdy i wybieraj układ: pusty, tytuł, tytuł z treścią, tytuł z obrazem, tekst z obrazem, dwie kolumny, pełny obraz, cytat, tabela, pytanie lub dział.
+5. Z górnego paska dodaj tekst, nagłówek, obraz, kształt/linię, wzór, ikonę, tabelę, przycisk, kod albo bezpieczny embed. Element można przeciągać, zmieniać jego rozmiar ośmioma uchwytami, wyrównywać, przesuwać między warstwami, zablokować, duplikować i usunąć.
+6. Obraz wybierz w Media Managerze. Możesz użyć lokalnego `photos/` albo `assets/shared/`; nie wpisuj ręcznie ścieżki GitHub.
+7. Dla obrazu możesz włączyć **Tryb Przytnij** i przeciągnąć widoczny fragment niezależnie od rozmiaru ramki. Narożniki domyślnie zachowują proporcje; przełącznik w panelu pozwala to wyłączyć.
+8. Ustaw tło jako kolor, gradient, obraz albo motyw i zdecyduj, czy zastosować je tylko do bieżącego slajdu, czy do wszystkich.
+9. Dodaj notatki prowadzącego, sprawdź podgląd i kliknij **Zapisz draft**. Gdy materiał jest gotowy dla uczniów, kliknij **Opublikuj**.
+10. W Dashboard Builderze dodaj kartę **Prezentacja ChemDisk**, wybierz repozytorium i prezentację, a następnie opublikuj dashboard.
+
+Uczeń otwiera wspólny odtwarzacz ChemDisk. Postęp korzysta ze stabilnych `slideId`, więc sama zmiana kolejności slajdów nie kasuje odwiedzin. Draft jest dostępny tylko w podglądzie administratora; zwykły kursant widzi wyłącznie wersję opublikowaną.
 
 ### 19.1. Prezentacja Google
 
@@ -1131,6 +1151,10 @@ W treści można używać:
 ### Obraz z URL
 
 Wklej publiczny adres HTTPS i wpisz opis ALT. Plik nie jest kopiowany do repo lekcji.
+
+### Obraz z Media Managera
+
+Wybierz obraz lokalny lekcji albo plik wspólny. Lokalny upload trafia do `lessons/<nazwa-lekcji>/photos/`, a lekcja zapisuje tylko stabilną referencję `photos/...`, ALT, szerokość i wyrównanie. Po zaznaczeniu bloku obrazu otwórz podgląd kroku: wokół ilustracji pojawi się ramka, procent szerokości i uchwyt w prawym dolnym rogu. Przeciągaj uchwyt myszą lub dotykiem; zmiana jest widoczna od razu, a historia i lokalny autosave są aktualizowane po puszczeniu.
 
 ### Lista
 
@@ -1844,9 +1868,9 @@ Obsługiwane są: jedna odpowiedź, wiele odpowiedzi, prawda/fałsz, krótki tek
 
 Bank pozwala tworzyć, edytować, duplikować, usuwać, wyszukiwać, tagować i kategoryzować pytania. Dołączenie pytania z banku zapisuje odwołanie, a nie drugą kopię. Pytanie usunięte z banku trzeba również usunąć z listy odwołań egzaminu; Builder nie opublikuje brakującej referencji.
 
-Najpierw zapisz draft, aby w repozytorium istniał `exams/<examId>/exam.json`. Następnie w zakładce **Informacje** lub przy edycji pytania przeciągnij obraz na pole wgrywania, kliknij to pole i wybierz plik albo wklej obraz przez `Ctrl+V`/`Cmd+V`. Przy pytaniu wybierz wcześniej cel: treść pytania, konkretną odpowiedź, lewą/prawą stronę dopasowania albo element kolejności. Studio zapisze plik w `exams/<examId>/photos/` i pokaże jego miniaturę oraz pole ALT. Na końcu ponownie kliknij **Zapisz draft**, aby utrwalić referencję w `exam.json`.
+Najpierw zapisz draft, aby w repozytorium istniał `exams/<examId>/exam.json`. Następnie w zakładce **Informacje** lub przy edycji pytania kliknij **Media Manager**. Możesz przeciągnąć obraz, wybrać kilka plików albo wkleić obraz przez `Ctrl+V`/`Cmd+V`, a potem wskazać go jako okładkę, obraz pytania, konkretnej odpowiedzi, strony dopasowania albo elementu kolejności. Zakładka lokalna zapisuje plik w `exams/<examId>/photos/`, a wspólna w `assets/shared/`. Studio pokazuje miniaturę i pole ALT. Na końcu ponownie kliknij **Zapisz draft**, aby utrwalić referencję w `exam.json`.
 
-Jednorazowo można wgrać do ośmiu obrazów pytania albo jedną okładkę. Każdy plik może mieć maksymalnie 4 MB i musi być prawidłowym PNG, JPG/JPEG, WEBP lub GIF. Serwer sprawdza rzeczywistą sygnaturę pliku i nie przyjmuje SVG ani ścieżek wychodzących poza folder egzaminu. Usunięcie obrazu w edytorze usuwa referencję z definicji, ale nie kasuje samego pliku z repozytorium.
+Jednorazowo można wgrać do ośmiu obrazów pytania albo jedną okładkę. Każdy plik może mieć maksymalnie 4 MB i musi być prawidłowym PNG, JPG/JPEG, WEBP, GIF albo bezpiecznym SVG. Serwer sprawdza sygnaturę i odrzuca aktywną zawartość SVG, niezgodny typ oraz ścieżki wychodzące poza dozwolony folder. Usunięcie obrazu z pola pytania usuwa referencję z definicji; sam plik usuwa się jawnie w Media Managerze lub eksploratorze.
 
 ### 35.4. Najważniejsze ustawienia
 

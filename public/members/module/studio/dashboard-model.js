@@ -43,6 +43,7 @@
   });
 
   const MODULE_ORDER = Object.freeze([
+    'presentation',
     'slides',
     'pdf',
     'film',
@@ -58,6 +59,12 @@
   ]);
 
   const MODULE_DEFINITIONS = deepFreeze({
+    presentation: {
+      label: 'Prezentacja ChemDisk',
+      icon: '▥',
+      path: 'presentation',
+      presentationLabel: 'ID prezentacji z biblioteki'
+    },
     slides: {
       label: 'Prezentacja',
       icon: '▤',
@@ -304,6 +311,7 @@
     const point = singleLine(source.point || source.punkt);
     const repositoryId = singleLine(source.repositoryId || source.repo).toLowerCase();
     const examId = singleLine(source.examId || source.exam).toLowerCase();
+    const presentationId = singleLine(source.presentationId || source.presentation).toLowerCase();
     const sourceMode = source.source === 'file' || (!source.source && file)
       ? 'file'
       : 'prompt';
@@ -324,6 +332,7 @@
       point,
       repositoryId,
       examId,
+      presentationId,
       internal: singleLine(source.internal),
       formula: canonical.module === 'atonom' ? singleLine(source.formula) : '',
       href: singleLine(source.href),
@@ -465,6 +474,7 @@
       point: '',
       repositoryId: '',
       examId: '',
+      presentationId: '',
       internal: '',
       formula: '',
       hash: '',
@@ -526,6 +536,10 @@
       parsed.repositoryId = take('repo').toLowerCase();
       parsed.examId = take('exam').toLowerCase();
     }
+    if (parsed.module === 'presentation') {
+      parsed.repositoryId = take('repo').toLowerCase();
+      parsed.presentationId = take('presentation').toLowerCase();
+    }
     if (parsed.module === 'contact') parsed.internal = take('internal');
     if (parsed.module === 'atonom') parsed.formula = take('formula');
 
@@ -577,6 +591,10 @@
     if (card.module === 'exam') {
       add('repo', card.repositoryId);
       add('exam', card.examId);
+    }
+    if (card.module === 'presentation') {
+      add('repo', card.repositoryId);
+      add('presentation', card.presentationId);
     }
     if (card.module === 'contact') add('internal', card.internal);
     if (card.module === 'atonom') add('formula', card.formula);
@@ -717,7 +735,7 @@
 
   function runtimeMaterialType(block) {
     return ({
-      lesson: 'lesson', slides: 'presentation', film: 'video', yt: 'video', pdf: 'pdf', forms: 'quiz', exam: 'exam', chat: 'script'
+      lesson: 'lesson', presentation: 'presentation', slides: 'presentation', film: 'video', yt: 'video', pdf: 'pdf', forms: 'quiz', exam: 'exam', chat: 'script'
     })[block.module] || (block.module === 'link' ? 'embed' : 'other');
   }
 
@@ -932,8 +950,9 @@
             presentationMode: block.presentationMode,
             videoCompletionThreshold: block.videoCompletionThreshold,
             contentFile: block.module === 'lesson' ? block.file : '',
-            repositoryId: block.module === 'exam' ? block.repositoryId : '',
-            examId: block.module === 'exam' ? block.examId : ''
+            repositoryId: ['exam', 'presentation'].includes(block.module) ? block.repositoryId : '',
+            examId: block.module === 'exam' ? block.examId : '',
+            presentationId: block.module === 'presentation' ? block.presentationId : ''
           });
         }
       });
@@ -1115,7 +1134,10 @@
         if (block.module === 'exam' && !/^[a-z0-9][a-z0-9-]{0,79}$/.test(block.examId)) {
           addError('EXAM_ID_REQUIRED', 'Wybierz prawidłowy egzamin z biblioteki.', block);
         }
-        if (['lesson', 'chat', 'exam'].includes(block.module) && !safeRepositoryId(block.repositoryId)) {
+        if (block.module === 'presentation' && !/^[a-z0-9][a-z0-9-]{0,79}$/.test(block.presentationId)) {
+          addError('PRESENTATION_ID_REQUIRED', 'Wybierz prawidłową prezentację z biblioteki.', block);
+        }
+        if (['lesson', 'chat', 'exam', 'presentation'].includes(block.module) && !safeRepositoryId(block.repositoryId)) {
           addError('CONTENT_REPOSITORY_INVALID', 'Wybierz poprawne repozytorium materiałów.', block);
         }
         if (block.module === 'chat') {

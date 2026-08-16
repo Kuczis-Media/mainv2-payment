@@ -599,6 +599,20 @@ fieldset:focus-within {
   border-radius: 18px;
 }
 
+.lesson-managed-image {
+  width: var(--lesson-image-width, 100%);
+  max-width: 100%;
+  min-height: 120px;
+  margin: 28px auto;
+}
+.lesson-managed-image.lesson-image-align-left { margin-left: 0; margin-right: auto; }
+.lesson-managed-image.lesson-image-align-right { margin-left: auto; margin-right: 0; }
+.lesson-managed-image img { width: 100%; height: auto; max-height: 560px; margin: 0; object-fit: contain; }
+.lesson-managed-image-placeholder { display: grid; min-height: 160px; place-items: center; align-content: center; gap: 8px; color: var(--muted); background: var(--surface-soft); border: 1px dashed var(--line); border-radius: 18px; }
+.lesson-managed-image-placeholder span { font-size: 1.8rem; }
+.lesson-managed-image-placeholder small { font-size: .72rem; }
+.lesson-managed-image.is-error .lesson-managed-image-placeholder { color: var(--danger); }
+
 .lesson-rich-style {
   margin: 24px 0;
   color: var(--lesson-rich-color, var(--muted));

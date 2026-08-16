@@ -58,6 +58,7 @@
     attempts: new Map(),
     libraryAssets: [],
     repositories: [],
+    mediaObjectUrls: [],
     isAdmin: false,
     topbarCollapsed: false,
     outlineCollapsed: false
@@ -560,8 +561,10 @@
     elements.lessonPosition.textContent = `Krok ${state.index + 1} z ${state.lesson.slides.length}`;
     elements.progressBar.style.width = `${progress}%`;
     clearTypesetMath(elements.slideContent);
+    state.mediaObjectUrls.splice(0).forEach((url) => URL.revokeObjectURL(url));
     elements.slideContent.innerHTML = slide.html;
     initializeInteractiveBlocks(elements.slideContent);
+    void hydrateManagedImages(elements.slideContent);
     typesetMath(elements.slideContent);
     elements.slideStatus.textContent = slide.task
       ? (isSolved ? 'Zadanie rozwiązane' : 'Zadanie do wykonania')
@@ -577,6 +580,37 @@
     saveProgress();
     elements.slideCard.focus?.({ preventScroll: true });
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function hydrateManagedImages(root) {
+    const library = window.ChemContentLibrary;
+    if (!library?.readMediaBlob) return;
+    const figures = Array.from(root.querySelectorAll('[data-lesson-media-ref]'));
+    await Promise.all(figures.map(async (figure) => {
+      const reference = figure.dataset.lessonMediaRef || '';
+      try {
+        const blob = await library.readMediaBlob({
+          scope: figure.dataset.lessonMediaScope === 'shared' ? 'shared' : 'local',
+          materialKind: figure.dataset.lessonMediaScope === 'shared' ? '' : 'lesson',
+          materialId: figure.dataset.lessonMediaScope === 'shared' ? '' : state.filename,
+          reference,
+          repositoryId: figure.dataset.lessonMediaRepository || state.repositoryId
+        });
+        if (!figure.isConnected) return;
+        const objectUrl = URL.createObjectURL(blob);
+        state.mediaObjectUrls.push(objectUrl);
+        const image = document.createElement('img');
+        image.src = objectUrl;
+        image.alt = figure.dataset.lessonMediaAlt || 'Ilustracja';
+        image.loading = 'lazy';
+        image.decoding = 'async';
+        figure.replaceChildren(image);
+      } catch (_) {
+        const placeholder = figure.querySelector('.lesson-managed-image-placeholder');
+        if (placeholder) placeholder.replaceChildren(document.createTextNode('Nie udało się wczytać obrazu.'));
+        figure.classList.add('is-error');
+      }
+    }));
   }
 
   function playSlideTransition(value) {

@@ -39,7 +39,9 @@ exports.handler = async function contentLibraryHandler(event = {}, context = {})
   const action = typeof query.action === 'string' ? query.action : 'list';
   const kind = typeof query.kind === 'string' ? query.kind : 'lesson';
   const repositoryId = typeof query.repo === 'string' ? query.repo : '';
-  const adminOnly = action === 'status' || ['prompt', 'exam', 'question_bank'].includes(kind) || query.refresh === '1';
+  const adminOnly = ['status', 'list-media'].includes(action)
+    || ['prompt', 'exam', 'question_bank', 'presentation', 'quiz'].includes(kind)
+    || query.refresh === '1';
   const authorization = adminOnly
     ? await requireAdmin(event, context)
     : await requireCourseAccess(event, context);
@@ -49,12 +51,12 @@ exports.handler = async function contentLibraryHandler(event = {}, context = {})
     if (action === 'status') {
       const configuration = contentRepository.publicConfiguration(process.env, repositoryId);
       const repositories = contentRepository.publicConfigurations();
-      let counts = { lessons: 0, prompts: 0, exams: 0 };
+      let counts = { lessons: 0, prompts: 0, exams: 0, presentations: 0, quizzes: 0 };
       let connection = configuration.configured ? 'pending' : 'not_configured';
       let error = '';
       if (configuration.configured) {
         try {
-          const [lessons, prompts, exams] = await Promise.all([
+          const [lessons, prompts, exams, presentations, quizzes] = await Promise.all([
             contentRepository.listAssets('lesson', {
               force: query.refresh === '1',
               repositoryId: configuration.id
@@ -66,9 +68,23 @@ exports.handler = async function contentLibraryHandler(event = {}, context = {})
             contentRepository.listAssets('exam', {
               force: query.refresh === '1',
               repositoryId: configuration.id
+            }),
+            contentRepository.listAssets('presentation', {
+              force: query.refresh === '1',
+              repositoryId: configuration.id
+            }),
+            contentRepository.listAssets('quiz', {
+              force: query.refresh === '1',
+              repositoryId: configuration.id
             })
           ]);
-          counts = { lessons: lessons.length, prompts: prompts.length, exams: exams.length };
+          counts = {
+            lessons: lessons.length,
+            prompts: prompts.length,
+            exams: exams.length,
+            presentations: presentations.length,
+            quizzes: quizzes.length
+          };
           connection = 'ready';
         } catch (statusError) {
           connection = 'error';
@@ -94,7 +110,41 @@ exports.handler = async function contentLibraryHandler(event = {}, context = {})
       });
     }
 
-    if (action === 'read' && ['lesson', 'prompt', 'exam', 'question_bank'].includes(kind)) {
+    if (action === 'list-media') {
+      const scope = typeof query.scope === 'string' ? query.scope : 'local';
+      const materialKind = typeof query.materialKind === 'string' ? query.materialKind : '';
+      const materialId = typeof query.materialId === 'string' ? query.materialId : '';
+      const media = await contentRepository.listMedia(scope, materialKind, materialId, {
+        force: query.refresh === '1',
+        repositoryId
+      });
+      let references = 0;
+      let source = '';
+      if (scope !== 'shared' && query.usage === '1') {
+        try {
+          const asset = await contentRepository.readAsset(materialKind, materialId, { repositoryId });
+          source = asset.content;
+        } catch (error) {
+          if (!(error instanceof contentRepository.ContentRepositoryError && error.status === 404)) throw error;
+        }
+      }
+      const assets = media.map((item) => {
+        const escaped = item.reference.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const usageCount = source ? (source.match(new RegExp(escaped, 'g')) || []).length : 0;
+        references += usageCount;
+        return { ...item, usageCount };
+      });
+      return json({
+        assets,
+        scope,
+        materialKind,
+        materialId,
+        references,
+        repository: contentRepository.publicConfiguration(process.env, repositoryId)
+      });
+    }
+
+    if (action === 'read' && ['lesson', 'prompt', 'exam', 'question_bank', 'presentation', 'quiz'].includes(kind)) {
       const asset = await contentRepository.readAsset(kind, query.file, { repositoryId });
       return json(asset);
     }
@@ -116,6 +166,19 @@ async function mutateContent(event) {
 
   try {
     if (event.httpMethod === 'PUT') {
+      if (validation.value.kind === 'media') {
+        await ensureMediaOwner(validation.value);
+        const savedMedia = await contentRepository.saveMedia(
+          validation.value.scope,
+          validation.value.materialKind,
+          validation.value.materialId,
+          validation.value.filename,
+          validation.value.contentBase64,
+          validation.value.mimeType,
+          { repositoryId: validation.value.repositoryId }
+        );
+        return json(savedMedia, 201);
+      }
       if (validation.value.kind === 'exam_media') {
         await contentRepository.readAsset('exam', validation.value.examId, {
           repositoryId: validation.value.repositoryId
@@ -143,6 +206,17 @@ async function mutateContent(event) {
       );
       return json(saved, saved.created ? 201 : 200);
     }
+    if (validation.value.kind === 'media') {
+      const deletedMedia = await contentRepository.deleteMedia(
+        validation.value.scope,
+        validation.value.materialKind,
+        validation.value.materialId,
+        validation.value.reference,
+        validation.value.expectedSha,
+        { repositoryId: validation.value.repositoryId }
+      );
+      return json(deletedMedia);
+    }
     const deleted = await contentRepository.deleteAsset(
       validation.value.kind,
       validation.value.filename,
@@ -156,6 +230,14 @@ async function mutateContent(event) {
       : 503;
     return json({ error: errorCode(error) }, status);
   }
+}
+
+async function ensureMediaOwner(value) {
+  if (value.scope === 'shared') return;
+  if (!['lesson', 'exam', 'presentation', 'quiz'].includes(value.materialKind)) return;
+  await contentRepository.readAsset(value.materialKind, value.materialId, {
+    repositoryId: value.repositoryId
+  });
 }
 
 async function validateExamQuestionReferences(rawContent, repositoryId) {
@@ -193,6 +275,47 @@ async function validateExamQuestionReferences(rawContent, repositoryId) {
 
 function validateMutationBody(value, method) {
   if (!plainObject(value)) return { ok: false, code: 'INVALID_CONTENT_REQUEST' };
+  if (value.kind === 'media') {
+    const allowed = method === 'PUT'
+      ? new Set(['kind', 'scope', 'materialKind', 'materialId', 'filename', 'contentBase64', 'mimeType', 'repositoryId'])
+      : new Set(['kind', 'scope', 'materialKind', 'materialId', 'reference', 'expectedSha', 'repositoryId']);
+    const scope = typeof value.scope === 'string' ? value.scope : '';
+    const materialKind = typeof value.materialKind === 'string' ? value.materialKind : '';
+    const materialId = typeof value.materialId === 'string' ? value.materialId : '';
+    if (
+      Object.keys(value).some((key) => !allowed.has(key))
+      || !['local', 'shared'].includes(scope)
+      || (scope === 'local' && !['lesson', 'exam', 'presentation', 'quiz'].includes(materialKind))
+      || (scope === 'local' && !materialId)
+      || (scope === 'shared' && (materialKind || materialId))
+      || (value.repositoryId != null && typeof value.repositoryId !== 'string')
+    ) return { ok: false, code: 'INVALID_CONTENT_REQUEST' };
+    if (method === 'PUT' && (
+      typeof value.filename !== 'string'
+      || typeof value.contentBase64 !== 'string'
+      || typeof value.mimeType !== 'string'
+    )) return { ok: false, code: 'INVALID_CONTENT_REQUEST' };
+    if (method === 'DELETE' && (
+      typeof value.reference !== 'string'
+      || typeof value.expectedSha !== 'string'
+      || !value.expectedSha
+    )) return { ok: false, code: 'INVALID_CONTENT_REQUEST' };
+    return {
+      ok: true,
+      value: {
+        kind: 'media',
+        scope,
+        materialKind,
+        materialId,
+        filename: method === 'PUT' ? value.filename : '',
+        contentBase64: method === 'PUT' ? value.contentBase64 : '',
+        mimeType: method === 'PUT' ? value.mimeType : '',
+        reference: method === 'DELETE' ? value.reference : '',
+        expectedSha: method === 'DELETE' ? value.expectedSha : '',
+        repositoryId: typeof value.repositoryId === 'string' ? value.repositoryId : ''
+      }
+    };
+  }
   if (value.kind === 'exam_media') {
     const allowed = new Set(['kind', 'examId', 'filename', 'contentBase64', 'mimeType', 'repositoryId']);
     if (
@@ -222,7 +345,7 @@ function validateMutationBody(value, method) {
   if (Object.keys(value).some((key) => !allowed.has(key))) {
     return { ok: false, code: 'INVALID_CONTENT_REQUEST' };
   }
-  if (!['lesson', 'prompt', 'exam', 'question_bank'].includes(value.kind)) {
+  if (!['lesson', 'prompt', 'exam', 'question_bank', 'presentation', 'quiz'].includes(value.kind)) {
     return { ok: false, code: 'INVALID_CONTENT_KIND' };
   }
   if (typeof value.filename !== 'string') {
@@ -261,4 +384,4 @@ function errorCode(error) {
     : 'CONTENT_REPOSITORY_UNAVAILABLE';
 }
 
-exports._test = { errorCode, validateExamQuestionReferences, validateMutationBody };
+exports._test = { ensureMediaOwner, errorCode, validateExamQuestionReferences, validateMutationBody };

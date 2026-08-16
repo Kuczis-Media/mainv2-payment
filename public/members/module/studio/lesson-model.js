@@ -8,10 +8,11 @@
   const SAFE_PROMPT_FILENAME = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.(?:json|txt)$/i;
   const SAFE_REPOSITORY_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
   const SAFE_BOARD_PATH = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.json$/i;
+  const SAFE_MEDIA_REF = /^(?:photos\/|assets\/shared\/)(?!.*\.\.)[a-z0-9][a-z0-9_.-]{0,99}\.(?:png|jpe?g|webp|gif|svg)$/i;
   const TASK_START = /^\s*:::(?:task|zadanie)\s*$/i;
   const QUESTION_START = /^\s*:::question\s*$/i;
   const SLIDE_SETTINGS_START = /^\s*:::slide\s*$/i;
-  const CONTAINER_START = /^\s*:::(style|accordion|youtube|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam)(?:\s+(.*?))?\s*$/i;
+  const CONTAINER_START = /^\s*:::(style|accordion|youtube|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)(?:\s+(.*?))?\s*$/i;
   const CONTAINER_END = /^\s*:::\s*$/;
   const STYLE_FONTS = Object.freeze([
     'sans',
@@ -176,7 +177,7 @@
       .split('\n')
       .map((line) => {
         if (/^\s*---\s*$/.test(line)) return '`---`';
-        if (/^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table)?(?:\s+.*?)?\s*$/i.test(line)) {
+        if (/^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)?(?:\s+.*?)?\s*$/i.test(line)) {
           return `\`${line.trim()}\``;
         }
         return line.replace(/\s+$/g, '');
@@ -289,7 +290,16 @@
       };
     }
     if (type === 'image') {
-      return { ...base, url: oneLine(source.url), alt: oneLine(source.alt) || 'Ilustracja' };
+      const requestedAlign = oneLine(source.align).toLowerCase();
+      return {
+        ...base,
+        url: oneLine(source.url),
+        ref: oneLine(source.ref).toLowerCase(),
+        repositoryId: oneLine(source.repositoryId || source.repository).toLowerCase(),
+        alt: oneLine(source.alt) || 'Ilustracja',
+        width: Math.max(20, Math.min(100, Number(source.width) || 100)),
+        align: ['left', 'center', 'right'].includes(requestedAlign) ? requestedAlign : 'center'
+      };
     }
     if (type === 'quote') {
       return { ...base, text: normalizeNewlines(source.text).trim() };
@@ -649,8 +659,11 @@
       errors.push({ code: 'UNKNOWN_BLOCK', path: `${path}.type`, message: 'Nieznany typ bloku.' });
       return;
     }
-    if (block.type === 'image' && !safeImageUrl(block.url)) {
-      errors.push({ code: 'UNSAFE_IMAGE_URL', path: `${path}.url`, message: 'Obraz musi używać pełnego adresu HTTPS.' });
+    if (block.type === 'image' && !SAFE_MEDIA_REF.test(block.ref) && !safeImageUrl(block.url)) {
+      errors.push({ code: 'UNSAFE_IMAGE_URL', path: `${path}.url`, message: 'Wybierz obraz z Media Managera albo podaj pełny adres HTTPS.' });
+    }
+    if (block.type === 'image' && block.repositoryId && !SAFE_REPOSITORY_ID.test(block.repositoryId)) {
+      errors.push({ code: 'INVALID_MEDIA_REPOSITORY', path: `${path}.repositoryId`, message: 'Repozytorium obrazu jest nieprawidłowe.' });
     }
     if (block.type === 'youtube' && !youtubeVideoId(block.video)) {
       errors.push({ code: 'INVALID_YOUTUBE', path: `${path}.video`, message: 'Podaj prawidłowy link lub ID filmu YouTube.' });
@@ -845,6 +858,17 @@
       ].join('\n');
     }
     if (block.type === 'image') {
+      if (SAFE_MEDIA_REF.test(block.ref)) {
+        return [
+          ':::image',
+          `ref: ${cleanDirectiveValue(block.ref)}`,
+          `repository: ${cleanDirectiveValue(block.repositoryId)}`,
+          `alt: ${cleanDirectiveValue(block.alt)}`,
+          `width: ${block.width}`,
+          `align: ${block.align}`,
+          ':::'
+        ].join('\n');
+      }
       return `![${cleanInline(block.alt)}](${safeImageUrl(block.url)})`;
     }
     if (block.type === 'quote') {
@@ -1198,6 +1222,16 @@
               title: rawTitle.replace(/\s+open=true$/i, ''),
               open: /\sopen=true$/i.test(rawTitle),
               blocks: children
+            }));
+          } else if (type === 'image') {
+            const values = parseDirectiveFields(bodyLines);
+            blocks.push(createBlock({
+              type,
+              ref: values.ref,
+              repositoryId: values.repository,
+              alt: values.alt,
+              width: values.width,
+              align: values.align
             }));
           } else if (type === 'youtube') {
             const values = parseDirectiveFields(bodyLines);

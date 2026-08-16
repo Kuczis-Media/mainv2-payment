@@ -83,6 +83,11 @@ test('Studio exposes dashboard, lesson, exam and prompt authoring workflows', ()
   assert.match(html, /id=["']content-explorer-folders["']/);
   assert.match(html, /id=["']content-explorer-search["']/);
   assert.match(script, /openContentExplorerAsset/);
+  assert.match(script, /deleteContentExplorerAsset/);
+  assert.match(script, /data\.explorerDelete|dataset\.explorerDelete/);
+  assert.match(script, /expectedSha:\s*asset\.sha/);
+  assert.match(examBuilder, /deletionWarning/);
+  assert.match(examBuilder, /assetDeleted/);
   assert.match(examBuilder, /openAsset/);
   assert.match(html, /data-exam-tab=["']questions["']/);
   assert.match(html, /data-exam-tab=["']reports["']/);
@@ -91,6 +96,7 @@ test('Studio exposes dashboard, lesson, exam and prompt authoring workflows', ()
   assert.match(examBuilder, /Szukaj po imieniu, nazwisku, e-mailu lub ID/);
   assert.match(styles, /\.exam-audience-picker/);
   assert.match(styles, /\.content-explorer-folder/);
+  assert.match(styles, /\.content-explorer-delete/);
   assert.match(examBuilder, /uploadExamMedia/);
   assert.match(examBuilder, /handleMediaPaste/);
   assert.match(examBuilder, /handleMediaDrop/);
@@ -180,7 +186,7 @@ test('Studio exposes dashboard, lesson, exam and prompt authoring workflows', ()
   assert.match(script, /function lessonRepositoryFilenameInput/);
   assert.match(script, /lessonRepositoryFilenameInput\([\s\S]*?block\.promptFile[\s\S]*?\[['"]json['"],\s*['"]txt['"]\]/);
   assert.match(script, /function syncInspectorRepository/);
-  assert.match(script, /\[['"]lesson['"],\s*['"]chat['"],\s*['"]exam['"]\]\.includes\(node\.module\)/);
+  assert.match(script, /\[['"]lesson['"],\s*['"]chat['"],\s*['"]exam['"],\s*['"]presentation['"]\]\.includes\(node\.module\)/);
   assert.match(script, /block\.type\s*===\s*['"]ai['"][^;\n]*syncInspectorRepository/);
   assert.match(script, /if\s*\(fieldName\s*===\s*['"]repositoryId['"]\)[\s\S]*?selectContentRepository/);
   assert.match(script, /collapsedNodes:\s*new Set\(\)/);

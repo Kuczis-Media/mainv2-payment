@@ -772,18 +772,41 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
 .content-explorer-search input:focus { border-color: var(--chem-primary); outline: 3px solid var(--studio-focus); }
 .content-explorer-status { min-height: 19px; margin: 12px 0; color: var(--chem-muted); font-size: .72rem; }
 .content-explorer-status.is-error { color: var(--chem-danger); }
-.content-explorer-folders { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 12px; }
-.content-explorer-folder { min-width: 0; background: var(--chem-bg); border: 1px solid var(--chem-line); border-radius: 16px; overflow: hidden; }
-.content-explorer-folder summary { display: grid; min-height: 54px; padding: 11px 13px; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 9px; cursor: pointer; list-style: none; }
+.content-explorer-folders { display: grid; align-items: start; gap: 10px; }
+.content-explorer-folder { min-width: 0; background: var(--chem-bg); border: 1px solid var(--chem-line); border-radius: 17px; overflow: hidden; transition: border-color 140ms ease, box-shadow 140ms ease; }
+.content-explorer-folder[open] { border-color: color-mix(in srgb, var(--chem-primary) 25%, var(--chem-line)); box-shadow: 0 10px 25px rgba(18, 35, 61, .05); }
+.content-explorer-folder > summary { display: grid; min-height: 62px; padding: 11px 14px; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 11px; cursor: pointer; list-style: none; }
 .content-explorer-folder summary::-webkit-details-marker { display: none; }
-.content-explorer-folder summary small { color: var(--chem-muted); font-size: .68rem; }
-.content-explorer-folder-icon { display: grid; width: 31px; height: 31px; place-items: center; color: var(--chem-primary); background: var(--chem-primary-soft); border-radius: 9px; font-size: .68rem; font-weight: 900; }
+.content-explorer-folder > summary > small { display: inline-flex; min-height: 24px; padding: 0 8px; align-items: center; color: var(--chem-muted); background: var(--chem-surface); border: 1px solid var(--chem-line); border-radius: 99px; font-size: .58rem; font-weight: 800; }
+.content-explorer-folder-copy { min-width: 0; }
+.content-explorer-folder-copy strong, .content-explorer-folder-copy small { display: block; }
+.content-explorer-folder-copy strong { font-size: .78rem; }
+.content-explorer-folder-copy small { margin-top: 3px; color: var(--chem-muted); font-size: .58rem; font-weight: 550; }
+.content-explorer-folder-icon { display: grid; width: 37px; height: 37px; place-items: center; color: var(--chem-primary); background: var(--chem-primary-soft); border-radius: 11px; font-size: .68rem; font-weight: 900; }
+.content-explorer-folder-icon.is-shared { color: var(--studio-violet); background: var(--studio-violet-soft); }
 .content-explorer-chevron { color: var(--chem-muted); transition: transform 150ms ease; }
-.content-explorer-folder:not([open]) .content-explorer-chevron { transform: rotate(-90deg); }
-.content-explorer-files { display: grid; max-height: 340px; padding: 0 8px 8px; gap: 6px; overflow-y: auto; scrollbar-gutter: stable; }
-.content-explorer-file { display: grid; width: 100%; min-width: 0; padding: 10px; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 9px; color: var(--chem-text); background: var(--chem-surface); border: 1px solid transparent; border-radius: 11px; text-align: left; cursor: pointer; }
-.content-explorer-file:hover { border-color: color-mix(in srgb, var(--chem-primary) 45%, var(--chem-line)); background: var(--chem-primary-soft); }
-.content-explorer-file:disabled { cursor: wait; opacity: .55; }
+.content-explorer-folder:not([open]) > summary .content-explorer-chevron,
+.content-explorer-material:not([open]) > summary .content-explorer-chevron { transform: rotate(-90deg); }
+.content-explorer-files { display: grid; max-height: 530px; padding: 2px 9px 10px 52px; gap: 6px; overflow-y: auto; scrollbar-gutter: stable; }
+.content-explorer-material { min-width: 0; background: var(--chem-surface); border: 1px solid var(--chem-line); border-radius: 13px; overflow: hidden; }
+.content-explorer-material[open] { border-color: color-mix(in srgb, var(--chem-primary) 30%, var(--chem-line)); }
+.content-explorer-material > summary { display: grid; min-height: 52px; padding: 9px 11px; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 10px; cursor: pointer; list-style: none; }
+.content-explorer-material > summary:hover { background: color-mix(in srgb, var(--chem-primary-soft) 50%, transparent); }
+.content-explorer-material-meta { color: var(--chem-muted); font-size: .57rem; white-space: nowrap; }
+.content-explorer-material-body { padding: 0 10px 10px 52px; }
+.content-explorer-definition-row { display: flex; min-height: 43px; padding: 6px 7px 6px 10px; align-items: center; justify-content: space-between; gap: 10px; background: var(--chem-bg); border-radius: 10px; }
+.content-explorer-definition-copy { display: flex; min-width: 0; align-items: center; gap: 8px; color: var(--chem-muted); font: 650 .62rem/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.content-explorer-definition-copy span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.content-explorer-row-actions { display: flex; flex: 0 0 auto; gap: 5px; }
+.content-explorer-open-button { min-height: 31px; padding: 0 10px; color: var(--chem-primary); background: var(--chem-surface); border: 1px solid color-mix(in srgb, var(--chem-primary) 28%, var(--chem-line)); border-radius: 8px; font: inherit; font-size: .58rem; font-weight: 850; cursor: pointer; }
+.content-explorer-open-button:hover { background: var(--chem-primary-soft); }
+.content-explorer-duplicate { min-height: 31px; padding: 0 9px; color: var(--studio-blue); background: var(--chem-surface); border: 1px solid color-mix(in srgb, var(--studio-blue) 24%, var(--chem-line)); border-radius: 8px; font: inherit; font-size: .55rem; font-weight: 850; cursor: pointer; }
+.content-explorer-duplicate:hover { background: var(--studio-blue-soft); }
+.content-explorer-duplicate:disabled { opacity: .45; cursor: wait; }
+.content-explorer-delete { min-width: 48px; padding: 7px; color: var(--chem-danger); background: color-mix(in srgb, var(--chem-danger) 7%, var(--chem-surface)); border: 1px solid transparent; border-radius: 11px; font: inherit; font-size: .58rem; font-weight: 850; cursor: pointer; }
+.content-explorer-delete:hover { border-color: color-mix(in srgb, var(--chem-danger) 40%, var(--chem-line)); background: color-mix(in srgb, var(--chem-danger) 13%, var(--chem-surface)); }
+.content-explorer-delete:focus-visible { outline: 3px solid var(--studio-focus); outline-offset: 1px; }
+.content-explorer-delete:disabled { cursor: wait; opacity: .5; }
 .content-explorer-file-type { display: grid; min-width: 34px; height: 28px; padding: 0 5px; place-items: center; color: var(--studio-blue); background: var(--studio-blue-soft); border-radius: 8px; font-size: .55rem; font-weight: 900; }
 .content-explorer-file-type.is-exam { color: var(--studio-amber); background: var(--studio-amber-soft); }
 .content-explorer-file-type.is-prompt { color: var(--studio-violet); background: var(--studio-violet-soft); }
@@ -792,8 +815,25 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
 .content-explorer-file-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .content-explorer-file-copy strong { font-size: .75rem; }
 .content-explorer-file-copy small { margin-top: 3px; color: var(--chem-muted); font-size: .61rem; }
-.content-explorer-open { color: var(--chem-primary); font-size: .64rem; font-weight: 800; white-space: nowrap; }
 .content-explorer-empty { margin: 0; padding: 16px 10px; color: var(--chem-muted); font-size: .7rem; text-align: center; }
+.content-explorer-media-folder { margin-top: 7px; background: color-mix(in srgb, var(--chem-bg) 82%, transparent); border: 1px solid color-mix(in srgb, var(--chem-line) 72%, transparent); border-radius: 10px; }
+.content-explorer-media-heading { display: flex; min-height: 43px; padding: 6px 7px 6px 10px; align-items: center; justify-content: space-between; gap: 10px; }
+.content-explorer-media-label { display: grid; min-width: 0; grid-template-columns: auto auto auto; align-items: center; gap: 7px; font: 750 .63rem/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.content-explorer-media-label small { color: var(--chem-muted); font: 550 .55rem/1.3 var(--chem-font); }
+.content-explorer-small-folder { color: var(--studio-amber); font-size: .83rem; }
+.content-explorer-manage-media { min-height: 31px; padding: 0 10px; color: var(--chem-primary); background: var(--chem-surface); border: 1px solid color-mix(in srgb, var(--chem-primary) 28%, var(--chem-line)); border-radius: 8px; font: inherit; font-size: .57rem; font-weight: 850; cursor: pointer; }
+.content-explorer-manage-media:hover { background: var(--chem-primary-soft); }
+.content-explorer-media-list { display: grid; padding: 0 7px 7px 28px; gap: 4px; }
+.content-explorer-media-row { display: flex; min-height: 37px; padding: 4px 5px 4px 8px; align-items: center; justify-content: space-between; gap: 8px; background: var(--chem-surface); border-radius: 8px; }
+.content-explorer-media-copy { display: grid; min-width: 0; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 7px; }
+.content-explorer-media-copy > span:nth-child(2) { overflow: hidden; font: 650 .57rem/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.content-explorer-media-copy small { color: var(--chem-muted); font-size: .52rem; white-space: nowrap; }
+.content-explorer-image-icon { color: var(--studio-blue); }
+.content-explorer-media-delete { min-height: 28px; padding: 0 8px; color: var(--chem-danger); background: transparent; border: 1px solid transparent; border-radius: 7px; font: inherit; font-size: .52rem; font-weight: 850; cursor: pointer; }
+.content-explorer-media-delete:hover { background: color-mix(in srgb, var(--chem-danger) 9%, transparent); border-color: color-mix(in srgb, var(--chem-danger) 24%, transparent); }
+.content-explorer-media-empty, .content-explorer-media-loading { margin: 0; padding: 0 10px 10px 28px; color: var(--chem-muted); font-size: .55rem; }
+.content-explorer-shared-body { display: flex; padding: 2px 13px 13px 52px; align-items: center; justify-content: space-between; gap: 14px; }
+.content-explorer-shared-body p { margin: 0; color: var(--chem-muted); font-size: .62rem; line-height: 1.5; }
 
 .workspace-view {
   --workspace-toolbar-height: 94px;
@@ -2884,6 +2924,23 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
   margin: 14px auto;
   border-radius: 12px;
 }
+.lesson-preview-body .lesson-managed-image { width: var(--lesson-image-width, 100%); max-width: 100%; min-height: 90px; margin: 14px auto; }
+.lesson-preview-body .lesson-managed-image.lesson-image-align-left { margin-left: 0; margin-right: auto; }
+.lesson-preview-body .lesson-managed-image.lesson-image-align-right { margin-left: auto; margin-right: 0; }
+.lesson-preview-body .lesson-managed-image img { width: 100%; height: auto; max-height: 420px; margin: 0; object-fit: contain; }
+.lesson-preview-image-resizer { position: relative; display: block; width: var(--lesson-image-width, 100%); max-width: 100%; }
+.lesson-preview-image-resizer.is-selected { outline: 2px solid var(--studio-blue); outline-offset: 3px; }
+.lesson-preview-image-resizer > img { width: 100% !important; max-width: 100% !important; }
+.lesson-preview-image-handle { position: absolute; right: -9px; bottom: -9px; width: 18px; height: 18px; padding: 0; background: var(--chem-surface); border: 3px solid var(--studio-blue); border-radius: 50%; box-shadow: 0 2px 8px rgba(10, 24, 45, .22); cursor: nwse-resize; touch-action: none; }
+.lesson-preview-image-size { position: absolute; right: 4px; bottom: 5px; z-index: 2; padding: 3px 7px; color: #fff; background: rgba(10, 24, 45, .76); border-radius: 99px; font-size: .52rem; font-weight: 850; pointer-events: none; }
+.lesson-managed-image-placeholder { display: grid; min-height: 120px; place-items: center; align-content: center; gap: 7px; color: var(--chem-muted); background: var(--chem-surface-soft); border: 1px dashed var(--chem-line); border-radius: 12px; }
+.lesson-managed-image-placeholder span { font-size: 1.4rem; }
+.lesson-managed-image-placeholder small { font-size: .62rem; }
+.lesson-image-source-card { display: grid; padding: 13px; gap: 7px; background: var(--chem-bg); border: 1px solid var(--chem-line); border-radius: 13px; }
+.lesson-image-source-card > strong { font-size: .7rem; }
+.lesson-image-source-card > code { overflow: hidden; color: var(--chem-primary); font-size: .6rem; text-overflow: ellipsis; white-space: nowrap; }
+.lesson-image-source-actions { display: flex; margin-top: 4px; gap: 7px; }
+.lesson-image-source-actions .button { min-height: 37px; padding: 0 11px; font-size: .63rem; }
 
 .lesson-preview-body blockquote {
   margin: 13px 0;
@@ -4773,10 +4830,123 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
   }
 }
 
+.project-card-presentation .project-icon { color: var(--studio-blue); background: var(--studio-blue-soft); }
+.presentation-workspace { height: calc(100dvh - var(--studio-header-height)); min-height: 720px; overflow: hidden; background: var(--chem-bg); }
+.presentation-toolbar { display: flex; min-height: 78px; padding: 12px 20px; align-items: center; justify-content: space-between; gap: 18px; background: var(--chem-surface); border-bottom: 1px solid var(--chem-line); }
+.presentation-toolbar-brand { min-width: 0; }
+.presentation-toolbar-brand .eyebrow { font-size: .56rem; }
+.presentation-toolbar-brand input { display: block; width: min(430px, 42vw); margin-top: 3px; padding: 2px 4px; color: var(--chem-text); background: transparent; border: 1px solid transparent; border-radius: 7px; font: 800 1rem/1.3 var(--chem-font); }
+.presentation-toolbar-brand input:focus { background: var(--chem-bg); border-color: var(--chem-primary); outline: 2px solid var(--studio-focus); }
+.presentation-toolbar-tools { display: flex; gap: 6px; }
+.presentation-toolbar-tools button, .presentation-insert-toolbar button { min-height: 36px; padding: 0 11px; color: var(--chem-text); background: var(--chem-bg); border: 1px solid var(--chem-line); border-radius: 9px; font: inherit; font-size: .62rem; font-weight: 820; cursor: pointer; }
+.presentation-toolbar-tools button:hover, .presentation-insert-toolbar button:hover { border-color: var(--chem-primary); background: var(--chem-primary-soft); }
+.presentation-toolbar-tools button.is-primary { color: #fff; background: var(--studio-blue); border-color: var(--studio-blue); }
+.presentation-toolbar-tools button.is-publish { color: #073b33; background: #78d6c7; border-color: #78d6c7; }
+.presentation-toolbar-tools button:disabled { opacity: .42; cursor: not-allowed; }
+.presentation-builder-shell { display: grid; height: calc(100% - 78px); min-height: 0; grid-template-columns: 250px minmax(520px, 1fr) 285px; }
+.presentation-slides-panel, .presentation-properties-panel { min-width: 0; min-height: 0; background: var(--chem-surface); overflow-y: auto; scrollbar-gutter: stable; }
+.presentation-slides-panel { border-right: 1px solid var(--chem-line); }
+.presentation-properties-panel { border-left: 1px solid var(--chem-line); }
+.presentation-slides-panel > header, .presentation-properties-panel > header { display: flex; min-height: 60px; padding: 12px 14px; align-items: center; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--chem-line); }
+.presentation-slides-panel > header small, .presentation-slides-panel > header strong, .presentation-properties-panel > header small, .presentation-properties-panel > header strong { display: block; }
+.presentation-slides-panel > header small, .presentation-properties-panel > header small { color: var(--chem-muted); font-size: .55rem; text-transform: uppercase; letter-spacing: .1em; }
+.presentation-slides-panel > header strong, .presentation-properties-panel > header strong { margin-top: 3px; font-size: .76rem; }
+.presentation-slides-panel > header button { display: grid; width: 32px; height: 32px; place-items: center; color: #fff; background: var(--chem-primary); border: 0; border-radius: 9px; font: inherit; cursor: pointer; }
+.presentation-library-controls { padding: 12px 12px 5px; border-bottom: 1px solid var(--chem-line); }
+.presentation-library-controls label > span { display: block; margin-bottom: 5px; color: var(--chem-muted); font-size: .55rem; font-weight: 750; }
+.presentation-library-controls select, .presentation-library-controls input { width: 100%; height: 35px; padding: 0 9px; color: var(--chem-text); background: var(--chem-bg); border: 1px solid var(--chem-line); border-radius: 9px; font: inherit; font-size: .62rem; }
+.presentation-search { display: block; margin-top: 7px; }
+.presentation-library { display: flex; max-height: 105px; margin-top: 7px; gap: 5px; overflow-x: auto; }
+.presentation-library-item { display: grid; min-width: 115px; padding: 7px; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 6px; color: var(--chem-text); background: var(--chem-surface); border: 1px solid var(--chem-line); border-radius: 8px; font: inherit; cursor: pointer; }
+.presentation-library-item span:first-child { color: var(--studio-blue); font-size: .45rem; font-weight: 900; }
+.presentation-library-item span:last-child { overflow: hidden; font-size: .55rem; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+.presentation-library-empty { margin: 0; padding: 8px; color: var(--chem-muted); font-size: .55rem; }
+.presentation-slide-list { display: grid; padding: 9px; gap: 7px; }
+.presentation-slide-row { display: grid; padding: 5px; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 5px; border: 1px solid transparent; border-radius: 10px; }
+.presentation-slide-row.is-selected { background: var(--chem-primary-soft); border-color: color-mix(in srgb, var(--chem-primary) 38%, var(--chem-line)); }
+.presentation-slide-row.is-selected .presentation-slide-thumb { box-shadow: 0 0 0 2px var(--chem-primary); }
+.presentation-slide-number { align-self: start; padding-top: 3px; color: var(--chem-muted); font-size: .55rem; font-weight: 800; text-align: center; }
+.presentation-slide-thumb { display: grid; aspect-ratio: 16 / 9; min-width: 0; padding: 7px; place-items: center; color: #17233a; border: 1px solid var(--chem-line); border-radius: 7px; box-shadow: 0 2px 8px rgba(12, 28, 52, .08); font: inherit; cursor: pointer; overflow: hidden; }
+.presentation-slide-thumb span { overflow: hidden; max-width: 100%; font-size: .5rem; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.presentation-slide-actions { display: grid; grid-template-columns: repeat(2, 24px); gap: 3px; }
+.presentation-slide-actions button { display: grid; width: 24px; height: 24px; padding: 0; place-items: center; color: var(--chem-muted); background: transparent; border: 1px solid transparent; border-radius: 6px; cursor: pointer; }
+.presentation-slide-actions button:hover { color: var(--chem-text); background: var(--chem-bg); border-color: var(--chem-line); }
+.presentation-slide-actions button.is-danger:hover { color: var(--chem-danger); }
+.presentation-slide-actions button:disabled { opacity: .3; }
+.presentation-stage-panel { display: grid; min-width: 0; min-height: 0; grid-template-rows: auto minmax(0, 1fr) auto auto; background: color-mix(in srgb, var(--chem-bg) 84%, #a9b8c9); overflow: hidden; }
+.presentation-insert-toolbar { display: flex; min-height: 54px; padding: 8px 12px; align-items: center; gap: 6px; background: var(--chem-surface); border-bottom: 1px solid var(--chem-line); overflow-x: auto; }
+.presentation-insert-toolbar > span { flex: 1; }
+.presentation-insert-toolbar button b { margin-right: 4px; color: var(--chem-primary); }
+.presentation-insert-toolbar label { display: flex; flex: 0 0 auto; align-items: center; gap: 5px; color: var(--chem-muted); font-size: .57rem; font-weight: 750; }
+.presentation-insert-toolbar select { height: 34px; padding: 0 7px; color: var(--chem-text); background: var(--chem-bg); border: 1px solid var(--chem-line); border-radius: 8px; font: inherit; font-size: .59rem; }
+.presentation-stage-scroll { display: grid; min-height: 0; padding: 26px; place-items: center; overflow: auto; }
+.presentation-stage-wrap { width: calc(min(960px, 100%) * var(--presentation-zoom, .9)); min-width: 450px; }
+.presentation-canvas { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #fff; box-shadow: 0 18px 54px rgba(15, 30, 52, .2); overflow: hidden; user-select: none; }
+.presentation-canvas[data-aspect="4:3"] { aspect-ratio: 4 / 3; }
+.presentation-canvas:focus { outline: 3px solid var(--studio-focus); outline-offset: 4px; }
+.presentation-canvas.has-guide-x::before, .presentation-canvas.has-guide-y::after { content: ''; position: absolute; z-index: 1005; pointer-events: none; background: #e34f9c; }
+.presentation-canvas.has-guide-x::before { left: 50%; top: 0; bottom: 0; width: 1px; }
+.presentation-canvas.has-guide-y::after { left: 0; right: 0; top: 50%; height: 1px; }
+.presentation-element { position: absolute; min-width: 10px; min-height: 10px; box-sizing: border-box; cursor: move; touch-action: none; }
+.presentation-element.is-selected { outline: 2px solid #1986e6; outline-offset: 1px; }
+.presentation-element.is-locked { cursor: not-allowed; }
+.presentation-text-content { display: flex; width: 100%; height: 100%; flex-direction: column; overflow: hidden; line-height: 1.15; white-space: pre-wrap; }
+.presentation-shape { width: 100%; height: 100%; box-sizing: border-box; border-style: solid; }
+.presentation-shape.is-rounded { border-radius: 18px; }
+.presentation-shape.is-circle { border-radius: 50%; }
+.presentation-shape.is-line { height: 0; margin-top: 50%; background: transparent !important; border-width: 0 0 2px !important; }
+.presentation-formula { display: grid; width: 100%; height: 100%; place-items: center; font-family: Georgia, serif; text-align: center; }
+.presentation-element.is-image img { display: block; width: 100%; height: 100%; pointer-events: none; }
+.presentation-element.is-image.is-cropping { outline-style: dashed; cursor: crosshair; }
+.presentation-element.is-image.is-cropping img { pointer-events: auto; cursor: crosshair; }
+.presentation-image-placeholder { display: grid; width: 100%; height: 100%; place-items: center; color: var(--chem-muted); background: #eef3f7; border: 1px dashed #b7c3d0; font-size: 12px; }
+.presentation-icon, .presentation-button-element, .presentation-embed-placeholder { display: grid; width: 100%; height: 100%; place-items: center; text-align: center; overflow: hidden; }
+.presentation-button-element { padding: 8px 14px; font-size: clamp(12px, 2vw, 24px); font-weight: 850; }
+.presentation-table { width: 100%; height: 100%; border-collapse: collapse; table-layout: fixed; background: #fff; overflow: hidden; }
+.presentation-table th, .presentation-table td { padding: .45em .55em; color: #17233a; border: 1px solid rgba(60, 79, 105, .2); text-align: left; overflow: hidden; text-overflow: ellipsis; }
+.presentation-table th { color: #fff; font-weight: 800; }
+.presentation-code { width: 100%; height: 100%; margin: 0; padding: 14px; overflow: auto; border-radius: 8px; white-space: pre-wrap; tab-size: 2; }
+.presentation-embed-placeholder { padding: 14px; align-content: center; gap: 6px; color: var(--chem-muted); background: repeating-linear-gradient(135deg, var(--chem-bg), var(--chem-bg) 12px, var(--chem-surface) 12px, var(--chem-surface) 24px); border: 1px dashed var(--chem-line); }
+.presentation-embed-placeholder span { color: var(--studio-blue); font-size: 1.5rem; }
+.presentation-embed-placeholder strong { color: var(--chem-text); font-size: .72rem; }
+.presentation-embed-placeholder small { max-width: 100%; overflow: hidden; font-size: .52rem; text-overflow: ellipsis; white-space: nowrap; }
+.presentation-resize-handle { position: absolute; width: 9px; height: 9px; background: #fff; border: 2px solid #1986e6; border-radius: 50%; z-index: 5; }
+.presentation-resize-handle.is-nw { left: -6px; top: -6px; cursor: nwse-resize; }
+.presentation-resize-handle.is-n { left: calc(50% - 5px); top: -6px; cursor: ns-resize; }
+.presentation-resize-handle.is-ne { right: -6px; top: -6px; cursor: nesw-resize; }
+.presentation-resize-handle.is-e { right: -6px; top: calc(50% - 5px); cursor: ew-resize; }
+.presentation-resize-handle.is-se { right: -6px; bottom: -6px; cursor: nwse-resize; }
+.presentation-resize-handle.is-s { left: calc(50% - 5px); bottom: -6px; cursor: ns-resize; }
+.presentation-resize-handle.is-sw { left: -6px; bottom: -6px; cursor: nesw-resize; }
+.presentation-resize-handle.is-w { left: -6px; top: calc(50% - 5px); cursor: ew-resize; }
+.presentation-notes { display: grid; padding: 8px 14px; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 10px; background: var(--chem-surface); border-top: 1px solid var(--chem-line); }
+.presentation-notes label { padding-top: 8px; color: var(--chem-muted); font-size: .57rem; font-weight: 800; }
+.presentation-notes textarea { min-height: 56px; max-height: 100px; padding: 8px 10px; resize: vertical; color: var(--chem-text); background: var(--chem-bg); border: 1px solid var(--chem-line); border-radius: 9px; font: inherit; font-size: .62rem; }
+.presentation-status { min-height: 28px; margin: 0; padding: 6px 14px; color: var(--chem-muted); background: var(--chem-surface); font-size: .58rem; }
+.presentation-status.is-error { color: var(--chem-danger); }
+.presentation-properties { padding: 12px; }
+.presentation-properties-form { display: grid; gap: 9px; }
+.presentation-properties-form hr { width: 100%; margin: 5px 0; border: 0; border-top: 1px solid var(--chem-line); }
+.presentation-properties-form > button { min-height: 36px; color: var(--chem-text); background: var(--chem-bg); border: 1px solid var(--chem-line); border-radius: 9px; font: inherit; font-size: .61rem; font-weight: 800; cursor: pointer; }
+.presentation-properties-form > button:hover { border-color: var(--chem-primary); background: var(--chem-primary-soft); }
+.presentation-properties-form > button.is-danger { color: var(--chem-danger); }
+.presentation-field { display: grid; gap: 5px; }
+.presentation-field > span { color: var(--chem-muted); font-size: .57rem; font-weight: 780; }
+.presentation-field > small { color: var(--chem-muted); font-size: .52rem; line-height: 1.45; }
+.presentation-field input, .presentation-field select, .presentation-field textarea { width: 100%; min-height: 37px; padding: 7px 9px; color: var(--chem-text); background: var(--chem-bg); border: 1px solid var(--chem-line); border-radius: 9px; font: inherit; font-size: .62rem; }
+.presentation-field textarea { resize: vertical; }
+.presentation-field input[type="color"] { padding: 4px; }
+.presentation-field input[type="range"] { padding: 0; }
+.presentation-field input[type="checkbox"] { width: 22px; min-height: 22px; }
+.presentation-action-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
+.presentation-action-grid button { min-height: 33px; color: var(--chem-text); background: var(--chem-bg); border: 1px solid var(--chem-line); border-radius: 8px; cursor: pointer; }
+.presentation-action-grid button:hover { color: var(--chem-primary); border-color: var(--chem-primary); }
+
 @media (max-width: 1220px) {
   .exam-builder-shell { grid-template-columns: 230px minmax(0, 1fr); }
   .exam-summary-panel { display: none; }
-  .content-explorer-folders { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .presentation-builder-shell { grid-template-columns: 220px minmax(500px, 1fr); }
+  .presentation-properties-panel { position: fixed; right: 0; top: calc(var(--studio-header-height) + 78px); bottom: 0; width: 285px; z-index: 20; box-shadow: -18px 0 42px rgba(10, 24, 45, .16); }
 }
 
 @media (max-width: 820px) {
@@ -4800,6 +4970,18 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
   .content-explorer-heading { align-items: stretch; flex-direction: column; }
   .content-explorer-controls,
   .content-explorer-folders { grid-template-columns: 1fr; }
+  .content-explorer-files { padding-left: 9px; }
+  .content-explorer-material-body { padding-left: 10px; }
+  .content-explorer-shared-body { padding-left: 13px; align-items: stretch; flex-direction: column; }
+  .content-explorer-media-copy small { display: none; }
+  .presentation-workspace { height: auto; min-height: calc(100dvh - var(--studio-header-height)); overflow: visible; }
+  .presentation-toolbar { align-items: stretch; flex-direction: column; }
+  .presentation-toolbar-brand input { width: 100%; }
+  .presentation-toolbar-tools { overflow-x: auto; }
+  .presentation-builder-shell { display: block; height: auto; }
+  .presentation-slides-panel { max-height: 330px; border-right: 0; border-bottom: 1px solid var(--chem-line); }
+  .presentation-stage-panel { min-height: 720px; }
+  .presentation-properties-panel { position: static; width: auto; max-height: none; box-shadow: none; border-left: 0; border-top: 1px solid var(--chem-line); }
 }
 
 @media (prefers-reduced-motion: reduce) {

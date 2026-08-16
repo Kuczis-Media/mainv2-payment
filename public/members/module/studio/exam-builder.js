@@ -398,9 +398,12 @@
     const headingCopy = create('div');
     headingCopy.append(
       create('strong', '', scope === 'cover' ? 'Obraz okładki' : 'Obrazy pytania i odpowiedzi'),
-      create('small', '', 'PNG, JPG, WEBP lub GIF · maksymalnie 4 MB')
+      create('small', '', 'PNG, JPG, WEBP, GIF lub bezpieczny SVG · maksymalnie 4 MB')
     );
-    heading.append(headingCopy);
+    const libraryButton = create('button', 'mini-button', 'Media Manager');
+    libraryButton.type = 'button';
+    libraryButton.dataset.examAction = 'open-media-manager';
+    heading.append(headingCopy, libraryButton);
     if (targets.length > 1) {
       const target = document.createElement('select');
       target.dataset.examMediaTarget = '1';
@@ -449,8 +452,40 @@
       item.append(preview, copy, remove); list.append(item);
     });
     if (!entries.length) list.append(create('p', 'exam-media-empty', 'Nie dodano jeszcze obrazu.'));
-    panel.append(heading, inputNode, dropzone, list, create('p', 'exam-media-note', 'Usunięcie tutaj usuwa referencję z egzaminu, ale nie kasuje samego pliku z repozytorium.'));
+    panel.append(heading, inputNode, dropzone, list, create('p', 'exam-media-note', 'Usuń referencję tutaj albo otwórz Media Manager, aby zarządzać plikami w photos i assets/shared.'));
     return panel;
+  }
+
+  function openExamMediaManager(panel) {
+    if (!panel || !window.ChemMediaManager?.open) {
+      elements.status.className = 'exam-builder-status is-error';
+      elements.status.textContent = 'Media Manager jest chwilowo niedostępny.';
+      return;
+    }
+    const target = panel.dataset.examMediaScope === 'cover'
+      ? 'cover'
+      : panel.querySelector('[data-exam-media-target]')?.value || state.mediaTarget || 'question';
+    const canUseLocal = Boolean(state.remoteSha && state.remoteExamId === state.exam.examId);
+    void window.ChemMediaManager.open({
+      scope: canUseLocal ? 'local' : 'shared',
+      materialKind: canUseLocal ? 'exam' : '',
+      materialId: canUseLocal ? state.exam.examId : '',
+      repositoryId: state.repositoryId,
+      onSelect(asset) {
+        const image = {
+          ref: asset.reference,
+          alt: String(asset.filename || 'Ilustracja').replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').slice(0, 300)
+        };
+        if (panel.dataset.examMediaScope === 'cover') state.exam.metadata.cover = image;
+        else {
+          const images = imagesForTarget(mediaQuestion(panel), target) || imagesForTarget(mediaQuestion(panel), 'question');
+          if (images && !images.some((entry) => entry.ref === image.ref)) images.push(image);
+        }
+        saveDrafts();
+        render();
+        elements.badge.textContent = 'Niezapisane zmiany';
+      }
+    });
   }
 
   async function loadMediaThumbnail(image, ref) {
@@ -1316,7 +1351,9 @@
     if (!button) return;
     const action = button.dataset.examAction;
     const questionId = button.dataset.questionId;
-    if (action === 'choose-media') {
+    if (action === 'open-media-manager') {
+      openExamMediaManager(button.closest('[data-exam-media-scope]'));
+    } else if (action === 'choose-media') {
       if (!state.mediaUploading) button.closest('[data-exam-media-scope]')?.querySelector('[data-exam-media-input]')?.click();
     } else if (action === 'remove-media-reference') {
       const panel = button.closest('[data-exam-media-scope]');
@@ -1474,13 +1511,7 @@
   async function deleteExam() {
     if (!state.remoteSha) return;
     try {
-      const references = await adminRequest({ view: 'references', repo: state.repositoryId, exam: state.exam.examId });
-      const places = (references.references || []).slice(0, 12).map((entry) => (
-        `• ${entry.source === 'lesson' ? 'Lekcja' : 'Dashboard'}: ${entry.title || entry.filename || entry.materialId}`
-      ));
-      const warning = references.count
-        ? `Egzamin jest używany w ${references.count} miejscu/miejscach. Usunięcie pozostawi niedziałające odwołania:\n${places.join('\n')}${references.count > places.length ? `\n• …i ${references.count - places.length} kolejnych` : ''}\n\n${references.note || ''}\n\n`
-        : `${references.note || 'Nie znaleziono odwołań w Dashboardzie ani lekcjach.'}\n\n`;
+      const warning = await examDeletionWarning(state.exam.examId, state.repositoryId);
       if (!window.confirm(`${warning}Usunąć exam.json z GitHuba? Commit będzie możliwy do odzyskania z historii.`)) return;
       await library.remove('exam', { filename: state.exam.examId, expectedSha: state.remoteSha, repositoryId: state.repositoryId });
       state.remoteSha = '';
@@ -1488,6 +1519,37 @@
       elements.status.textContent = 'Egzamin usunięto z GitHuba. Lokalny draft pozostał w Builderze.';
       await loadAssets(true);
     } catch (error) { elements.status.textContent = error.message || 'Nie udało się usunąć egzaminu.'; }
+  }
+
+  async function examDeletionWarning(examId, repositoryId) {
+    const references = await adminRequest({ view: 'references', repo: repositoryId, exam: examId });
+    const places = (references.references || []).slice(0, 12).map((entry) => (
+      `• ${entry.source === 'lesson' ? 'Lekcja' : 'Dashboard'}: ${entry.title || entry.filename || entry.materialId}`
+    ));
+    return references.count
+      ? `Egzamin jest używany w ${references.count} miejscu/miejscach. Usunięcie pozostawi niedziałające odwołania:\n${places.join('\n')}${references.count > places.length ? `\n• …i ${references.count - places.length} kolejnych` : ''}\n\n${references.note || ''}\n\n`
+      : `${references.note || 'Nie znaleziono odwołań w Dashboardzie ani lekcjach.'}\n\n`;
+  }
+
+  async function deletionWarning(asset) {
+    if (!asset?.filename) throw new Error('Nie wybrano egzaminu do usunięcia.');
+    return examDeletionWarning(asset.filename, asset.repositoryId || state.repositoryId);
+  }
+
+  function assetDeleted(asset) {
+    if (!asset?.filename) return;
+    const repositoryId = asset.repositoryId || state.repositoryId;
+    if (repositoryId !== state.repositoryId) return;
+    state.assets = state.assets.filter((entry) => entry.filename !== asset.filename);
+    if (state.remoteExamId === asset.filename) {
+      state.remoteSha = '';
+      state.remoteExamId = '';
+      state.report = null;
+      state.attemptReport = null;
+      elements.status.textContent = 'Egzamin usunięto z GitHuba. Lokalny draft pozostał w Builderze.';
+    }
+    renderLibrary();
+    render();
   }
 
   async function loadReport() {
@@ -1581,6 +1643,6 @@
     return minutes ? `${minutes} min ${value % 60} s` : `${value} s`;
   }
 
-  window.ChemExamBuilder = { activate, flush: saveDrafts, openAsset };
+  window.ChemExamBuilder = { activate, assetDeleted, deletionWarning, flush: saveDrafts, openAsset };
   document.addEventListener('DOMContentLoaded', initialize);
 })();

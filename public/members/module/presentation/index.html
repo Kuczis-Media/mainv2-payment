@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="x-members" content="1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow">
+  <base href="/members/module/presentation/">
+  <title>Prezentacja — ChemDisk</title>
+  <link rel="icon" href="/members/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;family=JetBrains+Mono:wght@100..800&amp;family=Lato:wght@300;400;700;900&amp;family=Lora:ital,wght@0,400..700;1,400..700&amp;family=Merriweather:wght@300;400;700;900&amp;family=Montserrat:wght@100..900&amp;family=Nunito:wght@200..1000&amp;family=Open+Sans:wght@300..800&amp;family=Playfair+Display:wght@400..900&amp;family=Poppins:wght@100;300;400;500;600;700;800;900&amp;family=Roboto:wght@100..900&amp;family=Source+Code+Pro:wght@200..900&amp;display=swap">
+  <script src="/members/module/theme.js"></script>
+  <link rel="stylesheet" href="/members/module/theme.css">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/progress.js"></script>
+  <script src="/assets/js/content-library.js"></script>
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <header class="presentation-player-topbar">
+    <a href="/members/" aria-label="Wróć do dashboardu"><span>⚗</span><strong>ChemDisk Presentation</strong></a>
+    <div><span id="presentation-player-save">Gotowe</span><button id="presentation-player-theme" type="button" aria-label="Zmień motyw">◐</button><button id="presentation-player-fullscreen" type="button">Pełny ekran</button></div>
+  </header>
+  <main class="presentation-player-main" id="presentation-player-main">
+    <section class="presentation-player-loading" id="presentation-player-loading" aria-live="polite"><span></span><h1>Wczytuję prezentację…</h1><p>Pobieram opublikowane slajdy z prywatnego repozytorium.</p></section>
+    <section class="presentation-player-error" id="presentation-player-error" hidden><span>!</span><h1>Nie udało się otworzyć prezentacji</h1><p id="presentation-player-error-copy"></p><a href="/members/">Wróć do dashboardu</a></section>
+    <section class="presentation-player" id="presentation-player" hidden>
+      <div class="presentation-player-heading"><div><small>Prezentacja</small><h1 id="presentation-player-title"></h1></div><button id="presentation-player-outline-toggle" type="button">Lista slajdów</button></div>
+      <div class="presentation-player-layout">
+        <aside class="presentation-player-outline" id="presentation-player-outline" aria-label="Slajdy"></aside>
+        <div class="presentation-player-stage-shell">
+          <div class="presentation-player-stage" id="presentation-player-stage" tabindex="0"></div>
+          <footer class="presentation-player-controls">
+            <button id="presentation-player-previous" type="button">← Poprzedni</button>
+            <div><strong id="presentation-player-position">1 / 1</strong><span class="presentation-player-progress"><i id="presentation-player-progress"></i></span></div>
+            <button id="presentation-player-next" type="button">Dalej →</button>
+          </footer>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

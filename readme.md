@@ -25,8 +25,9 @@ public/
     └── module/
         ├── theme.js / theme.css       # wspólna paleta jasna/ciemna aplikacji
         ├── media-*.js / *.css         # wspólne mechanizmy podglądów mediów
-        ├── studio/                    # Dashboard, Lesson, Prompt i Exam Builder
+        ├── studio/                    # Dashboard, Lesson, Prompt, Exam i Presentation Studio
         ├── exam/                      # wspólny odtwarzacz egzaminów
+        ├── presentation/              # natywny odtwarzacz prezentacji ChemDisk
         ├── lesson/                    # odtwarzacz lekcji z prywatnego repo treści
         ├── atonom/                    # modele cząsteczek z polskich nazw
         └── …                          # kalkulatory, tablice, media, czat i kontakt
@@ -42,11 +43,14 @@ netlify/functions/
 ├── admin-forms.js                     # odczyt/usuwanie zgłoszeń Netlify Forms
 ├── admin-dashboard.js                 # aktywny Markdown w Netlify Blobs
 ├── content-library.js                 # chroniona lista i odczyt repo treści
+├── content-media.js                   # uwierzytelniony odczyt prywatnych obrazów
+├── presentation.js                    # opublikowana definicja natywnej prezentacji
 ├── exam.js                            # definicja dla ucznia i cykl życia próby
 ├── admin-exams.js                     # raporty, analiza pytań i reset prób
 └── chat.mjs                           # chronione połączenie z Gemini i limit Netlify
 netlify/admin-common.js                # wspólna kanoniczna autoryzacja
 netlify/content-repository.js           # serwerowy klient GitHub Contents API
+netlify/presentation-common.js          # walidacja modelu prezentacji i bezpiecznych mediów
 netlify/exam-common.js                  # model, losowanie i punktacja egzaminów
 netlify/exam-storage.js                 # próby, indeksy i agregaty w Blobs
 netlify/exam-progress.js                # adapter do centralnego systemu postępu
@@ -139,13 +143,27 @@ Lekcje i prompty AI mają osobne źródło prawdy — jedno lub kilka prywatnych
 chemdisk-content/
 ├── catalog.json
 ├── lessons/
-│   └── nazwa-lekcji.md
+│   ├── nazwa-lekcji.md
+│   └── nazwa-lekcji/
+│       └── photos/
+│           └── schemat.webp
 ├── exams/
 │   ├── question-bank.json
 │   └── egzamin-alkohole/
 │       ├── exam.json
 │       └── photos/
 │           └── mechanizm.webp
+├── presentations/
+│   └── alkohole/
+│       ├── presentation.json
+│       └── photos/
+├── quizzes/
+│   └── szybka-powtorka/
+│       ├── quiz.json
+│       └── photos/
+├── assets/
+│   └── shared/
+│       └── logo-kursu.svg
 └── prompts/
     ├── nazwa-promptu.json
     └── zestaw-promptow.txt
@@ -207,7 +225,7 @@ Późniejsze dodanie, poprawienie lub usunięcie pliku w repo materiałów — p
 
 Przeglądarka nigdy nie otrzymuje tokenu GitHub. Kursant po sprawdzeniu aktywnego dostępu może pobrać treść lekcji, ponieważ musi ją wyświetlić, ale nie może zapisywać ani usuwać plików. Lista i treść promptów są dostępne w bibliotece tylko administratorowi, aby Prompt Builder mógł je edytować; zwykły moduł czatu nadal pobiera wybrany prompt po stronie funkcji `chat` i nie wysyła go kursantowi.
 
-Dozwolone są lekcje `.md` do 512 KiB, prompty `.txt` i `.json` do 256 KiB, `exam.json` do 2 MiB oraz wspólny `question-bank.json` do 5 MiB. Chroniony odczyt obrazu egzaminu ma limit 10 MiB. Nazwa pliku nie może zawierać ścieżki, `..` ani niedozwolonych znaków. `catalog.json` ma limit 256 KiB. Po rotacji tokenu zaktualizuj `GITHUB_CONTENT_TOKEN` w Netlify i ponownie wdróż Functions.
+Dozwolone są lekcje `.md` do 512 KiB, prompty `.txt` i `.json` do 256 KiB, definicje egzaminu, prezentacji i quizu do 2 MiB oraz wspólny `question-bank.json` do 5 MiB. Media Manager przyjmuje PNG, JPG/JPEG, WebP, GIF i konserwatywnie oczyszczony SVG do 4 MiB; chroniony odczyt ma limit 10 MiB. Nazwa pliku nie może zawierać ścieżki, `..` ani niedozwolonych znaków. `catalog.json` ma limit 256 KiB. Po rotacji tokenu zaktualizuj `GITHUB_CONTENT_TOKEN` w Netlify i ponownie wdróż Functions.
 
 Te same repozytoria materiałów mogą zasilać inne wdrożenie ChemDisk: skopiuj do niego moduł `netlify/content-repository.js`, funkcję `content-library`, klienta `public/assets/js/content-library.js` i ustaw tę samą konfigurację `GITHUB_CONTENT_*`. Klient domyślnie używa chronionej funkcji w tej samej domenie. Jeśli aplikacja ma własny zgodny endpoint, można wskazać go w `<head>` przez:
 
@@ -483,14 +501,17 @@ Przed zmianą produkcyjnego dashboardu, cennika, migracją witryny albo masowym 
 
 Administrator widzi w bocznym menu dodatkowy skrót **Studio treści** prowadzący do `/members/module/studio/`. Reguły w `netlify.toml` chronią cały katalog Studio rolą `admin` przed ogólną regułą `/members/*`; samo ukrycie linku w interfejsie nie jest mechanizmem autoryzacji.
 
-Na stronie startowej Studio znajduje się **Eksplorator treści**. Pokazuje pliki z wybranego prywatnego repozytorium w osobnych, zwijanych folderach **Lekcje**, **Egzaminy** i **Prompty**. Wyszukiwarka filtruje po nazwie, ścieżce i tagach, a kliknięcie pliku przełącza Studio do właściwego Buildera i wczytuje jego aktualną zawartość z GitHuba. Selektor repozytorium i przycisk odświeżania pozwalają przeglądać wszystkie skonfigurowane źródła bez wpisywania ścieżek.
+Na stronie startowej Studio znajduje się **Eksplorator treści** w formie zwartego drzewa. Pokazuje foldery **Lekcje**, **Egzaminy**, **Prezentacje**, **Quizy**, **Prompty** i **Media wspólne**. Po rozwinięciu materiału widać jego definicję oraz lokalny folder `photos`; lista obrazów jest pobierana dopiero wtedy, a miniatury w Media Managerze dopiero po pojawieniu się na ekranie. Każdy obraz można usunąć osobno, z informacją o rozmiarze i liczbie lokalnych odwołań. Wyszukiwarka filtruje po nazwie, ścieżce i tagach, a **Otwórz** przełącza Studio do właściwego Buildera. **Duplikuj** tworzy nową definicję i kopiuje jej lokalne media, zachowując wspólne referencje bez powielania plików.
 
-Studio ma cztery tryby:
+Usunięcie definicji wymaga aktualnego SHA i potwierdzenia. Gdy materiał ma lokalne obrazy, Studio osobno pyta, czy usunąć również `photos`, czy zachować pliki. Najpierw usuwa definicję, a dopiero potem opcjonalne pliki lokalne, więc częściowy błąd porządkowania nie pozostawia aktywnego materiału z brakującymi ilustracjami. Przed usunięciem egzaminu pokazuje wykryte użycia w Dashboardzie i lekcjach. Media z `assets/shared/` nigdy nie są usuwane razem z materiałem, ponieważ mogą należeć do wielu definicji. Każda operacja tworzy odwracalny commit Git; lokalny draft i historyczny postęp nie są automatycznie kasowane.
+
+Studio ma pięć trybów:
 
 - **Dashboard Builder** — przeciąganie sekcji, harmonijek poziomów 3–6, tekstów, komunikatów i kart modułów, w tym formularza kontaktowego zapisującego odpowiedzi w Netlify Forms. Każdą dużą sekcję oraz każdą zagnieżdżoną harmonijkę można tymczasowo zwinąć strzałką w jej nagłówku, aby skrócić obszar roboczy; nie zmienia to jej ustawienia dla kursanta. Inspektor konfiguruje ID lub link materiału, wariant kalkulatora/tablicy, tryb ochrony `type`, plik lekcji, prompt czatu, notatkę kontaktową albo bezpieczny własny link. Selektor przełącza przeszukiwane repozytorium, a karta zapamiętuje jego `id`, więc identyczne nazwy plików nie kolidują;
-- **Lesson Builder** — układanie slajdów oraz bloków nagłówka, tekstu, obrazu HTTPS, wideo YouTube, listy, tabeli, cytatu, calloutu, kodu, stylowanej sekcji, harmonijki, wzorów, pomocy AI, tablic interaktywnych, formularza kontaktowego i estetycznych kafelków z linkiem. Tabela ma od 2 do 8 kolumn, do 30 wierszy, opcjonalny podpis i wyrównanie; w odtwarzaczu przewija się poziomo na wąskim ekranie. Dedykowany wizualny kreator równań działa podobnie do uproszczonego edytora z Worda: ma gotowe szablony, palety symboli, klikalne strzałki, osobne pola substratów i produktów, warunki nad i pod strzałką oraz bieżący podgląd. Renderuje matematykę i chemię z indeksami, jonami, izotopami, stanami skupienia, temperaturą i katalizatorem. Każdy slajd może osobno wyłączyć animację albo użyć zanikania, ruchu w górę, ruchu z boku lub miękkiego przybliżenia. Do slajdu można dodać pytanie tekstowe, liczbowe, wyboru, ABCD, luki z listą albo luki wpisywane ręcznie. Opcje quizu mają osobne pola i znacznik ✓ poprawnej odpowiedzi. Luki tworzy się w wizualnym układzie „tekst → luka → tekst”: użytkownik nie wpisuje ani nie widzi składni `{{…}}`. Lekcję można wyszukać, wczytać, zapisać, zaktualizować albo usunąć w repozytorium wybranym z listy;
+- **Lesson Builder** — układanie slajdów oraz bloków nagłówka, tekstu, obrazu z Media Managera lub starszego HTTPS, wideo YouTube, listy, tabeli, cytatu, calloutu, kodu, stylowanej sekcji, harmonijki, wzorów, pomocy AI, tablic interaktywnych, formularza kontaktowego i estetycznych kafelków z linkiem. Zaznaczony obraz ma w podglądzie ramkę i uchwyt, którym można płynnie ustawić szerokość bez wpisywania liczby; wynik zapisuje się po puszczeniu uchwytu, a ALT i wyrównanie pozostają w inspektorze. Tabela ma od 2 do 8 kolumn, do 30 wierszy, opcjonalny podpis i wyrównanie; w odtwarzaczu przewija się poziomo na wąskim ekranie. Dedykowany wizualny kreator równań działa podobnie do uproszczonego edytora z Worda: ma gotowe szablony, palety symboli, klikalne strzałki, osobne pola substratów i produktów, warunki nad i pod strzałką oraz bieżący podgląd. Renderuje matematykę i chemię z indeksami, jonami, izotopami, stanami skupienia, temperaturą i katalizatorem. Każdy slajd może osobno wyłączyć animację albo użyć zanikania, ruchu w górę, ruchu z boku lub miękkiego przybliżenia. Do slajdu można dodać pytanie tekstowe, liczbowe, wyboru, ABCD, luki z listą albo luki wpisywane ręcznie. Opcje quizu mają osobne pola i znacznik ✓ poprawnej odpowiedzi. Luki tworzy się w wizualnym układzie „tekst → luka → tekst”: użytkownik nie wpisuje ani nie widzi składni `{{…}}`. Lekcję można wyszukać, wczytać, zapisać, zaktualizować albo usunąć w repozytorium wybranym z listy;
 - **Prompt Builder** — tworzenie pojedynczego promptu `.json` lub zestawu ponumerowanych instrukcji `.txt`. Builder waliduje numery punktów, limity treści i format, pokazuje gotowe źródło oraz obsługuje ten sam ręczny, repozytoryjny i wielorepozytoryjny obieg co lekcje;
-- **Exam Builder** — tworzenie definicji egzaminów, pytań i banku pytań oraz konfiguracja dostępu, czasu, nawigacji, punktacji, prób, wyników i raportów. Definicje są zapisywane w tym samym prywatnym repozytorium, a próby uczniów pozostają w Netlify Blobs.
+- **Exam Builder** — tworzenie definicji egzaminów, pytań i banku pytań oraz konfiguracja dostępu, czasu, nawigacji, punktacji, prób, wyników i raportów. Definicje są zapisywane w tym samym prywatnym repozytorium, a próby uczniów pozostają w Netlify Blobs;
+- **Presentation Studio** — natywny edytor slajdów z trzema panelami, motywami i 11 układami. Obsługuje tekst, nagłówki, obrazy, kształty i linie, wzory, ikony, tabele, przyciski, kod oraz bezpieczne embedy. Elementy mają bezpośrednie przeciąganie, osiem uchwytów zmiany rozmiaru, zachowanie proporcji, osobny tryb kadrowania, opacity, wyrównywanie, linie środka, warstwy, blokowanie, kopiowanie, cofanie i ponawianie. Slajdy można przeciągać, duplikować i przesuwać przyciskami, a tło może być kolorem, gradientem, obrazem albo motywem. Zapisuje `presentations/<presentationId>/presentation.json`, a kursant otwiera jeden wspólny odtwarzacz ChemDisk z klawiaturą, dotykiem, pełnym ekranem i dokładnym postępem po stabilnych `slideId`.
 
 Na większym ekranie biblioteka po lewej, obszar roboczy pośrodku oraz ustawienia/podgląd po prawej mają niezależne przewijanie. Każdą bibliotekę, prawy panel i górny pasek narzędzi można zwinąć osobno; ustawienia są zapamiętywane osobno dla Dashboard Buildera, Lesson Buildera, Prompt Buildera i Exam Buildera w `chemdisk.studio.layout.v1`. Pełny podgląd otwiera chroniony adres Studio w osobnym oknie, wczytuje aktualny lokalny draft i aktualizuje się po kolejnych zmianach.
 
@@ -509,7 +530,7 @@ Round-trip dashboardu zachowuje znaczenie składni obsługiwanej przez parser, l
 
 #### Przepływ Lesson Buildera
 
-Lesson Builder może rozpocząć pustą lekcję albo zaimportować istniejący `.md`, zamienić go na edytowalne bloki i ponownie wygenerować deterministyczny Markdown. Dostępne są podgląd, edycja źródła, kopiowanie do schowka i pobranie pliku. Import pliku ma limit 512 KiB, edytor źródła przyjmuje do 524 288 znaków, lekcja może zawierać od 1 do 100 slajdów, a nazwa pliku musi kończyć się `.md`, zaczynać znakiem alfanumerycznym, mieć maksymalnie 80 znaków i nie może zawierać `..` ani ścieżki katalogu. Builder przyjmuje dla obrazów wyłącznie pełne adresy `https://`.
+Lesson Builder może rozpocząć pustą lekcję albo zaimportować istniejący `.md`, zamienić go na edytowalne bloki i ponownie wygenerować deterministyczny Markdown. Dostępne są podgląd, edycja źródła, kopiowanie do schowka i pobranie pliku. Import pliku ma limit 512 KiB, edytor źródła przyjmuje do 524 288 znaków, lekcja może zawierać od 1 do 100 slajdów, a nazwa pliku musi kończyć się `.md`, zaczynać znakiem alfanumerycznym, mieć maksymalnie 80 znaków i nie może zawierać `..` ani ścieżki katalogu. Obraz może wskazywać stabilną referencję `photos/...` lub `assets/shared/...`; starsze pełne adresy `https://` nadal działają.
 
 Przycisk **Nowa lekcja** przygotowuje pierwszy slajd i przełącza zapis na tryb **Utwórz plik w GitHubie**. Jeżeli w repozytorium istnieje pusty plik `.md`, Studio otwiera go jako edytowalny szablon, zachowuje jego SHA i przy pierwszym zapisie uzupełnia ten sam plik bez tworzenia duplikatu.
 
@@ -519,7 +540,7 @@ Studio nie wykonuje cichego automatycznego zapisu do GitHuba. Autosave zapisuje 
 
 Odtwarzacz lekcji odrzuca plik większy niż 512 KiB lub zawierający ponad 100 slajdów. Builder pilnuje liczby slajdów, lecz obecnie nie blokuje pobrania tylko dlatego, że wynikowy Markdown przekroczył limit bajtów odtwarzacza. Przed wysłaniem bardzo dużej lekcji sprawdź rozmiar, np. `wc -c lessons/nazwa.md`, i utrzymaj go poniżej 524 288 bajtów.
 
-Na jednym slajdzie może znajdować się najwyżej jedno zadanie. Pytanie można dodać bezpośrednio z pustego slajdu, a następnie wpisać każdą opcję osobno i wskazać poprawną znakiem ✓. Quiz ABCD wymaga czterech opcji; pytanie `choice` co najmniej dwóch, a graficzne pole Studio zachowuje maksymalnie osiem. Przy lukach każde pole zwykłego tekstu ma przycisk **Dodaj lukę tutaj**. Studio pokazuje kolejność fragmentów i luk jako osobne kontrolki, a poprawną odpowiedź ustawia się na karcie danej luki. Dla luk tekstowych można ustawić sprawdzanie każdej luki osobno albo wszystkich naraz. Opcje i aliasy odpowiedzi nie mogą zawierać separatora `|`. Kontenery `:::style` i `:::accordion` muszą mieć treść i nie mogą zawierać kolejnego kontenera tego typu. Studio nie kopiuje obrazów do repozytorium ani Blobs; użyj pełnego publicznego adresu HTTPS do obrazu, także gdy sam plik obrazu leży w innym publicznym repozytorium GitHub. Kafelek z linkiem przyjmuje adresy `http`, `https`, `mailto`, kotwice i wewnętrzne ścieżki `/...`; niebezpieczne protokoły są odrzucane. Klocek formularza otwiera chroniony `/members/module/contact/`, może dołączyć maksymalnie 240 znaków treści wstępnej i zapisuje wysłane wiadomości w Netlify Forms. Klocek AI może opcjonalnie wskazać prompt `.json` lub punkt z `.txt` w wybranym repozytorium. Klocek tablicy otwiera `/members/module/whiteboard/` albo `/members/module/bitpaper/`; dla BitPaper może przekazać bezpieczną nazwę planszy `.json`. Przejście jest zapisywane osobno w każdym slajdzie, a systemowe `prefers-reduced-motion` wyłącza animację.
+Na jednym slajdzie może znajdować się najwyżej jedno zadanie. Pytanie można dodać bezpośrednio z pustego slajdu, a następnie wpisać każdą opcję osobno i wskazać poprawną znakiem ✓. Quiz ABCD wymaga czterech opcji; pytanie `choice` co najmniej dwóch, a graficzne pole Studio zachowuje maksymalnie osiem. Przy lukach każde pole zwykłego tekstu ma przycisk **Dodaj lukę tutaj**. Studio pokazuje kolejność fragmentów i luk jako osobne kontrolki, a poprawną odpowiedź ustawia się na karcie danej luki. Dla luk tekstowych można ustawić sprawdzanie każdej luki osobno albo wszystkich naraz. Opcje i aliasy odpowiedzi nie mogą zawierać separatora `|`. Kontenery `:::style` i `:::accordion` muszą mieć treść i nie mogą zawierać kolejnego kontenera tego typu. Dla obrazu przycisk **Wybierz z Media Managera** zapisuje referencję, ALT, szerokość i wyrównanie w ścisłej dyrektywie `:::image`; odtwarzacz pobiera prywatny plik dopiero po uwierzytelnieniu. Kafelek z linkiem przyjmuje adresy `http`, `https`, `mailto`, kotwice i wewnętrzne ścieżki `/...`; niebezpieczne protokoły są odrzucane. Klocek formularza otwiera chroniony `/members/module/contact/`, może dołączyć maksymalnie 240 znaków treści wstępnej i zapisuje wysłane wiadomości w Netlify Forms. Klocek AI może opcjonalnie wskazać prompt `.json` lub punkt z `.txt` w wybranym repozytorium. Klocek tablicy otwiera `/members/module/whiteboard/` albo `/members/module/bitpaper/`; dla BitPaper może przekazać bezpieczną nazwę planszy `.json`. Przejście jest zapisywane osobno w każdym slajdzie, a systemowe `prefers-reduced-motion` wyłącza animację.
 
 Eksport zawsze synchronizuje nagłówek `#` pierwszego slajdu z globalnym tytułem lekcji. Ton calloutu nie ma osobnego pola w Markdownzie i po ponownym imporcie jest rozpoznawany z jego tytułu. Tak jak przy dashboardzie, dla ważnego ręcznie pisanego źródła zachowaj kopię przed round-tripem przez graficzne klocki.
 
@@ -978,6 +999,14 @@ Każdy moduł ma stały element `<base>`, np.:
 
 Dzięki temu `style.css` i `script.js` są pobierane z katalogu modułu również wtedy, gdy Netlify obsłuży ładny adres bez `index.html`. Przy dodawaniu nowego modułu ustaw jego własny bezwzględny `<base>` i w dashboardzie linkuj najlepiej do ścieżki zakończonej `/`.
 
+## Media Manager i natywne prezentacje
+
+Wspólny **Media Manager** jest używany przez Exam Builder, Lesson Builder, Presentation Studio, obsługę quizów oraz eksplorator. Zakładka **W tym materiale** zapisuje pliki w jego własnym `photos/`, a **Wspólne dla kursu** w `assets/shared/`. Obsługuje wybór wielu plików, przeciąganie, wklejanie `Ctrl/Cmd+V`, wyszukiwanie, leniwe miniatury i jawne usuwanie. Definicje zapisują stabilne referencje względne, nigdy tymczasowy Blob URL ani token GitHub. Pliki są odczytywane przez `content-media` dopiero po sprawdzeniu sesji i dostępu do kursu.
+
+Usunięcie obrazu lokalnego pokazuje liczbę wystąpień w definicji właściciela. Dla `assets/shared/` aplikacja celowo wyświetla mocniejsze ostrzeżenie, ponieważ pełne skanowanie wszystkich repozytoriów przy każdym otwarciu byłoby kosztowne i zawodne. Usunięcie wymaga dokładnego SHA, więc nowsza równoległa wersja pliku nie zostanie nadpisana. Historia commita GitHub umożliwia odwrócenie operacji.
+
+**Presentation Studio** zapisuje wersjonowany, natywny `presentation.json` w prywatnym repozytorium. Slajdy i elementy mają trwałe ID, dlatego zmiana kolejności nie niszczy postępu. Starsze definicje bez nowych pól są normalizowane do bezpiecznych wartości domyślnych, a istniejący moduł Google Slides nadal działa niezależnie. Dashboard Builder ma osobny typ **Prezentacja ChemDisk**. Odtwarzacz `/members/module/presentation/` pokazuje wyłącznie opublikowaną definicję, wznawia ostatni slajd i wysyła odwiedziny do istniejącego centralnego systemu postępu.
+
 ## Centralny system postępu ucznia
 
 ChemDisk ma jeden wspólny system postępu dla dashboardu, lekcji, prezentacji, filmów, PDF-ów, quizów i pozostałych modułów. Nie jest to osobna aplikacja ani nowy framework: rozwiązanie rozszerza istniejące Netlify Functions, Netlify Identity, Netlify Blobs, Dashboard Builder i Lesson Builder.
@@ -1057,7 +1086,7 @@ Exam Engine rozszerza obecną architekturę ChemDisk. Definicje egzaminów i ban
 
 Każdy egzamin ma ścieżkę `exams/<examId>/exam.json`. Plik zawiera metadane, pytania lub stabilne odwołania do banku, konfigurację wyświetlania, nawigacji, czasu, losowania, punktacji, prób, dostępu, wyniku i status `draft`/`published`. Przy dostępie selektywnym może zawierać stabilne ID uprawnionych kont, ale nie zawiera ich nazw, e-maili, prób, indywidualnych wyników ani sekretów. Wspólny `exams/question-bank.json` przechowuje pytania wielokrotnego użycia ze stabilnym `questionId`.
 
-Obrazy są zapisywane jako referencje względne, np. `photos/mechanizm-a1b2c3.webp`, wraz z ALT. Pytanie i odpowiedź mogą mieć wiele obrazów. Po pierwszym zapisaniu draftu administrator przeciąga plik na pole obrazu, wybiera go z dysku albo wkleja przez `Ctrl+V`/`Cmd+V`; przy pytaniu może wcześniej wskazać treść pytania, konkretną odpowiedź, stronę dopasowania lub element kolejności. Studio przesyła plik przez chronioną Function bezpośrednio do `exams/<examId>/photos/`, a do `exam.json` dopisuje stabilną referencję po kolejnym zapisaniu draftu. Przyjmowane są PNG, JPG/JPEG, WEBP i GIF do 4 MB; format i sygnatura są weryfikowane po stronie serwera, a SVG jest odrzucany. Exam Player pobiera obrazy przez uwierzytelnioną Function, więc adres tymczasowy, token GitHub i dowolna ścieżka wejściowa nie są ujawniane klientowi.
+Obrazy są zapisywane jako referencje względne, np. `photos/mechanizm-a1b2c3.webp` albo `assets/shared/logo.svg`, wraz z ALT. Pytanie i odpowiedź mogą mieć wiele obrazów. Po pierwszym zapisaniu draftu administrator otwiera Media Manager, przeciąga plik, wybiera go z dysku albo wkleja przez `Ctrl+V`/`Cmd+V`; starsze pole szybkiego uploadu przy pytaniu również pozostaje aktywne. Studio przesyła plik przez chronioną Function do lokalnego `photos/` lub biblioteki wspólnej, a do `exam.json` dopisuje stabilną referencję po kolejnym zapisaniu draftu. Przyjmowane są PNG, JPG/JPEG, WEBP, GIF i bezpieczny SVG do 4 MB; format i zawartość są weryfikowane po stronie serwera. Exam Player pobiera obrazy przez uwierzytelnioną Function, więc adres tymczasowy, token GitHub i dowolna ścieżka wejściowa nie są ujawniane klientowi.
 
 ### Praca w Builderze
 
@@ -1101,7 +1130,7 @@ Raport ucznia w **Panel administratora → Postępy** ma przy egzaminie drugi zw
 - `GET|DELETE /.netlify/functions/admin-exams` — raport globalny, raport użytkownika/próby, odwołania oraz administracyjny reset;
 - `GET|POST|PUT|DELETE /.netlify/functions/content-library` — istniejący chroniony przepływ listy, odczytu, zapisu/publikacji i usuwania `exam.json` oraz banku.
 
-Exam Engine nie dodaje nowych zmiennych środowiskowych i nie implementuje AI, pełnego Media Managera ani niezawodnego proctoringu.
+Exam Engine i Media Manager nie dodają nowych zmiennych środowiskowych. Nie implementują AI ani nie przedstawiają zdarzeń przeglądarki jako niezawodnego proctoringu.
 
 ## Bezpieczeństwo i ograniczenia materiałów
 

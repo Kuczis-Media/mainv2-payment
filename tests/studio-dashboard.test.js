@@ -27,6 +27,7 @@ test('root dashboard progress cannot inherit while descendants still can', () =>
 
 test('studio exposes every requested dashboard block with the runtime protection modes', () => {
   assert.deepEqual(studio.MODULE_ORDER, [
+    'presentation',
     'slides',
     'pdf',
     'film',

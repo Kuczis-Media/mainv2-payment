@@ -78,6 +78,7 @@
     lessonRepositoryDelete: byId('lesson-repository-delete-button'),
     promptWorkspace: byId('prompt-workspace'),
     examWorkspace: byId('exam-workspace'),
+    presentationWorkspace: byId('presentation-workspace'),
     promptFilename: byId('prompt-filename-input'),
     promptFormat: byId('prompt-format-select'),
     promptInstruction: byId('prompt-instruction-input'),
@@ -131,6 +132,11 @@
       lessons: [],
       prompts: [],
       exams: [],
+      presentations: [],
+      quizzes: [],
+      mediaByOwner: new Map(),
+      mediaLoading: new Set(),
+      explorerOpen: new Set(['lesson', 'exam', 'presentation', 'quiz', 'prompt']),
       loaded: false,
       loading: false,
       error: '',
@@ -158,6 +164,7 @@
       remoteFilename: '',
       remoteSha: '',
       remoteRepositoryId: '',
+      mediaObjectUrls: [],
       saving: false
     },
     prompt: {
@@ -525,13 +532,14 @@
 
   function switchMode(mode) {
     finishEdit();
-    const next = ['home', 'dashboard', 'lesson', 'exam', 'prompt'].includes(mode) ? mode : 'home';
+    const next = ['home', 'dashboard', 'lesson', 'exam', 'presentation', 'prompt'].includes(mode) ? mode : 'home';
     state.mode = next;
     elements.home.hidden = next !== 'home';
     elements.dashboardWorkspace.hidden = next !== 'dashboard';
     elements.lessonWorkspace.hidden = next !== 'lesson';
     elements.promptWorkspace.hidden = next !== 'prompt';
     elements.examWorkspace.hidden = next !== 'exam';
+    elements.presentationWorkspace.hidden = next !== 'presentation';
     all('[data-switch-mode]').forEach((button) => {
       const active = button.dataset.switchMode === next;
       button.classList.toggle('is-active', active);
@@ -541,12 +549,14 @@
     if (next === 'lesson') renderLesson();
     if (next === 'prompt') renderPrompt();
     if (next === 'exam') void window.ChemExamBuilder?.activate?.();
+    if (next === 'presentation') void window.ChemPresentationBuilder?.activate?.();
     updateHistoryButtons();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function dashboardModuleDefaults(type) {
     const defaults = {
+      presentation: ['Nowa prezentacja ChemDisk', 'Otwórz natywną prezentację z dokładnym postępem slajdów.'],
       slides: ['Nowa prezentacja', 'Otwórz prezentację do tego działu.'],
       pdf: ['Dokument PDF', 'Materiał do czytania lub pobrania.'],
       film: ['Nagranie lekcji', 'Obejrzyj nagranie w odtwarzaczu kursowym.'],
@@ -601,7 +611,7 @@
       title,
       description,
       source: 'prompt',
-      repositoryId: ['lesson', 'chat', 'exam'].includes(type)
+      repositoryId: ['lesson', 'chat', 'exam', 'presentation'].includes(type)
         ? state.contentLibrary.selectedRepositoryId
         : '',
       formula: type === 'atonom' ? 'fenol' : ''
@@ -672,6 +682,14 @@
         title: asset.title || asset.filename,
         description: asset.description || 'Egzamin z bezpiecznym zapisem próby i wyniku.'
       });
+    } else if (asset.kind === 'presentation') {
+      node = dashboardModelApi.createModule({
+        module: 'presentation',
+        repositoryId: asset.repositoryId,
+        presentationId: asset.filename,
+        title: asset.title || asset.filename,
+        description: asset.description || 'Natywna prezentacja ChemDisk z dokładnym śledzeniem slajdów.'
+      });
     } else {
       const isText = /\.txt$/i.test(asset.filename);
       node = dashboardModelApi.createModule({
@@ -692,7 +710,9 @@
         ? 'Karta lekcji jest gotowa w dashboardzie.'
         : asset.kind === 'exam'
           ? 'Karta egzaminu jest gotowa w dashboardzie.'
-        : 'Karta AI jest gotowa; dla pliku TXT sprawdź numer punktu.'
+          : asset.kind === 'presentation'
+            ? 'Karta prezentacji ChemDisk jest gotowa w dashboardzie.'
+            : 'Karta AI jest gotowa; dla pliku TXT sprawdź numer punktu.'
     );
   }
 
@@ -1100,7 +1120,7 @@
       ? dashboardModelApi.findNode(state.dashboard.model, state.dashboard.selectedUid)
       : { node: state.dashboard.model, parent: null, container: null, index: -1 };
     const node = found.node;
-    if (node.kind === 'module' && ['lesson', 'chat', 'exam'].includes(node.module)) {
+    if (node.kind === 'module' && ['lesson', 'chat', 'exam', 'presentation'].includes(node.module)) {
       syncInspectorRepository(node.repositoryId);
     }
     const form = create('form', 'inspector-form');
@@ -1185,6 +1205,23 @@
           'Karta przechowuje tylko repositoryId i examId. Definicja pozostaje w jednym pliku exam.json.'
         ));
       }
+      if (node.module === 'presentation') {
+        form.append(field(
+          'Repozytorium',
+          selectInput(node.repositoryId, 'repositoryId', repositoryOptions(true))
+        ));
+        const presentationOptions = state.contentLibrary.presentations
+          .filter((asset) => !node.repositoryId || asset.repositoryId === node.repositoryId)
+          .map((asset) => ({ value: asset.filename, label: asset.title || asset.filename }));
+        if (node.presentationId && !presentationOptions.some((option) => option.value === node.presentationId)) {
+          presentationOptions.unshift({ value: node.presentationId, label: `${node.presentationId} — poza bieżącą listą` });
+        }
+        form.append(field(
+          'Prezentacja ChemDisk',
+          selectInput(node.presentationId, 'presentationId', presentationOptions.length ? presentationOptions : [{ value: '', label: 'Brak prezentacji w repozytorium' }]),
+          'Karta wskazuje presentation.json. Stare moduły Google Slides nadal działają niezależnie.'
+        ));
+      }
       if (node.module === 'chat') {
         form.append(field(
           'Repozytorium',
@@ -1241,7 +1278,7 @@
           'Dozwolony jest pełny adres HTTPS albo wewnętrzna ścieżka zaczynająca się od /.'
         ));
       }
-      if (node.module === 'slides') {
+      if (node.module === 'slides' || node.module === 'presentation') {
         form.append(field(
           'Sposób liczenia prezentacji',
           selectInput(node.presentationMode || 'highest', 'presentationMode', [
@@ -2126,7 +2163,7 @@
     if (block.type === 'accordion') return `${block.blocks.length} elementów · ${block.open ? 'otwarta' : 'zamknięta'}`;
     if (block.type === 'list') return `${block.items.length} punktów`;
     if (block.type === 'table') return `${block.headers.length} kolumn · ${block.rows.length} wierszy · ${block.align}`;
-    if (block.type === 'image') return block.url || 'Uzupełnij adres HTTPS';
+    if (block.type === 'image') return block.ref || block.url || 'Wybierz obraz';
     if (block.type === 'youtube') return block.video || 'Uzupełnij link lub ID filmu';
     if (block.type === 'exam') {
       const requirements = {
@@ -3092,9 +3129,33 @@
         ]))
       );
     } else if (block.type === 'image') {
+      const mediaCard = create('section', 'lesson-image-source-card');
+      mediaCard.append(
+        create('strong', '', block.ref ? 'Obraz z Media Managera' : 'Źródło obrazu'),
+        create('code', '', block.ref || 'Nie wybrano pliku')
+      );
+      const mediaActions = create('div', 'lesson-image-source-actions');
+      const choose = create('button', 'button button-primary', block.ref ? 'Zmień obraz' : 'Wybierz lub wgraj obraz');
+      choose.type = 'button';
+      choose.dataset.lessonMediaManager = '1';
+      mediaActions.append(choose);
+      if (block.ref) {
+        const clear = create('button', 'button button-soft', 'Usuń z klocka');
+        clear.type = 'button';
+        clear.dataset.lessonMediaClear = '1';
+        mediaActions.append(clear);
+      }
+      mediaCard.append(mediaActions);
       form.append(
-        field('Adres obrazu HTTPS', lessonInput(block.url, 'url', { type: 'url', placeholder: 'https://…' }), 'Obraz pozostaje pod wskazanym adresem — plik nie jest kopiowany do repozytorium.'),
-        field('Opis alternatywny ALT', lessonInput(block.alt, 'alt', { maxLength: 220 }))
+        mediaCard,
+        field('Zewnętrzny adres HTTPS — zgodność ze starymi lekcjami', lessonInput(block.url, 'url', { type: 'url', placeholder: 'https://…' }), 'Gdy wybierzesz plik z Media Managera, stabilna referencja ma pierwszeństwo przed tym adresem.'),
+        field('Opis alternatywny ALT', lessonInput(block.alt, 'alt', { maxLength: 220 })),
+        field('Szerokość obrazu (%)', lessonInput(String(block.width || 100), 'width', { type: 'range', min: 20, max: 100 })),
+        field('Wyrównanie', lessonSelect(block.align || 'center', 'align', [
+          { value: 'left', label: 'Do lewej' },
+          { value: 'center', label: 'Na środku' },
+          { value: 'right', label: 'Do prawej' }
+        ]))
       );
     } else if (block.type === 'callout') {
       form.append(
@@ -3880,6 +3941,7 @@
 
   function renderLessonPreview() {
     clearTypesetMath(elements.lessonPreview);
+    state.lesson.mediaObjectUrls.splice(0).forEach((url) => URL.revokeObjectURL(url));
     elements.lessonPreview.replaceChildren();
     const slide = selectedLessonSlide();
     if (!slide) return;
@@ -3897,8 +3959,90 @@
     bindPreviewAtonom(elements.lessonPreview);
     bindPreviewAiHelp(elements.lessonPreview);
     bindPreviewTasks(elements.lessonPreview);
+    void hydrateStudioLessonMedia(elements.lessonPreview).then(() => bindLessonPreviewImageResize(elements.lessonPreview));
     typesetMath(elements.lessonPreview);
     syncFullPreview('lesson');
+  }
+
+  async function hydrateStudioLessonMedia(root) {
+    const library = window.ChemContentLibrary;
+    if (!library?.readMediaBlob) return;
+    const figures = all('[data-lesson-media-ref]', root);
+    await Promise.all(figures.map(async (figure) => {
+      const shared = figure.dataset.lessonMediaScope === 'shared';
+      try {
+        const blob = await library.readMediaBlob({
+          scope: shared ? 'shared' : 'local',
+          materialKind: shared ? '' : 'lesson',
+          materialId: shared ? '' : state.lesson.model.filename,
+          reference: figure.dataset.lessonMediaRef,
+          repositoryId: figure.dataset.lessonMediaRepository
+            || state.lesson.remoteRepositoryId
+            || state.contentLibrary.selectedRepositoryId
+        });
+        if (!figure.isConnected) return;
+        const objectUrl = URL.createObjectURL(blob);
+        state.lesson.mediaObjectUrls.push(objectUrl);
+        const image = document.createElement('img');
+        image.src = objectUrl;
+        image.alt = figure.dataset.lessonMediaAlt || 'Ilustracja';
+        image.loading = 'lazy';
+        figure.replaceChildren(image);
+      } catch (_) {
+        const placeholder = figure.querySelector('.lesson-managed-image-placeholder');
+        if (placeholder) placeholder.textContent = 'Nie udało się wczytać obrazu.';
+        figure.classList.add('is-error');
+      }
+    }));
+  }
+
+  function bindLessonPreviewImageResize(root) {
+    const found = findLessonNode(state.lesson.selectedId);
+    if (!found || found.kind !== 'block' || found.node.type !== 'image') return;
+    const block = found.node;
+    let shell = null;
+    if (block.ref) {
+      shell = all('[data-lesson-media-ref]', root).find((node) => node.dataset.lessonMediaRef === block.ref) || null;
+    } else if (block.url) {
+      const image = all('.lesson-preview-body img', root).find((node) => node.getAttribute('src') === block.url);
+      if (image) {
+        shell = create('span', 'lesson-preview-image-resizer');
+        image.replaceWith(shell); shell.append(image);
+      }
+    }
+    if (!shell) return;
+    shell.classList.add('lesson-preview-image-resizer', 'is-selected');
+    shell.style.setProperty('--lesson-image-width', `${block.width || 100}%`);
+    shell.dataset.lessonResizeBlock = block.id;
+    const badge = create('span', 'lesson-preview-image-size', `${Math.round(block.width || 100)}%`);
+    const handle = create('button', 'lesson-preview-image-handle');
+    handle.type = 'button'; handle.setAttribute('aria-label', 'Zmień szerokość obrazu przeciągając uchwyt'); handle.title = 'Przeciągnij, aby zmienić szerokość';
+    shell.append(badge, handle);
+    handle.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+      const before = snapshot('lesson');
+      const body = shell.closest('.lesson-preview-body') || shell.parentElement;
+      const rect = body.getBoundingClientRect();
+      const startX = event.clientX;
+      const startWidth = Number(block.width) || 100;
+      const move = (moveEvent) => {
+        const next = Math.max(20, Math.min(100, startWidth + (moveEvent.clientX - startX) / Math.max(rect.width, 1) * 100));
+        block.width = Math.round(next * 10) / 10;
+        shell.style.setProperty('--lesson-image-width', `${block.width}%`);
+        badge.textContent = `${Math.round(block.width)}%`;
+      };
+      const up = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        if (before !== snapshot('lesson')) pushHistory('lesson', before);
+        scheduleDraftSave('lesson');
+        renderLessonInspector();
+        syncFullPreview('lesson');
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up, { once: true });
+      event.preventDefault();
+    });
   }
 
   function addFullPreviewHead(doc, mode) {
@@ -4426,6 +4570,46 @@
     input.focus();
   }
 
+  function openLessonImageManager() {
+    const found = findLessonNode(state.lesson.selectedId);
+    if (!found || found.kind !== 'block' || found.node.type !== 'image') return;
+    if (!window.ChemMediaManager?.open) {
+      toast('Media Manager jest niedostępny', 'Odśwież Studio i spróbuj ponownie.', 'error');
+      return;
+    }
+    const filename = state.lesson.model.filename;
+    const canUseLocal = Boolean(
+      state.lesson.remoteSha
+      && state.lesson.remoteFilename === filename
+      && state.lesson.remoteRepositoryId
+    );
+    void window.ChemMediaManager.open({
+      scope: canUseLocal ? 'local' : 'shared',
+      materialKind: canUseLocal ? 'lesson' : '',
+      materialId: canUseLocal ? filename : '',
+      repositoryId: state.lesson.remoteRepositoryId || state.contentLibrary.selectedRepositoryId,
+      onSelect(asset) {
+        commitMutation('lesson', () => {
+          found.node.ref = asset.reference;
+          found.node.repositoryId = asset.repositoryId || state.contentLibrary.selectedRepositoryId;
+          found.node.url = '';
+          if (!found.node.alt || found.node.alt === 'Ilustracja') {
+            found.node.alt = String(asset.filename || 'Ilustracja').replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').slice(0, 220);
+          }
+        });
+      }
+    });
+  }
+
+  function clearLessonImageReference() {
+    const found = findLessonNode(state.lesson.selectedId);
+    if (!found || found.kind !== 'block' || found.node.type !== 'image') return;
+    commitMutation('lesson', () => {
+      found.node.ref = '';
+      found.node.repositoryId = '';
+    });
+  }
+
   function handleLessonInspectorInput(event) {
     const target = event.target.closest('[data-lesson-field]');
     if (!target) return;
@@ -4564,6 +4748,8 @@
         primaryText.text = raw;
       } else if (fieldName === 'level') {
         block.level = Math.max(1, Math.min(3, Number(raw) || 2));
+      } else if (fieldName === 'width' && block.type === 'image') {
+        block.width = Math.max(20, Math.min(100, Number(raw) || 100));
       } else if (fieldName === 'useColor') {
         block.color = checked ? (block.color || '#0e665a') : '';
       } else if (fieldName === 'color') {
@@ -5295,7 +5481,7 @@
     const kind = create(
       'span',
       'repository-asset-kind',
-      asset.kind === 'lesson' ? 'MD' : asset.kind === 'exam' ? 'EXAM' : /\.txt$/i.test(asset.filename) ? 'TXT' : 'JSON'
+      asset.kind === 'lesson' ? 'MD' : asset.kind === 'exam' ? 'EXAM' : asset.kind === 'presentation' ? 'SLIDE' : /\.txt$/i.test(asset.filename) ? 'TXT' : 'JSON'
     );
     const copy = create('span');
     copy.append(
@@ -5312,7 +5498,7 @@
     const library = window.ChemContentLibrary;
     if (!library) return;
     const dashboardAssets = library.search(
-      [...state.contentLibrary.lessons, ...state.contentLibrary.prompts, ...state.contentLibrary.exams],
+      [...state.contentLibrary.lessons, ...state.contentLibrary.prompts, ...state.contentLibrary.exams, ...state.contentLibrary.presentations],
       elements.dashboardAssetSearch.value
     );
     elements.dashboardAssetList.replaceChildren(
@@ -5353,43 +5539,98 @@
     const groups = [
       { kind: 'lesson', title: 'Lekcje', icon: 'L', assets: state.contentLibrary.lessons },
       { kind: 'exam', title: 'Egzaminy', icon: 'E', assets: state.contentLibrary.exams },
+      { kind: 'presentation', title: 'Prezentacje', icon: 'S', assets: state.contentLibrary.presentations },
+      { kind: 'quiz', title: 'Quizy', icon: 'Q', assets: state.contentLibrary.quizzes },
       { kind: 'prompt', title: 'Prompty', icon: 'P', assets: state.contentLibrary.prompts }
     ];
-    elements.contentExplorerFolders.replaceChildren(...groups.map((group) => {
+    const roots = groups.map((group) => {
       const visible = library?.search ? library.search(group.assets, query) : group.assets;
       const folder = document.createElement('details');
       folder.className = 'content-explorer-folder';
-      folder.open = true;
+      folder.dataset.explorerRoot = group.kind;
+      folder.open = state.contentLibrary.explorerOpen.has(group.kind);
+      folder.addEventListener('toggle', () => {
+        if (folder.open) state.contentLibrary.explorerOpen.add(group.kind);
+        else state.contentLibrary.explorerOpen.delete(group.kind);
+      });
       const summary = document.createElement('summary');
       summary.append(
         create('span', 'content-explorer-folder-icon', group.icon),
-        create('strong', '', group.title),
+        create('span', 'content-explorer-folder-copy'),
         create('small', '', `${visible.length}/${group.assets.length}`),
         create('span', 'content-explorer-chevron', '⌄')
       );
+      summary.querySelector('.content-explorer-folder-copy').append(
+        create('strong', '', group.title),
+        create('small', '', group.kind === 'lesson' ? 'Pliki Markdown i lokalne zdjęcia' : ['exam', 'presentation', 'quiz'].includes(group.kind) ? 'Definicja i lokalny folder photos' : 'Pliki JSON i TXT')
+      );
       const files = create('div', 'content-explorer-files');
       visible.forEach((asset) => {
-        const button = create('button', 'content-explorer-file');
-        button.type = 'button';
-        button.dataset.explorerKind = group.kind;
-        button.dataset.explorerFilename = asset.filename;
-        button.dataset.explorerRepository = asset.repositoryId || state.contentLibrary.selectedRepositoryId;
+        const material = document.createElement('details');
+        material.className = 'content-explorer-material';
+        const ownerKey = explorerMediaKey(group.kind, asset.filename, asset.repositoryId);
+        material.dataset.explorerOwnerKey = ownerKey;
+        material.open = state.contentLibrary.explorerOpen.has(ownerKey);
+        const materialSummary = document.createElement('summary');
         const copy = create('span', 'content-explorer-file-copy');
         copy.append(
           create('strong', '', asset.title || asset.filename),
           create('small', '', asset.path || asset.filename)
         );
-        button.append(
-          create('span', `content-explorer-file-type is-${group.kind}`, group.kind === 'lesson' ? 'MD' : group.kind === 'exam' ? 'EXAM' : /\.txt$/i.test(asset.filename) ? 'TXT' : 'JSON'),
+        materialSummary.append(
+          create('span', `content-explorer-file-type is-${group.kind}`, group.kind === 'lesson' ? 'MD' : group.kind === 'exam' ? 'EXAM' : group.kind === 'presentation' ? 'SLIDE' : group.kind === 'quiz' ? 'QUIZ' : /\.txt$/i.test(asset.filename) ? 'TXT' : 'JSON'),
           copy,
-          create('span', 'content-explorer-open', 'Otwórz →')
+          create('span', 'content-explorer-material-meta', formatExplorerSize(asset.size)),
+          create('span', 'content-explorer-chevron', '⌄')
         );
-        files.append(button);
+        const body = create('div', 'content-explorer-material-body');
+        const row = create('div', 'content-explorer-definition-row');
+        const definition = create('div', 'content-explorer-definition-copy');
+        definition.append(create('span', '', '◇'), create('span', '', group.kind === 'exam' ? 'exam.json' : group.kind === 'presentation' ? 'presentation.json' : group.kind === 'quiz' ? 'quiz.json' : asset.filename));
+        const actions = create('div', 'content-explorer-row-actions');
+        const button = create('button', 'content-explorer-open-button', 'Otwórz');
+        button.type = 'button';
+        button.dataset.explorerOpen = '1';
+        button.dataset.explorerKind = group.kind;
+        button.dataset.explorerFilename = asset.filename;
+        button.dataset.explorerRepository = asset.repositoryId || state.contentLibrary.selectedRepositoryId;
+        const remove = create('button', 'content-explorer-delete', 'Usuń');
+        remove.type = 'button';
+        remove.dataset.explorerDelete = '1';
+        remove.dataset.explorerKind = group.kind;
+        remove.dataset.explorerFilename = asset.filename;
+        remove.dataset.explorerRepository = asset.repositoryId || state.contentLibrary.selectedRepositoryId;
+        remove.setAttribute('aria-label', `Usuń ${asset.title || asset.filename} z GitHuba`);
+        remove.title = 'Usuń z prywatnego repozytorium GitHub';
+        const duplicate = create('button', 'content-explorer-duplicate', 'Duplikuj');
+        duplicate.type = 'button';
+        duplicate.dataset.explorerDuplicate = '1';
+        duplicate.dataset.explorerKind = group.kind;
+        duplicate.dataset.explorerFilename = asset.filename;
+        duplicate.dataset.explorerRepository = asset.repositoryId || state.contentLibrary.selectedRepositoryId;
+        actions.append(button, duplicate, remove);
+        row.append(definition, actions);
+        body.append(row);
+        if (['lesson', 'exam', 'presentation', 'quiz'].includes(group.kind)) {
+          body.append(renderExplorerMediaFolder(group.kind, asset));
+        }
+        material.append(materialSummary, body);
+        material.addEventListener('toggle', () => {
+          if (material.open) {
+            state.contentLibrary.explorerOpen.add(ownerKey);
+            if (['lesson', 'exam', 'presentation', 'quiz'].includes(group.kind)) void loadExplorerMedia(group.kind, asset);
+          } else {
+            state.contentLibrary.explorerOpen.delete(ownerKey);
+          }
+        });
+        files.append(material);
       });
       if (!visible.length) files.append(create('p', 'content-explorer-empty', query ? 'Brak pasujących plików.' : 'Ten folder jest pusty.'));
       folder.append(summary, files);
       return folder;
-    }));
+    });
+    roots.push(renderSharedMediaRoot());
+    elements.contentExplorerFolders.replaceChildren(...roots);
     if (elements.contentExplorerStatus) {
       const total = groups.reduce((sum, group) => sum + group.assets.length, 0);
       const selected = selectedRepository();
@@ -5401,6 +5642,125 @@
           : state.contentLibrary.loaded
             ? `${total} plików · ${selected?.label || selected?.repository || 'repozytorium'}`
             : 'Biblioteka nie została jeszcze wczytana.';
+    }
+  }
+
+  function formatExplorerSize(bytes) {
+    const value = Number(bytes) || 0;
+    if (value < 1024) return `${value} B`;
+    if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
+    return `${(value / 1024 / 1024).toFixed(1)} MB`;
+  }
+
+  function explorerMediaKey(kind, materialId, repositoryId) {
+    return `${repositoryId || state.contentLibrary.selectedRepositoryId}:${kind}:${materialId}`;
+  }
+
+  function renderExplorerMediaFolder(kind, asset) {
+    const repositoryId = asset.repositoryId || state.contentLibrary.selectedRepositoryId;
+    const key = explorerMediaKey(kind, asset.filename, repositoryId);
+    const media = state.contentLibrary.mediaByOwner.get(key);
+    const loading = state.contentLibrary.mediaLoading.has(key);
+    const shell = create('section', 'content-explorer-media-folder');
+    const heading = create('div', 'content-explorer-media-heading');
+    const label = create('div', 'content-explorer-media-label');
+    label.append(
+      create('span', 'content-explorer-small-folder', '▰'),
+      create('span', '', 'photos'),
+      create('small', '', loading ? 'pobieranie…' : media ? `${media.length} plików` : 'otwórz materiał, aby wczytać')
+    );
+    const manage = create('button', 'content-explorer-manage-media', 'Zarządzaj');
+    manage.type = 'button';
+    manage.dataset.explorerMedia = '1';
+    manage.dataset.explorerKind = kind;
+    manage.dataset.explorerFilename = asset.filename;
+    manage.dataset.explorerRepository = repositoryId;
+    heading.append(label, manage);
+    shell.append(heading);
+    if (loading) {
+      shell.append(create('div', 'content-explorer-media-loading', 'Wczytuję zawartość folderu photos…'));
+      return shell;
+    }
+    if (!media) return shell;
+    if (!media.length) {
+      shell.append(create('p', 'content-explorer-media-empty', 'Brak obrazów. Kliknij „Zarządzaj”, aby dodać pierwszy plik.'));
+      return shell;
+    }
+    const list = create('div', 'content-explorer-media-list');
+    media.forEach((item) => {
+      const row = create('div', 'content-explorer-media-row');
+      const copy = create('div', 'content-explorer-media-copy');
+      copy.append(
+        create('span', 'content-explorer-image-icon', '▧'),
+        create('span', '', item.filename),
+        create('small', '', `${formatExplorerSize(item.size)}${item.usageCount ? ` · używany ${item.usageCount}×` : ' · nieużywany'}`)
+      );
+      const remove = create('button', 'content-explorer-media-delete', 'Usuń');
+      remove.type = 'button';
+      remove.dataset.explorerMediaDelete = '1';
+      remove.dataset.explorerOwnerKey = key;
+      remove.dataset.explorerReference = item.reference;
+      row.append(copy, remove);
+      list.append(row);
+    });
+    shell.append(list);
+    return shell;
+  }
+
+  function renderSharedMediaRoot() {
+    const folder = document.createElement('details');
+    folder.className = 'content-explorer-folder is-shared';
+    folder.open = state.contentLibrary.explorerOpen.has('shared-media');
+    folder.addEventListener('toggle', () => {
+      if (folder.open) state.contentLibrary.explorerOpen.add('shared-media');
+      else state.contentLibrary.explorerOpen.delete('shared-media');
+    });
+    const summary = document.createElement('summary');
+    const copy = create('span', 'content-explorer-folder-copy');
+    copy.append(create('strong', '', 'Media wspólne'), create('small', '', 'assets/shared · dla wielu materiałów'));
+    summary.append(
+      create('span', 'content-explorer-folder-icon is-shared', '▧'),
+      copy,
+      create('small', '', 'SHARED'),
+      create('span', 'content-explorer-chevron', '⌄')
+    );
+    const body = create('div', 'content-explorer-shared-body');
+    body.append(
+      create('p', '', 'Biblioteka obrazów wielokrotnego użytku. Usunięcie pliku może wpłynąć na kilka materiałów.'),
+      create('button', 'content-explorer-manage-media', 'Otwórz Media Manager')
+    );
+    body.querySelector('button').type = 'button';
+    body.querySelector('button').dataset.explorerMedia = '1';
+    body.querySelector('button').dataset.explorerScope = 'shared';
+    body.querySelector('button').dataset.explorerRepository = state.contentLibrary.selectedRepositoryId;
+    folder.append(summary, body);
+    return folder;
+  }
+
+  async function loadExplorerMedia(kind, asset, refresh = false) {
+    const library = window.ChemContentLibrary;
+    if (!library?.listMedia) return;
+    const repositoryId = asset.repositoryId || state.contentLibrary.selectedRepositoryId;
+    const key = explorerMediaKey(kind, asset.filename, repositoryId);
+    if (state.contentLibrary.mediaLoading.has(key) || (!refresh && state.contentLibrary.mediaByOwner.has(key))) return;
+    state.contentLibrary.mediaLoading.add(key);
+    renderContentExplorer();
+    try {
+      const media = await library.listMedia({
+        scope: 'local',
+        materialKind: kind,
+        materialId: asset.filename,
+        repositoryId,
+        refresh,
+        usage: true
+      });
+      state.contentLibrary.mediaByOwner.set(key, media);
+    } catch (error) {
+      toast('Nie udało się wczytać folderu photos', error?.message || 'Błąd repozytorium.', 'error');
+      state.contentLibrary.mediaByOwner.set(key, []);
+    } finally {
+      state.contentLibrary.mediaLoading.delete(key);
+      renderContentExplorer();
     }
   }
 
@@ -5435,6 +5795,10 @@
     state.contentLibrary.lessons = [];
     state.contentLibrary.prompts = [];
     state.contentLibrary.exams = [];
+    state.contentLibrary.presentations = [];
+    state.contentLibrary.quizzes = [];
+    state.contentLibrary.mediaByOwner.clear();
+    state.contentLibrary.mediaLoading.clear();
     state.contentLibrary.loaded = false;
     state.contentLibrary.error = '';
     renderRepositorySelectors();
@@ -5484,15 +5848,19 @@
       }
       renderRepositorySelectors();
       const repositoryId = state.contentLibrary.selectedRepositoryId;
-      const [lessons, prompts, exams] = await Promise.all([
+      const [lessons, prompts, exams, presentations, quizzes] = await Promise.all([
         library.list('lesson', { refresh: Boolean(force), repositoryId }),
         library.list('prompt', { refresh: Boolean(force), repositoryId }),
-        library.list('exam', { refresh: Boolean(force), repositoryId })
+        library.list('exam', { refresh: Boolean(force), repositoryId }),
+        library.list('presentation', { refresh: Boolean(force), repositoryId }),
+        library.list('quiz', { refresh: Boolean(force), repositoryId })
       ]);
       if (requestId !== state.contentLibrary.requestId) return;
       state.contentLibrary.lessons = lessons;
       state.contentLibrary.prompts = prompts;
       state.contentLibrary.exams = exams;
+      state.contentLibrary.presentations = presentations;
+      state.contentLibrary.quizzes = quizzes;
       state.contentLibrary.loaded = true;
       renderRepositoryAssets();
       if (state.mode === 'dashboard') renderDashboardInspector();
@@ -5597,17 +5965,25 @@
     }
   }
 
-  async function openContentExplorerAsset(event) {
-    const button = event.target.closest('[data-explorer-kind][data-explorer-filename]');
-    if (!button || button.disabled) return;
+  function contentExplorerAsset(button) {
+    if (!button) return null;
     const kind = button.dataset.explorerKind;
     const collection = kind === 'lesson'
       ? state.contentLibrary.lessons
-      : kind === 'exam' ? state.contentLibrary.exams : state.contentLibrary.prompts;
-    const asset = collection.find((entry) => (
+      : kind === 'exam' ? state.contentLibrary.exams
+        : kind === 'presentation' ? state.contentLibrary.presentations
+          : kind === 'quiz' ? state.contentLibrary.quizzes
+            : kind === 'prompt' ? state.contentLibrary.prompts : [];
+    return collection.find((entry) => (
       entry.filename === button.dataset.explorerFilename
       && (entry.repositoryId || state.contentLibrary.selectedRepositoryId) === button.dataset.explorerRepository
-    ));
+    )) || null;
+  }
+
+  async function openContentExplorerAsset(button) {
+    if (!button || button.disabled) return;
+    const kind = button.dataset.explorerKind;
+    const asset = contentExplorerAsset(button);
     if (!asset) return;
     button.disabled = true;
     elements.contentExplorerStatus.classList.remove('is-error');
@@ -5615,9 +5991,14 @@
     try {
       if (kind === 'lesson') await importRepositoryLesson(asset, { confirm: false });
       else if (kind === 'prompt') await importRepositoryPrompt(asset, { confirm: false });
-      else {
+      else if (kind === 'exam') {
         switchMode('exam');
         await window.ChemExamBuilder?.openAsset?.(asset);
+      } else if (kind === 'presentation') {
+        switchMode('presentation');
+        await window.ChemPresentationBuilder?.openAsset?.(asset);
+      } else {
+        toast('Quiz Builder nie jest jeszcze aktywny', 'Pliki i obrazy quizu możesz bezpiecznie zarządzać w eksploratorze.', 'error');
       }
     } catch (error) {
       elements.contentExplorerStatus.classList.add('is-error');
@@ -5625,6 +6006,254 @@
     } finally {
       button.disabled = false;
     }
+  }
+
+  async function deleteContentExplorerAsset(button) {
+    if (!button || button.disabled) return;
+    const asset = contentExplorerAsset(button);
+    if (!asset?.sha) {
+      toast('Nie można bezpiecznie usunąć pliku', 'Odśwież listę, aby pobrać aktualną wersję pliku z GitHuba.', 'error');
+      return;
+    }
+    const kind = button.dataset.explorerKind;
+    const repositoryId = button.dataset.explorerRepository;
+    const kindLabel = kind === 'lesson' ? 'lekcję' : kind === 'exam' ? 'egzamin' : kind === 'presentation' ? 'prezentację' : kind === 'quiz' ? 'quiz' : 'prompt';
+    let warning = kind === 'lesson'
+      ? 'Usunięcie lekcji nie usuwa kart Dashboardu, które mogą ją otwierać, ani historycznego postępu uczniów.\n\n'
+      : kind === 'prompt'
+        ? 'Usunięcie promptu nie usuwa kart Dashboardu, które mogą się do niego odwoływać.\n\n'
+        : '';
+    const material = button.closest('.content-explorer-material');
+    material?.querySelectorAll('button').forEach((control) => { control.disabled = true; });
+    elements.contentExplorerStatus.classList.remove('is-error');
+    elements.contentExplorerStatus.textContent = kind === 'exam'
+      ? `Sprawdzanie użycia egzaminu ${asset.title || asset.filename}…`
+      : `Przygotowanie usunięcia ${asset.title || asset.filename}…`;
+    try {
+      let localMedia = [];
+      if (['lesson', 'exam', 'presentation', 'quiz'].includes(kind) && window.ChemContentLibrary?.listMedia) {
+        localMedia = await window.ChemContentLibrary.listMedia({
+          scope: 'local',
+          materialKind: kind,
+          materialId: asset.filename,
+          repositoryId,
+          refresh: true,
+          usage: true
+        });
+      }
+      if (kind === 'exam') {
+        warning = window.ChemExamBuilder?.deletionWarning
+          ? await window.ChemExamBuilder.deletionWarning({ ...asset, repositoryId })
+          : 'Nie udało się sprawdzić odwołań do egzaminu. Usunięcie exam.json nie usuwa jego kart ani kroków lekcji.\n\n';
+      }
+      const confirmed = window.confirm(
+        `${warning}${localMedia.length ? `Materiał ma ${localMedia.length} ${localMedia.length === 1 ? 'obraz lokalny' : 'obrazy lokalne'} w folderze photos.\n\n` : ''}Usunąć ${kindLabel} „${asset.title || asset.filename}” z GitHuba? GitHub utworzy odwracalny commit usuwający plik.`
+      );
+      if (!confirmed) {
+        elements.contentExplorerStatus.textContent = 'Usuwanie anulowane.';
+        return;
+      }
+      const deleteLocalMedia = localMedia.length > 0 && window.confirm(
+        `Czy usunąć również folder photos (${localMedia.length} ${localMedia.length === 1 ? 'plik' : 'plików'})?\n\nOK — usuń definicję razem z lokalnymi obrazami.\nAnuluj — usuń tylko definicję i zachowaj obrazy.\n\nMedia wspólne z assets/shared nigdy nie są tu usuwane.`
+      );
+      const result = await window.ChemContentLibrary.remove(kind, {
+        filename: asset.filename,
+        expectedSha: asset.sha,
+        repositoryId
+      });
+      const mediaFailures = [];
+      if (deleteLocalMedia) {
+        for (let index = 0; index < localMedia.length; index += 1) {
+          elements.contentExplorerStatus.textContent = `Definicja usunięta · porządkowanie obrazu ${index + 1}/${localMedia.length}: ${localMedia[index].filename}…`;
+          try {
+            await window.ChemContentLibrary.removeMedia({
+              scope: 'local',
+              materialKind: kind,
+              materialId: asset.filename,
+              reference: localMedia[index].reference,
+              expectedSha: localMedia[index].sha,
+              repositoryId
+            });
+          } catch (mediaError) {
+            mediaFailures.push(localMedia[index].filename);
+          }
+        }
+      }
+      if (kind === 'lesson' && state.lesson.remoteFilename === asset.filename && state.lesson.remoteRepositoryId === repositoryId) {
+        state.lesson.remoteFilename = '';
+        state.lesson.remoteSha = '';
+        state.lesson.remoteRepositoryId = '';
+      }
+      if (kind === 'prompt' && state.prompt.remoteFilename === asset.filename && state.prompt.remoteRepositoryId === repositoryId) {
+        state.prompt.remoteFilename = '';
+        state.prompt.remoteSha = '';
+        state.prompt.remoteRepositoryId = '';
+        renderPromptPreview();
+      }
+      if (kind === 'exam') window.ChemExamBuilder?.assetDeleted?.({ ...asset, repositoryId });
+      if (kind === 'presentation') window.ChemPresentationBuilder?.assetDeleted?.({ ...asset, repositoryId });
+      updateRepositoryButtons();
+      toast(
+        kind === 'lesson' ? 'Lekcja usunięta z GitHuba'
+          : kind === 'exam' ? 'Egzamin usunięty z GitHuba'
+            : kind === 'presentation' ? 'Prezentacja usunięta z GitHuba'
+              : kind === 'quiz' ? 'Quiz usunięty z GitHuba'
+                : 'Prompt usunięty z GitHuba',
+        mediaFailures.length
+          ? `Definicja została usunięta, ale ${mediaFailures.length} lokalnych obrazów pozostało w GitHubie: ${mediaFailures.join(', ')}.`
+          : result.commitSha ? `Commit ${result.commitSha.slice(0, 7)} został zapisany.` : `${asset.filename} usunięto. Lokalny draft pozostaje bez zmian.`
+      );
+      await loadRepositoryAssets(true);
+    } catch (error) {
+      elements.contentExplorerStatus.classList.add('is-error');
+      elements.contentExplorerStatus.textContent = error?.message || 'Nie udało się usunąć pliku.';
+      toast('Nie udało się usunąć pliku', error?.message || 'Błąd repozytorium.', 'error');
+    } finally {
+      material?.querySelectorAll('button').forEach((control) => { control.disabled = false; });
+    }
+  }
+
+  function duplicateFilename(filename, kind) {
+    if (kind === 'lesson') return filename.replace(/\.md$/i, '-kopia.md');
+    if (kind === 'prompt') return filename.replace(/(\.(?:json|txt))$/i, '-kopia$1');
+    return `${filename}-kopia`;
+  }
+
+  async function blobBase64(blob) {
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = '';
+    for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+    }
+    return btoa(binary);
+  }
+
+  async function duplicateContentExplorerAsset(button) {
+    if (!button || button.disabled) return;
+    const asset = contentExplorerAsset(button);
+    const library = window.ChemContentLibrary;
+    if (!asset || !library) return;
+    const kind = button.dataset.explorerKind;
+    const repositoryId = button.dataset.explorerRepository;
+    const requested = window.prompt('Nazwa kopii w repozytorium:', duplicateFilename(asset.filename, kind));
+    if (requested == null) return;
+    let target;
+    try { target = library.validateFilename(kind, requested.trim().toLowerCase()); }
+    catch (error) { toast('Nieprawidłowa nazwa kopii', error.message, 'error'); return; }
+    if (target === asset.filename) { toast('Wybierz inną nazwę', 'Kopia musi mieć nowy identyfikator albo nazwę pliku.', 'error'); return; }
+    button.disabled = true;
+    elements.contentExplorerStatus.textContent = `Duplikowanie ${asset.title || asset.filename}…`;
+    try {
+      const readers = { lesson: 'readLesson', prompt: 'readPrompt', exam: 'readExam', presentation: 'readPresentation', quiz: 'readQuiz' };
+      const source = await library[readers[kind]](asset.filename, { repositoryId });
+      let content = source.content;
+      if (['exam', 'presentation', 'quiz'].includes(kind)) {
+        const definition = JSON.parse(content);
+        if (kind === 'exam') { definition.examId = target; definition.status = 'draft'; }
+        if (kind === 'presentation') { definition.presentationId = target; definition.metadata = { ...(definition.metadata || {}), status: 'draft' }; }
+        if (kind === 'quiz') definition.quizId = target;
+        content = `${JSON.stringify(definition, null, 2)}\n`;
+      }
+      await library.save(kind, { filename: target, content, repositoryId });
+      let media = [];
+      if (['lesson', 'exam', 'presentation', 'quiz'].includes(kind)) {
+        media = await library.listMedia({ scope: 'local', materialKind: kind, materialId: asset.filename, repositoryId, refresh: true });
+        for (let index = 0; index < media.length; index += 1) {
+          elements.contentExplorerStatus.textContent = `Kopiowanie obrazu ${index + 1}/${media.length}: ${media[index].filename}…`;
+          const blob = await library.readMediaBlob({ scope: 'local', materialKind: kind, materialId: asset.filename, reference: media[index].reference, repositoryId });
+          await library.uploadMedia({ scope: 'local', materialKind: kind, materialId: target, filename: media[index].filename, contentBase64: await blobBase64(blob), mimeType: media[index].mimeType || blob.type, repositoryId });
+        }
+      }
+      toast('Kopia utworzona', `${target}${media.length ? ` · skopiowano ${media.length} obrazów lokalnych` : ''}. Referencje wspólne pozostały bez zmian.`);
+      await loadRepositoryAssets(true);
+    } catch (error) {
+      elements.contentExplorerStatus.classList.add('is-error');
+      elements.contentExplorerStatus.textContent = error?.message || 'Nie udało się utworzyć kopii.';
+      toast('Nie udało się utworzyć pełnej kopii', 'Jeśli definicja zdążyła powstać, sprawdź jej folder photos i usuń niepełną kopię albo ponów brakujące pliki.', 'error');
+    } finally { button.disabled = false; }
+  }
+
+  async function openExplorerMediaManager(button) {
+    if (!window.ChemMediaManager?.open) {
+      toast('Media Manager jest niedostępny', 'Odśwież Studio i spróbuj ponownie.', 'error');
+      return;
+    }
+    const shared = button.dataset.explorerScope === 'shared';
+    const kind = shared ? '' : button.dataset.explorerKind;
+    const materialId = shared ? '' : button.dataset.explorerFilename;
+    const repositoryId = button.dataset.explorerRepository || state.contentLibrary.selectedRepositoryId;
+    await window.ChemMediaManager.open({
+      scope: shared ? 'shared' : 'local',
+      materialKind: kind,
+      materialId,
+      repositoryId,
+      onDelete: () => {
+        if (!shared) {
+          const asset = contentExplorerAsset(button);
+          if (asset) void loadExplorerMedia(kind, asset, true);
+        }
+      }
+    });
+  }
+
+  async function deleteExplorerMedia(button) {
+    if (!button || button.disabled) return;
+    const key = button.dataset.explorerOwnerKey;
+    const reference = button.dataset.explorerReference;
+    const media = state.contentLibrary.mediaByOwner.get(key) || [];
+    const asset = media.find((item) => item.reference === reference);
+    if (!asset?.sha) {
+      toast('Nie można bezpiecznie usunąć obrazu', 'Odśwież folder photos i spróbuj ponownie.', 'error');
+      return;
+    }
+    const warning = asset.usageCount > 0
+      ? `Ten obraz jest używany ${asset.usageCount}× w definicji materiału. Po usunięciu pojawi się brak obrazu.\n\n`
+      : '';
+    if (!window.confirm(`${warning}Usunąć „${asset.filename}” z GitHuba? Commit będzie można odwrócić.`)) return;
+    button.disabled = true;
+    elements.contentExplorerStatus.textContent = `Usuwanie ${asset.filename}…`;
+    try {
+      const result = await window.ChemContentLibrary.removeMedia({
+        scope: asset.scope,
+        materialKind: asset.materialKind,
+        materialId: asset.materialId,
+        reference: asset.reference,
+        expectedSha: asset.sha,
+        repositoryId: asset.repositoryId || state.contentLibrary.selectedRepositoryId
+      });
+      state.contentLibrary.mediaByOwner.set(key, media.filter((item) => item.reference !== reference));
+      renderContentExplorer();
+      toast('Obraz usunięty', result.commitSha ? `Commit ${result.commitSha.slice(0, 7)} zapisano w GitHubie.` : asset.filename);
+    } catch (error) {
+      button.disabled = false;
+      elements.contentExplorerStatus.classList.add('is-error');
+      elements.contentExplorerStatus.textContent = error?.message || 'Nie udało się usunąć obrazu.';
+    }
+  }
+
+  function handleContentExplorerAction(event) {
+    const mediaDelete = event.target.closest('[data-explorer-media-delete]');
+    if (mediaDelete) {
+      void deleteExplorerMedia(mediaDelete);
+      return;
+    }
+    const media = event.target.closest('[data-explorer-media]');
+    if (media) {
+      void openExplorerMediaManager(media);
+      return;
+    }
+    const remove = event.target.closest('[data-explorer-delete]');
+    if (remove) {
+      void deleteContentExplorerAsset(remove);
+      return;
+    }
+    const duplicate = event.target.closest('[data-explorer-duplicate]');
+    if (duplicate) {
+      void duplicateContentExplorerAsset(duplicate);
+      return;
+    }
+    const open = event.target.closest('[data-explorer-open]');
+    if (open) void openContentExplorerAsset(open);
   }
 
   function bindPalette() {
@@ -5680,7 +6309,7 @@
     elements.lessonAssetSearch.addEventListener('input', renderRepositoryAssets);
     elements.promptAssetSearch.addEventListener('input', renderRepositoryAssets);
     elements.contentExplorerSearch?.addEventListener('input', renderContentExplorer);
-    elements.contentExplorerFolders?.addEventListener('click', openContentExplorerAsset);
+    elements.contentExplorerFolders?.addEventListener('click', handleContentExplorerAction);
     elements.contentExplorerRefresh?.addEventListener('click', () => loadRepositoryAssets(true));
     [elements.dashboardRepository, elements.lessonRepository, elements.promptRepository, elements.contentExplorerRepository].forEach((select) => {
       if (!select) return;
@@ -5802,6 +6431,16 @@
       if (event.target.closest('[data-lesson-field]')) finishEdit();
     });
     elements.lessonInspector.addEventListener('click', (event) => {
+      const mediaManager = event.target.closest('[data-lesson-media-manager]');
+      if (mediaManager) {
+        openLessonImageManager();
+        return;
+      }
+      const mediaClear = event.target.closest('[data-lesson-media-clear]');
+      if (mediaClear) {
+        clearLessonImageReference();
+        return;
+      }
       const formulaPreset = event.target.closest('[data-formula-preset]');
       if (formulaPreset) {
         applyLessonFormulaPreset(formulaPreset);

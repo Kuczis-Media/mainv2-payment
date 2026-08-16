@@ -7,13 +7,14 @@
   const SAFE_PROMPT_FILENAME = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.(?:json|txt)$/i;
   const SAFE_REPOSITORY_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
   const SAFE_BOARD_PATH = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.json$/i;
+  const SAFE_MEDIA_REF = /^(?:photos\/|assets\/shared\/)(?!.*\.\.)[a-z0-9][a-z0-9_.-]{0,99}\.(?:png|jpe?g|webp|gif|svg)$/i;
   const TASK_START = /^\s*:::(?:task|zadanie)\s*$/i;
   const TASK_END = /^\s*:::\s*$/;
   const QUESTION_START = /^\s*:::question\s*$/i;
   const SLIDE_SETTINGS_START = /^\s*:::slide\s*$/i;
   const STYLE_START = /^\s*:::style(?:\s+(.+?))?\s*$/i;
   const ACCORDION_START = /^\s*:::accordion(?:\s+(.+?))?\s*$/i;
-  const STRUCTURAL_CONTAINER_START = /^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam)(?:\s+.*?)?\s*$/i;
+  const STRUCTURAL_CONTAINER_START = /^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)(?:\s+.*?)?\s*$/i;
   const RICH_CONTAINER_END = /^\s*:::\s*$/;
   const SAFE_STYLE_COLOR = /^#[0-9a-f]{6}$/i;
   const LINK_ICONS = new Set(['link', 'book', 'video', 'chemistry', 'math', 'file', 'external']);
@@ -39,7 +40,7 @@
     'sin', 'cos', 'tan', 'log', 'ln', 'partial', 'nabla', 'rightarrow', 'leftarrow',
     'leftrightarrow', 'text', 'mathrm', 'mathbf', 'overline', 'vec', 'left', 'right'
   ]);
-  const INTERACTIVE_START = /^\s*:::(youtube|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam)\s*$/i;
+  const INTERACTIVE_START = /^\s*:::(youtube|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)\s*$/i;
 
   class LessonFormatError extends Error {
     constructor(code, message) {
@@ -679,6 +680,18 @@
   function interactiveBlockHtml(type, body) {
     const values = directiveFields(body);
     if (type === 'table') return tableBlockHtml(body);
+    if (type === 'image') {
+      const ref = String(values.ref || '').trim().toLowerCase();
+      const repository = String(values.repository || '').trim().toLowerCase();
+      const alt = String(values.alt || 'Ilustracja').trim().slice(0, 220) || 'Ilustracja';
+      const width = Math.max(20, Math.min(100, Number(values.width) || 100));
+      const align = ['left', 'center', 'right'].includes(values.align) ? values.align : 'center';
+      if (!SAFE_MEDIA_REF.test(ref) || (repository && !SAFE_REPOSITORY_ID.test(repository))) {
+        return '<p class="lesson-interactive-error">Nieprawidłowa referencja obrazu.</p>';
+      }
+      const scope = ref.startsWith('assets/shared/') ? 'shared' : 'local';
+      return `<figure class="lesson-managed-image lesson-image-align-${align}" style="--lesson-image-width:${width}%" data-lesson-media-ref="${escapeHtml(ref)}" data-lesson-media-repository="${escapeHtml(repository)}" data-lesson-media-scope="${scope}" data-lesson-media-alt="${escapeHtml(alt)}"><div class="lesson-managed-image-placeholder"><span aria-hidden="true">▧</span><small>Wczytywanie obrazu…</small></div></figure>`;
+    }
     if (type === 'youtube') {
       const id = youtubeVideoId(values.id || values.url);
       if (!id) return '<p class="lesson-interactive-error">Nieprawidłowy film YouTube.</p>';

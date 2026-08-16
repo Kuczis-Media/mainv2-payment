@@ -6,6 +6,7 @@
   'use strict';
 
   const DEFAULT_ENDPOINT = '/.netlify/functions/content-library';
+  const DEFAULT_MEDIA_ENDPOINT = '/.netlify/functions/content-media';
   const SAFE_LESSON_FILENAME = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.md$/i;
   const SAFE_PROMPT_FILENAME = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.(json|txt)$/i;
   const SAFE_EXAM_ID = /^[a-z0-9][a-z0-9-]{0,79}$/;
@@ -43,7 +44,14 @@
     EXAM_FILE_INVALID: 'Definicja egzaminu jest nieprawidłowa.',
     EXAM_MEDIA_INVALID: 'Plik nie jest prawidłowym obrazem PNG, JPG, WEBP lub GIF.',
     INVALID_EXAM_MEDIA_REFERENCE: 'Nazwa albo ścieżka obrazu jest nieprawidłowa.',
+    MEDIA_INVALID: 'Plik nie jest prawidłowym obrazem PNG, JPG, WEBP, GIF lub SVG.',
+    MEDIA_SVG_UNSAFE: 'SVG zawiera aktywną albo zewnętrzną treść i nie może zostać zapisany.',
+    INVALID_MEDIA_REFERENCE: 'Nazwa albo ścieżka obrazu jest nieprawidłowa.',
+    INVALID_MEDIA_OWNER: 'Nieprawidłowy materiał nadrzędny dla obrazu.',
+    INVALID_MEDIA_SCOPE: 'Nieprawidłowa biblioteka mediów.',
     QUESTION_BANK_INVALID: 'Bank pytań jest nieprawidłowy.',
+    PRESENTATION_FILE_INVALID: 'Definicja prezentacji jest nieprawidłowa.',
+    QUIZ_FILE_INVALID: 'Definicja quizu jest nieprawidłowa.',
     SESSION_CHECK_UNAVAILABLE: 'Nie udało się potwierdzić sesji.'
   });
 
@@ -64,11 +72,19 @@
     return value || DEFAULT_ENDPOINT;
   }
 
+  function mediaEndpoint() {
+    const meta = root && root.document
+      ? root.document.querySelector('meta[name="chemdisk-media-endpoint"]')
+      : null;
+    const value = meta && typeof meta.content === 'string' ? meta.content.trim() : '';
+    return value || DEFAULT_MEDIA_ENDPOINT;
+  }
+
   function validateFilename(kind, rawFilename) {
     const filename = typeof rawFilename === 'string' ? rawFilename.trim() : '';
     const pattern = kind === 'lesson'
       ? SAFE_LESSON_FILENAME
-      : kind === 'exam' ? SAFE_EXAM_ID
+      : ['exam', 'presentation', 'quiz'].includes(kind) ? SAFE_EXAM_ID
         : kind === 'question_bank' ? SAFE_QUESTION_BANK_FILENAME : SAFE_PROMPT_FILENAME;
     if (!pattern.test(filename)) {
       throw new ContentLibraryError('INVALID_CONTENT_FILENAME', 400);
@@ -144,7 +160,7 @@
   }
 
   async function list(kind, options = {}) {
-    if (!['lesson', 'prompt', 'exam', 'question_bank'].includes(kind)) {
+    if (!['lesson', 'prompt', 'exam', 'question_bank', 'presentation', 'quiz'].includes(kind)) {
       throw new ContentLibraryError('INVALID_CONTENT_KIND', 400);
     }
     const payload = await request({
@@ -170,6 +186,14 @@
 
   async function readQuestionBank(options = {}) {
     return read('question_bank', 'question-bank.json', options);
+  }
+
+  async function readPresentation(rawPresentationId, options = {}) {
+    return read('presentation', rawPresentationId, options);
+  }
+
+  async function readQuiz(rawQuizId, options = {}) {
+    return read('quiz', rawQuizId, options);
   }
 
   async function read(kind, rawFilename, options = {}) {
@@ -238,6 +262,106 @@
     });
   }
 
+  function normalizeMediaOwner(input = {}) {
+    const scope = input.scope === 'shared' ? 'shared' : 'local';
+    const materialKind = scope === 'shared' ? '' : String(input.materialKind || '').trim().toLowerCase();
+    const materialId = scope === 'shared' ? '' : String(input.materialId || '').trim();
+    if (scope === 'local' && !['lesson', 'exam', 'presentation', 'quiz'].includes(materialKind)) {
+      throw new ContentLibraryError('INVALID_MEDIA_OWNER', 400);
+    }
+    if (scope === 'local') {
+      if (materialKind === 'lesson') validateFilename('lesson', materialId);
+      else if (!SAFE_EXAM_ID.test(materialId)) throw new ContentLibraryError('INVALID_MEDIA_OWNER', 400);
+    }
+    return { scope, materialKind, materialId };
+  }
+
+  async function listMedia(input = {}) {
+    const owner = normalizeMediaOwner(input);
+    const payload = await request({
+      action: 'list-media',
+      scope: owner.scope,
+      materialKind: owner.materialKind,
+      materialId: owner.materialId,
+      repo: validateRepositoryId(input.repositoryId),
+      refresh: input.refresh ? '1' : '',
+      usage: input.usage ? '1' : ''
+    });
+    return Array.isArray(payload.assets) ? payload.assets : [];
+  }
+
+  async function uploadMedia(input = {}) {
+    const owner = normalizeMediaOwner(input);
+    const filename = typeof input.filename === 'string' ? input.filename.trim().toLowerCase() : '';
+    if (!/^[a-z0-9][a-z0-9_.-]{0,99}\.(?:png|jpe?g|webp|gif|svg)$/.test(filename)) {
+      throw new ContentLibraryError('INVALID_MEDIA_REFERENCE', 400);
+    }
+    if (typeof input.contentBase64 !== 'string' || !input.contentBase64) {
+      throw new ContentLibraryError('MEDIA_INVALID', 422);
+    }
+    return request({}, {
+      method: 'PUT',
+      body: {
+        kind: 'media',
+        ...owner,
+        filename,
+        contentBase64: input.contentBase64,
+        mimeType: typeof input.mimeType === 'string' ? input.mimeType : '',
+        repositoryId: validateRepositoryId(input.repositoryId)
+      }
+    });
+  }
+
+  async function removeMedia(input = {}) {
+    const owner = normalizeMediaOwner(input);
+    return request({}, {
+      method: 'DELETE',
+      body: {
+        kind: 'media',
+        ...owner,
+        reference: typeof input.reference === 'string' ? input.reference.trim().toLowerCase() : '',
+        expectedSha: typeof input.expectedSha === 'string' ? input.expectedSha : '',
+        repositoryId: validateRepositoryId(input.repositoryId)
+      }
+    });
+  }
+
+  async function readMediaBlob(input = {}, options = {}) {
+    const owner = normalizeMediaOwner(input);
+    const applicationOrigin = root && root.location ? root.location.origin : 'https://local.invalid';
+    const url = new URL(mediaEndpoint(), applicationOrigin);
+    if (url.origin !== applicationOrigin) throw new ContentLibraryError('INVALID_CONTENT_ENDPOINT', 400);
+    const values = {
+      scope: owner.scope,
+      materialKind: owner.materialKind,
+      materialId: owner.materialId,
+      ref: typeof input.reference === 'string' ? input.reference.trim().toLowerCase() : '',
+      repo: validateRepositoryId(input.repositoryId)
+    };
+    Object.entries(values).forEach(([key, value]) => {
+      if (value) url.searchParams.set(key, value);
+    });
+    const token = await accessToken(options.forceRefresh);
+    let response;
+    try {
+      response = await root.fetch(url, {
+        method: 'GET',
+        cache: 'no-store',
+        credentials: 'same-origin',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    } catch {
+      throw new ContentLibraryError('CONTENT_REPOSITORY_UNAVAILABLE', 503);
+    }
+    if (response.status === 401 && !options.forceRefresh) return readMediaBlob(input, { forceRefresh: true });
+    if (!response.ok) {
+      let payload = {};
+      try { payload = await response.json(); } catch { /* binary endpoint */ }
+      throw new ContentLibraryError(payload.error || 'CONTENT_REPOSITORY_UNAVAILABLE', response.status);
+    }
+    return response.blob();
+  }
+
   async function status(options = {}) {
     return request({
       action: 'status',
@@ -268,6 +392,15 @@
     return `/members/module/exam/?${params.toString()}`;
   }
 
+  function presentationUrl(rawPresentationId, rawRepositoryId = '', materialId = '') {
+    const presentationId = validateFilename('presentation', rawPresentationId);
+    const repositoryId = validateRepositoryId(rawRepositoryId);
+    const params = new URLSearchParams({ presentation: presentationId });
+    if (repositoryId) params.set('repo', repositoryId);
+    if (/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(materialId || '')) params.set('material', materialId);
+    return `/members/module/presentation/?${params.toString()}`;
+  }
+
   function search(assets, query) {
     const normalized = String(query || '').trim().toLocaleLowerCase('pl');
     if (!normalized) return Array.isArray(assets) ? assets.slice() : [];
@@ -290,17 +423,24 @@
     ERROR_MESSAGES,
     list,
     readExam,
+    readPresentation,
     readPrompt,
+    readQuiz,
     readLesson,
     readQuestionBank,
     repositories,
     remove,
+    removeMedia,
     save,
     search,
     status,
+    listMedia,
+    readMediaBlob,
+    uploadMedia,
     uploadExamMedia,
     lessonUrl,
     examUrl,
+    presentationUrl,
     validateFilename,
     validateRepositoryId,
     _test: { endpoint }

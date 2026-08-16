@@ -10,12 +10,17 @@
   <meta name="description" content="ChemDisk Studio — graficzny kreator dashboardu, lekcji i promptów AI.">
   <title>Studio treści — ChemDisk</title>
   <link rel="icon" href="/members/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;family=JetBrains+Mono:wght@100..800&amp;family=Lato:wght@300;400;700;900&amp;family=Lora:ital,wght@0,400..700;1,400..700&amp;family=Merriweather:wght@300;400;700;900&amp;family=Montserrat:wght@100..900&amp;family=Nunito:wght@200..1000&amp;family=Open+Sans:wght@300..800&amp;family=Playfair+Display:wght@400..900&amp;family=Poppins:wght@100;300;400;500;600;700;800;900&amp;family=Roboto:wght@100..900&amp;family=Source+Code+Pro:wght@200..900&amp;display=swap">
   <script src="/members/module/theme.js"></script>
   <link rel="stylesheet" href="/members/module/theme.css">
+  <link rel="stylesheet" href="/assets/css/media-manager.css">
   <link rel="stylesheet" href="style.css">
   <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
   <script src="/assets/js/auth.js"></script>
   <script src="/assets/js/content-library.js"></script>
+  <script src="/assets/js/media-manager.js"></script>
   <script src="/members/module/mathjax-config.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" onload="document.dispatchEvent(new Event('chemdisk-mathjax-ready'))"></script>
   <script src="/members/dashboard-parser.js"></script>
@@ -24,7 +29,9 @@
   <script src="lesson-model.js"></script>
   <script src="prompt-model.js"></script>
   <script src="exam-model.js"></script>
+  <script src="presentation-model.js"></script>
   <script src="exam-builder.js" defer></script>
+  <script src="presentation-builder.js" defer></script>
   <script src="script.js" defer></script>
 </head>
 <body>
@@ -52,6 +59,7 @@
       <button type="button" data-switch-mode="dashboard">Dashboard</button>
       <button type="button" data-switch-mode="lesson">Lekcja</button>
       <button type="button" data-switch-mode="exam">Egzamin</button>
+      <button type="button" data-switch-mode="presentation">Prezentacja</button>
       <button type="button" data-switch-mode="prompt">Prompt AI</button>
     </nav>
 
@@ -136,6 +144,18 @@
             </span>
             <span class="project-arrow" aria-hidden="true">→</span>
           </button>
+
+          <button class="project-card project-card-presentation" type="button" data-open-mode="presentation">
+            <span class="project-icon" aria-hidden="true">
+              <svg viewBox="0 0 40 40"><rect x="5" y="6" width="30" height="23" rx="3"></rect><path d="M20 29v6M13 35h14M11 13h18M11 18h11"></path></svg>
+            </span>
+            <span class="project-copy">
+              <small>Slajdy natywne w prywatnym repo</small>
+              <strong>Presentation Studio</strong>
+              <span>Układy, teksty, obrazy, warstwy, notatki, podgląd i publikacja bez ręcznego JSON.</span>
+            </span>
+            <span class="project-arrow" aria-hidden="true">→</span>
+          </button>
         </div>
 
         <section class="content-explorer" aria-labelledby="content-explorer-title">
@@ -143,7 +163,7 @@
             <div>
               <span class="eyebrow">Prywatne repozytorium GitHub</span>
               <h2 id="content-explorer-title">Eksplorator treści</h2>
-              <p>Otwórz plik bezpośrednio we właściwym kreatorze — bez kopiowania ścieżek i ręcznego importu.</p>
+              <p>Otwieraj i bezpiecznie usuwaj pliki bezpośrednio z prywatnego repozytorium — bez kopiowania ścieżek i ręcznych commitów.</p>
             </div>
             <button class="button button-soft" id="content-explorer-refresh" type="button">↻ Odśwież pliki</button>
           </header>
@@ -244,6 +264,9 @@
               <section class="palette-group">
                 <h2>Materiały</h2>
                 <div class="palette-grid">
+                  <button class="palette-item" type="button" draggable="true" data-dashboard-add="presentation" data-search="prezentacja chemdisk natywna slajdy">
+                    <span class="palette-symbol is-blue">▥</span><span><strong>Prezentacja ChemDisk</strong><small>Presentation Studio</small></span>
+                  </button>
                   <button class="palette-item" type="button" draggable="true" data-dashboard-add="slides" data-search="prezentacja slides google">
                     <span class="palette-symbol is-amber">▤</span><span><strong>Prezentacja</strong><small>Google Slides</small></span>
                   </button>
@@ -644,6 +667,65 @@
             </div>
             <div class="prompt-validation-status" id="prompt-validation-status" role="status" aria-live="polite"></div>
             <pre class="prompt-source-preview" id="prompt-source-preview"></pre>
+          </aside>
+        </div>
+      </section>
+
+      <section class="workspace-view presentation-workspace" id="presentation-workspace" data-workspace="presentation" hidden>
+        <div class="presentation-toolbar">
+          <div class="presentation-toolbar-brand">
+            <span class="eyebrow">Presentation Studio</span>
+            <input id="presentation-title" type="text" maxlength="180" value="Nowa prezentacja" aria-label="Tytuł prezentacji">
+          </div>
+          <div class="presentation-toolbar-tools" aria-label="Narzędzia prezentacji">
+            <button type="button" data-presentation-action="new">＋ Nowa</button>
+            <button type="button" data-presentation-action="undo" title="Cofnij">↶</button>
+            <button type="button" data-presentation-action="redo" title="Ponów">↷</button>
+            <button type="button" data-presentation-action="preview">▶ Podgląd</button>
+            <button type="button" class="is-primary" data-presentation-action="save">Zapisz draft</button>
+            <button type="button" class="is-publish" data-presentation-action="publish">Opublikuj</button>
+          </div>
+        </div>
+        <div class="presentation-builder-shell">
+          <aside class="presentation-slides-panel">
+            <div class="presentation-library-controls">
+              <label><span>Repozytorium</span><select id="presentation-repository"></select></label>
+              <label class="presentation-search"><span class="sr-only">Szukaj prezentacji</span><input id="presentation-search" type="search" placeholder="Szukaj prezentacji…"></label>
+              <div id="presentation-library" class="presentation-library"></div>
+            </div>
+            <header><div><small>Scenariusz</small><strong>Slajdy</strong></div><button type="button" data-presentation-action="add-slide">＋</button></header>
+            <div class="presentation-slide-list" id="presentation-slide-list"></div>
+          </aside>
+          <main class="presentation-stage-panel">
+            <div class="presentation-insert-toolbar">
+              <button type="button" data-presentation-add="heading"><b>H</b> Nagłówek</button>
+              <button type="button" data-presentation-add="text"><b>T</b> Tekst</button>
+              <button type="button" data-presentation-add="image"><b>▧</b> Obraz</button>
+              <button type="button" data-presentation-add="shape"><b>□</b> Kształt</button>
+              <button type="button" data-presentation-add="formula"><b>∑</b> Wzór</button>
+              <button type="button" data-presentation-add="icon"><b>⚗</b> Ikona</button>
+              <button type="button" data-presentation-add="table"><b>▦</b> Tabela</button>
+              <button type="button" data-presentation-add="button"><b>↗</b> Przycisk</button>
+              <button type="button" data-presentation-add="code"><b>&lt;/&gt;</b> Kod</button>
+              <button type="button" data-presentation-add="embed"><b>▣</b> Embed</button>
+              <span></span>
+              <label>Układ <select id="presentation-layout"><option value="blank">Pusty</option><option value="title">Tytułowy</option><option value="title-content">Tytuł i treść</option><option value="title-image">Tytuł + obraz</option><option value="text-image">Tekst + obraz</option><option value="two-columns">Dwie kolumny</option><option value="image-full">Obraz pełny</option><option value="quote">Cytat</option><option value="table">Tabela</option><option value="question">Pytanie</option><option value="section">Dział</option></select></label>
+              <label>Zoom <select id="presentation-zoom"><option value="0.6">60%</option><option value="0.75">75%</option><option value="0.9" selected>90%</option><option value="1">100%</option></select></label>
+            </div>
+            <div class="presentation-stage-scroll">
+              <div class="presentation-stage-wrap" id="presentation-stage-wrap">
+                <div class="presentation-canvas" id="presentation-canvas" tabindex="0" aria-label="Obszar slajdu"></div>
+              </div>
+            </div>
+            <div class="presentation-notes">
+              <label for="presentation-notes">Notatki prezentera</label>
+              <textarea id="presentation-notes" rows="3" placeholder="Widoczne tylko dla prezentera…"></textarea>
+            </div>
+            <p class="presentation-status" id="presentation-status" role="status" aria-live="polite">Gotowe.</p>
+          </main>
+          <aside class="presentation-properties-panel">
+            <header><small>Właściwości</small><strong id="presentation-properties-title">Prezentacja</strong></header>
+            <div id="presentation-properties" class="presentation-properties"></div>
           </aside>
         </div>
       </section>
