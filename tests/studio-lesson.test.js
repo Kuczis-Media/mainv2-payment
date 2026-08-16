@@ -791,3 +791,47 @@ test('lesson keeps a stable exam reference and derives pass conditions without c
   assert.match(runtime.slides[0].html, /\/members\/module\/exam\/\?repo=default&amp;exam=alkohole-test/);
   assert.match(runtime.slides[0].html, /data-exam-requirement="minimum_score"/);
 });
+
+test('lesson canvas layout round-trips positioned blocks and remains safe in the student renderer', () => {
+  const lesson = studio.createLesson({
+    title: 'Swobodny slajd',
+    filename: 'swobodny-slajd.md',
+    slides: [{
+      layout: 'canvas',
+      blocks: [
+        studio.createBlock('heading', {
+          id: 'title-block',
+          level: 2,
+          text: 'Budowa H~2~O',
+          layout: { mode: 'canvas', x: 4, y: 5, width: 52, height: 18 }
+        }),
+        studio.createBlock('image', {
+          id: 'water-image',
+          ref: 'assets/shared/woda.png',
+          repositoryId: 'default',
+          alt: 'Model cząsteczki wody',
+          layout: { mode: 'canvas', x: 58, y: 12, width: 36, height: 62 }
+        })
+      ]
+    }]
+  });
+
+  const markdown = studio.serializeLesson(lesson);
+  assert.match(markdown, /:::slide\ntransition: fade\nlayout: canvas\n:::/);
+  assert.match(markdown, /:::layout id=title-block x=4 y=5 width=52 height=18/);
+  assert.match(markdown, /:::layout id=water-image x=58 y=12 width=36 height=62/);
+
+  const editable = studio.parseEditableLesson(markdown, lesson.filename);
+  assert.equal(editable.slides[0].layout, 'canvas');
+  const editableImage = editable.slides[0].blocks.find((block) => block.id === 'water-image');
+  assert.deepEqual(editableImage.layout, {
+    mode: 'canvas', x: 58, y: 12, width: 36, height: 62
+  });
+
+  const runtime = lessonParser.parseLesson(markdown, lesson.filename);
+  assert.equal(runtime.slides[0].layout, 'canvas');
+  assert.match(runtime.slides[0].html, /class="lesson-canvas-element"/);
+  assert.match(runtime.slides[0].html, /--lesson-canvas-x:58%/);
+  assert.match(runtime.slides[0].html, /H<sub>2<\/sub>O/);
+  assert.doesNotMatch(runtime.slides[0].html, /<script/i);
+});

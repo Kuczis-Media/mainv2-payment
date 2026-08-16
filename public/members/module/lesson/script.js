@@ -562,6 +562,7 @@
     elements.progressBar.style.width = `${progress}%`;
     clearTypesetMath(elements.slideContent);
     state.mediaObjectUrls.splice(0).forEach((url) => URL.revokeObjectURL(url));
+    elements.slideContent.classList.toggle('is-canvas-layout', slide.layout === 'canvas');
     elements.slideContent.innerHTML = slide.html;
     initializeInteractiveBlocks(elements.slideContent);
     void hydrateManagedImages(elements.slideContent);

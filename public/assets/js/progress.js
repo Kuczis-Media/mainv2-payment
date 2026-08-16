@@ -273,6 +273,10 @@
     const match = initialUrl.pathname.match(/^\/members\/module\/([^/]+)\/?$/i);
     if (!match || match[1].toLowerCase() === 'studio') return null;
     const moduleName = match[1].toLowerCase();
+    // Exam Player zapisuje otwarcie przez własną funkcję serwerową razem z
+    // repositoryId/examId. Drugi automatyczny zapis zawyżał openCount i mógł
+    // wyprzedzić utworzenie właściwego rekordu egzaminu.
+    if (moduleName === 'exam') return null;
     const types = {
       lesson: 'lesson', slides: 'presentation', film: 'video', yt: 'video', pdf: 'pdf', forms: 'quiz',
       chat: 'script', bitpaper: 'other', whiteboard: 'other', kalkulator: 'other', classic: 'other',

@@ -48,6 +48,7 @@ test('course progress remains legible and refreshes after a cached back navigati
   assert.match(dashboard, /api\.resetAll\(\)/);
   assert.match(dashboard, /studentResetButton\('Resetuj'/);
   assert.match(dashboard, /aggregate\.trackedCount <= 0/);
+  assert.match(studio, /action:\s*'lesson_manifest',[\s\S]*repositoryId,[\s\S]*manifest:/);
   assert.doesNotMatch(studio, /Uwzględniaj w postępie (?:sekcji|działu|całego kursu)/);
   assert.match(html, /id="profile-reset-progress"/);
 });

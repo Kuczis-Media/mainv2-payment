@@ -1113,6 +1113,13 @@ Na dole przewijanej biblioteki klocków znajduje się sekcja **Narzędzia lekcji
 
 Tworzy kolejny krok lekcji. Kursant przechodzi między slajdami przyciskami i planem lekcji.
 
+Po zaznaczeniu slajdu wybierz **Układ elementów**:
+
+- **Automatyczny** — dotychczasowy, zgodny wstecznie układ klocków jeden pod drugim;
+- **Swobodny** — płótno 16:9, na którym każdy główny klocek można przeciągnąć i skalować czterema narożnymi uchwytami.
+
+W swobodnym układzie zaznacz klocek w podglądzie, przeciągnij etykietę **Przeciągnij** albo użyj pól X, Y, szerokości i wysokości w inspektorze. Pozycje są zapisywane procentowo w pliku lekcji, więc zachowują proporcje na różnych ekranach. Na telefonie elementy automatycznie przechodzą w czytelny układ pionowy. Przełączenie starego slajdu na układ swobodny nadaje klockom bezpieczne pozycje startowe; można je później dowolnie poprawić.
+
 Po kliknięciu całego slajdu wybierz w prawym panelu jego przejście:
 
 - **Brak przejścia** — slajd pojawia się natychmiast;
@@ -1154,7 +1161,7 @@ Wklej publiczny adres HTTPS i wpisz opis ALT. Plik nie jest kopiowany do repo le
 
 ### Obraz z Media Managera
 
-Wybierz obraz lokalny lekcji albo plik wspólny. Lokalny upload trafia do `lessons/<nazwa-lekcji>/photos/`, a lekcja zapisuje tylko stabilną referencję `photos/...`, ALT, szerokość i wyrównanie. Po zaznaczeniu bloku obrazu otwórz podgląd kroku: wokół ilustracji pojawi się ramka, procent szerokości i uchwyt w prawym dolnym rogu. Przeciągaj uchwyt myszą lub dotykiem; zmiana jest widoczna od razu, a historia i lokalny autosave są aktualizowane po puszczeniu.
+Wybierz obraz lokalny lekcji albo plik wspólny. Media Manager obsługuje wybór z dysku, przeciąganie plików i wklejanie obrazu przez `Ctrl+V`/`Cmd+V`. Lokalny upload trafia do `lessons/<nazwa-lekcji>/photos/`, a lekcja zapisuje tylko stabilną referencję `photos/...`, ALT, szerokość i wyrównanie. W układzie automatycznym zaznaczony obraz ma uchwyt szerokości w prawym dolnym rogu. W układzie swobodnym cały obraz można przesuwać i skalować w obu osiach tak samo jak pozostałe klocki. Historia i lokalny autosave są aktualizowane po puszczeniu uchwytu.
 
 ### Lista
 
@@ -1323,6 +1330,8 @@ Dodaj co najmniej dwie fiszki i wybierz kolor. Kursant klika kartę, aby zobaczy
 ## 22. Wszystkie zadania interaktywne lekcji
 
 Po dodaniu zadania kliknij je i skonfiguruj w prawym panelu. Zadanie może zablokować przejście dalej do chwili poprawnej odpowiedzi.
+
+Pod polem **Treść pytania** znajduje się paleta **Wzory i indeksy**. Kliknij gotowy wzór H₂O, CO₂, H₂SO₄, NH₄⁺ albo SO₄²⁻, aby wstawić go w miejscu kursora. Aby utworzyć własny indeks, zaznacz fragment tekstu i kliknij `x₂` lub `x²`. Studio zapisuje bezpieczną składnię `~indeks dolny~` i `^indeks górny^`, a podgląd oraz odtwarzacz pokazują już gotowy zapis typograficzny.
 
 ### 22.1. Quiz ABCD
 

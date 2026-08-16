@@ -7,8 +7,11 @@ const MATERIAL_TYPES = Object.freeze([
 ]);
 const STATUS_VALUES = Object.freeze(['not_started', 'opened', 'in_progress', 'completed']);
 const MATERIAL_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
-const STRUCTURAL_MATERIAL_TYPES = new Set(['lesson', 'lesson_step', 'section', 'subsection', 'department', 'course']);
-const DOES_NOT_COMPLETE_ON_OPEN = new Set([...STRUCTURAL_MATERIAL_TYPES, 'exam']);
+const DOES_NOT_COMPLETE_ON_OPEN = new Set(['lesson', 'lesson_step', 'section', 'subsection', 'department', 'course', 'exam']);
+// Lekcja jest liściem katalogu Dashboardu. Jej kroki są przechowywane w
+// settings.steps, a nie jako osobne dzieci, dlatego musi uczestniczyć w
+// agregacji kursu tak samo jak egzamin lub prezentacja.
+const NON_AGGREGATED_LEAF_TYPES = new Set(['lesson_step', 'section', 'subsection', 'department', 'course']);
 const MAX_RECORDS = 5_000;
 const MAX_VISITED = 1_000;
 const MAX_INVALIDATIONS = 10_000;
@@ -615,6 +618,25 @@ function recordProgress(record) {
   return record ? clamp(record.progressPercent) : 0;
 }
 
+function aggregateRecordForNode(user, node) {
+  const direct = user.records[node.id] || null;
+  if (node.type !== 'exam' || !node.settings.examId) return direct;
+  const repositoryId = node.settings.repositoryId || 'default';
+  const canonicalId = `exam:${repositoryId}:${node.settings.examId}`.slice(0, 128);
+  const canonical = validMaterialId(canonicalId) ? user.records[canonicalId] || null : null;
+  if (!canonical) return direct;
+  if (!direct) return { ...canonical, materialId: node.id };
+  const directPercent = recordProgress(direct);
+  const canonicalPercent = recordProgress(canonical);
+  if (canonicalPercent < directPercent) return direct;
+  if (canonicalPercent === directPercent) {
+    const directActivity = Date.parse(direct.lastActivityAt || direct.completedAt || 0) || 0;
+    const canonicalActivity = Date.parse(canonical.lastActivityAt || canonical.completedAt || 0) || 0;
+    if (directActivity >= canonicalActivity) return direct;
+  }
+  return { ...canonical, materialId: node.id };
+}
+
 function aggregateUser(userInput, catalogInput) {
   const { catalog, byId, effective } = effectiveSettings(catalogInput);
   const user = activeUserDocument(userInput, catalog);
@@ -629,8 +651,8 @@ function aggregateUser(userInput, catalogInput) {
     if (result[node.id]) return result[node.id];
     const nested = children.get(node.id) || [];
     if (!nested.length) {
-      const record = user.records[node.id] || null;
-      const tracked = effective.get(node.id)?.tracking !== false && !STRUCTURAL_MATERIAL_TYPES.has(node.type);
+      const record = aggregateRecordForNode(user, node);
+      const tracked = effective.get(node.id)?.tracking !== false && !NON_AGGREGATED_LEAF_TYPES.has(node.type);
       result[node.id] = {
         materialId: node.id,
         title: node.title,
@@ -690,18 +712,21 @@ function aggregateUser(userInput, catalogInput) {
     };
     result.course = course;
   }
-  const trackedLeafIds = new Set(catalog.nodes
-    .filter((node) => !(children.get(node.id) || []).length && effective.get(node.id)?.tracking !== false)
-    .map((node) => node.id));
-  const records = Object.values(user.records).filter((record) => trackedLeafIds.has(record.materialId));
+  const trackedLeaves = catalog.nodes
+    .filter((node) => (
+      !(children.get(node.id) || []).length
+      && effective.get(node.id)?.tracking !== false
+      && !NON_AGGREGATED_LEAF_TYPES.has(node.type)
+    ))
+    .map((node) => result[node.id]);
   return {
     course,
     nodes: result,
     counts: {
-      completed: records.filter((record) => record.status === 'completed').length,
-      started: records.filter((record) => ['opened', 'in_progress'].includes(record.status)).length,
-      opened: records.filter((record) => record.opened).length,
-      notOpened: Math.max(0, course.trackedCount - records.filter((record) => record.opened).length)
+      completed: trackedLeaves.filter((leaf) => leaf.status === 'completed').length,
+      started: trackedLeaves.filter((leaf) => ['opened', 'in_progress'].includes(leaf.status)).length,
+      opened: trackedLeaves.filter((leaf) => leaf.opened).length,
+      notOpened: Math.max(0, course.trackedCount - trackedLeaves.filter((leaf) => leaf.opened).length)
     },
     lastActivityAt: user.lastActivityAt
   };

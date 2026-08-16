@@ -206,7 +206,10 @@ test('Exam Function provides autosave, resume, timer-safe result and blocks IDOR
   const progressStore = new MemoryStore();
   await progressStore.set(CATALOG_KEY, JSON.stringify(progressCommon.normalizeCatalog({
     global: { tracking: 'ON', showProgress: 'ON', recordOpens: true },
-    nodes: [{ id: 'exam-card', type: 'exam', title: 'Egzamin', progress: { tracking: 'ON', showProgress: 'ON', weight: 1 }, settings: { repositoryId: 'default', examId: 'egzamin-testowy' } }]
+    nodes: [
+      { id: 'exam-card', type: 'exam', title: 'Egzamin', progress: { tracking: 'ON', showProgress: 'ON', weight: 1 }, settings: { repositoryId: 'default', examId: 'egzamin-testowy' } },
+      { id: 'legacy-exam-card', type: 'exam', title: 'Starszy kafelek egzaminu', progress: { tracking: 'ON', showProgress: 'ON', weight: 1 }, settings: {} }
+    ]
   })));
   examFunction._test.setStoreFactory(() => examStore);
   examFunction._test.setProgressStoreFactory(() => progressStore);
@@ -239,7 +242,7 @@ test('Exam Function provides autosave, resume, timer-safe result and blocks IDOR
   assert.equal(forged.statusCode, 400);
   assert.equal(bodyOf(forged).error, 'UNEXPECTED_FIELDS');
 
-  const startedResponse = await examFunction.handler(eventFor('POST', { action: 'start', repositoryId: 'default', examId: 'egzamin-testowy', materialId: 'exam-card' }), studentContext());
+  const startedResponse = await examFunction.handler(eventFor('POST', { action: 'start', repositoryId: 'default', examId: 'egzamin-testowy', materialId: 'legacy-exam-card' }), studentContext());
   assert.equal(startedResponse.statusCode, 201);
   let attempt = bodyOf(startedResponse).attempt;
   const serializedActive = JSON.stringify(attempt);
@@ -315,6 +318,15 @@ test('Exam Function provides autosave, resume, timer-safe result and blocks IDOR
   const progressDocument = JSON.parse(progressEntry.data);
   assert.equal(progressDocument.records['exam-card'].details.scorePercent, 100);
   assert.equal(progressDocument.records['exam-card'].status, 'completed');
+  assert.equal(progressDocument.records['legacy-exam-card'].details.scorePercent, 100);
+  assert.equal(progressDocument.records['legacy-exam-card'].status, 'completed');
+
+  const legacyProgress = await examFunction.handler(eventFor('POST', {
+    action: 'open', repositoryId: 'default', examId: 'egzamin-testowy', materialId: 'legacy-exam-card'
+  }), studentContext());
+  assert.equal(legacyProgress.statusCode, 200);
+  const legacyProgressEntry = await progressStore.getWithMetadata('users/MTExMTExMTEtMTExMS00MTExLTgxMTEtMTExMTExMTExMTEx.json');
+  assert.equal(JSON.parse(legacyProgressEntry.data).records['legacy-exam-card'].materialType, 'exam');
 
   canonical = { id: USER_B, email: 'feedback@example.com', app_metadata: { roles: ['active'] } };
   currentDefinition = definition({

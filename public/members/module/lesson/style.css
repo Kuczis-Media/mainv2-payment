@@ -538,6 +538,43 @@ fieldset:focus-within {
 .slide-content h2 { font-size: clamp(1.9rem, 4.5vw, 3.25rem); }
 .slide-content h3 { font-size: clamp(1.35rem, 3vw, 2rem); }
 
+.slide-content.is-canvas-layout {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  min-height: clamp(360px, 52vw, 680px);
+  overflow: hidden;
+}
+
+.slide-content.is-canvas-layout .lesson-canvas-element {
+  position: absolute;
+  left: var(--lesson-canvas-x, 5%);
+  top: var(--lesson-canvas-y, 5%);
+  width: var(--lesson-canvas-width, 44%);
+  height: var(--lesson-canvas-height, 28%);
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: clamp(8px, 1.4vw, 18px);
+  border-radius: 16px;
+}
+
+.slide-content.is-canvas-layout .lesson-canvas-element > :first-child { margin-top: 0; }
+.slide-content.is-canvas-layout .lesson-canvas-element > :last-child { margin-bottom: 0; }
+.slide-content.is-canvas-layout .lesson-canvas-element .lesson-managed-image,
+.slide-content.is-canvas-layout .lesson-canvas-element > img {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+}
+.slide-content.is-canvas-layout .lesson-canvas-element .lesson-managed-image img,
+.slide-content.is-canvas-layout .lesson-canvas-element > img {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: contain;
+}
+
 .slide-content h1 + p,
 .slide-content h2 + p,
 .slide-content h3 + p { margin-top: 24px; }
@@ -612,6 +649,25 @@ fieldset:focus-within {
 .lesson-managed-image-placeholder span { font-size: 1.8rem; }
 .lesson-managed-image-placeholder small { font-size: .72rem; }
 .lesson-managed-image.is-error .lesson-managed-image-placeholder { color: var(--danger); }
+
+@media (max-width: 720px) {
+  .slide-content.is-canvas-layout {
+    display: grid;
+    aspect-ratio: auto;
+    min-height: 0;
+    overflow: visible;
+    gap: 16px;
+  }
+  .slide-content.is-canvas-layout .lesson-canvas-element {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+    padding: 0;
+  }
+}
 
 .lesson-rich-style {
   margin: 24px 0;

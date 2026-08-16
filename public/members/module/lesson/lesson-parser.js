@@ -14,7 +14,8 @@
   const SLIDE_SETTINGS_START = /^\s*:::slide\s*$/i;
   const STYLE_START = /^\s*:::style(?:\s+(.+?))?\s*$/i;
   const ACCORDION_START = /^\s*:::accordion(?:\s+(.+?))?\s*$/i;
-  const STRUCTURAL_CONTAINER_START = /^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)(?:\s+.*?)?\s*$/i;
+  const LAYOUT_START = /^\s*:::layout(?:\s+(.+?))?\s*$/i;
+  const STRUCTURAL_CONTAINER_START = /^\s*:::(?:task|zadanie|question|slide|style|accordion|layout|youtube|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)(?:\s+.*?)?\s*$/i;
   const RICH_CONTAINER_END = /^\s*:::\s*$/;
   const SAFE_STYLE_COLOR = /^#[0-9a-f]{6}$/i;
   const LINK_ICONS = new Set(['link', 'book', 'video', 'chemistry', 'math', 'file', 'external']);
@@ -269,6 +270,7 @@
     let slideSettingsLines = null;
     let slideSettingsSeen = false;
     let transition = 'fade';
+    let layout = 'flow';
     let stepMetadata = null;
 
     for (const line of lines) {
@@ -286,6 +288,7 @@
           const values = directiveFields(slideSettingsLines.join('\n'));
           const requested = String(values.transition || '').trim().toLowerCase();
           transition = SLIDE_TRANSITIONS.has(requested) ? requested : 'fade';
+          layout = String(values.layout || '').trim().toLowerCase() === 'canvas' ? 'canvas' : 'flow';
           slideSettingsLines = null;
         } else {
           slideSettingsLines.push(line);
@@ -353,6 +356,7 @@
       html: renderMarkdown(markdown),
       title: heading ? stripMarkdown(heading[1]) : `Krok ${index + 1}`,
       transition,
+      layout,
       task,
       includeInLesson: include,
       requiredToAdvance: stepMetadata?.requiredToAdvance !== false,
@@ -522,6 +526,35 @@
     const color = SAFE_STYLE_COLOR.test(values.color || '') ? values.color.toLowerCase() : '';
     const background = SAFE_STYLE_COLOR.test(values.background || '') ? values.background.toLowerCase() : '';
     return { font, size, align, bold, color, background };
+  }
+
+  function parseLayoutOptions(source) {
+    const values = {};
+    String(source || '').replace(/([a-z_]+)=([^\s]+)/gi, (_, key, value) => {
+      values[key.toLowerCase()] = value;
+      return '';
+    });
+    const clamp = (value, minimum, maximum, fallback) => {
+      const parsed = Number(value);
+      return Math.max(minimum, Math.min(maximum, Number.isFinite(parsed) ? parsed : fallback));
+    };
+    return {
+      id: /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(values.id || '') ? values.id : '',
+      x: clamp(values.x, 0, 92, 5),
+      y: clamp(values.y, 0, 92, 5),
+      width: clamp(values.width, 8, 100, 44),
+      height: clamp(values.height, 8, 100, 28)
+    };
+  }
+
+  function layoutContainerHtml(options) {
+    const style = [
+      `--lesson-canvas-x:${options.x}%`,
+      `--lesson-canvas-y:${options.y}%`,
+      `--lesson-canvas-width:${options.width}%`,
+      `--lesson-canvas-height:${options.height}%`
+    ].join(';');
+    return `<div class="lesson-canvas-element"${options.id ? ` data-lesson-block-id="${escapeHtml(options.id)}"` : ''} style="${style}">`;
   }
 
   function styleContainerHtml(options) {
@@ -966,6 +999,14 @@
         const accordion = parseAccordionOptions(accordionStart[1]);
         html += `<details class="lesson-accordion"${accordion.open ? ' open' : ''}><summary>${renderInline(accordion.title)}</summary><div class="lesson-accordion-content">`;
         richContainers.push('accordion');
+        continue;
+      }
+
+      const layoutStart = LAYOUT_START.exec(line);
+      if (layoutStart) {
+        closeBlocks();
+        html += layoutContainerHtml(parseLayoutOptions(layoutStart[1]));
+        richContainers.push('layout');
         continue;
       }
 

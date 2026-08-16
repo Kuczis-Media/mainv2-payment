@@ -128,11 +128,17 @@ async function handlePut(event, store, auth) {
 async function updateLessonManifest(body, store, auth) {
   const filename = typeof body.filename === 'string' && /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.md$/i.test(body.filename)
     ? body.filename : '';
-  if (!filename || !plainObject(body.manifest)) return json({ error: 'INVALID_LESSON_MANIFEST' }, 400);
+  const repositoryId = typeof body.repositoryId === 'string' && /^[a-z0-9][a-z0-9-]{0,39}$/.test(body.repositoryId)
+    ? body.repositoryId : '';
+  if (!filename || !repositoryId || !plainObject(body.manifest)) return json({ error: 'INVALID_LESSON_MANIFEST' }, 400);
   const previous = await readCatalog(store);
   const steps = Array.isArray(body.manifest.steps) ? body.manifest.steps : [];
   const nodes = previous.nodes.map((node) => {
-    if (node.type !== 'lesson' || node.settings.contentFile !== filename) return node;
+    if (
+      node.type !== 'lesson'
+      || node.settings.contentFile !== filename
+      || (node.settings.repositoryId || 'default') !== repositoryId
+    ) return node;
     return {
       ...node,
       settings: {
@@ -150,8 +156,8 @@ async function updateLessonManifest(body, store, auth) {
     targetUserId: null,
     action: 'progress.lesson_manifest.update',
     materialId: null,
-    previousValue: { filename, matchedMaterials: changed },
-    newValue: { filename, navigation: body.manifest.navigation, stepCount: steps.length }
+    previousValue: { filename, repositoryId, matchedMaterials: changed },
+    newValue: { filename, repositoryId, navigation: body.manifest.navigation, stepCount: steps.length }
   });
   return json({ saved: true, matchedMaterials: changed });
 }

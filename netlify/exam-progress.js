@@ -33,10 +33,13 @@ async function updateExamProgress(input) {
   }
   if (validMaterialId(input.materialId)) {
     const node = resolved.byId.get(input.materialId);
+    const legacyExplicitExamCard = node?.type === 'exam' && !node.settings.examId;
     if (
       node?.type === 'exam'
-      && node.settings.examId === input.examId
-      && (node.settings.repositoryId || 'default') === (input.repositoryId || 'default')
+      && (legacyExplicitExamCard || (
+        node.settings.examId === input.examId
+        && (node.settings.repositoryId || 'default') === (input.repositoryId || 'default')
+      ))
     ) ids.add(node.id);
   }
 

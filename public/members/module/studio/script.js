@@ -905,8 +905,14 @@
   }
 
   function field(label, control, help) {
-    const wrapper = create('label', 'field');
-    wrapper.append(create('span', '', label), control);
+    const interactive = control?.classList?.contains('studio-material-picker');
+    const wrapper = create(interactive ? 'div' : 'label', 'field');
+    const caption = create('span', '', label);
+    wrapper.append(caption, control);
+    if (interactive) {
+      const input = control.querySelector('input');
+      if (input && !input.getAttribute('aria-label')) input.setAttribute('aria-label', label);
+    }
     if (help) wrapper.append(create('small', 'field-help', help));
     return wrapper;
   }
@@ -958,13 +964,10 @@
   }
 
   function repositoryFilenameInput(value, fieldName, kind, extension, repositoryId) {
-    const wrapper = create('div', 'repository-filename-control');
     const input = textInput(value, fieldName, {
       placeholder: kind === 'lesson' ? 'np. stechiometria.md' : `np. pomoc.${extension}`,
       maxLength: 80
     });
-    const list = document.createElement('datalist');
-    list.id = `repository-options-${fieldName}-${extension}`;
     const selectedRepositoryId = repositoryId || (
       state.contentLibrary.repositories.find((repository) => repository.default) || {}
     ).id || state.contentLibrary.selectedRepositoryId;
@@ -972,19 +975,13 @@
       ? state.contentLibrary.lessons
       : state.contentLibrary.prompts.filter((asset) => asset.filename.toLowerCase().endsWith(`.${extension}`)))
       .filter((asset) => !selectedRepositoryId || asset.repositoryId === selectedRepositoryId);
-    assets.forEach((asset) => {
-      const option = document.createElement('option');
-      option.value = asset.filename;
-      option.label = asset.title || asset.filename;
-      list.append(option);
+    return materialPicker(input, assets, {
+      type: kind === 'lesson' ? 'Lekcja' : `Plik ${extension.toUpperCase()}`,
+      empty: kind === 'lesson' ? 'Brak lekcji w tym repozytorium.' : `Brak plików .${extension}.`
     });
-    input.setAttribute('list', list.id);
-    wrapper.append(input, list);
-    return wrapper;
   }
 
   function lessonRepositoryFilenameInput(value, fieldName, extensions, repositoryId) {
-    const wrapper = create('div', 'repository-filename-control');
     const allowedExtensions = (Array.isArray(extensions) ? extensions : [extensions])
       .map((extension) => String(extension || '').toLowerCase())
       .filter(Boolean);
@@ -994,24 +991,117 @@
         : `Wybierz plik .${allowedExtensions[0] || 'txt'}`,
       maxLength: 80
     });
-    const list = document.createElement('datalist');
-    list.id = `lesson-repository-options-${fieldName}-${allowedExtensions.join('-')}`;
     const selectedRepositoryId = repositoryId || (
       state.contentLibrary.repositories.find((repository) => repository.default) || {}
     ).id || state.contentLibrary.selectedRepositoryId;
-    state.contentLibrary.prompts
+    const assets = state.contentLibrary.prompts
       .filter((asset) => (
         (!selectedRepositoryId || asset.repositoryId === selectedRepositoryId)
         && allowedExtensions.some((extension) => asset.filename.toLowerCase().endsWith(`.${extension}`))
-      ))
-      .forEach((asset) => {
-        const option = document.createElement('option');
-        option.value = asset.filename;
-        option.label = asset.title || asset.filename;
-        list.append(option);
+      ));
+    return materialPicker(input, assets, {
+      type: allowedExtensions.map((item) => item.toUpperCase()).join(' / '),
+      empty: 'Brak pasujących plików w tym repozytorium.'
+    });
+  }
+
+  function materialPicker(input, assets, options = {}) {
+    const wrapper = create('div', 'studio-material-picker');
+    const inputRow = create('div', 'studio-material-picker-input');
+    const toggle = create('button', 'studio-material-picker-toggle', '⌄');
+    const popup = create('div', 'studio-material-picker-popup');
+    const list = create('div', 'studio-material-picker-list');
+    toggle.type = 'button';
+    toggle.setAttribute('aria-label', 'Pokaż listę materiałów');
+    input.autocomplete = 'off';
+    input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-autocomplete', 'list');
+    input.setAttribute('aria-expanded', 'false');
+    popup.hidden = true;
+
+    const source = (assets || []).map((asset) => ({
+      ...asset,
+      pickerValue: String(asset.pickerValue || asset.filename || asset.id || ''),
+      pickerTitle: String(asset.title || asset.name || asset.filename || asset.id || 'Materiał')
+    })).filter((asset) => asset.pickerValue);
+    const close = () => {
+      popup.hidden = true;
+      wrapper.classList.remove('is-open');
+      input.setAttribute('aria-expanded', 'false');
+    };
+    const open = () => {
+      popup.hidden = false;
+      wrapper.classList.add('is-open');
+      input.setAttribute('aria-expanded', 'true');
+    };
+    const render = (requestedQuery) => {
+      const query = String(requestedQuery === undefined ? input.value : requestedQuery)
+        .trim()
+        .toLocaleLowerCase('pl');
+      const matches = source.filter((asset) => (
+        !query
+        || `${asset.pickerTitle} ${asset.pickerValue} ${asset.description || ''}`
+          .toLocaleLowerCase('pl')
+          .includes(query)
+      ));
+      list.replaceChildren();
+      matches.slice(0, 80).forEach((asset) => {
+        const button = create('button', 'studio-material-picker-option');
+        button.type = 'button';
+        button.dataset.pickerValue = asset.pickerValue;
+        const icon = create('span', 'studio-material-picker-icon', String(options.icon || options.type || 'M').slice(0, 1));
+        const copy = create('span', 'studio-material-picker-copy');
+        copy.append(
+          create('strong', '', asset.pickerTitle),
+          create('small', '', asset.pickerValue)
+        );
+        const badge = create('em', '', options.type || 'Materiał');
+        button.append(icon, copy, badge);
+        button.addEventListener('pointerdown', (event) => event.preventDefault());
+        button.addEventListener('click', () => {
+          input.value = asset.pickerValue;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+          close();
+          input.focus();
+        });
+        list.append(button);
       });
-    input.setAttribute('list', list.id);
-    wrapper.append(input, list);
+      if (!matches.length) {
+        const empty = create('div', 'studio-material-picker-empty');
+        empty.append(
+          create('strong', '', options.empty || 'Nie znaleziono materiału.'),
+          create('small', '', options.allowCustom === false ? 'Zmień wyszukiwanie.' : 'Możesz wpisać nazwę pliku ręcznie.')
+        );
+        list.append(empty);
+      }
+    };
+    input.addEventListener('focus', () => {
+      render('');
+      open();
+      input.select?.();
+    });
+    input.addEventListener('input', () => { render(); open(); });
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') close();
+      if (event.key === 'ArrowDown') {
+        open();
+        list.querySelector('button')?.focus();
+        event.preventDefault();
+      }
+    });
+    toggle.addEventListener('click', () => {
+      if (popup.hidden) { render(''); open(); input.focus(); }
+      else close();
+    });
+    wrapper.addEventListener('focusout', () => {
+      window.setTimeout(() => {
+        if (!wrapper.contains(document.activeElement)) close();
+      }, 0);
+    });
+    inputRow.append(input, toggle);
+    popup.append(create('small', 'studio-material-picker-hint', 'Wpisz fragment nazwy lub wybierz z listy'), list);
+    wrapper.append(inputRow, popup);
     return wrapper;
   }
 
@@ -1193,15 +1283,16 @@
           'Repozytorium',
           selectInput(node.repositoryId, 'repositoryId', repositoryOptions(true))
         ));
-        const examOptions = state.contentLibrary.exams
-          .filter((asset) => !node.repositoryId || asset.repositoryId === node.repositoryId)
-          .map((asset) => ({ value: asset.filename, label: asset.title || asset.filename }));
-        if (node.examId && !examOptions.some((option) => option.value === node.examId)) {
-          examOptions.unshift({ value: node.examId, label: `${node.examId} — poza bieżącą listą` });
-        }
+        const exams = state.contentLibrary.exams
+          .filter((asset) => !node.repositoryId || asset.repositoryId === node.repositoryId);
         form.append(field(
           'Egzamin',
-          selectInput(node.examId, 'examId', examOptions.length ? examOptions : [{ value: '', label: 'Brak egzaminów w repozytorium' }]),
+          materialPicker(textInput(node.examId, 'examId', { placeholder: 'Wyszukaj egzamin…' }), exams, {
+            type: 'Egzamin',
+            icon: 'E',
+            empty: 'Brak egzaminów w tym repozytorium.',
+            allowCustom: false
+          }),
           'Karta przechowuje tylko repositoryId i examId. Definicja pozostaje w jednym pliku exam.json.'
         ));
       }
@@ -1210,15 +1301,16 @@
           'Repozytorium',
           selectInput(node.repositoryId, 'repositoryId', repositoryOptions(true))
         ));
-        const presentationOptions = state.contentLibrary.presentations
-          .filter((asset) => !node.repositoryId || asset.repositoryId === node.repositoryId)
-          .map((asset) => ({ value: asset.filename, label: asset.title || asset.filename }));
-        if (node.presentationId && !presentationOptions.some((option) => option.value === node.presentationId)) {
-          presentationOptions.unshift({ value: node.presentationId, label: `${node.presentationId} — poza bieżącą listą` });
-        }
+        const presentations = state.contentLibrary.presentations
+          .filter((asset) => !node.repositoryId || asset.repositoryId === node.repositoryId);
         form.append(field(
           'Prezentacja ChemDisk',
-          selectInput(node.presentationId, 'presentationId', presentationOptions.length ? presentationOptions : [{ value: '', label: 'Brak prezentacji w repozytorium' }]),
+          materialPicker(textInput(node.presentationId, 'presentationId', { placeholder: 'Wyszukaj prezentację…' }), presentations, {
+            type: 'Prezentacja',
+            icon: 'S',
+            empty: 'Brak prezentacji w tym repozytorium.',
+            allowCustom: false
+          }),
           'Karta wskazuje presentation.json. Stare moduły Google Slides nadal działają niezależnie.'
         ));
       }
@@ -2102,6 +2194,9 @@
         toast('Nie można zagnieździć klocka', 'Harmonijka ani stylowany kontener nie mogą zawierać kolejnego kontenera.', 'error');
         return;
       }
+      if (slide.layout === 'canvas' && !insertion.parentBlockId) {
+        inserted.layout = defaultLessonCanvasLayout(Math.max(0, slide.blocks.indexOf(inserted)));
+      }
       state.lesson.selectedId = inserted.id;
       state.lesson.previewSlideId = slide.id;
     });
@@ -2462,6 +2557,26 @@
     return select;
   }
 
+  function defaultLessonCanvasLayout(index) {
+    if (index === 0) return { mode: 'canvas', x: 4, y: 4, width: 92, height: 18 };
+    const slot = index - 1;
+    return {
+      mode: 'canvas',
+      x: slot % 2 === 0 ? 4 : 52,
+      y: Math.min(66, 25 + Math.floor(slot / 2) * 32),
+      width: 44,
+      height: 27
+    };
+  }
+
+  function ensureLessonCanvasLayout(slide) {
+    (slide.blocks || []).forEach((block, index) => {
+      if (!block.layout || block.layout.mode !== 'canvas') {
+        block.layout = defaultLessonCanvasLayout(index);
+      }
+    });
+  }
+
   function lessonInspectorActions(kind) {
     const footer = create('div', 'inspector-actions');
     const duplicate = create('button', 'button button-soft', 'Duplikuj');
@@ -2740,6 +2855,7 @@
     ));
     form.append(
       field('Treść pytania', lessonTextarea(task.question, 'question', { rows: 3, maxLength: 900 })),
+      scientificNotationToolbar(),
       field('Etykieta pola', lessonInput(task.label, 'label', { maxLength: 160 }))
     );
     if (task.type !== 'gaps' && task.type !== 'gaps-text') {
@@ -2787,6 +2903,61 @@
       field('Podpowiedź po błędzie', lessonTextarea(task.hint, 'hint', { rows: 3, maxLength: 500 })),
       field('Komunikat po dobrej odpowiedzi', lessonTextarea(task.feedback, 'feedback', { rows: 3, maxLength: 500 }))
     );
+  }
+
+  function scientificNotationToolbar() {
+    const section = create('section', 'scientific-notation-toolbar');
+    const header = create('header');
+    header.append(
+      create('strong', '', 'Wzory i indeksy'),
+      create('small', '', 'Zaznacz fragment pytania i wybierz indeks albo wstaw gotowy wzór.')
+    );
+    const buttons = create('div', 'scientific-notation-buttons');
+    [
+      ['H₂O', 'H~2~O', 'Wstaw wzór wody'],
+      ['CO₂', 'CO~2~', 'Wstaw wzór tlenku węgla(IV)'],
+      ['H₂SO₄', 'H~2~SO~4~', 'Wstaw wzór kwasu siarkowego(VI)'],
+      ['NH₄⁺', 'NH~4~^+^', 'Wstaw jon amonowy'],
+      ['SO₄²⁻', 'SO~4~^2−^', 'Wstaw jon siarczanowy(VI)']
+    ].forEach(([label, snippet, title]) => {
+      const button = create('button', 'scientific-notation-button', label);
+      button.type = 'button';
+      button.dataset.lessonInlineSnippet = snippet;
+      button.title = title;
+      buttons.append(button);
+    });
+    [
+      ['x₂', 'sub', 'Indeks dolny'],
+      ['x²', 'sup', 'Indeks górny']
+    ].forEach(([label, kind, title]) => {
+      const button = create('button', 'scientific-notation-button is-format', label);
+      button.type = 'button';
+      button.dataset.lessonInlineWrap = kind;
+      button.title = title;
+      buttons.append(button);
+    });
+    section.append(header, buttons, create(
+      'p',
+      '',
+      'Możesz też wpisać ręcznie H~2~O albo x^2^. Podgląd od razu pokaże prawidłowe indeksy.'
+    ));
+    return section;
+  }
+
+  function insertLessonInlineNotation(button) {
+    const input = elements.lessonInspector.querySelector('[data-lesson-field="question"]');
+    if (!input || typeof input.setRangeText !== 'function') return;
+    const start = Number.isSafeInteger(input.selectionStart) ? input.selectionStart : input.value.length;
+    const end = Number.isSafeInteger(input.selectionEnd) ? input.selectionEnd : start;
+    const selected = input.value.slice(start, end);
+    let snippet = button.dataset.lessonInlineSnippet || '';
+    if (button.dataset.lessonInlineWrap) {
+      const marker = button.dataset.lessonInlineWrap === 'sub' ? '~' : '^';
+      snippet = `${marker}${selected || (marker === '~' ? '2' : '+')}${marker}`;
+    }
+    input.setRangeText(snippet, start, end, 'end');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.focus();
   }
 
   const LESSON_FORMULA_PRESETS = Object.freeze({
@@ -3005,6 +3176,16 @@
         lessonInput(slideTitle(found.node, found.index), 'slideTitle', { maxLength: 140 })
       ));
       form.append(field(
+        'Układ elementów',
+        lessonSelect(found.node.layout || 'flow', 'slideLayout', [
+          { value: 'flow', label: 'Automatyczny — elementy jeden pod drugim' },
+          { value: 'canvas', label: 'Swobodny — przeciągaj i skaluj na slajdzie' }
+        ]),
+        found.node.layout === 'canvas'
+          ? 'Zaznacz klocek i przeciągnij jego uchwyt w podglądzie. Rogami zmienisz szerokość i wysokość.'
+          : 'Układ automatyczny zachowuje pełną zgodność ze starszymi lekcjami.'
+      ));
+      form.append(field(
         'Uwzględniaj krok w procencie lekcji',
         lessonSelect(found.node.includeInLesson || 'INHERIT', 'includeInLesson', [
           { value: 'INHERIT', label: 'Dziedzicz (domyślnie: tak)' },
@@ -3072,6 +3253,23 @@
       lessonBlockSubtitle(block),
       'Zmiany pojawią się od razu w podglądzie lekcji.'
     ));
+    if (found.slide?.layout === 'canvas' && !found.parent?.type) {
+      const layout = block.layout || defaultLessonCanvasLayout(found.index);
+      const geometry = create('section', 'lesson-layout-inspector');
+      geometry.append(
+        create('strong', '', 'Położenie na slajdzie'),
+        create('small', '', 'Możesz też przeciągać i skalować element bezpośrednio w podglądzie.')
+      );
+      const row = create('div', 'field-row');
+      row.append(
+        field('X (%)', lessonInput(layout.x, 'layoutX', { type: 'number', min: 0, max: 92 })),
+        field('Y (%)', lessonInput(layout.y, 'layoutY', { type: 'number', min: 0, max: 92 })),
+        field('Szerokość (%)', lessonInput(layout.width, 'layoutWidth', { type: 'number', min: 8, max: 100 })),
+        field('Wysokość (%)', lessonInput(layout.height, 'layoutHeight', { type: 'number', min: 8, max: 100 }))
+      );
+      geometry.append(row);
+      form.append(geometry);
+    }
     if (block.type === 'heading') {
       const row = create('div', 'field-row');
       row.append(
@@ -3184,22 +3382,23 @@
       );
     } else if (block.type === 'exam') {
       syncInspectorRepository(block.repositoryId);
-      const exams = state.contentLibrary.exams || [];
-      const examOptions = exams.map((asset) => ({
-        value: asset.filename,
-        label: asset.title ? `${asset.title} · ${asset.filename}` : asset.filename
-      }));
-      if (block.examId && !examOptions.some((option) => option.value === block.examId)) {
-        examOptions.unshift({ value: block.examId, label: `${block.examId} (spoza bieżącej listy)` });
-      }
-      if (!examOptions.length) examOptions.push({ value: '', label: 'Brak egzaminów w repozytorium' });
+      const exams = (state.contentLibrary.exams || [])
+        .filter((asset) => !block.repositoryId || asset.repositoryId === block.repositoryId);
       form.append(
         field(
           'Repozytorium egzaminu',
           lessonSelect(block.repositoryId, 'repositoryId', repositoryOptions(true)),
           'Lekcja przechowuje wyłącznie stabilną referencję do egzaminu, nie kopiuje jego pytań.'
         ),
-        field('Egzamin z biblioteki', lessonSelect(block.examId, 'examId', examOptions)),
+        field(
+          'Egzamin z biblioteki',
+          materialPicker(lessonInput(block.examId, 'examId', { placeholder: 'Wyszukaj egzamin…' }), exams, {
+            type: 'Egzamin',
+            icon: 'E',
+            empty: 'Brak egzaminów w tym repozytorium.',
+            allowCustom: false
+          })
+        ),
         field('Tytuł kafelka', lessonInput(block.title, 'title', { maxLength: 180 })),
         field('Opis dla ucznia', lessonTextarea(block.description, 'description', { rows: 4, maxLength: 500 })),
         field('Tekst przycisku', lessonInput(block.button, 'button', { maxLength: 80 })),
@@ -3917,6 +4116,7 @@
       create('span', '', state.lesson.model.filename)
     );
     const body = create('div', 'lesson-preview-body');
+    body.classList.toggle('is-canvas-layout', slide.layout === 'canvas');
     try {
       body.innerHTML = window.ChemLesson.renderMarkdown(lessonPreviewMarkdown(slide));
     } catch (_) {
@@ -3959,7 +4159,10 @@
     bindPreviewAtonom(elements.lessonPreview);
     bindPreviewAiHelp(elements.lessonPreview);
     bindPreviewTasks(elements.lessonPreview);
-    void hydrateStudioLessonMedia(elements.lessonPreview).then(() => bindLessonPreviewImageResize(elements.lessonPreview));
+    void hydrateStudioLessonMedia(elements.lessonPreview).then(() => {
+      bindLessonPreviewCanvasControls(elements.lessonPreview);
+      bindLessonPreviewImageResize(elements.lessonPreview);
+    });
     typesetMath(elements.lessonPreview);
     syncFullPreview('lesson');
   }
@@ -3996,9 +4199,100 @@
     }));
   }
 
+  function bindLessonPreviewCanvasControls(root) {
+    const slide = selectedLessonSlide();
+    if (!slide || slide.layout !== 'canvas') return;
+    ensureLessonCanvasLayout(slide);
+    all('.lesson-canvas-element[data-lesson-block-id]', root).forEach((element) => {
+      const blockId = element.dataset.lessonBlockId;
+      const block = slide.blocks.find((candidate) => candidate.id === blockId);
+      if (!block) return;
+      element.addEventListener('click', (event) => {
+        if (event.target.closest('a, button, input, select, textarea, iframe')) return;
+        if (state.lesson.selectedId === blockId) return;
+        state.lesson.selectedId = blockId;
+        renderLessonCanvas();
+        renderLessonInspector();
+        renderLessonPreview();
+      });
+      if (state.lesson.selectedId !== blockId) return;
+
+      element.classList.add('is-selected');
+      const moveHandle = create('button', 'lesson-canvas-move-handle', 'Przeciągnij');
+      moveHandle.type = 'button';
+      moveHandle.setAttribute('aria-label', 'Przeciągnij element po slajdzie');
+      element.append(moveHandle);
+      ['nw', 'ne', 'sw', 'se'].forEach((direction) => {
+        const handle = create('button', `lesson-canvas-resize-handle is-${direction}`);
+        handle.type = 'button';
+        handle.dataset.canvasResize = direction;
+        handle.setAttribute('aria-label', `Skaluj element od rogu ${direction.toUpperCase()}`);
+        element.append(handle);
+      });
+
+      const beginGeometryEdit = (event, direction) => {
+        if (event.button !== 0) return;
+        const before = snapshot('lesson');
+        const canvas = element.closest('.lesson-preview-body');
+        const bounds = canvas.getBoundingClientRect();
+        const startX = event.clientX;
+        const startY = event.clientY;
+        const initial = { ...block.layout };
+        const move = (moveEvent) => {
+          const dx = (moveEvent.clientX - startX) / Math.max(bounds.width, 1) * 100;
+          const dy = (moveEvent.clientY - startY) / Math.max(bounds.height, 1) * 100;
+          let x = initial.x;
+          let y = initial.y;
+          let width = initial.width;
+          let height = initial.height;
+          if (!direction) {
+            x += dx;
+            y += dy;
+          } else {
+            if (direction.includes('e')) width += dx;
+            if (direction.includes('s')) height += dy;
+            if (direction.includes('w')) { x += dx; width -= dx; }
+            if (direction.includes('n')) { y += dy; height -= dy; }
+          }
+          width = Math.max(8, Math.min(100 - x, width));
+          height = Math.max(8, Math.min(100 - y, height));
+          x = Math.max(0, Math.min(100 - width, x));
+          y = Math.max(0, Math.min(100 - height, y));
+          block.layout = {
+            mode: 'canvas',
+            x: Math.round(x * 10) / 10,
+            y: Math.round(y * 10) / 10,
+            width: Math.round(width * 10) / 10,
+            height: Math.round(height * 10) / 10
+          };
+          element.style.setProperty('--lesson-canvas-x', `${block.layout.x}%`);
+          element.style.setProperty('--lesson-canvas-y', `${block.layout.y}%`);
+          element.style.setProperty('--lesson-canvas-width', `${block.layout.width}%`);
+          element.style.setProperty('--lesson-canvas-height', `${block.layout.height}%`);
+        };
+        const up = () => {
+          window.removeEventListener('pointermove', move);
+          if (before !== snapshot('lesson')) pushHistory('lesson', before);
+          scheduleDraftSave('lesson');
+          renderLessonInspector();
+          syncFullPreview('lesson');
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up, { once: true });
+        event.preventDefault();
+        event.stopPropagation();
+      };
+      moveHandle.addEventListener('pointerdown', (event) => beginGeometryEdit(event, ''));
+      all('[data-canvas-resize]', element).forEach((handle) => {
+        handle.addEventListener('pointerdown', (event) => beginGeometryEdit(event, handle.dataset.canvasResize));
+      });
+    });
+  }
+
   function bindLessonPreviewImageResize(root) {
     const found = findLessonNode(state.lesson.selectedId);
     if (!found || found.kind !== 'block' || found.node.type !== 'image') return;
+    if (found.slide?.layout === 'canvas') return;
     const block = found.node;
     let shell = null;
     if (block.ref) {
@@ -4625,6 +4919,9 @@
       state.lesson.model.navigationConfigured = true;
     } else if (found.kind === 'slide' && fieldName === 'slideTitle') {
       setSlideTitle(found.node, raw);
+    } else if (found.kind === 'slide' && fieldName === 'slideLayout') {
+      found.node.layout = raw === 'canvas' ? 'canvas' : 'flow';
+      if (found.node.layout === 'canvas') ensureLessonCanvasLayout(found.node);
     } else if (found.kind === 'slide' && fieldName === 'transition') {
       found.node.transition = lessonModelApi.SLIDE_TRANSITIONS.includes(raw) ? raw : 'fade';
     } else if (found.kind === 'slide' && fieldName === 'stepId') {
@@ -4695,7 +4992,19 @@
       }
     } else if (found.kind === 'block') {
       const block = found.node;
-      if (fieldName === 'mode' && block.type === 'formula') {
+      if (['layoutX', 'layoutY', 'layoutWidth', 'layoutHeight'].includes(fieldName)) {
+        block.layout = block.layout?.mode === 'canvas'
+          ? block.layout
+          : defaultLessonCanvasLayout(found.index);
+        const key = {
+          layoutX: 'x',
+          layoutY: 'y',
+          layoutWidth: 'width',
+          layoutHeight: 'height'
+        }[fieldName];
+        const limits = key === 'x' || key === 'y' ? [0, 92] : [8, 100];
+        block.layout[key] = Math.max(limits[0], Math.min(limits[1], Number(raw) || limits[0]));
+      } else if (fieldName === 'mode' && block.type === 'formula') {
         const previousMode = block.mode;
         block.mode = raw === 'math' ? 'math' : 'chemistry';
         if (block.mode === 'math' && !block.expression) block.expression = 'E = mc^{2}';
@@ -5255,6 +5564,7 @@
         body: JSON.stringify({
           action: 'lesson_manifest',
           filename,
+          repositoryId,
           manifest: {
             navigation: validation.lesson.navigation,
             steps: validation.lesson.slides.map((slide, index) => ({
@@ -6421,7 +6731,7 @@
       handleLessonInspectorInput(event);
       finishEdit();
       if (
-        ['type', 'mode', 'arrow', 'variant', 'repositoryId', 'promptFile', 'examId', 'requirement', 'options', 'optionItem', 'gapLabel', 'gapSegment', 'useColor', 'conditionType']
+        ['type', 'mode', 'arrow', 'variant', 'repositoryId', 'promptFile', 'examId', 'requirement', 'options', 'optionItem', 'gapLabel', 'gapSegment', 'useColor', 'conditionType', 'slideLayout']
           .includes(event.target.dataset.lessonField)
       ) {
         renderLessonInspector();
@@ -6454,6 +6764,11 @@
       const formulaSnippet = event.target.closest('[data-formula-snippet]');
       if (formulaSnippet) {
         insertLessonFormulaSnippet(formulaSnippet);
+        return;
+      }
+      const inlineNotation = event.target.closest('[data-lesson-inline-snippet], [data-lesson-inline-wrap]');
+      if (inlineNotation) {
+        insertLessonInlineNotation(inlineNotation);
         return;
       }
       const taskEditorAction = event.target.closest('[data-lesson-task-editor-action]');

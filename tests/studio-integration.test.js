@@ -261,6 +261,12 @@ test('Studio exposes dashboard, lesson, exam and prompt authoring workflows', ()
   assert.match(lessonWorkspace, /data-lesson-add=["']table["']/);
   assert.match(script, /fieldName\s*===\s*['"]tableHeaders['"]/);
   assert.match(script, /fieldName\s*===\s*['"]tableRows['"]/);
+  assert.match(script, /function materialPicker\(/);
+  assert.match(script, /studio-material-picker-option/);
+  assert.doesNotMatch(script, /createElement\(['"]datalist['"]\)/);
+  assert.match(script, /slideLayout/);
+  assert.match(script, /bindLessonPreviewCanvasControls/);
+  assert.match(script, /scientificNotationToolbar/);
 
   const dashboardClone = script.slice(
     script.indexOf('function cloneDashboardNode'),

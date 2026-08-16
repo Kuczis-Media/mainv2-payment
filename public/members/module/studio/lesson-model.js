@@ -12,7 +12,7 @@
   const TASK_START = /^\s*:::(?:task|zadanie)\s*$/i;
   const QUESTION_START = /^\s*:::question\s*$/i;
   const SLIDE_SETTINGS_START = /^\s*:::slide\s*$/i;
-  const CONTAINER_START = /^\s*:::(style|accordion|youtube|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)(?:\s+(.*?))?\s*$/i;
+  const CONTAINER_START = /^\s*:::(style|accordion|layout|youtube|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)(?:\s+(.*?))?\s*$/i;
   const CONTAINER_END = /^\s*:::\s*$/;
   const STYLE_FONTS = Object.freeze([
     'sans',
@@ -202,6 +202,22 @@
     return { font, color, background, size, align, bold };
   }
 
+  function normalizeBlockLayout(value) {
+    const source = value && typeof value === 'object' ? value : {};
+    if (String(source.mode || '').toLowerCase() !== 'canvas') return null;
+    const clamp = (number, minimum, maximum, fallback) => {
+      const parsed = Number(number);
+      return Math.round((Math.max(minimum, Math.min(maximum, Number.isFinite(parsed) ? parsed : fallback))) * 10) / 10;
+    };
+    return {
+      mode: 'canvas',
+      x: clamp(source.x, 0, 92, 5),
+      y: clamp(source.y, 0, 92, 5),
+      width: clamp(source.width, 8, 100, 44),
+      height: clamp(source.height, 8, 100, 28)
+    };
+  }
+
   function normalizeTableCell(value) {
     return oneLine(value)
       .replace(/:::/g, '')
@@ -265,7 +281,12 @@
       throw new StudioLessonError('UNKNOWN_BLOCK', `Nieznany typ bloku: ${type}.`, 'block.type');
     }
 
-    const base = { id: oneLine(source.id) || nextId('block'), type };
+    const layout = normalizeBlockLayout(source.layout);
+    const base = {
+      id: oneLine(source.id) || nextId('block'),
+      type,
+      ...(layout ? { layout } : {})
+    };
     if (type === 'heading') {
       return { ...base, level: Math.min(3, Math.max(1, Number(source.level) || 2)), text: oneLine(source.text) };
     }
@@ -547,6 +568,7 @@
     } : source.condition;
     return {
       id: oneLine(source.id) || nextId('slide'),
+      layout: oneLine(source.layout).toLowerCase() === 'canvas' ? 'canvas' : 'flow',
       transition: SLIDE_TRANSITIONS.includes(oneLine(source.transition).toLowerCase())
         ? oneLine(source.transition).toLowerCase()
         : 'fade',
@@ -840,7 +862,7 @@
     return { valid: errors.length === 0, errors, lesson };
   }
 
-  function serializeBlock(input) {
+  function serializeBlockCore(input) {
     const block = createBlock(input);
     if (block.type === 'heading') return `${'#'.repeat(block.level)} ${cleanInline(block.text)}`;
     if (block.type === 'text') return protectStructuralLines(block.text);
@@ -999,6 +1021,18 @@
     return `:::accordion ${cleanInline(block.title)}${open}\n${block.blocks.map(serializeBlock).join('\n\n')}\n:::`;
   }
 
+  function serializeBlock(input) {
+    const block = createBlock(input);
+    const serialized = serializeBlockCore(block);
+    if (!serialized || !block.layout || block.layout.mode !== 'canvas') return serialized;
+    const layout = normalizeBlockLayout(block.layout);
+    return [
+      `:::layout id=${cleanDirectiveValue(block.id)} x=${layout.x} y=${layout.y} width=${layout.width} height=${layout.height}`,
+      serialized,
+      ':::'
+    ].join('\n');
+  }
+
   function serializeTask(input) {
     const task = createTask(input);
     const lines = [':::task', `type: ${task.type}`];
@@ -1040,7 +1074,13 @@
       if (slideIndex === 0) {
         const titleBlock = blocks.find((block) => block.type === 'heading' && block.level === 1);
         if (titleBlock) titleBlock.text = lesson.title;
-        else blocks.unshift(createBlock('heading', { level: 1, text: lesson.title }));
+        else blocks.unshift(createBlock('heading', {
+          level: 1,
+          text: lesson.title,
+          ...(slide.layout === 'canvas'
+            ? { layout: { mode: 'canvas', x: 4, y: 2, width: 92, height: 16 } }
+            : {})
+        }));
       }
       const parts = blocks.map(serializeBlock).filter(Boolean);
       if (slide.progressConfigured) {
@@ -1051,8 +1091,11 @@
           condition: slide.condition
         })} -->`);
       }
-      if (slide.transition !== 'fade') {
-        parts.unshift([':::slide', `transition: ${slide.transition}`, ':::'].join('\n'));
+      if (slide.transition !== 'fade' || slide.layout === 'canvas') {
+        const settings = [':::slide', `transition: ${slide.transition}`];
+        if (slide.layout === 'canvas') settings.push('layout: canvas');
+        settings.push(':::');
+        parts.unshift(settings.join('\n'));
       }
       if (slide.task) {
         if (slide.task.question) parts.push(serializeQuestion(slide.task.question));
@@ -1162,6 +1205,24 @@
     return normalizeStyle(attrs);
   }
 
+  function parseLayoutAttributes(value) {
+    const attrs = {};
+    String(value || '').replace(/([a-z_]+)=([^\s]+)/gi, (_, key, rawValue) => {
+      attrs[key.toLowerCase()] = rawValue;
+      return '';
+    });
+    return {
+      id: oneLine(attrs.id),
+      layout: normalizeBlockLayout({
+        mode: 'canvas',
+        x: attrs.x,
+        y: attrs.y,
+        width: attrs.width,
+        height: attrs.height
+      })
+    };
+  }
+
   function parseDirectiveFields(lines) {
     const values = {};
     lines.forEach((line) => {
@@ -1210,10 +1271,22 @@
         if (end > index) {
           const type = container[1].toLowerCase();
           const bodyLines = lines.slice(index + 1, end);
-          const children = ['style', 'accordion'].includes(type)
-            ? parseBlocks(bodyLines.join('\n'), false)
-            : [];
-          if (type === 'style') {
+          const children = type === 'layout'
+            ? parseBlocks(bodyLines.join('\n'), true)
+            : ['style', 'accordion'].includes(type)
+              ? parseBlocks(bodyLines.join('\n'), false)
+              : [];
+          if (type === 'layout') {
+            const child = children[0];
+            if (child) {
+              const positioned = parseLayoutAttributes(container[2]);
+              blocks.push(createBlock({
+                ...child,
+                id: positioned.id || child.id,
+                layout: positioned.layout
+              }));
+            }
+          } else if (type === 'style') {
             blocks.push(createBlock({ type: 'style', ...parseStyleAttributes(container[2]), blocks: children }));
           } else if (type === 'accordion') {
             const rawTitle = oneLine(container[2]);
@@ -1437,6 +1510,7 @@
     let slideSettingsLines = null;
     let slideSettingsSeen = false;
     let transition = 'fade';
+    let layout = 'flow';
     let containerDepth = 0;
     let inCode = false;
     lines.forEach((line, index) => {
@@ -1463,6 +1537,7 @@
           transition = SLIDE_TRANSITIONS.includes(oneLine(values.transition).toLowerCase())
             ? oneLine(values.transition).toLowerCase()
             : 'fade';
+          layout = oneLine(values.layout).toLowerCase() === 'canvas' ? 'canvas' : 'flow';
           slideSettingsLines = null;
         } else slideSettingsLines.push(line);
         return;
@@ -1571,6 +1646,7 @@
       blocks,
       task,
       transition,
+      layout,
       includeInLesson: stepMetadata?.includeInLesson,
       requiredToAdvance: stepMetadata?.requiredToAdvance,
       condition: stepMetadata?.condition,
@@ -1642,6 +1718,7 @@
     flashcards: true,
     tables: true,
     exams: true,
+    canvasLayout: true,
     accordions: true,
     nestedContainers: false,
     styleFonts: STYLE_FONTS,

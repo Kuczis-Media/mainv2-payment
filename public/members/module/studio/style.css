@@ -2406,6 +2406,124 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
   line-height: 1.45;
 }
 
+.studio-material-picker {
+  position: relative;
+  z-index: 2;
+  min-width: 0;
+}
+.studio-material-picker.is-open { z-index: 40; }
+.studio-material-picker-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  overflow: hidden;
+  background: var(--chem-surface);
+  border: 1px solid var(--chem-line);
+  border-radius: 13px;
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+.studio-material-picker.is-open .studio-material-picker-input,
+.studio-material-picker:focus-within .studio-material-picker-input {
+  border-color: color-mix(in srgb, var(--chem-primary) 68%, var(--chem-line));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--chem-primary) 14%, transparent);
+}
+.studio-material-picker-input > input {
+  min-width: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+.studio-material-picker-toggle {
+  min-height: 42px;
+  padding: 0;
+  color: var(--chem-primary);
+  background: color-mix(in srgb, var(--chem-primary) 8%, var(--chem-surface));
+  border: 0;
+  border-left: 1px solid var(--chem-line);
+  font-size: 1rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+.studio-material-picker.is-open .studio-material-picker-toggle { transform: rotate(180deg); }
+.studio-material-picker-popup {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 7px);
+  right: 0;
+  left: 0;
+  overflow: hidden;
+  padding: 8px;
+  background: color-mix(in srgb, var(--chem-surface) 97%, transparent);
+  border: 1px solid color-mix(in srgb, var(--chem-primary) 22%, var(--chem-line));
+  border-radius: 15px;
+  box-shadow: 0 18px 42px rgba(9, 24, 42, .2);
+  backdrop-filter: blur(14px);
+}
+.studio-material-picker-popup[hidden] { display: none; }
+.studio-material-picker-hint {
+  display: block;
+  padding: 5px 7px 9px;
+  color: var(--chem-muted);
+  font-size: .54rem;
+  font-weight: 750;
+}
+.studio-material-picker-list {
+  display: grid;
+  max-height: 280px;
+  overflow: auto;
+  gap: 5px;
+  overscroll-behavior: contain;
+}
+.studio-material-picker-option {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  width: 100%;
+  min-height: 52px;
+  padding: 7px 9px;
+  gap: 9px;
+  color: var(--chem-text);
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  cursor: pointer;
+}
+.studio-material-picker-option:hover,
+.studio-material-picker-option:focus-visible {
+  background: color-mix(in srgb, var(--chem-primary) 8%, var(--chem-surface));
+  border-color: color-mix(in srgb, var(--chem-primary) 25%, var(--chem-line));
+  outline: none;
+}
+.studio-material-picker-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  color: var(--chem-primary);
+  background: color-mix(in srgb, var(--chem-primary) 12%, var(--chem-surface));
+  border-radius: 10px;
+  font-size: .67rem;
+  font-weight: 900;
+}
+.studio-material-picker-copy { display: grid; min-width: 0; gap: 2px; }
+.studio-material-picker-copy strong,
+.studio-material-picker-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-material-picker-copy strong { font-size: .65rem; }
+.studio-material-picker-copy small { color: var(--chem-muted); font-size: .54rem; }
+.studio-material-picker-option > em {
+  padding: 4px 7px;
+  color: var(--chem-muted);
+  background: var(--chem-surface-soft);
+  border-radius: 99px;
+  font-size: .47rem;
+  font-style: normal;
+  font-weight: 800;
+}
+.studio-material-picker-empty { display: grid; padding: 16px 12px; gap: 4px; text-align: center; }
+.studio-material-picker-empty strong { font-size: .65rem; }
+.studio-material-picker-empty small { color: var(--chem-muted); font-size: .55rem; }
+
 .field input[type="color"] {
   min-height: 42px;
   padding: 4px;
@@ -2895,6 +3013,121 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
 .lesson-preview-body {
   min-width: 0;
 }
+
+.lesson-preview-body.is-canvas-layout {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  min-height: 310px;
+  overflow: hidden;
+  background-color: color-mix(in srgb, var(--chem-surface-soft) 68%, transparent);
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--chem-line) 70%, transparent) 1px, transparent 1px);
+  background-size: 16px 16px;
+  border: 1px solid var(--chem-line);
+  border-radius: 16px;
+}
+
+.lesson-preview-body.is-canvas-layout .lesson-canvas-element {
+  position: absolute;
+  left: var(--lesson-canvas-x, 5%);
+  top: var(--lesson-canvas-y, 5%);
+  width: var(--lesson-canvas-width, 44%);
+  height: var(--lesson-canvas-height, 28%);
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 11px;
+}
+
+.lesson-preview-body.is-canvas-layout .lesson-canvas-element > :first-child { margin-top: 0; }
+.lesson-preview-body.is-canvas-layout .lesson-canvas-element > :last-child { margin-bottom: 0; }
+.lesson-preview-body.is-canvas-layout .lesson-canvas-element.is-selected {
+  z-index: 5;
+  overflow: visible;
+  outline: 2px solid var(--studio-blue);
+  outline-offset: 1px;
+  background: color-mix(in srgb, var(--chem-surface) 88%, transparent);
+  box-shadow: 0 8px 25px rgba(10, 24, 45, .16);
+}
+
+.lesson-canvas-move-handle {
+  position: absolute;
+  z-index: 8;
+  top: -29px;
+  left: 50%;
+  min-height: 26px;
+  padding: 4px 10px;
+  color: #fff;
+  background: var(--studio-blue);
+  border: 0;
+  border-radius: 99px;
+  font-size: .53rem;
+  font-weight: 850;
+  transform: translateX(-50%);
+  cursor: grab;
+  touch-action: none;
+}
+.lesson-canvas-move-handle:active { cursor: grabbing; }
+.lesson-canvas-resize-handle {
+  position: absolute;
+  z-index: 9;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  background: #fff;
+  border: 3px solid var(--studio-blue);
+  border-radius: 50%;
+  touch-action: none;
+}
+.lesson-canvas-resize-handle.is-nw { top: -8px; left: -8px; cursor: nwse-resize; }
+.lesson-canvas-resize-handle.is-ne { top: -8px; right: -8px; cursor: nesw-resize; }
+.lesson-canvas-resize-handle.is-sw { bottom: -8px; left: -8px; cursor: nesw-resize; }
+.lesson-canvas-resize-handle.is-se { right: -8px; bottom: -8px; cursor: nwse-resize; }
+
+.lesson-layout-inspector {
+  display: grid;
+  gap: 8px;
+  padding: 13px;
+  background: color-mix(in srgb, var(--studio-blue) 7%, var(--chem-surface));
+  border: 1px solid color-mix(in srgb, var(--studio-blue) 28%, var(--chem-line));
+  border-radius: 14px;
+}
+.lesson-layout-inspector > small { color: var(--chem-muted); font-size: .6rem; line-height: 1.45; }
+.lesson-layout-inspector .field-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.scientific-notation-toolbar {
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--chem-primary) 8%, var(--chem-surface)), var(--chem-surface));
+  border: 1px solid color-mix(in srgb, var(--chem-primary) 26%, var(--chem-line));
+  border-radius: 14px;
+}
+.scientific-notation-toolbar header { display: grid; gap: 3px; }
+.scientific-notation-toolbar header strong { font-size: .7rem; }
+.scientific-notation-toolbar header small,
+.scientific-notation-toolbar > p { margin: 0; color: var(--chem-muted); font-size: .57rem; line-height: 1.5; }
+.scientific-notation-buttons { display: flex; flex-wrap: wrap; gap: 7px; }
+.scientific-notation-button {
+  min-width: 46px;
+  min-height: 38px;
+  padding: 7px 10px;
+  color: var(--chem-text);
+  background: var(--chem-surface);
+  border: 1px solid var(--chem-line);
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(10, 24, 45, .06);
+  font-size: .72rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+.scientific-notation-button:hover,
+.scientific-notation-button:focus-visible {
+  color: var(--chem-primary);
+  border-color: color-mix(in srgb, var(--chem-primary) 55%, var(--chem-line));
+  transform: translateY(-1px);
+}
+.scientific-notation-button.is-format { background: color-mix(in srgb, var(--chem-primary) 9%, var(--chem-surface)); }
 
 .lesson-preview-body h1,
 .lesson-preview-body h2,

@@ -180,6 +180,67 @@ test('hierarchical aggregation weights enabled direct children at every level', 
   assert.equal(aggregate.course.completedCount, 1);
 });
 
+test('a lesson is an aggregate leaf and contributes its saved progress to section and course', () => {
+  const source = catalog({
+    nodes: [
+      { id: 'course', type: 'course', progress: progress({ tracking: 'ON' }) },
+      { id: 'department', parentId: 'course', type: 'department', progress: progress() },
+      { id: 'section', parentId: 'department', type: 'section', progress: progress() },
+      {
+        id: 'lesson-card', parentId: 'section', type: 'lesson', progress: progress(),
+        settings: { contentFile: 'lekcja.md', repositoryId: 'default' }
+      }
+    ]
+  });
+  const user = progressCommon.normalizeUserDocument({
+    userId: USER_ONE,
+    records: {
+      'lesson-card': {
+        materialType: 'lesson', progressPercent: 100,
+        completedAt: '2026-08-15T10:00:00Z', lastActivityAt: '2026-08-15T10:00:00Z'
+      }
+    }
+  }, USER_ONE);
+  const aggregate = progressCommon.aggregateUser(user, source);
+  assert.equal(aggregate.nodes['lesson-card'].tracked, true);
+  assert.equal(aggregate.nodes['lesson-card'].trackedCount, 1);
+  assert.equal(aggregate.nodes.section.progressPercent, 100);
+  assert.equal(aggregate.course.progressPercent, 100);
+  assert.equal(aggregate.course.completedCount, 1);
+});
+
+test('exam aggregation recovers a completed canonical record when an older dashboard card is only opened', () => {
+  const source = catalog({
+    nodes: [
+      { id: 'course', type: 'course', progress: progress({ tracking: 'ON' }) },
+      {
+        id: 'exam-card', parentId: 'course', type: 'exam', progress: progress(),
+        settings: { repositoryId: 'default', examId: 'organic-final' }
+      }
+    ]
+  });
+  const user = progressCommon.normalizeUserDocument({
+    userId: USER_ONE,
+    records: {
+      'exam-card': {
+        materialType: 'exam', opened: true, progressPercent: 0,
+        lastActivityAt: '2026-08-15T10:00:00Z'
+      },
+      'exam:default:organic-final': {
+        materialType: 'exam', opened: true, progressPercent: 100,
+        completedAt: '2026-08-15T11:00:00Z', lastActivityAt: '2026-08-15T11:00:00Z',
+        details: { scorePercent: 86, passed: true }
+      }
+    }
+  }, USER_ONE);
+  const aggregate = progressCommon.aggregateUser(user, source);
+  assert.equal(aggregate.nodes['exam-card'].progressPercent, 100);
+  assert.equal(aggregate.nodes['exam-card'].record.materialId, 'exam-card');
+  assert.equal(aggregate.nodes['exam-card'].record.details.scorePercent, 86);
+  assert.equal(aggregate.course.progressPercent, 100);
+  assert.equal(aggregate.counts.completed, 1);
+});
+
 test('legacy inclusion flags are ignored and every enabled child contributes to all ancestors', () => {
   const source = catalog({
     nodes: [

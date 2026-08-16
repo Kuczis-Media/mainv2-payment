@@ -950,7 +950,7 @@
             presentationMode: block.presentationMode,
             videoCompletionThreshold: block.videoCompletionThreshold,
             contentFile: block.module === 'lesson' ? block.file : '',
-            repositoryId: ['exam', 'presentation'].includes(block.module) ? block.repositoryId : '',
+            repositoryId: ['lesson', 'exam', 'presentation'].includes(block.module) ? block.repositoryId : '',
             examId: block.module === 'exam' ? block.examId : '',
             presentationId: block.module === 'presentation' ? block.presentationId : ''
           });
