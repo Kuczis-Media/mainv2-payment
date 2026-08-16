@@ -650,6 +650,22 @@ fieldset:focus-within {
 .lesson-managed-image-placeholder small { font-size: .72rem; }
 .lesson-managed-image.is-error .lesson-managed-image-placeholder { color: var(--danger); }
 
+.lesson-image-retry {
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  border-radius: 10px;
+  color: inherit;
+  background: var(--surface);
+  cursor: pointer;
+  font: inherit;
+  font-size: .68rem;
+  font-weight: 800;
+}
+
+.lesson-image-retry:hover { background: var(--surface-soft); }
+.lesson-image-retry:disabled { cursor: wait; opacity: .62; }
+
 @media (max-width: 720px) {
   .slide-content.is-canvas-layout {
     display: grid;

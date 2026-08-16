@@ -716,14 +716,15 @@
     if (type === 'image') {
       const ref = String(values.ref || '').trim().toLowerCase();
       const repository = String(values.repository || '').trim().toLowerCase();
+      const owner = String(values.owner || '').trim();
       const alt = String(values.alt || 'Ilustracja').trim().slice(0, 220) || 'Ilustracja';
       const width = Math.max(20, Math.min(100, Number(values.width) || 100));
       const align = ['left', 'center', 'right'].includes(values.align) ? values.align : 'center';
-      if (!SAFE_MEDIA_REF.test(ref) || (repository && !SAFE_REPOSITORY_ID.test(repository))) {
+      if (!SAFE_MEDIA_REF.test(ref) || (repository && !SAFE_REPOSITORY_ID.test(repository)) || (owner && !SAFE_FILENAME.test(owner))) {
         return '<p class="lesson-interactive-error">Nieprawidłowa referencja obrazu.</p>';
       }
       const scope = ref.startsWith('assets/shared/') ? 'shared' : 'local';
-      return `<figure class="lesson-managed-image lesson-image-align-${align}" style="--lesson-image-width:${width}%" data-lesson-media-ref="${escapeHtml(ref)}" data-lesson-media-repository="${escapeHtml(repository)}" data-lesson-media-scope="${scope}" data-lesson-media-alt="${escapeHtml(alt)}"><div class="lesson-managed-image-placeholder"><span aria-hidden="true">▧</span><small>Wczytywanie obrazu…</small></div></figure>`;
+      return `<figure class="lesson-managed-image lesson-image-align-${align}" style="--lesson-image-width:${width}%" data-lesson-media-ref="${escapeHtml(ref)}" data-lesson-media-repository="${escapeHtml(repository)}" data-lesson-media-owner="${escapeHtml(owner)}" data-lesson-media-scope="${scope}" data-lesson-media-alt="${escapeHtml(alt)}"><div class="lesson-managed-image-placeholder"><span aria-hidden="true">▧</span><small>Wczytywanie obrazu…</small></div></figure>`;
     }
     if (type === 'youtube') {
       const id = youtubeVideoId(values.id || values.url);

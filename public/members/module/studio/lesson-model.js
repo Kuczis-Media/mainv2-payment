@@ -317,6 +317,7 @@
         url: oneLine(source.url),
         ref: oneLine(source.ref).toLowerCase(),
         repositoryId: oneLine(source.repositoryId || source.repository).toLowerCase(),
+        owner: oneLine(source.owner || source.mediaOwnerId),
         alt: oneLine(source.alt) || 'Ilustracja',
         width: Math.max(20, Math.min(100, Number(source.width) || 100)),
         align: ['left', 'center', 'right'].includes(requestedAlign) ? requestedAlign : 'center'
@@ -687,6 +688,9 @@
     if (block.type === 'image' && block.repositoryId && !SAFE_REPOSITORY_ID.test(block.repositoryId)) {
       errors.push({ code: 'INVALID_MEDIA_REPOSITORY', path: `${path}.repositoryId`, message: 'Repozytorium obrazu jest nieprawidłowe.' });
     }
+    if (block.type === 'image' && block.owner && !SAFE_FILENAME.test(block.owner)) {
+      errors.push({ code: 'INVALID_MEDIA_OWNER', path: `${path}.owner`, message: 'Folder źródłowy obrazu jest nieprawidłowy.' });
+    }
     if (block.type === 'youtube' && !youtubeVideoId(block.video)) {
       errors.push({ code: 'INVALID_YOUTUBE', path: `${path}.video`, message: 'Podaj prawidłowy link lub ID filmu YouTube.' });
     }
@@ -885,6 +889,7 @@
           ':::image',
           `ref: ${cleanDirectiveValue(block.ref)}`,
           `repository: ${cleanDirectiveValue(block.repositoryId)}`,
+          ...(SAFE_FILENAME.test(block.owner) ? [`owner: ${cleanDirectiveValue(block.owner)}`] : []),
           `alt: ${cleanDirectiveValue(block.alt)}`,
           `width: ${block.width}`,
           `align: ${block.align}`,
@@ -1302,6 +1307,7 @@
               type,
               ref: values.ref,
               repositoryId: values.repository,
+              owner: values.owner,
               alt: values.alt,
               width: values.width,
               align: values.align
@@ -1688,13 +1694,21 @@
     const titleMatch = text.match(/^\s*#\s+(.+?)\s*$/m);
     const safeName = validateFilename(filename) || '';
     const fallback = (safeName || 'Nowa lekcja').replace(/\.md$/i, '').replace(/[-_]+/g, ' ');
-    return createLesson({
+    const lesson = createLesson({
       title: titleMatch ? stripMarkdown(titleMatch[1]) : fallback,
       filename: safeName || slugify(fallback),
       navigation: lessonMetadata?.navigation === 'free' ? 'free' : 'sequential',
       navigationConfigured: Boolean(lessonMetadata),
       slides: parts.map(parseSlide)
     });
+    const assignMediaOwner = (blocks) => (blocks || []).forEach((block) => {
+      if (block.type === 'image' && block.ref.startsWith('photos/') && !block.owner) {
+        block.owner = lesson.filename;
+      }
+      if (Array.isArray(block.blocks)) assignMediaOwner(block.blocks);
+    });
+    lesson.slides.forEach((slide) => assignMediaOwner(slide.blocks));
+    return lesson;
   }
 
   function parseEditableLesson(markdown, filename) {

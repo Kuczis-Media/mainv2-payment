@@ -4169,34 +4169,68 @@
 
   async function hydrateStudioLessonMedia(root) {
     const library = window.ChemContentLibrary;
-    if (!library?.readMediaBlob) return;
     const figures = all('[data-lesson-media-ref]', root);
-    await Promise.all(figures.map(async (figure) => {
+    const showError = (figure, error) => {
+      if (!figure.isConnected) return;
+      figure.classList.add('is-error');
+      const placeholder = create('div', 'lesson-managed-image-placeholder');
+      const message = create(
+        'small',
+        '',
+        error?.code === 'CONTENT_FILE_NOT_FOUND'
+          ? 'Nie znaleziono pliku w folderze zdjęć tej lekcji.'
+          : 'Nie udało się wczytać obrazu.'
+      );
+      const retry = create('button', 'lesson-image-retry', 'Spróbuj ponownie');
+      retry.type = 'button';
+      retry.addEventListener('click', () => {
+        retry.disabled = true;
+        message.textContent = 'Ponowne wczytywanie…';
+        void loadFigure(figure, true);
+      });
+      placeholder.append(message, retry);
+      figure.replaceChildren(placeholder);
+    };
+    const loadFigure = async (figure, bypassCache = false) => {
       const shared = figure.dataset.lessonMediaScope === 'shared';
       try {
         const blob = await library.readMediaBlob({
           scope: shared ? 'shared' : 'local',
           materialKind: shared ? '' : 'lesson',
-          materialId: shared ? '' : state.lesson.model.filename,
+          materialId: shared
+            ? ''
+            : (figure.dataset.lessonMediaOwner || state.lesson.remoteFilename || state.lesson.model.filename),
           reference: figure.dataset.lessonMediaRef,
           repositoryId: figure.dataset.lessonMediaRepository
             || state.lesson.remoteRepositoryId
             || state.contentLibrary.selectedRepositoryId
-        });
+        }, { bypassCache });
         if (!figure.isConnected) return;
         const objectUrl = URL.createObjectURL(blob);
-        state.lesson.mediaObjectUrls.push(objectUrl);
         const image = document.createElement('img');
         image.src = objectUrl;
         image.alt = figure.dataset.lessonMediaAlt || 'Ilustracja';
-        image.loading = 'lazy';
+        image.loading = 'eager';
+        image.decoding = 'async';
+        image.fetchPriority = 'high';
+        try { void image.decode?.().catch(() => undefined); } catch { /* dekodowanie dokończy się przy malowaniu */ }
+        if (!figure.isConnected) {
+          URL.revokeObjectURL(objectUrl);
+          return;
+        }
+        state.lesson.mediaObjectUrls.push(objectUrl);
+        figure.classList.remove('is-error');
         figure.replaceChildren(image);
-      } catch (_) {
-        const placeholder = figure.querySelector('.lesson-managed-image-placeholder');
-        if (placeholder) placeholder.textContent = 'Nie udało się wczytać obrazu.';
-        figure.classList.add('is-error');
+        if (bypassCache) bindLessonPreviewImageResize(root);
+      } catch (error) {
+        showError(figure, error);
       }
-    }));
+    };
+    if (!library?.readMediaBlob) {
+      figures.forEach((figure) => showError(figure, { code: 'MEDIA_CLIENT_UNAVAILABLE' }));
+      return;
+    }
+    await Promise.all(figures.map((figure) => loadFigure(figure)));
   }
 
   function bindLessonPreviewCanvasControls(root) {
@@ -4886,6 +4920,9 @@
         commitMutation('lesson', () => {
           found.node.ref = asset.reference;
           found.node.repositoryId = asset.repositoryId || state.contentLibrary.selectedRepositoryId;
+          found.node.owner = asset.scope === 'local' || String(asset.reference || '').startsWith('photos/')
+            ? (asset.materialId || filename)
+            : '';
           found.node.url = '';
           if (!found.node.alt || found.node.alt === 'Ilustracja') {
             found.node.alt = String(asset.filename || 'Ilustracja').replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').slice(0, 220);
@@ -4901,6 +4938,7 @@
     commitMutation('lesson', () => {
       found.node.ref = '';
       found.node.repositoryId = '';
+      found.node.owner = '';
     });
   }
 

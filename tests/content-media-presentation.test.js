@@ -66,6 +66,22 @@ test('Media Manager maps local and shared files to bounded GitHub folders', asyn
   assert.equal(JSON.parse(deletion.options.body).sha, sha);
 });
 
+test('protected media reads reuse a bounded warm Function cache', async () => {
+  repository._test.clearCache();
+  let requests = 0;
+  const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const fetchImpl = async () => {
+    requests += 1;
+    return response(bytes);
+  };
+  const options = { config: configured, fetchImpl };
+  const first = await repository.readMedia('local', 'lesson', 'test.md', 'photos/model.png', options);
+  const second = await repository.readMedia('local', 'lesson', 'test.md', 'photos/model.png', options);
+  assert.equal(requests, 1);
+  assert.deepEqual(second.buffer, first.buffer);
+  assert.equal(second.mimeType, 'image/png');
+});
+
 test('media writes reject traversal, mismatched binaries and active SVG content before GitHub access', async () => {
   let called = false;
   const fetchImpl = async () => { called = true; return response({}); };
@@ -207,30 +223,37 @@ test('Lesson Builder round-trips managed local media while keeping legacy HTTPS 
     title: 'Obrazy',
     filename: 'obrazy.md',
     slides: [{ blocks: [
-      { type: 'image', ref: 'photos/schemat.webp', repositoryId: 'default', alt: 'Schemat', width: 72, align: 'right' },
+      { type: 'image', ref: 'photos/schemat.webp', repositoryId: 'default', owner: 'obrazy.md', alt: 'Schemat', width: 72, align: 'right' },
       { type: 'image', url: 'https://example.com/stary.png', alt: 'Starszy obraz' }
     ] }]
   });
   const markdown = lessonModel.serializeLesson(lesson);
-  assert.match(markdown, /:::image[\s\S]*ref: photos\/schemat\.webp[\s\S]*repository: default[\s\S]*width: 72[\s\S]*align: right/);
+  assert.match(markdown, /:::image[\s\S]*ref: photos\/schemat\.webp[\s\S]*repository: default[\s\S]*owner: obrazy\.md[\s\S]*width: 72[\s\S]*align: right/);
   assert.match(markdown, /!\[Starszy obraz\]\(https:\/\/example\.com\/stary\.png\)/);
   const editable = lessonModel.parseLesson(markdown, 'obrazy.md');
   assert.equal(editable.slides[0].blocks.find((block) => block.ref)?.ref, 'photos/schemat.webp');
+  assert.equal(editable.slides[0].blocks.find((block) => block.ref)?.owner, 'obrazy.md');
   const published = lessonParser.parseLesson(markdown, 'obrazy.md');
   assert.match(published.slides[0].html, /data-lesson-media-ref="photos\/schemat\.webp"/);
+  assert.match(published.slides[0].html, /data-lesson-media-owner="obrazy\.md"/);
 });
 
 test('Studio publishes the shared Media Manager and a nested, lazy content explorer', () => {
   const root = path.join(__dirname, '..');
   const html = fs.readFileSync(path.join(root, 'public/members/module/studio/index.html'), 'utf8');
   const script = fs.readFileSync(path.join(root, 'public/members/module/studio/script.js'), 'utf8');
+  const lessonPlayer = fs.readFileSync(path.join(root, 'public/members/module/lesson/script.js'), 'utf8');
   const manager = fs.readFileSync(path.join(root, 'public/assets/js/media-manager.js'), 'utf8');
+  const mediaFunction = fs.readFileSync(path.join(root, 'netlify/functions/content-media.js'), 'utf8');
   assert.match(html, /media-manager\.css/);
   assert.match(html, /media-manager\.js/);
   assert.match(script, /function loadExplorerMedia/);
   assert.match(script, /function deleteExplorerMedia/);
   assert.match(script, /function duplicateContentExplorerAsset/);
   assert.match(script, /readMediaBlob/);
+  assert.match(script, /bypassCache/);
+  assert.match(script, /lesson-image-retry/);
+  assert.match(lessonPlayer, /scheduleLessonImagePrefetch/);
   assert.match(script, /uploadMedia/);
   assert.ok(script.indexOf("ChemContentLibrary.remove(kind") < script.indexOf("ChemContentLibrary.removeMedia({", script.indexOf('async function deleteContentExplorerAsset')));
   assert.match(script, /ChemMediaManager\.open/);
@@ -238,6 +261,7 @@ test('Studio publishes the shared Media Manager and a nested, lazy content explo
   assert.match(manager, /clipboardData/);
   assert.match(manager, /dataTransfer/);
   assert.match(manager, /removeMedia/);
+  assert.match(mediaFunction, /private, max-age=3600, stale-while-revalidate=86400/);
 });
 
 test('visual editors expose direct resize handles and duplicate elements with fresh stable IDs', () => {

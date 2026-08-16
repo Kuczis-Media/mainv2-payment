@@ -566,6 +566,7 @@
     elements.slideContent.innerHTML = slide.html;
     initializeInteractiveBlocks(elements.slideContent);
     void hydrateManagedImages(elements.slideContent);
+    scheduleLessonImagePrefetch();
     typesetMath(elements.slideContent);
     elements.slideStatus.textContent = slide.task
       ? (isSolved ? 'Zadanie rozwiązane' : 'Zadanie do wykonania')
@@ -585,33 +586,102 @@
 
   async function hydrateManagedImages(root) {
     const library = window.ChemContentLibrary;
-    if (!library?.readMediaBlob) return;
     const figures = Array.from(root.querySelectorAll('[data-lesson-media-ref]'));
-    await Promise.all(figures.map(async (figure) => {
+    const showError = (figure, error) => {
+      if (!figure.isConnected) return;
+      figure.classList.add('is-error');
+      const placeholder = document.createElement('div');
+      const message = document.createElement('small');
+      const retry = document.createElement('button');
+      placeholder.className = 'lesson-managed-image-placeholder';
+      message.textContent = error?.code === 'CONTENT_FILE_NOT_FOUND'
+        ? 'Nie znaleziono pliku obrazu w folderze tej lekcji.'
+        : 'Nie udało się wczytać obrazu.';
+      retry.className = 'lesson-image-retry';
+      retry.type = 'button';
+      retry.textContent = 'Spróbuj ponownie';
+      retry.addEventListener('click', () => {
+        retry.disabled = true;
+        message.textContent = 'Ponowne wczytywanie…';
+        void loadFigure(figure, true);
+      });
+      placeholder.append(message, retry);
+      figure.replaceChildren(placeholder);
+    };
+    const loadFigure = async (figure, bypassCache = false) => {
       const reference = figure.dataset.lessonMediaRef || '';
       try {
         const blob = await library.readMediaBlob({
           scope: figure.dataset.lessonMediaScope === 'shared' ? 'shared' : 'local',
           materialKind: figure.dataset.lessonMediaScope === 'shared' ? '' : 'lesson',
-          materialId: figure.dataset.lessonMediaScope === 'shared' ? '' : state.filename,
+          materialId: figure.dataset.lessonMediaScope === 'shared'
+            ? ''
+            : (figure.dataset.lessonMediaOwner || state.filename),
           reference,
           repositoryId: figure.dataset.lessonMediaRepository || state.repositoryId
-        });
+        }, { bypassCache });
         if (!figure.isConnected) return;
         const objectUrl = URL.createObjectURL(blob);
-        state.mediaObjectUrls.push(objectUrl);
         const image = document.createElement('img');
         image.src = objectUrl;
         image.alt = figure.dataset.lessonMediaAlt || 'Ilustracja';
-        image.loading = 'lazy';
+        image.loading = 'eager';
         image.decoding = 'async';
+        image.fetchPriority = 'high';
+        try { void image.decode?.().catch(() => undefined); } catch { /* dekodowanie dokończy się przy malowaniu */ }
+        if (!figure.isConnected) {
+          URL.revokeObjectURL(objectUrl);
+          return;
+        }
+        state.mediaObjectUrls.push(objectUrl);
+        figure.classList.remove('is-error');
         figure.replaceChildren(image);
-      } catch (_) {
-        const placeholder = figure.querySelector('.lesson-managed-image-placeholder');
-        if (placeholder) placeholder.replaceChildren(document.createTextNode('Nie udało się wczytać obrazu.'));
-        figure.classList.add('is-error');
+      } catch (error) {
+        showError(figure, error);
       }
-    }));
+    };
+    if (!library?.readMediaBlob) {
+      figures.forEach((figure) => showError(figure, { code: 'MEDIA_CLIENT_UNAVAILABLE' }));
+      return;
+    }
+    await Promise.all(figures.map((figure) => loadFigure(figure)));
+  }
+
+  function scheduleLessonImagePrefetch() {
+    const library = window.ChemContentLibrary;
+    if (!library?.readMediaBlob || !state.lesson?.slides?.length) return;
+    const unique = new Map();
+    const orderedSlides = state.lesson.slides.slice(state.index, state.index + 3);
+    orderedSlides.forEach((slide) => {
+      if (unique.size >= 12 || !slide?.html?.includes('data-lesson-media-ref')) return;
+      const template = document.createElement('template');
+      template.innerHTML = slide.html;
+      template.content.querySelectorAll('[data-lesson-media-ref]').forEach((figure) => {
+        if (unique.size >= 12) return;
+        const shared = figure.dataset.lessonMediaScope === 'shared';
+        const input = {
+          scope: shared ? 'shared' : 'local',
+          materialKind: shared ? '' : 'lesson',
+          materialId: shared ? '' : (figure.dataset.lessonMediaOwner || state.filename),
+          reference: figure.dataset.lessonMediaRef || '',
+          repositoryId: figure.dataset.lessonMediaRepository || state.repositoryId
+        };
+        unique.set([
+          input.repositoryId, input.scope, input.materialId, input.reference
+        ].join(':'), input);
+      });
+    });
+    const preload = async () => {
+      const images = [...unique.values()];
+      for (let index = 0; index < images.length; index += 4) {
+        await Promise.allSettled(images.slice(index, index + 4).map((input) => library.readMediaBlob(input)));
+      }
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(() => { void preload(); }, { timeout: 1_500 });
+    } else {
+      window.setTimeout(() => { void preload(); }, 250);
+    }
   }
 
   function playSlideTransition(value) {

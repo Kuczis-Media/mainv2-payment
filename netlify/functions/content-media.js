@@ -40,7 +40,7 @@ exports.handler = async function contentMediaHandler(event = {}, context = {}) {
       headers: {
         'Content-Type': media.mimeType,
         'Content-Length': String(media.buffer.byteLength),
-        'Cache-Control': 'private, max-age=300',
+        'Cache-Control': 'private, max-age=3600, stale-while-revalidate=86400',
         'Content-Disposition': 'inline',
         'X-Content-Type-Options': 'nosniff',
         ...(media.mimeType === 'image/svg+xml'
@@ -58,4 +58,3 @@ exports.handler = async function contentMediaHandler(event = {}, context = {}) {
     return json({ error: code }, status);
   }
 };
-

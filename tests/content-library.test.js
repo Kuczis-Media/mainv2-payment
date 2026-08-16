@@ -402,6 +402,50 @@ test('browser content client searches metadata and validates names locally', () 
   assert.throws(() => browserLibrary.validateFilename('lesson', '../atom.md'));
 });
 
+test('browser media client reuses an authenticated image Blob and allows an explicit retry', async (t) => {
+  const originalDocument = global.document;
+  const originalLocation = global.location;
+  const originalAuth = global.ChemAuth;
+  const originalFetch = global.fetch;
+  const requests = [];
+  t.after(() => {
+    browserLibrary._test.clearMediaCache();
+    if (originalDocument === undefined) delete global.document;
+    else global.document = originalDocument;
+    if (originalLocation === undefined) delete global.location;
+    else global.location = originalLocation;
+    if (originalAuth === undefined) delete global.ChemAuth;
+    else global.ChemAuth = originalAuth;
+    global.fetch = originalFetch;
+  });
+  browserLibrary._test.clearMediaCache();
+  global.document = { querySelector: () => null };
+  global.location = { origin: 'https://course.example' };
+  global.ChemAuth = { getAccessToken: async () => 'identity-secret' };
+  global.fetch = async (url, options) => {
+    requests.push({ url: String(url), options });
+    return new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), {
+      status: 200,
+      headers: { 'content-type': 'image/png' }
+    });
+  };
+
+  const image = {
+    scope: 'local', materialKind: 'lesson', materialId: 'test.md',
+    reference: 'photos/model.png', repositoryId: 'default'
+  };
+  const first = await browserLibrary.readMediaBlob(image);
+  const second = await browserLibrary.readMediaBlob(image);
+  assert.equal(first, second);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].options.cache, 'default');
+  assert.equal(requests[0].options.headers.Authorization, 'Bearer identity-secret');
+  assert.equal(browserLibrary._test.mediaCacheSize(), 1);
+
+  await browserLibrary.readMediaBlob(image, { bypassCache: true });
+  assert.equal(requests.length, 2);
+});
+
 test('browser content client never sends an Identity token to a cross-origin endpoint', async (t) => {
   const originalDocument = global.document;
   const originalLocation = global.location;

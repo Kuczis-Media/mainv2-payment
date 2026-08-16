@@ -3129,6 +3129,21 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
 }
 .scientific-notation-button.is-format { background: color-mix(in srgb, var(--chem-primary) 9%, var(--chem-surface)); }
 
+.lesson-managed-image-placeholder .lesson-image-retry {
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 1px solid color-mix(in srgb, var(--chem-danger) 34%, var(--chem-line));
+  border-radius: 10px;
+  color: var(--chem-danger);
+  background: var(--chem-surface);
+  cursor: pointer;
+  font: inherit;
+  font-size: .58rem;
+  font-weight: 800;
+}
+
+.lesson-managed-image-placeholder .lesson-image-retry:disabled { cursor: wait; opacity: .62; }
+
 .lesson-preview-body h1,
 .lesson-preview-body h2,
 .lesson-preview-body h3 {

@@ -14,6 +14,8 @@ const MAX_QUIZ_BYTES = 2 * 1024 * 1024;
 const MAX_QUESTION_BANK_BYTES = 5 * 1024 * 1024;
 const MAX_MEDIA_BYTES = 10 * 1024 * 1024;
 const MAX_MEDIA_UPLOAD_BYTES = 4 * 1024 * 1024;
+const MEDIA_READ_CACHE_MS = 5 * 60 * 1000;
+const MAX_MEDIA_READ_CACHE_BYTES = 24 * 1024 * 1024;
 const SAFE_REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const SAFE_REPOSITORY_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const SAFE_TOKEN_ENV = /^GITHUB_CONTENT_TOKEN(?:_[A-Z0-9][A-Z0-9_]*)?$/;
@@ -31,6 +33,8 @@ const SAFE_SHA = /^[a-f0-9]{40,64}$/i;
 const PROMPT_POINT_HEADER = /^::punkt[ \t]+([1-9]\d{0,3})[ \t]*$/i;
 const SIMPLE_PROMPT_POINT_HEADER = /^([1-9]\d{0,3})[.)][ \t]+(.+)$/;
 const listCache = new Map();
+const mediaReadCache = new Map();
+let mediaReadCacheBytes = 0;
 const mutationQueues = new Map();
 const MAX_REPOSITORIES = 20;
 
@@ -769,6 +773,39 @@ function mediaMimeType(rawFilename) {
   })[extension] || '';
 }
 
+function mediaReadCacheKey(config, directory, filename) {
+  return `${config.repository}:${config.ref}:${config.root || ''}:${directory}/${filename}`;
+}
+
+function removeMediaReadCache(key) {
+  const cached = mediaReadCache.get(key);
+  if (!cached) return;
+  mediaReadCacheBytes = Math.max(0, mediaReadCacheBytes - cached.buffer.byteLength);
+  mediaReadCache.delete(key);
+}
+
+function cachedMedia(key) {
+  const cached = mediaReadCache.get(key);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    removeMediaReadCache(key);
+    return null;
+  }
+  mediaReadCache.delete(key);
+  mediaReadCache.set(key, cached);
+  return cached;
+}
+
+function cacheMedia(key, buffer, mimeType) {
+  removeMediaReadCache(key);
+  const entry = { buffer, mimeType, expiresAt: Date.now() + MEDIA_READ_CACHE_MS };
+  mediaReadCache.set(key, entry);
+  mediaReadCacheBytes += buffer.byteLength;
+  while (mediaReadCacheBytes > MAX_MEDIA_READ_CACHE_BYTES && mediaReadCache.size > 1) {
+    removeMediaReadCache(mediaReadCache.keys().next().value);
+  }
+}
+
 function mediaLocation(rawScope, rawMaterialKind, rawMaterialId) {
   const scope = cleanString(rawScope).toLowerCase() || 'local';
   if (scope === 'shared') {
@@ -931,6 +968,7 @@ async function saveMedia(rawScope, rawMaterialKind, rawMaterialId, rawFilename, 
       },
       { ...options, creating: true, fileExpected: false }
     );
+    removeMediaReadCache(mediaReadCacheKey(config, location.directory, media.filename));
     return {
       kind: 'media',
       scope: location.scope,
@@ -955,6 +993,19 @@ async function readMedia(rawScope, rawMaterialKind, rawMaterialId, rawReference,
   const reference = validateMediaReference(location, rawReference);
   const config = configFromOptions(options);
   const filename = reference.slice(location.referencePrefix.length);
+  const cacheKey = mediaReadCacheKey(config, location.directory, filename);
+  const cached = cachedMedia(cacheKey);
+  if (cached) {
+    return {
+      buffer: cached.buffer,
+      mimeType: cached.mimeType,
+      reference,
+      scope: location.scope,
+      materialKind: location.materialKind,
+      materialId: location.materialId,
+      repositoryId: config.id
+    };
+  }
   const response = await githubRequest(config, `${location.directory}/${filename}`, {
     ...options,
     raw: true,
@@ -963,6 +1014,7 @@ async function readMedia(rawScope, rawMaterialKind, rawMaterialId, rawReference,
   const buffer = await readResponseBytes(response, MAX_MEDIA_BYTES);
   const mimeType = mediaMimeType(filename);
   if (!mimeType) throw new ContentRepositoryError('INVALID_MEDIA_REFERENCE', 400);
+  cacheMedia(cacheKey, buffer, mimeType);
   return {
     buffer,
     mimeType,
@@ -992,6 +1044,7 @@ async function deleteMedia(rawScope, rawMaterialKind, rawMaterialId, rawReferenc
       },
       { ...options, fileExpected: true }
     );
+    removeMediaReadCache(mediaReadCacheKey(config, location.directory, filename));
     return {
       kind: 'media',
       deleted: true,
@@ -1040,6 +1093,8 @@ function cleanString(value) {
 
 function clearCache() {
   listCache.clear();
+  mediaReadCache.clear();
+  mediaReadCacheBytes = 0;
 }
 
 module.exports = {

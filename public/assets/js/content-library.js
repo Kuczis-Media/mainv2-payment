@@ -12,6 +12,11 @@
   const SAFE_EXAM_ID = /^[a-z0-9][a-z0-9-]{0,79}$/;
   const SAFE_QUESTION_BANK_FILENAME = /^question-bank\.json$/;
   const SAFE_REPOSITORY_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
+  const MEDIA_CACHE_TTL_MS = 15 * 60 * 1000;
+  const MEDIA_CACHE_MAX_ENTRIES = 96;
+  const MEDIA_FETCH_TIMEOUT_MS = 12_000;
+  const MEDIA_RETRY_DELAYS_MS = Object.freeze([0, 300, 900]);
+  const mediaBlobCache = new Map();
 
   const ERROR_MESSAGES = Object.freeze({
     ACCESS_EXPIRED: 'Dostęp do kursu wygasł.',
@@ -299,7 +304,7 @@
     if (typeof input.contentBase64 !== 'string' || !input.contentBase64) {
       throw new ContentLibraryError('MEDIA_INVALID', 422);
     }
-    return request({}, {
+    const saved = await request({}, {
       method: 'PUT',
       body: {
         kind: 'media',
@@ -310,11 +315,13 @@
         repositoryId: validateRepositoryId(input.repositoryId)
       }
     });
+    invalidateMediaBlob(owner, saved.reference || saved.ref || `photos/${filename}`, input.repositoryId);
+    return saved;
   }
 
   async function removeMedia(input = {}) {
     const owner = normalizeMediaOwner(input);
-    return request({}, {
+    const removed = await request({}, {
       method: 'DELETE',
       body: {
         kind: 'media',
@@ -324,10 +331,39 @@
         repositoryId: validateRepositoryId(input.repositoryId)
       }
     });
+    invalidateMediaBlob(owner, input.reference, input.repositoryId);
+    return removed;
   }
 
-  async function readMediaBlob(input = {}, options = {}) {
-    const owner = normalizeMediaOwner(input);
+  function mediaBlobCacheKey(owner, reference, repositoryId) {
+    return [
+      validateRepositoryId(repositoryId),
+      owner.scope,
+      owner.materialKind,
+      owner.materialId,
+      String(reference || '').trim().toLowerCase()
+    ].join(':');
+  }
+
+  function invalidateMediaBlob(owner, reference, repositoryId) {
+    try { mediaBlobCache.delete(mediaBlobCacheKey(owner, reference, repositoryId)); } catch { /* invalid input */ }
+  }
+
+  function trimMediaBlobCache() {
+    while (mediaBlobCache.size > MEDIA_CACHE_MAX_ENTRIES) {
+      mediaBlobCache.delete(mediaBlobCache.keys().next().value);
+    }
+  }
+
+  function wait(milliseconds) {
+    return new Promise((resolve) => (root?.setTimeout || setTimeout)(resolve, milliseconds));
+  }
+
+  function transientMediaStatus(status) {
+    return [404, 408, 425, 429].includes(status) || status >= 500;
+  }
+
+  async function fetchMediaBlob(owner, input, options = {}) {
     const applicationOrigin = root && root.location ? root.location.origin : 'https://local.invalid';
     const url = new URL(mediaEndpoint(), applicationOrigin);
     if (url.origin !== applicationOrigin) throw new ContentLibraryError('INVALID_CONTENT_ENDPOINT', 400);
@@ -341,25 +377,66 @@
     Object.entries(values).forEach(([key, value]) => {
       if (value) url.searchParams.set(key, value);
     });
-    const token = await accessToken(options.forceRefresh);
-    let response;
-    try {
-      response = await root.fetch(url, {
-        method: 'GET',
-        cache: 'no-store',
-        credentials: 'same-origin',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-    } catch {
-      throw new ContentLibraryError('CONTENT_REPOSITORY_UNAVAILABLE', 503);
+    let forceRefresh = Boolean(options.forceRefresh);
+    let lastError = null;
+    for (let attempt = 0; attempt < MEDIA_RETRY_DELAYS_MS.length; attempt += 1) {
+      if (MEDIA_RETRY_DELAYS_MS[attempt]) await wait(MEDIA_RETRY_DELAYS_MS[attempt]);
+      const token = await accessToken(forceRefresh);
+      const controller = typeof AbortController === 'function' ? new AbortController() : null;
+      const timeout = (root?.setTimeout || setTimeout)(() => controller?.abort(), MEDIA_FETCH_TIMEOUT_MS);
+      let response;
+      try {
+        response = await root.fetch(url, {
+          method: 'GET',
+          cache: 'default',
+          credentials: 'same-origin',
+          headers: { Accept: 'image/*', Authorization: `Bearer ${token}` },
+          ...(controller ? { signal: controller.signal } : {})
+        });
+      } catch (error) {
+        lastError = new ContentLibraryError(
+          error?.name === 'AbortError' ? 'CONTENT_REPOSITORY_TIMEOUT' : 'CONTENT_REPOSITORY_UNAVAILABLE',
+          error?.name === 'AbortError' ? 504 : 503
+        );
+        if (attempt + 1 < MEDIA_RETRY_DELAYS_MS.length) continue;
+        throw lastError;
+      } finally {
+        (root?.clearTimeout || clearTimeout)(timeout);
+      }
+      if (response.status === 401 && !forceRefresh) {
+        forceRefresh = true;
+        lastError = new ContentLibraryError('AUTH_EXPIRED', 401);
+        continue;
+      }
+      if (!response.ok) {
+        let payload = {};
+        try { payload = await response.json(); } catch { /* binary endpoint */ }
+        lastError = new ContentLibraryError(payload.error || 'CONTENT_REPOSITORY_UNAVAILABLE', response.status);
+        if (transientMediaStatus(response.status) && attempt + 1 < MEDIA_RETRY_DELAYS_MS.length) continue;
+        throw lastError;
+      }
+      const blob = await response.blob();
+      if (!blob.size || (blob.type && !blob.type.startsWith('image/'))) {
+        throw new ContentLibraryError('MEDIA_INVALID', 422);
+      }
+      return blob;
     }
-    if (response.status === 401 && !options.forceRefresh) return readMediaBlob(input, { forceRefresh: true });
-    if (!response.ok) {
-      let payload = {};
-      try { payload = await response.json(); } catch { /* binary endpoint */ }
-      throw new ContentLibraryError(payload.error || 'CONTENT_REPOSITORY_UNAVAILABLE', response.status);
-    }
-    return response.blob();
+    throw lastError || new ContentLibraryError('CONTENT_REPOSITORY_UNAVAILABLE', 503);
+  }
+
+  function readMediaBlob(input = {}, options = {}) {
+    const owner = normalizeMediaOwner(input);
+    const key = mediaBlobCacheKey(owner, input.reference, input.repositoryId);
+    const cached = mediaBlobCache.get(key);
+    if (!options.bypassCache && cached && cached.expiresAt > Date.now()) return cached.promise;
+    if (cached) mediaBlobCache.delete(key);
+    const promise = fetchMediaBlob(owner, input, options).catch((error) => {
+      if (mediaBlobCache.get(key)?.promise === promise) mediaBlobCache.delete(key);
+      throw error;
+    });
+    mediaBlobCache.set(key, { promise, expiresAt: Date.now() + MEDIA_CACHE_TTL_MS });
+    trimMediaBlobCache();
+    return promise;
   }
 
   async function status(options = {}) {
@@ -443,6 +520,10 @@
     presentationUrl,
     validateFilename,
     validateRepositoryId,
-    _test: { endpoint }
+    _test: {
+      endpoint,
+      clearMediaCache() { mediaBlobCache.clear(); },
+      mediaCacheSize() { return mediaBlobCache.size; }
+    }
   };
 });
