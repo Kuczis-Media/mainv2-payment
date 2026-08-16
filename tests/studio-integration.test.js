@@ -64,6 +64,7 @@ test('Studio exposes dashboard, lesson, exam and prompt authoring workflows', ()
   const styles = read('public/members/module/studio/style.css');
   const examBuilder = read('public/members/module/studio/exam-builder.js');
   const examStyles = read('public/members/module/exam/style.css');
+  const examPlayer = read('public/members/module/exam/script.js');
   const mathJaxConfig = read('public/members/module/mathjax-config.js');
 
   assert.ok(fs.existsSync(path.join(studioRoot, 'dashboard-model.js')));
@@ -95,6 +96,16 @@ test('Studio exposes dashboard, lesson, exam and prompt authoring workflows', ()
   assert.match(examBuilder, /handleMediaDrop/);
   assert.match(styles, /\.exam-media-dropzone/);
   assert.match(examStyles, /\[hidden\]\s*\{\s*display:\s*none\s*!important/);
+  assert.match(examPlayer, /ANSWER_SAVE_INTERVAL_MS\s*=\s*8_000/);
+  assert.match(examPlayer, /SIGNAL_THROTTLE_MS\s*=\s*10_000/);
+  assert.match(examPlayer, /autosave-batch/);
+  assert.match(examPlayer, /sessionStorage/);
+  assert.match(examPlayer, /pendingNavigationIndex/);
+  assert.match(examPlayer, /state\.attempt\.currentIndex\s*=\s*targetIndex/);
+  assert.match(examPlayer, /cursor_leave/);
+  assert.match(examPlayer, /context_menu/);
+  assert.match(examBuilder, /Sygnały wymagające uwagi/);
+  assert.match(styles, /\.exam-attempt-alerts/);
   assert.match(styles, /\.exam-builder-shell\s*\{[\s\S]*?height:\s*calc\(100dvh\s*-\s*var\(--studio-header-height\)\s*-\s*var\(--workspace-toolbar-height\)\)/);
   assert.match(styles, /\.exam-editor-panel,[\s\S]*?\.exam-summary-panel\s*\{[\s\S]*?overflow-y:\s*auto/);
   assert.match(html, /id=["']prompt-download-button["']/);

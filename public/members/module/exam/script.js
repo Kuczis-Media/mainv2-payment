@@ -2,6 +2,8 @@
   'use strict';
 
   const client = window.ChemExamClient;
+  const ANSWER_SAVE_INTERVAL_MS = 8_000;
+  const SIGNAL_THROTTLE_MS = 10_000;
   const byId = (id) => document.getElementById(id);
   const elements = {
     loading: byId('exam-loading'), start: byId('exam-start'), attempt: byId('exam-attempt'), result: byId('exam-result'),
@@ -25,7 +27,12 @@
     serverOffset: 0,
     timerId: 0,
     dirtyQuestions: new Set(),
+    answerVersions: new Map(),
     saveTimer: 0,
+    signalTimes: new Map(),
+    transitioning: false,
+    pendingNavigationIndex: null,
+    deadlineSaveFor: '',
     mutationQueue: Promise.resolve(),
     objectUrls: []
   };
@@ -38,12 +45,15 @@
     USER_NOT_ALLOWED: 'Ten egzamin nie jest przypisany do Twojego konta.',
     ATTEMPT_LIMIT_REACHED: 'Wykorzystano wszystkie dozwolone próby.',
     ATTEMPT_COOLDOWN: 'Następna próba będzie dostępna po zakończeniu cooldownu.',
-    ANSWER_REQUIRED: 'Najpierw zapisz odpowiedź na bieżące pytanie.',
+    ANSWER_REQUIRED: 'Najpierw odpowiedz na bieżące pytanie.',
+    INVALID_QUESTION_INDEX: 'Nie można przejść do tego pytania.',
+    QUESTION_NOT_UNLOCKED: 'To pytanie nie jest jeszcze odblokowane.',
     ANSWER_ALREADY_CONFIRMED: 'Ta odpowiedź została już zatwierdzona i nie można jej zmienić.',
     IMMEDIATE_FEEDBACK_DISABLED: 'Natychmiastowe sprawdzanie nie jest włączone dla tego egzaminu.',
     SKIPPING_DISABLED: 'Konfiguracja egzaminu nie pozwala pominąć pytania.',
     BACK_NAVIGATION_DISABLED: 'Cofanie zostało wyłączone dla tego egzaminu.',
     QUESTION_TIME_EXPIRED: 'Czas na to pytanie minął.',
+    ANSWER_BATCH_INVALID: 'Nie udało się przygotować paczki odpowiedzi do zapisu.',
     UNANSWERED_QUESTIONS: 'Odpowiedz na wszystkie wymagane pytania przed zakończeniem.',
     EXAM_UNAVAILABLE: 'Egzamin jest chwilowo niedostępny.'
   };
@@ -103,7 +113,7 @@
     });
     elements.previous.addEventListener('click', () => navigatePage(-1));
     elements.next.addEventListener('click', () => navigatePage(1));
-    elements.save.addEventListener('click', () => saveVisible(true));
+    elements.save.addEventListener('click', () => flushPendingAnswers(true));
     elements.submit.addEventListener('click', submitAttempt);
     elements.flag.addEventListener('click', toggleFlag);
     elements.navigatorGrid.addEventListener('click', (event) => {
@@ -115,9 +125,10 @@
     elements.questionList.addEventListener('click', questionAction);
     elements.theme.addEventListener('click', toggleTheme);
     window.addEventListener('pagehide', () => logLifecycle('leave', true));
-    document.addEventListener('visibilitychange', () => {
-      if (state.attempt?.status === 'active') void logLifecycle(document.hidden ? 'visibility_hidden' : 'visibility_visible');
-    });
+    document.documentElement.addEventListener('mouseleave', () => logSignal('cursor_leave'));
+    document.addEventListener('copy', () => logSignal('copy'));
+    document.addEventListener('paste', () => logSignal('paste'));
+    document.addEventListener('contextmenu', () => logSignal('context_menu'));
     window.addEventListener('beforeunload', (event) => {
       if (state.attempt?.status !== 'active') return;
       const policy = state.attempt.exam.security.leavePolicy;
@@ -182,7 +193,7 @@
         preview: state.preview,
         body: { materialId: state.materialId }
       });
-      state.attempt = payload.attempt;
+      initializeAttempt(payload.attempt, false);
       renderAttempt();
     } catch (error) { setMessage(elements.startMessage, errorMessage(error)); }
     finally { elements.startButton.disabled = false; }
@@ -192,7 +203,7 @@
     try {
       const payload = await client.attempt({ ...state.reference, attemptId, preview: state.preview });
       syncServerTime(payload.serverNow);
-      state.attempt = payload.attempt;
+      initializeAttempt(payload.attempt, true);
       if (state.attempt.status === 'active') {
         renderAttempt();
         const navigation = performance.getEntriesByType?.('navigation')?.[0];
@@ -217,6 +228,112 @@
     updateControls();
     startTimer();
     setMessage(elements.attemptMessage, '', false);
+  }
+
+  function pendingStorageKey(attemptId = state.attempt?.attemptId) {
+    return attemptId ? `chemdisk.exam.pending.${attemptId}` : '';
+  }
+
+  function cloneAnswer(value) {
+    if (value == null || typeof value !== 'object') return value;
+    try { return JSON.parse(JSON.stringify(value)); } catch (_) { return null; }
+  }
+
+  function initializeAttempt(attempt, restoreLocal) {
+    window.clearTimeout(state.saveTimer);
+    state.saveTimer = 0;
+    state.dirtyQuestions.clear();
+    state.answerVersions.clear();
+    state.signalTimes.clear();
+    state.transitioning = false;
+    state.pendingNavigationIndex = null;
+    state.deadlineSaveFor = '';
+    state.attempt = attempt;
+    if (restoreLocal && attempt?.status === 'active') restorePendingAnswers();
+    else if (attempt?.status && attempt.status !== 'active') clearPendingAnswers(attempt.attemptId);
+  }
+
+  function clearPendingAnswers(attemptId = state.attempt?.attemptId) {
+    const key = pendingStorageKey(attemptId);
+    if (!key) return;
+    try { sessionStorage.removeItem(key); } catch (_) {}
+  }
+
+  function capturePendingAnswers() {
+    const answers = {};
+    const versions = {};
+    if (!state.attempt) return { answers, versions, count: 0 };
+    const confirmed = new Set(state.attempt.confirmedQuestionIds || []);
+    for (const questionId of state.dirtyQuestions) {
+      if (confirmed.has(questionId) || !state.attempt.questions.some((question) => question.questionId === questionId)) continue;
+      answers[questionId] = cloneAnswer(state.attempt.answers?.[questionId]);
+      versions[questionId] = state.answerVersions.get(questionId) || 0;
+    }
+    return { answers, versions, count: Object.keys(answers).length };
+  }
+
+  function persistPendingAnswers() {
+    const key = pendingStorageKey();
+    if (!key) return;
+    const pending = capturePendingAnswers();
+    try {
+      if (!pending.count) sessionStorage.removeItem(key);
+      else sessionStorage.setItem(key, JSON.stringify({ answers: pending.answers, updatedAt: new Date().toISOString() }));
+    } catch (_) {}
+  }
+
+  function restorePendingAnswers() {
+    const key = pendingStorageKey();
+    if (!key) return;
+    let stored;
+    try { stored = JSON.parse(sessionStorage.getItem(key) || 'null'); } catch (_) { stored = null; }
+    if (!stored?.answers || typeof stored.answers !== 'object' || Array.isArray(stored.answers)) return;
+    const confirmed = new Set(state.attempt.confirmedQuestionIds || []);
+    Object.entries(stored.answers).forEach(([questionId, answer]) => {
+      if (confirmed.has(questionId) || !state.attempt.questions.some((question) => question.questionId === questionId)) return;
+      state.attempt.answers[questionId] = cloneAnswer(answer);
+      state.dirtyQuestions.add(questionId);
+      state.answerVersions.set(questionId, 1);
+    });
+    if (state.dirtyQuestions.size) scheduleAnswerSave();
+  }
+
+  function acceptServerAttempt(serverAttempt, sent = null) {
+    if (!serverAttempt) return;
+    if (serverAttempt.status !== 'active') {
+      state.attempt = serverAttempt;
+      state.dirtyQuestions.clear();
+      state.answerVersions.clear();
+      clearPendingAnswers(serverAttempt.attemptId);
+      return;
+    }
+    const local = capturePendingAnswers();
+    const optimisticIndex = state.transitioning && Number.isSafeInteger(state.pendingNavigationIndex)
+      ? state.pendingNavigationIndex : null;
+    if (sent) {
+      Object.keys(sent.answers || {}).forEach((questionId) => {
+        if ((state.answerVersions.get(questionId) || 0) !== sent.versions[questionId]) return;
+        state.dirtyQuestions.delete(questionId);
+        state.answerVersions.delete(questionId);
+        delete local.answers[questionId];
+      });
+    }
+    state.attempt = serverAttempt;
+    if (optimisticIndex != null && serverAttempt.questions[optimisticIndex]) {
+      serverAttempt.currentIndex = optimisticIndex;
+      serverAttempt.highestReachedIndex = Math.max(serverAttempt.highestReachedIndex, optimisticIndex);
+    }
+    const confirmed = new Set(serverAttempt.confirmedQuestionIds || []);
+    for (const questionId of [...state.dirtyQuestions]) {
+      if (confirmed.has(questionId) || !serverAttempt.questions.some((question) => question.questionId === questionId)) {
+        state.dirtyQuestions.delete(questionId);
+        state.answerVersions.delete(questionId);
+        continue;
+      }
+      if (Object.hasOwn(local.answers, questionId)) serverAttempt.answers[questionId] = local.answers[questionId];
+    }
+    persistPendingAnswers();
+    if (state.dirtyQuestions.size) scheduleAnswerSave();
   }
 
   function visibleIndices() {
@@ -371,10 +488,16 @@
   function answerChanged(event) {
     const article = event.target.closest('[data-question-id]');
     if (!article) return;
-    state.dirtyQuestions.add(article.dataset.questionId);
-    elements.saveState.textContent = 'Niezapisana odpowiedź';
-    window.clearTimeout(state.saveTimer);
-    state.saveTimer = window.setTimeout(() => saveVisible(false), 700);
+    const questionId = article.dataset.questionId;
+    const question = state.attempt.questions.find((candidate) => candidate.questionId === questionId);
+    if (!question || state.attempt.confirmedQuestionIds?.includes(questionId)) return;
+    state.attempt.answers[questionId] = readAnswer(article, question);
+    state.dirtyQuestions.add(questionId);
+    state.answerVersions.set(questionId, (state.answerVersions.get(questionId) || 0) + 1);
+    elements.saveState.textContent = 'Odpowiedź zapisana lokalnie';
+    persistPendingAnswers();
+    scheduleAnswerSave();
+    renderNavigator();
   }
 
   function readAnswer(article, question) {
@@ -388,41 +511,42 @@
     return Object.fromEntries(Array.from(article.querySelectorAll('[data-blank-id]')).map((input) => [input.dataset.blankId, input.value]));
   }
 
-  async function saveVisible(explicit) {
+  function scheduleAnswerSave() {
+    if (state.saveTimer || !state.dirtyQuestions.size || state.attempt?.status !== 'active') return;
+    state.saveTimer = window.setTimeout(() => {
+      state.saveTimer = 0;
+      void flushPendingAnswers(false);
+    }, ANSWER_SAVE_INTERVAL_MS);
+  }
+
+  async function flushPendingAnswers(explicit) {
     window.clearTimeout(state.saveTimer);
-    const articles = Array.from(elements.questionList.querySelectorAll('[data-question-id]'));
-    const confirmed = new Set(state.attempt.confirmedQuestionIds || []);
-    const targets = articles.filter((article) => !confirmed.has(article.dataset.questionId)
-      && (explicit || state.dirtyQuestions.has(article.dataset.questionId)));
-    if (!targets.length) return true;
-    elements.saveState.textContent = 'Zapisywanie…';
-    for (const article of targets) {
-      const question = state.attempt.questions.find((candidate) => candidate.questionId === article.dataset.questionId);
-      if (!question) continue;
-      try {
-        const payload = await mutate('autosave', {
-          questionId: question.questionId,
-          answer: readAnswer(article, question)
-        });
-        state.attempt = payload.attempt;
-        state.dirtyQuestions.delete(question.questionId);
-      } catch (error) {
-        if (error.code === 'ATTEMPT_VERSION_CONFLICT' && error.payload?.attempt) {
-          state.attempt = error.payload.attempt;
-          renderAttempt();
-        }
-        setMessage(elements.attemptMessage, errorMessage(error));
-        elements.saveState.textContent = 'Błąd zapisu';
-        return false;
-      }
+    state.saveTimer = 0;
+    const pending = capturePendingAnswers();
+    if (!pending.count) {
+      if (explicit) elements.saveState.textContent = 'Wszystkie odpowiedzi zapisane';
+      return true;
     }
-    elements.saveState.textContent = 'Odpowiedzi zapisane';
-    renderNavigator();
-    return true;
+    elements.saveState.textContent = `Zapisywanie odpowiedzi (${pending.count})…`;
+    try {
+      const payload = await mutate('autosave-batch', { answers: pending.answers });
+      acceptServerAttempt(payload.attempt, pending);
+      elements.saveState.textContent = state.dirtyQuestions.size ? 'Nowsze zmiany czekają na zapis' : 'Odpowiedzi zapisane';
+      renderNavigator();
+      return true;
+    } catch (error) {
+      if (error.code === 'ATTEMPT_VERSION_CONFLICT' && error.payload?.attempt) {
+        acceptServerAttempt(error.payload.attempt);
+        renderAttempt();
+      }
+      setMessage(elements.attemptMessage, errorMessage(error));
+      elements.saveState.textContent = 'Zapis chwilowo nieudany — ponowię automatycznie';
+      scheduleAnswerSave();
+      return false;
+    }
   }
 
   async function navigatePage(direction) {
-    if (!await saveVisible(true)) return;
     const indices = visibleIndices();
     const target = direction < 0 ? indices[0] - 1 : indices.at(-1) + 1;
     if (target < 0 || target >= state.attempt.totalQuestions) return;
@@ -430,22 +554,92 @@
   }
 
   async function navigateTo(targetIndex) {
-    if (!await saveVisible(true)) return;
+    if (state.transitioning) return;
+    const previousIndex = state.attempt.currentIndex;
+    const previousHighestReachedIndex = state.attempt.highestReachedIndex;
+    const localError = localNavigationError(targetIndex);
+    if (localError) {
+      setMessage(elements.attemptMessage, ERROR_MESSAGES[localError] || ERROR_MESSAGES.EXAM_UNAVAILABLE);
+      return;
+    }
+    state.transitioning = true;
+    state.pendingNavigationIndex = targetIndex;
+    window.clearTimeout(state.saveTimer);
+    state.saveTimer = 0;
+    const pending = capturePendingAnswers();
+    state.attempt.currentIndex = targetIndex;
+    state.attempt.highestReachedIndex = Math.max(state.attempt.highestReachedIndex, targetIndex);
+    if (state.attempt.exam.timing.mode === 'question') clearTimer();
+    renderQuestions();
+    renderNavigator();
+    updateControls();
+    setMessage(elements.attemptMessage, '', false);
     try {
-      const payload = await mutate('navigate', { targetIndex });
-      state.attempt = payload.attempt;
+      const payload = await mutate('navigate', {
+        targetIndex,
+        ...(pending.count ? { answers: pending.answers } : {})
+      });
+      acceptServerAttempt(payload.attempt, pending);
+      elements.saveState.textContent = state.dirtyQuestions.size ? 'Nowsze zmiany czekają na zapis' : 'Odpowiedzi zapisane';
+      renderNavigator();
+      updateControls();
+      startTimer();
+    } catch (error) {
+      state.pendingNavigationIndex = null;
+      if (error.payload?.attempt) acceptServerAttempt(error.payload.attempt);
+      else {
+        state.attempt.currentIndex = previousIndex;
+        state.attempt.highestReachedIndex = previousHighestReachedIndex;
+      }
+      scheduleAnswerSave();
       renderAttempt();
-    } catch (error) { setMessage(elements.attemptMessage, errorMessage(error)); }
+      setMessage(elements.attemptMessage, errorMessage(error));
+    } finally {
+      state.transitioning = false;
+      state.pendingNavigationIndex = null;
+      renderNavigator();
+      updateControls();
+    }
+  }
+
+  function localNavigationError(targetIndex) {
+    if (!Number.isSafeInteger(targetIndex) || targetIndex < 0 || targetIndex >= state.attempt.totalQuestions) {
+      return 'INVALID_QUESTION_INDEX';
+    }
+    const currentIndex = state.attempt.currentIndex;
+    const navigation = state.attempt.exam.navigation;
+    if (!navigation.allowBack && targetIndex < currentIndex) return 'BACK_NAVIGATION_DISABLED';
+    const nextSequentialIndex = visibleIndices().at(-1) + 1;
+    if (!navigation.allowFreeNavigation && targetIndex > nextSequentialIndex) return 'QUESTION_NOT_UNLOCKED';
+    if (targetIndex <= currentIndex) return '';
+    const timedOut = new Set(state.attempt.timedOutQuestionIds || []);
+    const unanswered = state.attempt.questions.slice(currentIndex, targetIndex).some((question) => (
+      !answerPresent(state.attempt.answers?.[question.questionId]) && !timedOut.has(question.questionId)
+    ));
+    if (unanswered && navigation.requireAnswerBeforeNext) return 'ANSWER_REQUIRED';
+    if (unanswered && !navigation.allowSkip) return 'SKIPPING_DISABLED';
+    return '';
   }
 
   async function toggleFlag() {
     const question = state.attempt.questions[state.attempt.currentIndex];
     const flagged = !state.attempt.flags.includes(question.questionId);
+    window.clearTimeout(state.saveTimer);
+    state.saveTimer = 0;
+    const pending = capturePendingAnswers();
     try {
-      const payload = await mutate('navigate', { targetIndex: state.attempt.currentIndex, flagged });
-      state.attempt = payload.attempt;
+      const payload = await mutate('navigate', {
+        targetIndex: state.attempt.currentIndex,
+        flagged,
+        ...(pending.count ? { answers: pending.answers } : {})
+      });
+      acceptServerAttempt(payload.attempt, pending);
       renderAttempt();
-    } catch (error) { setMessage(elements.attemptMessage, errorMessage(error)); }
+    } catch (error) {
+      if (error.payload?.attempt) acceptServerAttempt(error.payload.attempt);
+      scheduleAnswerSave();
+      setMessage(elements.attemptMessage, errorMessage(error));
+    }
   }
 
   function orderingAction(event) {
@@ -456,8 +650,6 @@
     if (!sibling) return;
     if (button.dataset.orderAction === 'up') item.parentNode.insertBefore(item, sibling);
     else item.parentNode.insertBefore(sibling, item);
-    const article = button.closest('[data-question-id]');
-    state.dirtyQuestions.add(article.dataset.questionId);
     renderOrderNumbers(item.parentNode);
     answerChanged({ target: button });
   }
@@ -469,15 +661,22 @@
   }
 
   async function confirmQuestion(questionId) {
-    if (!await saveVisible(true)) return;
+    window.clearTimeout(state.saveTimer);
+    state.saveTimer = 0;
+    const pending = capturePendingAnswers();
     const button = elements.questionList.querySelector(`[data-confirm-question="${CSS.escape(questionId)}"]`);
     if (button) button.disabled = true;
     try {
-      const payload = await mutate('confirm-answer', { questionId });
-      state.attempt = payload.attempt;
+      const payload = await mutate('confirm-answer', {
+        questionId,
+        ...(pending.count ? { answers: pending.answers } : {})
+      });
+      acceptServerAttempt(payload.attempt, pending);
       renderAttempt();
     } catch (error) {
+      if (error.payload?.attempt) acceptServerAttempt(error.payload.attempt);
       if (button) button.disabled = false;
+      scheduleAnswerSave();
       setMessage(elements.attemptMessage, errorMessage(error));
     }
   }
@@ -487,15 +686,25 @@
   }
 
   async function submitAttempt() {
-    if (!await saveVisible(true)) return;
-    const unanswered = state.attempt.totalQuestions - state.attempt.answeredCount;
+    const answered = Object.values(state.attempt.answers || {}).filter(answerPresent).length;
+    const unanswered = state.attempt.totalQuestions - answered;
     if (unanswered > 0 && !window.confirm(`Pozostało ${unanswered} pytań bez odpowiedzi. Zakończyć próbę?`)) return;
+    window.clearTimeout(state.saveTimer);
+    state.saveTimer = 0;
+    const pending = capturePendingAnswers();
     elements.submit.disabled = true;
     try {
-      const payload = await mutate('submit', { force: unanswered > 0 });
-      state.attempt = payload.attempt;
+      const payload = await mutate('submit', {
+        force: unanswered > 0,
+        ...(pending.count ? { answers: pending.answers } : {})
+      });
+      acceptServerAttempt(payload.attempt, pending);
+      try { sessionStorage.removeItem(pendingStorageKey()); } catch (_) {}
       renderResult(payload.result);
-    } catch (error) { setMessage(elements.attemptMessage, errorMessage(error)); }
+    } catch (error) {
+      scheduleAnswerSave();
+      setMessage(elements.attemptMessage, errorMessage(error));
+    }
     finally { elements.submit.disabled = false; }
   }
 
@@ -515,23 +724,39 @@
     return result;
   }
 
-  async function logLifecycle(eventType, keepalive) {
+  async function logLifecycle(eventType, keepalive, details = {}) {
     if (state.attempt?.status !== 'active') return;
     const attemptId = state.attempt.attemptId;
+    const pending = capturePendingAnswers();
     try {
       const payload = keepalive
         ? await client.mutate('event', {
           ...state.reference,
           preview: state.preview,
-          body: { attemptId, revision: state.attempt.revision, operationId: operationId(), eventType }
+          body: {
+            attemptId, revision: state.attempt.revision, operationId: operationId(), eventType, details,
+            ...(pending.count ? { answers: pending.answers } : {})
+          }
         }, { keepalive: true })
-        : await mutate('event', { eventType });
+        : await mutate('event', {
+          eventType,
+          details,
+          ...(pending.count ? { answers: pending.answers } : {})
+        });
       if (payload?.attempt?.attemptId === attemptId
         && state.attempt?.attemptId === attemptId
         && Number(payload.attempt.revision) >= Number(state.attempt.revision)) {
-        state.attempt = payload.attempt;
+        acceptServerAttempt(payload.attempt, pending);
       }
     } catch (_) {}
+  }
+
+  function logSignal(eventType) {
+    if (state.attempt?.status !== 'active') return;
+    const now = Date.now();
+    if (now - (state.signalTimes.get(eventType) || 0) < SIGNAL_THROTTLE_MS) return;
+    state.signalTimes.set(eventType, now);
+    void logLifecycle(eventType, false, { source: 'student_exam' });
   }
 
   function renderNavigator() {
@@ -544,15 +769,16 @@
       button.classList.toggle('is-current', visibleIndices().includes(index));
       button.classList.toggle('is-answered', answerPresent(state.attempt.answers[question.questionId]));
       button.classList.toggle('is-flagged', state.attempt.flags.includes(question.questionId));
-      button.disabled = !state.attempt.exam.navigation.allowFreeNavigation && index > state.attempt.highestReachedIndex + 1;
+      button.disabled = state.transitioning
+        || (!state.attempt.exam.navigation.allowFreeNavigation && index > state.attempt.highestReachedIndex + 1);
       return button;
     }));
   }
 
   function updateControls() {
     const indices = visibleIndices();
-    elements.previous.disabled = indices[0] === 0 || !state.attempt.exam.navigation.allowBack;
-    elements.next.disabled = indices.at(-1) >= state.attempt.totalQuestions - 1;
+    elements.previous.disabled = state.transitioning || indices[0] === 0 || !state.attempt.exam.navigation.allowBack;
+    elements.next.disabled = state.transitioning || indices.at(-1) >= state.attempt.totalQuestions - 1;
     elements.next.hidden = state.attempt.exam.display.mode === 'all';
     elements.previous.hidden = state.attempt.exam.display.mode === 'all';
     elements.submit.hidden = state.attempt.exam.display.mode !== 'all' && indices.at(-1) < state.attempt.totalQuestions - 1;
@@ -579,6 +805,10 @@
       ? Math.max(0, Math.floor((now - Date.parse(startedAt || state.attempt.startedAt)) / 1000))
       : remaining;
     elements.timer.textContent = formatClock(displayed);
+    if (remaining > 0 && remaining <= 5 && state.dirtyQuestions.size && state.deadlineSaveFor !== expiresAt) {
+      state.deadlineSaveFor = expiresAt;
+      void flushPendingAnswers(false);
+    }
     if (remaining <= 0) void timerExpired(timing.mode);
   }
 
@@ -587,18 +817,14 @@
     if (mode === 'exam') {
       try {
         const payload = await client.attempt({ ...state.reference, attemptId: state.attempt.attemptId, preview: state.preview });
-        state.attempt = payload.attempt;
+        acceptServerAttempt(payload.attempt);
         if (state.attempt.status !== 'active') renderResult(state.attempt.result);
       } catch (error) { setMessage(elements.attemptMessage, errorMessage(error)); }
       return;
     }
     setMessage(elements.attemptMessage, 'Czas na bieżące pytanie minął. Przejdź dalej.');
-    try {
-      const target = Math.min(state.attempt.totalQuestions - 1, state.attempt.currentIndex + 1);
-      const payload = await mutate('navigate', { targetIndex: target });
-      state.attempt = payload.attempt;
-      renderAttempt();
-    } catch (_) { renderAttempt(); }
+    const target = Math.min(state.attempt.totalQuestions - 1, state.attempt.currentIndex + 1);
+    await navigateTo(target);
   }
 
   function clearTimer() {
@@ -607,6 +833,7 @@
 
   function renderResult(result) {
     clearTimer();
+    if (state.attempt?.status && state.attempt.status !== 'active') clearPendingAnswers(state.attempt.attemptId);
     setView('result');
     const passed = result.passed;
     elements.resultIcon.textContent = passed === false ? '×' : '✓';

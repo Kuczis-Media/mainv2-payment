@@ -331,16 +331,10 @@ test('Exam Function provides autosave, resume, timer-safe result and blocks IDOR
   let feedbackAttempt = bodyOf(feedbackStart).attempt;
   assert.deepEqual(feedbackAttempt.immediateFeedback, {});
   const feedbackQuestion = feedbackAttempt.questions[0];
-  const feedbackSave = await examFunction.handler(eventFor('POST', {
-    action: 'autosave', repositoryId: 'default', examId: 'feedback-test', attemptId: feedbackAttempt.attemptId,
-    revision: feedbackAttempt.revision, operationId: 'feedback-save-operation', questionId: feedbackQuestion.questionId,
-    answer: feedbackQuestion.options[0].answerId
-  }), studentContext());
-  feedbackAttempt = bodyOf(feedbackSave).attempt;
-  assert.deepEqual(feedbackAttempt.immediateFeedback, {});
   const confirmed = await examFunction.handler(eventFor('POST', {
     action: 'confirm-answer', repositoryId: 'default', examId: 'feedback-test', attemptId: feedbackAttempt.attemptId,
-    revision: feedbackAttempt.revision, operationId: 'feedback-confirm-operation', questionId: feedbackQuestion.questionId
+    revision: feedbackAttempt.revision, operationId: 'feedback-confirm-operation', questionId: feedbackQuestion.questionId,
+    answers: { [feedbackQuestion.questionId]: feedbackQuestion.options[0].answerId }
   }), studentContext());
   assert.equal(confirmed.statusCode, 200);
   feedbackAttempt = bodyOf(confirmed).attempt;
@@ -395,6 +389,57 @@ test('Exam Function provides autosave, resume, timer-safe result and blocks IDOR
   }), studentContext());
   assert.equal(nextTimedPage.statusCode, 200);
   assert.equal(bodyOf(nextTimedPage).attempt.currentIndex, 2);
+
+  currentDefinition = definition({
+    examId: 'batch-navigation', attempts: { mode: 'unlimited' },
+    questions: [question('single_choice', 'batch-1'), question('single_choice', 'batch-2')],
+    navigation: { allowFreeNavigation: false, allowSkip: false, requireAnswerBeforeNext: true }
+  });
+  const batchStart = await examFunction.handler(eventFor('POST', {
+    action: 'start', repositoryId: 'default', examId: 'batch-navigation'
+  }), studentContext());
+  let batchAttempt = bodyOf(batchStart).attempt;
+  const [batchFirst, batchSecond] = batchAttempt.questions;
+  const lockedBatch = await examFunction.handler(eventFor('POST', {
+    action: 'autosave-batch', repositoryId: 'default', examId: 'batch-navigation', attemptId: batchAttempt.attemptId,
+    revision: batchAttempt.revision, operationId: 'batch-locked-operation',
+    answers: {
+      [batchFirst.questionId]: batchFirst.options[0].answerId,
+      [batchSecond.questionId]: batchSecond.options[0].answerId
+    }
+  }), studentContext());
+  assert.equal(lockedBatch.statusCode, 409);
+  assert.equal(bodyOf(lockedBatch).error, 'QUESTION_NOT_UNLOCKED');
+  const unchangedAfterRejectedBatch = await examStorage.readAttempt(
+    examStore, 'default', 'batch-navigation', USER_B, batchAttempt.attemptId
+  );
+  assert.equal(unchangedAfterRejectedBatch.value.answers[batchFirst.questionId], undefined);
+  const batchedNavigate = await examFunction.handler(eventFor('POST', {
+    action: 'navigate', repositoryId: 'default', examId: 'batch-navigation', attemptId: batchAttempt.attemptId,
+    revision: batchAttempt.revision, operationId: 'batch-navigate-operation', targetIndex: 1,
+    answers: { [batchFirst.questionId]: batchFirst.options[0].answerId }
+  }), studentContext());
+  assert.equal(batchedNavigate.statusCode, 200);
+  batchAttempt = bodyOf(batchedNavigate).attempt;
+  assert.equal(batchAttempt.currentIndex, 1);
+  assert.equal(batchAttempt.answers[batchFirst.questionId], batchFirst.options[0].answerId);
+  const signal = await examFunction.handler(eventFor('POST', {
+    action: 'event', repositoryId: 'default', examId: 'batch-navigation', attemptId: batchAttempt.attemptId,
+    revision: batchAttempt.revision, operationId: 'batch-copy-signal', eventType: 'copy',
+    details: { source: 'student_exam' }
+  }), studentContext());
+  assert.equal(signal.statusCode, 200);
+  batchAttempt = bodyOf(signal).attempt;
+  const batchSubmit = await examFunction.handler(eventFor('POST', {
+    action: 'submit', repositoryId: 'default', examId: 'batch-navigation', attemptId: batchAttempt.attemptId,
+    revision: batchAttempt.revision, operationId: 'batch-submit-operation', force: false,
+    answers: { [batchSecond.questionId]: batchSecond.options[0].answerId }
+  }), studentContext());
+  assert.equal(batchSubmit.statusCode, 200);
+  assert.equal(bodyOf(batchSubmit).result.scorePercent, 100);
+  const storedBatch = await examStorage.readAttempt(examStore, 'default', 'batch-navigation', USER_B, batchAttempt.attemptId);
+  assert.ok(storedBatch.value.events.some((entry) => entry.type === 'copy'));
+  assert.ok(storedBatch.value.events.every((entry) => !['save_answer', 'change_question'].includes(entry.type)));
 });
 
 test('attempt strategies, display pages, cooldown and lesson references remain deterministic', async () => {
@@ -453,7 +498,11 @@ test('admin exam reports require fresh admin role and expose answer keys only to
     flags: [], currentIndex: 0, highestReachedIndex: 0, startedAt: now, submittedAt: now, lastActivityAt: now,
     expiresAt: null, questionStartedAt: {}, questionExpiresAt: {}, timedOutQuestionIds: [], durationSeconds: 25,
     result: examCommon.gradeAttempt({ questions: [rawQuestion], answers: { [rawQuestion.questionId]: rawQuestion.correctAnswerIds[0] } }, storedDefinition),
-    events: [{ type: 'start', timestamp: now, index: 0 }, { type: 'submit', timestamp: now, index: 0 }], operationIds: []
+    events: [
+      { type: 'start', timestamp: now, index: 0 },
+      { type: 'copy', timestamp: now, index: 0, details: { source: 'student_exam' } },
+      { type: 'submit', timestamp: now, index: 0 }
+    ], operationIds: []
   };
   await examStorage.createAttempt(examStore, attempt);
   await examStorage.syncAttemptIndexes(examStore, attempt, attempt.profile);
@@ -484,6 +533,7 @@ test('admin exam reports require fresh admin role and expose answer keys only to
   }), contextFor(canonical));
   assert.equal(detailed.statusCode, 200);
   assert.deepEqual(bodyOf(detailed).attempt.questions[0].correctAnswerIds, rawQuestion.correctAnswerIds);
+  assert.ok(bodyOf(detailed).attempt.events.some((entry) => entry.type === 'copy'));
 
   const reset = await adminExamsFunction.handler(eventFor('DELETE', {
     repositoryId: 'default', examId: 'egzamin-testowy', targetUserId: USER_A,

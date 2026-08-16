@@ -936,6 +936,21 @@
     const reset = create('button', 'button button-danger', 'Resetuj próbę');
     reset.type = 'button'; reset.dataset.examAction = 'reset-attempt'; reset.dataset.userId = attempt.userId; reset.dataset.attemptId = attempt.attemptId;
     heading.append(copy, reset); report.append(heading);
+    const signalTypes = new Set(['cursor_leave', 'copy', 'paste', 'context_menu']);
+    const signals = (attempt.events || []).filter((entry) => signalTypes.has(entry.type));
+    const signalBox = document.createElement('details');
+    signalBox.className = `exam-attempt-alerts${signals.length ? ' has-alerts' : ''}`;
+    const signalSummary = document.createElement('summary');
+    signalSummary.append(
+      create('span', '', signals.length ? `Sygnały wymagające uwagi — ${signals.length}` : 'Sygnały wymagające uwagi — brak'),
+      create('strong', '', signals.length ? 'Sprawdź' : 'OK')
+    );
+    signalBox.append(
+      signalSummary,
+      create('p', 'exam-attempt-alert-note', 'Są to pomocnicze sygnały z przeglądarki, a nie dowód niesamodzielnej pracy. Wyjście kursorem może oznaczać także użycie paska przeglądarki.')
+    );
+    signals.forEach((entry) => signalBox.append(attemptEventRow(entry, true)));
+    report.append(signalBox);
     (attempt.questions || []).forEach((question, index) => {
       const graded = attempt.result?.questionResults?.find((entry) => entry.questionId === question.questionId);
       const details = document.createElement('details'); details.className = 'exam-attempt-question';
@@ -949,14 +964,31 @@
       if (question.explanation) details.append(create('p', '', question.explanation));
       report.append(details);
     });
+    const ordinaryEvents = (attempt.events || []).filter((entry) => !signalTypes.has(entry.type));
     const events = document.createElement('details'); events.className = 'exam-attempt-events';
-    const eventSummary = document.createElement('summary'); eventSummary.textContent = `Dziennik zdarzeń (${attempt.events?.length || 0})`;
+    const eventSummary = document.createElement('summary'); eventSummary.textContent = `Pozostałe zdarzenia próby (${ordinaryEvents.length})`;
     events.append(eventSummary);
-    (attempt.events || []).forEach((entry) => {
-      events.append(create('p', '', `${new Date(entry.timestamp).toLocaleString('pl-PL')} · ${entry.type} · pytanie ${Number(entry.index) + 1}`));
-    });
+    ordinaryEvents.forEach((entry) => events.append(attemptEventRow(entry, false)));
     report.append(events);
     return report;
+  }
+
+  function attemptEventRow(entry, alert) {
+    const labels = {
+      start: 'Rozpoczęcie próby', resume: 'Wznowienie próby', refresh: 'Odświeżenie strony',
+      leave: 'Opuszczenie strony', timeout: 'Upłynięcie czasu', submit: 'Zakończenie próby',
+      visibility_hidden: 'Ukrycie karty', visibility_visible: 'Powrót do karty',
+      cursor_leave: 'Kursor opuścił obszar strony', copy: 'Kopiowanie', paste: 'Wklejanie',
+      context_menu: 'Otwarcie menu prawego przycisku', save_answer: 'Zapis odpowiedzi',
+      change_question: 'Zmiana pytania', confirm_answer: 'Zatwierdzenie odpowiedzi'
+    };
+    const question = entry.index != null && Number.isSafeInteger(Number(entry.index)) && Number(entry.index) >= 0
+      ? ` · pytanie ${Number(entry.index) + 1}` : '';
+    return create(
+      'p',
+      alert ? 'exam-attempt-alert-row' : '',
+      `${new Date(entry.timestamp).toLocaleString('pl-PL')} · ${labels[entry.type] || entry.type}${question}`
+    );
   }
 
   function answerKey(question) {

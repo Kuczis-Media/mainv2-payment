@@ -649,12 +649,20 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
 .exam-attempt-report h3 { margin: 3px 0; }
 .exam-attempt-report header p { margin: 0; color: var(--chem-muted); font-size: .75rem; }
 .exam-attempt-question,
-.exam-attempt-events { border: 1px solid var(--chem-line); border-radius: 11px; background: var(--chem-surface-soft); }
+.exam-attempt-events,
+.exam-attempt-alerts { border: 1px solid var(--chem-line); border-radius: 11px; background: var(--chem-surface-soft); }
+.exam-attempt-alerts.has-alerts { border-color: color-mix(in srgb, var(--chem-danger) 52%, var(--chem-line)); background: color-mix(in srgb, var(--chem-danger) 7%, var(--chem-surface-soft)); }
 .exam-attempt-question summary,
-.exam-attempt-events summary { display: flex; padding: 11px 13px; align-items: center; justify-content: space-between; gap: 16px; cursor: pointer; font-size: .76rem; }
+.exam-attempt-events summary,
+.exam-attempt-alerts summary { display: flex; padding: 11px 13px; align-items: center; justify-content: space-between; gap: 16px; cursor: pointer; font-size: .76rem; }
+.exam-attempt-alerts summary strong { color: var(--chem-muted); }
+.exam-attempt-alerts.has-alerts summary strong { color: var(--chem-danger); }
 .exam-attempt-question pre { margin: 0 12px 12px; padding: 12px; overflow: auto; white-space: pre-wrap; background: var(--chem-surface); border-radius: 9px; font-size: .7rem; }
 .exam-attempt-question > p,
-.exam-attempt-events > p { margin: 0; padding: 8px 13px; color: var(--chem-muted); font-size: .7rem; }
+.exam-attempt-events > p,
+.exam-attempt-alerts > p { margin: 0; padding: 8px 13px; color: var(--chem-muted); font-size: .7rem; }
+.exam-attempt-alert-note { border-top: 1px solid var(--chem-line); line-height: 1.5; }
+.exam-attempt-alert-row { color: var(--chem-danger) !important; border-top: 1px solid color-mix(in srgb, var(--chem-danger) 16%, transparent); }
 .exam-report-empty { color: var(--chem-muted); font-size: .78rem; }
 
 .project-icon {

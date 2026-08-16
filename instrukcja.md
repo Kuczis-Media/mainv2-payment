@@ -1878,11 +1878,11 @@ Lokalne minimum lekcji, np. 75%, nie zmienia globalnego progu egzaminu, np. 60%.
 
 ### 35.6. Próba ucznia
 
-Po kliknięciu **Rozpocznij** serwer zapisuje zestaw i kolejność pytań, czas startu, ewentualny termin końca i numer próby. Odpowiedzi zapisują się automatycznie po krótkiej przerwie w pisaniu oraz przed zmianą ekranu. Odświeżenie strony nie usuwa próby, jeżeli konfiguracja pozwala wrócić.
+Po kliknięciu **Rozpocznij** serwer zapisuje zestaw i kolejność pytań, czas startu, ewentualny termin końca i numer próby. Zaznaczenie odpowiedzi działa natychmiast i jest buforowane w `sessionStorage` bieżącej karty. Zmienione odpowiedzi trafiają na serwer jedną paczką mniej więcej co 8 sekund albo razem z przejściem, zatwierdzeniem pytania lub zakończeniem próby. Nowe pytanie pojawia się od razu, natomiast Function potwierdza nawigację w tle i nadal sprawdza jej reguły server-side. Odświeżenie strony odtwarza najnowszy stan serwerowy oraz niezapisany bufor tej karty, jeżeli konfiguracja pozwala wrócić. Bufor jest usuwany po zakończeniu próby i nie zawiera klucza odpowiedzi.
 
 Jeśli administrator włączył informację natychmiastową, samo zaznaczenie lub autosave jeszcze niczego nie ujawnia. Dopiero zatwierdzenie konkretnego pytania zapisuje nieodwracalny stan tego pytania i pobiera z serwera ograniczoną informację zwrotną. Pozostałe pytania aktywnej próby nadal nie zawierają klucza.
 
-Timer i punktacja są serwerowe. Przesunięcie zegara urządzenia, edycja HTML ani wysłanie własnego procentu nie zmienia wyniku. System rejestruje podstawowe zdarzenia, ale zamknięcie karty nie zawsze może zostać wiarygodnie wysłane przez przeglądarkę. Event log nie jest pełnym proctoringiem.
+Timer i punktacja są serwerowe. Przesunięcie zegara urządzenia, edycja HTML ani wysłanie własnego procentu nie zmienia wyniku. System nie zapisuje historii każdego kliknięcia ani każdego przejścia. Rejestruje cykl próby oraz alerty: wyjście kursorem poza stronę, kopiowanie, wklejanie i otwarcie menu prawego przycisku. Administrator widzi je w zwijanej sekcji **Sygnały wymagające uwagi** raportu próby. Alerty są ograniczane częstotliwościowo i mają charakter pomocniczy — pasek przeglądarki, menu systemowe lub ograniczenia przeglądarki mogą wpływać na ich znaczenie, a zamknięcie karty nie zawsze da się dostarczyć do serwera. Event log nie jest pełnym proctoringiem.
 
 `progressPercent` oznacza część egzaminu z zapisaną odpowiedzią, a `scorePercent` wynik merytoryczny. Samo otwarcie nie kończy egzaminu. Globalne wyłączenie pasków postępu nie wyłącza zapisu odpowiedzi, timerów ani wyników egzaminu.
 
@@ -1896,7 +1896,7 @@ Przed usunięciem egzaminu Builder sprawdza Dashboard i lekcje w wybranym repozy
 
 ### 35.8. Koszt i diagnostyka
 
-Egzamin wykonuje więcej wywołań Functions niż zwykły materiał: start, autosave zmienionych odpowiedzi, nawigacja i zakończenie zapisują stan oraz małe indeksy w Blobs. Tryb odpowiedzi natychmiastowej dodaje jedno zatwierdzenie Function/Blobs na sprawdzone pytanie. Zapis jest opóźniony i grupowany, a raporty korzystają z indeksów zamiast skanować cały magazyn. Wyłączenie centralnego postępu zatrzymuje procent kursu, lecz nie może zatrzymać przechowywania samej próby. Wyszukiwarka odbiorców działa wyłącznie podczas pracy administratora i nie zwiększa kosztu zwykłych wejść uczniów.
+Egzamin wykonuje więcej wywołań Functions niż zwykły materiał, ale odpowiedź nie jest już zapisywana osobnym żądaniem przed każdą zmianą pytania. Zmiany są grupowane co około 8 sekund, a nawigacja, zatwierdzenie i submit przenoszą oczekujące odpowiedzi w tym samym atomowym żądaniu. Przy 60 pytaniach wyświetlanych pojedynczo pełne przejście bez dodatkowych obrazów, alertów i trybu natychmiastowego to zwykle około 63 wywołania Function: definicja, otwarcie, start, 59 przejść i zakończenie. Dodatkowe autosave pojawią się tylko wtedy, gdy uczeń pozostaje na pytaniu dłużej niż interwał; alerty i indywidualne zatwierdzenia również są osobnymi wywołaniami. Raporty korzystają z indeksów zamiast skanować cały magazyn. Wyłączenie centralnego postępu zatrzymuje procent kursu, lecz nie może zatrzymać przechowywania samej próby.
 
 Najczęstsze problemy:
 

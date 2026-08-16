@@ -38,8 +38,12 @@ const {
 } = require('../admin-common.js');
 
 const MAX_BODY_BYTES = 512 * 1024;
-const MUTATIONS = new Set(['open', 'start', 'autosave', 'confirm-answer', 'navigate', 'event', 'submit']);
-const EVENT_TYPES = new Set(['refresh', 'leave', 'resume', 'visibility_hidden', 'visibility_visible']);
+const MAX_BATCH_ANSWERS = 500;
+const MUTATIONS = new Set(['open', 'start', 'autosave', 'autosave-batch', 'confirm-answer', 'navigate', 'event', 'submit']);
+const EVENT_TYPES = new Set([
+  'refresh', 'leave', 'resume', 'visibility_hidden', 'visibility_visible',
+  'cursor_leave', 'copy', 'paste', 'context_menu'
+]);
 
 exports.handler = async function examHandler(event = {}, context = {}) {
   const method = String(event.httpMethod || '').toUpperCase();
@@ -147,6 +151,7 @@ async function handlePost(event, auth) {
     return json({ error: 'ATTEMPT_FINISHED', result: resultForStudent(attempt, attempt.definitionSnapshot) }, 409);
   }
   if (body.action === 'autosave') return autosave(store, attempt, body, auth);
+  if (body.action === 'autosave-batch') return autosaveBatch(store, attempt, body, auth);
   if (body.action === 'confirm-answer') return confirmAnswer(store, attempt, body, auth);
   if (body.action === 'navigate') return navigate(store, attempt, body, auth);
   if (body.action === 'event') return logEvent(store, attempt, body, auth);
@@ -284,30 +289,32 @@ async function startAttempt(store, loaded, reference, body, auth) {
 
 async function autosave(store, attempt, body, auth) {
   const questionId = String(body.questionId || '');
-  const index = attempt.questions.findIndex((question) => question.questionId === questionId);
-  if (index < 0) return json({ error: 'QUESTION_NOT_FOUND' }, 404);
-  const definition = attempt.definitionSnapshot;
-  const navigation = definition.navigation;
-  if (!navigation.allowFreeNavigation && index > attempt.highestReachedIndex) {
-    return json({ error: 'QUESTION_NOT_UNLOCKED' }, 409);
-  }
-  if (!navigation.allowBack && index < attempt.currentIndex) return json({ error: 'BACK_NAVIGATION_DISABLED' }, 409);
-  const timedOut = questionTimedOut(attempt, questionId);
-  if (timedOut) return json({ error: 'QUESTION_TIME_EXPIRED' }, 409);
-  const answer = sanitizeAnswer(attempt.questions[index], body.answer);
+  if (!questionId) return json({ error: 'QUESTION_NOT_FOUND' }, 404);
+  return saveAnswerBatch(store, attempt, {
+    ...body,
+    answers: { [questionId]: body.answer }
+  }, auth);
+}
+
+async function autosaveBatch(store, attempt, body, auth) {
+  return saveAnswerBatch(store, attempt, body, auth);
+}
+
+async function saveAnswerBatch(store, attempt, body, auth) {
   const operation = operationInput(attempt, body);
   const outcome = await updateAttempt(store, operation, (draft) => {
-    if ((draft.confirmedQuestionIds || []).includes(questionId)) {
-      return { error: 'ANSWER_ALREADY_CONFIRMED' };
-    }
-    draft.answers[questionId] = answer;
-    addEvent(draft, 'save_answer', { questionId, index });
-    return {};
+    const applied = applyAnswerBatch(draft, body.answers);
+    return applied.error ? applied : { savedCount: applied.count };
   });
   if (outcome.result?.error) return updateError(outcome.result);
-  const saved = outcome.result?.attempt || outcome.result?.attempt;
+  const saved = outcome.result?.attempt;
   await syncAttemptState(store, saved, auth);
-  return json({ attempt: safeAttempt(saved), saved: true, duplicate: Boolean(outcome.result?.duplicate) });
+  return json({
+    attempt: safeAttempt(saved),
+    saved: true,
+    savedCount: Number(outcome.result?.savedCount) || 0,
+    duplicate: Boolean(outcome.result?.duplicate)
+  });
 }
 
 async function confirmAnswer(store, attempt, body, auth) {
@@ -325,6 +332,8 @@ async function confirmAnswer(store, attempt, body, auth) {
   }
   if (questionTimedOut(attempt, questionId)) return json({ error: 'QUESTION_TIME_EXPIRED' }, 409);
   const outcome = await updateAttempt(store, operationInput(attempt, body), (draft) => {
+    const applied = applyAnswerBatch(draft, body.answers);
+    if (applied.error) return applied;
     if (!answerIsComplete(draft.questions[index], draft.answers?.[questionId])) return { error: 'ANSWER_REQUIRED' };
     draft.confirmedQuestionIds = Array.isArray(draft.confirmedQuestionIds) ? draft.confirmedQuestionIds : [];
     if (!draft.confirmedQuestionIds.includes(questionId)) {
@@ -349,33 +358,28 @@ async function navigate(store, attempt, body, auth) {
   if (!Number.isSafeInteger(targetIndex) || targetIndex < 0 || targetIndex >= attempt.questions.length) {
     return json({ error: 'INVALID_QUESTION_INDEX' }, 400);
   }
-  const navigation = attempt.definitionSnapshot.navigation;
-  if (!navigation.allowBack && targetIndex < attempt.currentIndex) return json({ error: 'BACK_NAVIGATION_DISABLED' }, 409);
-  const nextSequentialIndex = visibleEndIndex(
-    attempt.definitionSnapshot.display,
-    attempt.currentIndex,
-    attempt.questions.length
-  ) + 1;
-  if (!navigation.allowFreeNavigation && targetIndex > nextSequentialIndex) {
-    return json({ error: 'QUESTION_NOT_UNLOCKED' }, 409);
-  }
-  const advancing = targetIndex > attempt.currentIndex;
-  const crossed = advancing
-    ? attempt.questions.slice(attempt.currentIndex, targetIndex)
-    : [];
-  const unanswered = crossed.filter((question) => (
-    !answerIsPresent(attempt.answers[question.questionId]) && !questionTimedOut(attempt, question.questionId)
-  ));
-  if (advancing && navigation.requireAnswerBeforeNext && unanswered.length) {
-    return json({ error: 'ANSWER_REQUIRED' }, 409);
-  }
-  if (advancing && !navigation.allowSkip && unanswered.length) {
-    return json({ error: 'SKIPPING_DISABLED' }, 409);
-  }
   const operation = operationInput(attempt, body);
   const outcome = await updateAttempt(store, operation, (draft) => {
+    const applied = applyAnswerBatch(draft, body.answers);
+    if (applied.error) return applied;
     expireCurrentQuestionIfNeeded(draft);
-    const previousIndex = draft.currentIndex;
+    const navigation = draft.definitionSnapshot.navigation;
+    if (!navigation.allowBack && targetIndex < draft.currentIndex) return { error: 'BACK_NAVIGATION_DISABLED' };
+    const nextSequentialIndex = visibleEndIndex(
+      draft.definitionSnapshot.display,
+      draft.currentIndex,
+      draft.questions.length
+    ) + 1;
+    if (!navigation.allowFreeNavigation && targetIndex > nextSequentialIndex) {
+      return { error: 'QUESTION_NOT_UNLOCKED' };
+    }
+    const advancing = targetIndex > draft.currentIndex;
+    const crossed = advancing ? draft.questions.slice(draft.currentIndex, targetIndex) : [];
+    const unanswered = crossed.filter((question) => (
+      !answerIsPresent(draft.answers[question.questionId]) && !questionTimedOut(draft, question.questionId)
+    ));
+    if (advancing && navigation.requireAnswerBeforeNext && unanswered.length) return { error: 'ANSWER_REQUIRED' };
+    if (advancing && !navigation.allowSkip && unanswered.length) return { error: 'SKIPPING_DISABLED' };
     draft.currentIndex = targetIndex;
     draft.highestReachedIndex = Math.max(
       draft.highestReachedIndex,
@@ -390,8 +394,7 @@ async function navigate(store, attempt, body, auth) {
     } else if (body.flagged === false) {
       draft.flags = draft.flags.filter((id) => id !== target.questionId);
     }
-    addEvent(draft, 'change_question', { from: previousIndex, index: targetIndex, questionId: target.questionId });
-    return {};
+    return { savedCount: applied.count };
   });
   if (outcome.result?.error) return updateError(outcome.result);
   const saved = outcome.result?.attempt;
@@ -406,6 +409,8 @@ async function logEvent(store, attempt, body, auth) {
     return submit(store, attempt, { ...body, force: true }, auth, 'left');
   }
   const outcome = await updateAttempt(store, operationInput(attempt, body), (draft) => {
+    const applied = applyAnswerBatch(draft, body.answers);
+    if (applied.error) return applied;
     expireCurrentQuestionIfNeeded(draft);
     addEvent(draft, eventType, safeEventDetails(body.details));
     return {};
@@ -417,14 +422,16 @@ async function logEvent(store, attempt, body, auth) {
 }
 
 async function submit(store, attempt, body, auth, reason) {
-  const missing = attempt.questions.filter((question) => !answerIsPresent(attempt.answers[question.questionId]));
-  if (!body.force && attempt.definitionSnapshot.navigation.requireAnswerBeforeNext && missing.length) {
-    return json({ error: 'UNANSWERED_QUESTIONS', count: missing.length }, 409);
-  }
   const status = reason === 'timeout' ? 'timed_out' : 'submitted';
   const outcome = await updateAttempt(store, operationInput(attempt, body), (draft) => {
+    const applied = applyAnswerBatch(draft, body.answers);
+    if (applied.error) return applied;
+    const missing = draft.questions.filter((question) => !answerIsPresent(draft.answers[question.questionId]));
+    if (!body.force && draft.definitionSnapshot.navigation.requireAnswerBeforeNext && missing.length) {
+      return { error: 'UNANSWERED_QUESTIONS', count: missing.length };
+    }
     finishAttempt(draft, status, reason);
-    return {};
+    return { savedCount: applied.count };
   });
   if (outcome.result?.error) return updateError(outcome.result);
   const saved = outcome.result?.attempt;
@@ -457,7 +464,7 @@ async function finalizeExpiredAttempt(store, attempt, profile) {
     finishAttempt(draft, 'timed_out', 'timeout');
     return {};
   });
-  const saved = outcome.result?.attempt || outcome.result?.attempt || attempt;
+  const saved = outcome.result?.attempt || attempt;
   if (saved.status !== 'active') {
     if (!saved.preview) await syncAttemptIndexes(store, saved, profile || saved.profile);
     if (!saved.preview) await progressForAttempt(store, saved, { userId: saved.userId, user: { email: saved.profile?.email, user_metadata: { full_name: saved.profile?.name } } });
@@ -660,6 +667,29 @@ function sanitizeAnswer(question, raw) {
   return null;
 }
 
+function applyAnswerBatch(attempt, rawAnswers) {
+  if (rawAnswers == null) return { count: 0 };
+  if (!plainObject(rawAnswers)) return { error: 'ANSWER_BATCH_INVALID' };
+  const entries = Object.entries(rawAnswers);
+  if (!entries.length || entries.length > MAX_BATCH_ANSWERS) return { error: 'ANSWER_BATCH_INVALID' };
+  const navigation = attempt.definitionSnapshot.navigation;
+  const confirmed = new Set(attempt.confirmedQuestionIds || []);
+  const updates = [];
+  for (const [questionId, rawAnswer] of entries) {
+    const index = attempt.questions.findIndex((question) => question.questionId === questionId);
+    if (index < 0) return { error: 'QUESTION_NOT_FOUND' };
+    if (!navigation.allowFreeNavigation && index > attempt.highestReachedIndex) {
+      return { error: 'QUESTION_NOT_UNLOCKED' };
+    }
+    if (!navigation.allowBack && index < attempt.currentIndex) return { error: 'BACK_NAVIGATION_DISABLED' };
+    if (questionTimedOut(attempt, questionId)) return { error: 'QUESTION_TIME_EXPIRED' };
+    if (confirmed.has(questionId)) return { error: 'ANSWER_ALREADY_CONFIRMED' };
+    updates.push([questionId, sanitizeAnswer(attempt.questions[index], rawAnswer)]);
+  }
+  updates.forEach(([questionId, answer]) => { attempt.answers[questionId] = answer; });
+  return { count: updates.length };
+}
+
 function answerIsComplete(question, answer) {
   if (!answerIsPresent(answer)) return false;
   if (question.type === 'matching') {
@@ -685,7 +715,7 @@ function addEvent(attempt, type, details = {}) {
     index: Number.isSafeInteger(details.index) ? details.index : attempt.currentIndex,
     details: safeEventDetails(details)
   });
-  attempt.events = attempt.events.slice(-2_000);
+  attempt.events = attempt.events.slice(-500);
 }
 
 function safeEventDetails(value) {
@@ -736,10 +766,11 @@ function validateBodyFields(body) {
     open: ['materialId'],
     start: ['materialId'],
     autosave: ['attemptId', 'revision', 'operationId', 'questionId', 'answer'],
-    'confirm-answer': ['attemptId', 'revision', 'operationId', 'questionId'],
-    navigate: ['attemptId', 'revision', 'operationId', 'targetIndex', 'flagged'],
-    event: ['attemptId', 'revision', 'operationId', 'eventType', 'details', 'force'],
-    submit: ['attemptId', 'revision', 'operationId', 'force']
+    'autosave-batch': ['attemptId', 'revision', 'operationId', 'answers'],
+    'confirm-answer': ['attemptId', 'revision', 'operationId', 'questionId', 'answers'],
+    navigate: ['attemptId', 'revision', 'operationId', 'targetIndex', 'flagged', 'answers'],
+    event: ['attemptId', 'revision', 'operationId', 'eventType', 'details', 'force', 'answers'],
+    submit: ['attemptId', 'revision', 'operationId', 'force', 'answers']
   };
   const allowed = new Set([...common, ...(byAction[body.action] || [])]);
   return Object.keys(body).some((key) => !allowed.has(key))
@@ -756,9 +787,18 @@ function safeOperationId(value) {
 }
 
 function updateError(result) {
-  const status = result.error === 'ATTEMPT_VERSION_CONFLICT' || result.error === 'ANSWER_ALREADY_CONFIRMED'
-    ? 409 : result.error === 'ATTEMPT_NOT_FOUND' ? 404 : 400;
-  return json({ error: result.error, attempt: result.attempt ? safeAttempt(result.attempt) : undefined }, status);
+  const conflictErrors = new Set([
+    'ATTEMPT_VERSION_CONFLICT', 'ANSWER_ALREADY_CONFIRMED', 'QUESTION_TIME_EXPIRED',
+    'QUESTION_NOT_UNLOCKED', 'BACK_NAVIGATION_DISABLED', 'ANSWER_REQUIRED',
+    'SKIPPING_DISABLED', 'UNANSWERED_QUESTIONS'
+  ]);
+  const status = conflictErrors.has(result.error)
+    ? 409 : result.error === 'ATTEMPT_NOT_FOUND' || result.error === 'QUESTION_NOT_FOUND' ? 404 : 400;
+  return json({
+    error: result.error,
+    count: Number.isSafeInteger(result.count) ? result.count : undefined,
+    attempt: result.attempt ? safeAttempt(result.attempt) : undefined
+  }, status);
 }
 
 function emptyOptions() {
@@ -770,6 +810,7 @@ exports._test = {
   finalizeExpiredAttempt,
   loadDefinition,
   safeAttempt,
+  applyAnswerBatch,
   sanitizeAnswer,
   setProgressStoreFactory,
   setStoreFactory,
