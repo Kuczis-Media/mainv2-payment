@@ -143,6 +143,7 @@
       opcje: 'options',
       text: 'text',
       tekst: 'text',
+      text_json: 'textJson',
       check_mode: 'checkMode',
       tryb_sprawdzania: 'checkMode',
       case_sensitive: 'caseSensitive',
@@ -168,6 +169,17 @@
         );
       }
       values[key] = match[2].trim();
+    }
+
+    let taskText = values.text || '';
+    if (values.textJson !== undefined) {
+      try { taskText = JSON.parse(values.textJson); }
+      catch (_) {
+        throw new LessonFormatError('INVALID_TASK_TEXT', `Slajd ${slideNumber}: wielowierszowy tekst zadania jest uszkodzony.`);
+      }
+      if (typeof taskText !== 'string') {
+        throw new LessonFormatError('INVALID_TASK_TEXT', `Slajd ${slideNumber}: wielowierszowy tekst zadania musi być tekstem.`);
+      }
     }
 
     const typeAliases = {
@@ -241,7 +253,7 @@
           : type === 'gaps-text' ? 'Wpisz odpowiedzi w luki' : 'Twoja odpowiedź'
       ),
       placeholder: values.placeholder || '',
-      text: values.text || '',
+      text: taskText.replace(/\r\n?/g, '\n'),
       hint: values.hint || '',
       success: values.success || 'Dobrze! Możesz przejść dalej.'
     };

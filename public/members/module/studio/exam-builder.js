@@ -152,7 +152,7 @@
     state.initialized = true;
     Object.assign(elements, {
       workspace: byId('exam-workspace'), repository: byId('exam-repository-select'), search: byId('exam-library-search'),
-      library: byId('exam-library'), tabs: byId('exam-tab-list'), editor: byId('exam-editor'),
+      library: byId('exam-library'), libraryStatus: byId('exam-library-status'), tabs: byId('exam-tab-list'), editor: byId('exam-editor'),
       editorTitle: byId('exam-editor-title'), badge: byId('exam-status-badge'), validation: byId('exam-validation'),
       summary: byId('exam-summary'), status: byId('exam-builder-status'), newExam: byId('exam-new-button'),
       preview: byId('exam-preview-button'), remove: byId('exam-delete-button'), saveDraft: byId('exam-save-draft-button'),
@@ -222,6 +222,8 @@
         state.loaded = true;
         return true;
       } catch (error) {
+        elements.libraryStatus.textContent = error.message || 'Nie udało się pobrać biblioteki egzaminów.';
+        elements.libraryStatus.classList.add('is-error');
         elements.status.textContent = error.message || 'Nie udało się pobrać biblioteki egzaminów.';
         elements.status.classList.add('is-error');
         return false;
@@ -246,6 +248,8 @@
   async function loadAssets(force) {
     elements.status.className = 'exam-builder-status';
     elements.status.textContent = 'Pobieranie biblioteki egzaminów…';
+    elements.libraryStatus.classList.remove('is-error');
+    elements.libraryStatus.textContent = 'Pobieranie biblioteki egzaminów…';
     try {
       state.assets = await library.list('exam', { repositoryId: state.repositoryId, refresh: force });
       try {
@@ -262,6 +266,8 @@
       renderLibrary();
       render();
     } catch (error) {
+      elements.libraryStatus.textContent = error.message || 'Nie udało się pobrać egzaminów.';
+      elements.libraryStatus.classList.add('is-error');
       elements.status.textContent = error.message || 'Nie udało się pobrać egzaminów.';
       elements.status.classList.add('is-error');
     }
@@ -286,8 +292,9 @@
       return button;
     }));
     if (!assets.length) {
-      elements.library.append(create('p', 'exam-library-empty', query ? 'Brak pasujących egzaminów.' : 'Brak egzaminów w tym repozytorium.'));
+      elements.libraryStatus.textContent = query ? 'Brak egzaminów pasujących do wyszukiwania.' : 'Brak egzaminów w tym repozytorium.';
     } else {
+      elements.libraryStatus.textContent = `${assets.length} pasujących egzaminów.`;
       elements.library.append(pagedListApi.controls(document, state.libraryPaging, paged, {
         label: 'egzaminów',
         onMore: renderLibrary

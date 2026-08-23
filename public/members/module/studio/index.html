@@ -772,16 +772,21 @@
 
         <div class="quiz-builder-shell">
           <aside class="quiz-library-panel">
-            <div class="panel-heading"><div><small>Prywatne repozytorium</small><strong>Gotowe quizy</strong></div></div>
-            <label class="repository-picker">
-              <span>Repozytorium treści</span>
-              <select id="quiz-repository-select"></select>
-            </label>
-            <label class="palette-search">
-              <span class="sr-only">Szukaj quizu</span>
-              <input id="quiz-library-search" type="search" placeholder="Szukaj quizu…" autocomplete="off">
-            </label>
-            <div class="quiz-library" id="quiz-library" aria-label="Quizy w repozytorium"></div>
+            <details class="repository-library studio-builder-repository-library" open>
+              <summary>
+                <span><strong>Gotowe quizy z GitHuba</strong><small>Wczytaj do buildera</small></span>
+                <span aria-hidden="true">⌄</span>
+              </summary>
+              <div class="repository-library-body">
+                <label class="repository-picker">
+                  <span>Repozytorium</span>
+                  <select id="quiz-repository-select" aria-label="Repozytorium quizów"></select>
+                </label>
+                <input id="quiz-library-search" type="search" placeholder="Szukaj quizu…" autocomplete="off" aria-label="Szukaj quizu">
+                <p id="quiz-library-status" role="status" aria-live="polite">Łączenie z repozytorium…</p>
+                <div class="repository-asset-list quiz-library" id="quiz-library" aria-label="Quizy w repozytorium"></div>
+              </div>
+            </details>
             <div class="quiz-add-menu">
               <small>Dodaj pytanie</small>
               <button type="button" data-quiz-add="single"><b>○</b><span>Jedna odpowiedź</span></button>
@@ -847,15 +852,21 @@
         </div>
         <div class="presentation-builder-shell">
           <aside class="presentation-slides-panel">
-            <div class="presentation-library-controls">
-              <div class="studio-library-heading is-compact">
-                <small>Prywatne repozytorium</small>
-                <strong>Gotowe prezentacje</strong>
+            <details class="repository-library studio-builder-repository-library presentation-repository-library" open>
+              <summary>
+                <span><strong>Gotowe prezentacje z GitHuba</strong><small>Wczytaj do buildera</small></span>
+                <span aria-hidden="true">⌄</span>
+              </summary>
+              <div class="repository-library-body">
+                <label class="repository-picker">
+                  <span>Repozytorium</span>
+                  <select id="presentation-repository" aria-label="Repozytorium prezentacji"></select>
+                </label>
+                <input id="presentation-search" type="search" placeholder="Szukaj prezentacji…" autocomplete="off" aria-label="Szukaj prezentacji">
+                <p id="presentation-library-status" role="status" aria-live="polite">Łączenie z repozytorium…</p>
+                <div id="presentation-library" class="repository-asset-list presentation-library" aria-label="Prezentacje w repozytorium"></div>
               </div>
-              <label><span>Repozytorium</span><select id="presentation-repository"></select></label>
-              <label class="presentation-search"><span class="sr-only">Szukaj prezentacji</span><input id="presentation-search" type="search" placeholder="Szukaj prezentacji…"></label>
-              <div id="presentation-library" class="presentation-library"></div>
-            </div>
+            </details>
             <header><div><small>Scenariusz</small><strong>Slajdy</strong></div><button type="button" data-presentation-action="add-slide">＋</button></header>
             <div class="presentation-slide-list" id="presentation-slide-list"></div>
           </aside>
@@ -910,19 +921,21 @@
 
         <div class="exam-builder-shell">
           <aside class="exam-builder-navigation" aria-label="Sekcje Exam Buildera">
-            <div class="studio-library-heading">
-              <small>Prywatne repozytorium</small>
-              <strong>Gotowe egzaminy</strong>
-            </div>
-            <label class="repository-picker">
-              <span>Repozytorium treści</span>
-              <select id="exam-repository-select"></select>
-            </label>
-            <label class="palette-search exam-library-search">
-              <span class="sr-only">Szukaj egzaminu</span>
-              <input id="exam-library-search" type="search" placeholder="Szukaj egzaminu…" autocomplete="off">
-            </label>
-            <div class="exam-library" id="exam-library" aria-label="Egzaminy w repozytorium"></div>
+            <details class="repository-library studio-builder-repository-library" open>
+              <summary>
+                <span><strong>Gotowe egzaminy z GitHuba</strong><small>Wczytaj do buildera</small></span>
+                <span aria-hidden="true">⌄</span>
+              </summary>
+              <div class="repository-library-body">
+                <label class="repository-picker">
+                  <span>Repozytorium</span>
+                  <select id="exam-repository-select" aria-label="Repozytorium egzaminów"></select>
+                </label>
+                <input id="exam-library-search" type="search" placeholder="Szukaj egzaminu…" autocomplete="off" aria-label="Szukaj egzaminu">
+                <p id="exam-library-status" role="status" aria-live="polite">Łączenie z repozytorium…</p>
+                <div class="repository-asset-list exam-library" id="exam-library" aria-label="Egzaminy w repozytorium"></div>
+              </div>
+            </details>
             <nav class="exam-tab-list" id="exam-tab-list">
               <button class="is-active" type="button" data-exam-tab="information">Informacje</button>
               <button type="button" data-exam-tab="questions">Pytania</button>

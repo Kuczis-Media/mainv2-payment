@@ -72,6 +72,18 @@ button {
   display: none !important;
 }
 
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
 :focus-visible {
   outline: 3px solid var(--studio-focus);
   outline-offset: 2px;
@@ -4778,6 +4790,7 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
   color: var(--chem-text);
   font-size: 0.69rem;
   line-height: calc(38px + .8rem);
+  white-space: pre-line;
 }
 
 .preview-gap-field,
@@ -5834,6 +5847,44 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
 .presentation-action-grid button { min-height: 33px; color: var(--chem-text); background: var(--chem-bg); border: 1px solid var(--chem-line); border-radius: 8px; cursor: pointer; }
 .presentation-action-grid button:hover { color: var(--chem-primary); border-color: var(--chem-primary); }
 
+/* One repository-library pattern across Lesson, Quiz, Exam and Presentation builders. */
+.studio-builder-repository-library {
+  margin: 0 0 16px;
+}
+
+.quiz-library-panel .studio-builder-repository-library .repository-picker,
+.exam-builder-navigation .studio-builder-repository-library .repository-picker {
+  margin: 0;
+}
+
+.studio-builder-repository-library .quiz-library,
+.studio-builder-repository-library .exam-library,
+.studio-builder-repository-library .presentation-library {
+  max-height: 176px;
+  margin: 0;
+  gap: 5px;
+}
+
+.studio-builder-repository-library .presentation-library .repository-asset {
+  min-height: 46px;
+}
+
+.presentation-slides-panel > .presentation-repository-library {
+  margin: 12px;
+}
+
+.repository-library-empty {
+  margin: 0;
+  padding: 5px 2px;
+  color: var(--chem-muted);
+  font-size: .54rem;
+  line-height: 1.4;
+}
+
+.quiz-add-menu {
+  margin-top: 0;
+}
+
 @media (max-width: 1220px) {
   .exam-builder-shell { grid-template-columns: 230px minmax(0, 1fr); }
   .exam-summary-panel { display: none; }
@@ -5846,7 +5897,7 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
   .exam-builder-navigation { border-right: 0; border-bottom: 1px solid var(--chem-line); }
   .exam-tab-list { display: flex; padding-bottom: 4px; overflow-x: auto; }
   .exam-tab-list button { flex: 0 0 auto; white-space: nowrap; }
-  .exam-library { max-height: 130px; }
+  .studio-builder-repository-library .exam-library { max-height: 130px; }
   .exam-editor-panel { padding: 16px; }
   .exam-field-row,
   .exam-report-metrics { grid-template-columns: 1fr; }

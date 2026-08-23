@@ -12,6 +12,7 @@
     repository: byId('quiz-repository-select'),
     search: byId('quiz-library-search'),
     library: byId('quiz-library'),
+    libraryStatus: byId('quiz-library-status'),
     id: byId('quiz-id'),
     title: byId('quiz-title'),
     description: byId('quiz-description'),
@@ -63,6 +64,12 @@
   function setStatus(message, error) {
     elements.status.textContent = message || '';
     elements.status.classList.toggle('is-error', Boolean(error));
+  }
+
+  function setLibraryStatus(message, error = false) {
+    if (!elements.libraryStatus) return;
+    elements.libraryStatus.textContent = message || '';
+    elements.libraryStatus.classList.toggle('is-error', Boolean(error));
   }
 
   function saveLocal() {
@@ -361,10 +368,6 @@
 
   function renderLibrary() {
     const assets = library.search(state.assets, elements.search.value);
-    if (!assets.length) {
-      elements.library.replaceChildren(create('p', 'quiz-library-empty', state.assets.length ? 'Brak wyników.' : 'Brak quizów w tym repozytorium.'));
-      return;
-    }
     const paged = pagedListApi.page(state.libraryPaging, 'quiz-library', assets);
     elements.library.replaceChildren(...paged.items.map((asset) => {
       const button = create('button', `repository-asset${state.remoteId === asset.filename ? ' is-active' : ''}`);
@@ -379,10 +382,15 @@
       button.addEventListener('click', () => void openAsset(asset));
       return button;
     }));
-    elements.library.append(pagedListApi.controls(root.document, state.libraryPaging, paged, {
-      label: 'quizów',
-      onMore: renderLibrary
-    }));
+    if (assets.length) {
+      elements.library.append(pagedListApi.controls(root.document, state.libraryPaging, paged, {
+        label: 'quizów',
+        onMore: renderLibrary
+      }));
+      setLibraryStatus(`${assets.length} pasujących quizów.`);
+    } else {
+      setLibraryStatus(state.assets.length ? 'Brak quizów pasujących do wyszukiwania.' : 'Brak quizów w tym repozytorium.');
+    }
   }
 
   function render() {
@@ -394,6 +402,7 @@
   }
 
   async function loadLibrary(refresh = false) {
+    setLibraryStatus('Pobieranie biblioteki quizów…');
     try {
       if (!state.repositories.length) state.repositories = await library.repositories();
       if (!state.repositoryId) state.repositoryId = state.repositories.find((entry) => entry.default)?.id || state.repositories[0]?.id || '';
@@ -406,6 +415,7 @@
       state.assets = await library.list('quiz', { repositoryId: state.repositoryId, refresh });
       renderLibrary();
     } catch (error) {
+      setLibraryStatus(error?.message || 'Nie udało się wczytać biblioteki quizów.', true);
       setStatus(error?.message || 'Nie udało się wczytać biblioteki quizów.', true);
     }
   }

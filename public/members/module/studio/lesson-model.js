@@ -554,7 +554,7 @@
       id: oneLine(source.id) || nextId('task'),
       type,
       question: normalizeNewlines(source.question).trim(),
-      text: oneLine(source.text || source.gapText),
+      text: normalizeNewlines(source.text || source.gapText).trim(),
       label: oneLine(source.label) || (
         ['choice', 'abcd', 'gaps'].includes(type)
           ? 'Wybierz odpowiedź'
@@ -1110,7 +1110,9 @@
     if (task.type === 'choice' || task.type === 'abcd' || task.type === 'gaps') {
       lines.push(`options: ${task.options.join(' | ')}`);
     }
-    if (task.type === 'gaps' || task.type === 'gaps-text') lines.push(`text: ${task.text}`);
+    if (task.type === 'gaps' || task.type === 'gaps-text') {
+      lines.push(/\n/.test(task.text) ? `text_json: ${JSON.stringify(task.text)}` : `text: ${task.text}`);
+    }
     if (task.type === 'gaps-text') lines.push(`check_mode: ${task.checkMode}`);
     lines.push(`answer: ${task.answers.join(' | ')}`);
     if (task.caseSensitive && (task.type === 'text' || task.type === 'gaps-text')) {
@@ -1234,6 +1236,7 @@
       opcje: 'options',
       text: 'text',
       tekst: 'text',
+      text_json: 'textJson',
       check_mode: 'checkMode',
       tryb_sprawdzania: 'checkMode',
       case_sensitive: 'caseSensitive',
@@ -1252,6 +1255,14 @@
       }
       values[key] = match[2];
     });
+    let taskText = values.text || '';
+    if (values.textJson !== undefined) {
+      try { taskText = JSON.parse(values.textJson); }
+      catch (_) { throw new StudioLessonError('INVALID_TASK_TEXT', 'Wielowierszowy tekst zadania jest uszkodzony.', 'task.text'); }
+      if (typeof taskText !== 'string') {
+        throw new StudioLessonError('INVALID_TASK_TEXT', 'Wielowierszowy tekst zadania musi być tekstem.', 'task.text');
+      }
+    }
     const rawType = normalizeKey(values.type || 'text');
     const type = rawType === 'liczba' ? 'number'
       : rawType === 'tekst' ? 'text'
@@ -1266,7 +1277,7 @@
       placeholder: values.placeholder,
       hint: values.hint,
       feedback: values.feedback,
-      text: values.text,
+      text: taskText,
       checkMode: values.checkMode,
       options,
       answers,

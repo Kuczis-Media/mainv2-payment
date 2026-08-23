@@ -2815,7 +2815,7 @@
     const heading = create('div');
     heading.append(
       create('strong', '', 'Wizualny edytor zdania z lukami'),
-      create('small', '', 'Wpisuj zwykły tekst. Przyciskiem dodasz lukę dokładnie w wybranym miejscu.')
+      create('small', '', 'Wpisuj zwykły tekst. Enter tworzy nową linię w zadaniu kursanta, a przyciskiem dodasz lukę dokładnie w wybranym miejscu.')
     );
     header.append(heading);
     const structure = taskGapStructure(task);

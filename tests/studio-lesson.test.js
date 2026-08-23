@@ -455,6 +455,33 @@ test('studio publishes backgrounds, YouTube, Google Slides, ATONOM, flashcards a
   assert.equal(lessonParser.checkAnswer(slide.task, ['aldehydem', 'hydroksylowa']), false);
 });
 
+test('selectable true-false gaps preserve Enter line breaks through save and student rendering', () => {
+  const taskText = [
+    'A. Każde białko ma strukturę trzeciorzędową. {{odpowiedź A}}',
+    'B. Struktura czwartorzędowa wymaga kilku łańcuchów. {{odpowiedź B}}',
+    'C. Pojedynczy łańcuch może mieć strukturę trzeciorzędową. {{odpowiedź C}}'
+  ].join('\n');
+  const lesson = studio.createLesson({
+    title: 'Prawda czy fałsz',
+    filename: 'prawda-falsz.md',
+    slides: [{
+      task: {
+        type: 'gaps',
+        question: 'Oceń każde zdanie.',
+        text: taskText,
+        options: ['Prawda', 'Fałsz'],
+        answers: ['Fałsz', 'Prawda', 'Prawda']
+      }
+    }]
+  });
+
+  assert.equal(lesson.slides[0].task.text, taskText);
+  const markdown = studio.serializeLesson(lesson);
+  assert.ok(markdown.includes(`text_json: ${JSON.stringify(taskText)}`));
+  assert.equal(studio.parseLesson(markdown, lesson.filename).slides[0].task.text, taskText);
+  assert.equal(lessonParser.parseLesson(markdown, lesson.filename).slides[0].task.text, taskText);
+});
+
 test('studio round-trips manually typed gaps and their checking mode', () => {
   const lesson = studio.createLesson({
     title: 'Luki wpisywane przez ucznia',

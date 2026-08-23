@@ -13,6 +13,7 @@
     repository: byId('presentation-repository'),
     search: byId('presentation-search'),
     library: byId('presentation-library'),
+    libraryStatus: byId('presentation-library-status'),
     slides: byId('presentation-slide-list'),
     layout: byId('presentation-layout'),
     zoom: byId('presentation-zoom'),
@@ -70,6 +71,12 @@
     elements.status.classList.toggle('is-error', Boolean(error));
   }
 
+  function setLibraryStatus(message, error = false) {
+    if (!elements.libraryStatus) return;
+    elements.libraryStatus.textContent = message || '';
+    elements.libraryStatus.classList.toggle('is-error', Boolean(error));
+  }
+
   function pushHistory(raw = snapshot()) {
     if (state.undo[state.undo.length - 1] !== raw) state.undo.push(raw);
     state.undo = state.undo.slice(-80);
@@ -102,6 +109,7 @@
   }
 
   async function loadLibrary(refresh = false) {
+    setLibraryStatus('Pobieranie biblioteki prezentacji…');
     try {
       if (!state.repositories.length) state.repositories = await library.repositories();
       if (!state.repositoryId) state.repositoryId = state.repositories.find((entry) => entry.default)?.id || state.repositories[0]?.id || '';
@@ -114,6 +122,7 @@
       state.assets = await library.list('presentation', { repositoryId: state.repositoryId, refresh });
       renderLibrary();
     } catch (error) {
+      setLibraryStatus(error?.message || 'Nie udało się wczytać prezentacji.', true);
       setStatus(error?.message || 'Nie udało się wczytać prezentacji.', true);
     }
   }
@@ -134,11 +143,15 @@
       button.addEventListener('click', () => void openAsset(asset));
       return button;
     }));
-    if (!assets.length) elements.library.append(create('p', 'presentation-library-empty', 'Brak prezentacji w tym repozytorium.'));
-    else elements.library.append(pagedListApi.controls(root.document, state.libraryPaging, paged, {
-      label: 'prezentacji',
-      onMore: renderLibrary
-    }));
+    if (!assets.length) {
+      setLibraryStatus(state.assets.length ? 'Brak prezentacji pasujących do wyszukiwania.' : 'Brak prezentacji w tym repozytorium.');
+    } else {
+      setLibraryStatus(`${assets.length} pasujących prezentacji.`);
+      elements.library.append(pagedListApi.controls(root.document, state.libraryPaging, paged, {
+        label: 'prezentacji',
+        onMore: renderLibrary
+      }));
+    }
   }
 
   function cleanupUrls() {

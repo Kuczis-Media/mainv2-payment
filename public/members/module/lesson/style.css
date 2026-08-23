@@ -1452,6 +1452,7 @@ fieldset:focus-within {
   font-size: clamp(1rem, 2vw, 1.13rem);
   font-weight: 620;
   line-height: calc(42px + 1rem);
+  white-space: pre-line;
 }
 
 .gap-exercise select {

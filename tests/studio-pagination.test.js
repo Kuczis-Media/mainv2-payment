@@ -48,3 +48,21 @@ test('all Studio file explorers use the shared paginated list contract', () => {
     assert.match(script, /pagedListApi(?:\?)?\.reset/);
   });
 });
+
+test('quiz, exam and presentation libraries use the same repository accordion as lessons', () => {
+  const html = fs.readFileSync(path.join(root, 'public/members/module/studio/index.html'), 'utf8');
+  const builders = [
+    ['quiz', 'Gotowe quizy z GitHuba'],
+    ['exam', 'Gotowe egzaminy z GitHuba'],
+    ['presentation', 'Gotowe prezentacje z GitHuba']
+  ];
+
+  builders.forEach(([kind, title]) => {
+    assert.match(html, new RegExp(`<details class="repository-library studio-builder-repository-library[^\"]*" open>[\\s\\S]*?${title}`));
+    assert.match(html, new RegExp(`id="${kind}-(?:library-search|search)"[^>]*aria-label="Szukaj`));
+    assert.match(html, new RegExp(`id="${kind}-library-status" role="status" aria-live="polite"`));
+    assert.match(html, new RegExp(`class="repository-asset-list ${kind}-library"`));
+  });
+
+  assert.doesNotMatch(html, /<span class="sr-only">Szukaj (?:quizu|egzaminu|prezentacji)<\/span>/);
+});
