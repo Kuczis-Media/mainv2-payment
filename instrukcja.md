@@ -438,8 +438,8 @@ Aplikacja używa Gemini lub OpenAI tylko po stronie Netlify Functions. Kursant n
 1. Otwórz dashboard jako administrator.
 2. Wejdź w **Panel administratora → AI / Modele**.
 3. Kliknij **Nowa konfiguracja**, wpisz nazwę i wybierz Google Gemini albo OpenAI.
-4. Wpisz identyfikator modelu ręcznie i zapisz konfigurację. Lista modeli nie jest zamknięta.
-5. W sekcji klucza wklej API key i kliknij **Ustaw / zmień klucz**. Pełna wartość zostanie wysłana bezpośrednio do chronionej Function i zapisana w osobnym store sekretów; panel nie potrafi jej później odczytać.
+4. Wpisz identyfikator modelu ręcznie. Lista modeli nie jest zamknięta.
+5. W widocznym od razu polu **2. Klucz API** wklej API key i kliknij **3. Zapisz konfigurację i klucz**. Jedna akcja najpierw tworzy konfigurację, a następnie zapisuje klucz w osobnym chronionym store sekretów. Panel nie potrafi później odczytać jego pełnej wartości.
 6. Kliknij **Testuj**. Otrzymasz znormalizowany stan bez treści odpowiedzi i bez szczegółów mogących ujawnić sekret.
 7. W razie potrzeby ustaw konfigurację jako domyślną albo przypisz ją tylko do chatu.
 
@@ -855,7 +855,7 @@ Studio jest dostępne tylko dla konta z rolą `admin`. Zawiera:
 7. skrót do wspólnego **Media Managera**
 8. skrót do **AI / Modele** w chronionym panelu administratora
 
-Na stronie głównej Studio działa **Eksplorator treści**. Wybierz repozytorium i rozwiń folder **Lekcje**, **Egzaminy**, **Prezentacje**, **Quizy**, **Prompty** albo **Media wspólne**. Każdy materiał jest osobnym zwijanym folderem. Po jego otwarciu zobaczysz definicję oraz folder `photos`; zdjęcia są pobierane dopiero w tej chwili, dzięki czemu duże repozytorium nie tworzy od razu ogromnej listy ani wielu zapytań. Kliknij **Otwórz**, aby wczytać plik do odpowiedniego Buildera. **Duplikuj** poprosi o nową nazwę i skopiuje definicję razem z lokalnym `photos`; media wspólne pozostaną współdzielonymi referencjami. Quiz otwiera się bezpośrednio w aktywnym Quiz Builderze.
+Na stronie głównej Studio działa **Eksplorator treści**. Wybierz repozytorium i rozwiń folder **Lekcje**, **Egzaminy**, **Prezentacje**, **Quizy**, **Prompty** albo **Media wspólne**. Każdy materiał jest osobnym zwijanym folderem. Każda lista pokazuje najpierw maksymalnie 12 pozycji; przycisk **Pokaż więcej** dodaje następne 12 bez tworzenia od razu setek elementów interfejsu. Tak samo działają biblioteki plików w Dashboard Builderze, Lesson Builderze, Prompt Builderze, Quiz Builderze, Exam Builderze, Presentation Studio oraz obrazy w Media Managerze. Wpisanie nowego wyszukiwania lub zmiana repozytorium wraca do pierwszych 12 wyników. Po otwarciu materiału zobaczysz definicję oraz folder `photos`; zdjęcia są pobierane dopiero w tej chwili. Kliknij **Otwórz**, aby wczytać plik do odpowiedniego Buildera. **Duplikuj** poprosi o nową nazwę i skopiuje definicję razem z lokalnym `photos`; media wspólne pozostaną współdzielonymi referencjami. Quiz otwiera się bezpośrednio w aktywnym Quiz Builderze.
 
 ### Quiz Builder
 
@@ -922,6 +922,8 @@ Sekcja **Pomoc i konto** jest wymagana. Jeśli jej zabraknie, aplikacja dołącz
 4. Ustaw kolejność przeciąganiem lub przyciskami strzałek.
 5. Skonfiguruj każdy materiał i upewnij się, że ma włączone lub dziedziczone śledzenie postępu.
 6. Opublikuj dashboard.
+
+Organizer można również dodać do harmonijki, która już istnieje. Zaznacz tę harmonijkę i kliknij **Dodaj organizer po kolei** w jej ustawieniach albo przycisk **+1→** w nagłówku harmonijki. Powstanie osobny organizer wewnątrz; pozostałe materiały tej harmonijki nadal można otwierać w dowolnej kolejności. Jeżeli cała istniejąca harmonijka ma działać sekwencyjnie, zamiast dodawać dziecko zmień jej ustawienie **Sposób przechodzenia** na **Po kolei (organizer)**.
 
 Uczeń może od razu rozpocząć pierwszy krok. Następny przycisk pozostaje zablokowany do czasu ukończenia wszystkich wcześniejszych kroków. Google Slides w organizerze pokazują przycisk **Zakończ krok** i nie odblokowują kolejnego modułu przy samym otwarciu; jest to świadoma deklaracja ucznia, bo zewnętrzny podgląd Google nie udostępnia ChemDisk wiarygodnego stanu obejrzenia. PDF otwiera się bezpośrednio z numerowanej karty w wybranym trybie i po poprawnym otwarciu odblokowuje następny krok. Lekcja wymaga ukończenia wymaganych kroków, Quiz ChemDisk zapisuje ukończenie po sprawdzeniu odpowiedzi, a egzamin kończy się dopiero po zapisaniu zakończonej próby. Blokada jest sprawdzana przez serwer postępu; Exam Engine sprawdza ją dodatkowo przed otwarciem egzaminu. Organizer nie może zawierać kolejnej harmonijki — jeśli potrzebujesz drugiej ścieżki, dodaj osobny organizer.
 

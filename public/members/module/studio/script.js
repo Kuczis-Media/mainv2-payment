@@ -12,6 +12,7 @@
   const dashboardModelApi = window.ChemDashboardStudioModel;
   const lessonModelApi = window.ChemLessonStudioModel;
   const promptModelApi = window.ChemPromptStudioModel;
+  const pagedListApi = window.ChemStudioPagedList;
 
   const byId = (id) => document.getElementById(id);
   const all = (selector, root = document) => Array.from(root.querySelectorAll(selector));
@@ -138,6 +139,7 @@
       mediaByOwner: new Map(),
       mediaLoading: new Set(),
       explorerOpen: new Set(['lesson', 'exam', 'presentation', 'quiz', 'prompt']),
+      paging: pagedListApi.createState(),
       loaded: false,
       loading: false,
       error: '',
@@ -784,6 +786,13 @@
     );
     const actions = create('span', 'node-actions');
     if (node.kind === 'section' || node.kind === 'group') {
+      if (node.kind === 'group' && node.navigation !== 'sequential') {
+        actions.append(actionButton(
+          'add-organizer-child',
+          'Dodaj organizer po kolei do tej harmonijki',
+          '+1→'
+        ));
+      }
       const collapsed = state.dashboard.collapsedNodes.has(node.uid);
       const noun = node.kind === 'section'
         ? 'sekcję'
@@ -1271,6 +1280,20 @@
             ? 'Kolejny moduł odblokuje się dopiero po ukończeniu wszystkich wcześniejszych kroków.'
             : 'Uczeń może otwierać materiały w dowolnej kolejności.'
         ));
+        if (node.navigation !== 'sequential') {
+          const tools = create('section', 'inspector-progress-settings organizer-insert-tools');
+          tools.append(
+            create('h3', '', 'Organizer wewnątrz tej harmonijki'),
+            create('p', 'field-help', 'Dodaj osobny blok z kolejnością do już istniejącej harmonijki. Jej pozostałe materiały zachowają dowolną kolejność.'),
+          );
+          const addOrganizer = create('button', 'button button-primary', 'Dodaj organizer po kolei');
+          addOrganizer.type = 'button';
+          addOrganizer.dataset.inspectorAction = 'add-organizer-child';
+          addOrganizer.disabled = node.level >= 6;
+          if (node.level >= 6) addOrganizer.title = 'Osiągnięto maksymalny poziom zagnieżdżenia harmonijek.';
+          tools.append(addOrganizer);
+          form.append(tools);
+        }
       }
     } else if (node.kind === 'text' || node.kind === 'notice') {
       form.append(field(
@@ -1614,6 +1637,23 @@
   function dashboardNodeAction(action, uid) {
     const found = dashboardModelApi.findNode(state.dashboard.model, uid);
     if (!found || !found.container) return;
+    if (action === 'add-organizer-child' && found.node.kind === 'group' && found.node.navigation !== 'sequential') {
+      commitMutation('dashboard', () => {
+        const inserted = dashboardModelApi.insertNode(
+          state.dashboard.model,
+          uid,
+          createDashboardNode('organizer'),
+          found.node.blocks.length
+        );
+        if (!inserted) {
+          toast('Nie można dodać organizera', 'Ta harmonijka osiągnęła maksymalny poziom zagnieżdżenia.', 'error');
+          return;
+        }
+        state.dashboard.selectedUid = inserted.uid;
+        state.dashboard.collapsedNodes.delete(uid);
+      });
+      return;
+    }
     if (
       action === 'toggle-collapse'
       && (found.node.kind === 'section' || found.node.kind === 'group')
@@ -5989,6 +6029,20 @@
     return button;
   }
 
+  function renderPagedRepositoryAssets(container, assets, key, label, actionLabel, onClick) {
+    const paged = pagedListApi.page(state.contentLibrary.paging, key, assets);
+    container.replaceChildren(
+      ...paged.items.map((asset) => repositoryAssetButton(asset, actionLabel, onClick))
+    );
+    if (paged.total) {
+      container.append(pagedListApi.controls(document, state.contentLibrary.paging, paged, {
+        label,
+        onMore: renderRepositoryAssets
+      }));
+    }
+    return paged;
+  }
+
   function renderRepositoryAssets() {
     const library = window.ChemContentLibrary;
     if (!library) return;
@@ -5996,22 +6050,37 @@
       [...state.contentLibrary.lessons, ...state.contentLibrary.prompts, ...state.contentLibrary.exams, ...state.contentLibrary.presentations, ...state.contentLibrary.quizzes],
       elements.dashboardAssetSearch.value
     );
-    elements.dashboardAssetList.replaceChildren(
-      ...dashboardAssets.map((asset) => repositoryAssetButton(asset, 'Dodaj', insertDashboardAsset))
+    renderPagedRepositoryAssets(
+      elements.dashboardAssetList,
+      dashboardAssets,
+      'dashboard-assets',
+      'materiałów',
+      'Dodaj',
+      insertDashboardAsset
     );
     const lessonAssets = library.search(
       state.contentLibrary.lessons,
       elements.lessonAssetSearch.value
     );
-    elements.lessonAssetList.replaceChildren(
-      ...lessonAssets.map((asset) => repositoryAssetButton(asset, 'Wczytaj', importRepositoryLesson))
+    renderPagedRepositoryAssets(
+      elements.lessonAssetList,
+      lessonAssets,
+      'lesson-assets',
+      'lekcji',
+      'Wczytaj',
+      importRepositoryLesson
     );
     const promptAssets = library.search(
       state.contentLibrary.prompts,
       elements.promptAssetSearch.value
     );
-    elements.promptAssetList.replaceChildren(
-      ...promptAssets.map((asset) => repositoryAssetButton(asset, 'Wczytaj', importRepositoryPrompt))
+    renderPagedRepositoryAssets(
+      elements.promptAssetList,
+      promptAssets,
+      'prompt-assets',
+      'promptów',
+      'Wczytaj',
+      importRepositoryPrompt
     );
     if (state.contentLibrary.loaded) {
       elements.dashboardAssetStatus.textContent = dashboardAssets.length
@@ -6039,7 +6108,8 @@
       { kind: 'prompt', title: 'Prompty', icon: 'P', assets: state.contentLibrary.prompts }
     ];
     const roots = groups.map((group) => {
-      const visible = library?.search ? library.search(group.assets, query) : group.assets;
+      const matches = library?.search ? library.search(group.assets, query) : group.assets;
+      const paged = pagedListApi.page(state.contentLibrary.paging, `explorer-${group.kind}`, matches);
       const folder = document.createElement('details');
       folder.className = 'content-explorer-folder';
       folder.dataset.explorerRoot = group.kind;
@@ -6052,7 +6122,7 @@
       summary.append(
         create('span', 'content-explorer-folder-icon', group.icon),
         create('span', 'content-explorer-folder-copy'),
-        create('small', '', `${visible.length}/${group.assets.length}`),
+        create('small', '', `${matches.length}/${group.assets.length}`),
         create('span', 'content-explorer-chevron', '⌄')
       );
       summary.querySelector('.content-explorer-folder-copy').append(
@@ -6060,7 +6130,7 @@
         create('small', '', group.kind === 'lesson' ? 'Pliki Markdown i lokalne zdjęcia' : ['exam', 'presentation', 'quiz'].includes(group.kind) ? 'Definicja i lokalny folder photos' : 'Pliki JSON i TXT')
       );
       const files = create('div', 'content-explorer-files');
-      visible.forEach((asset) => {
+      paged.items.forEach((asset) => {
         const material = document.createElement('details');
         material.className = 'content-explorer-material';
         const ownerKey = explorerMediaKey(group.kind, asset.filename, asset.repositoryId);
@@ -6120,7 +6190,11 @@
         });
         files.append(material);
       });
-      if (!visible.length) files.append(create('p', 'content-explorer-empty', query ? 'Brak pasujących plików.' : 'Ten folder jest pusty.'));
+      if (!matches.length) files.append(create('p', 'content-explorer-empty', query ? 'Brak pasujących plików.' : 'Ten folder jest pusty.'));
+      else files.append(pagedListApi.controls(document, state.contentLibrary.paging, paged, {
+        label: 'plików',
+        onMore: renderContentExplorer
+      }));
       folder.append(summary, files);
       return folder;
     });
@@ -6182,7 +6256,8 @@
       return shell;
     }
     const list = create('div', 'content-explorer-media-list');
-    media.forEach((item) => {
+    const paged = pagedListApi.page(state.contentLibrary.paging, `media-${key}`, media);
+    paged.items.forEach((item) => {
       const row = create('div', 'content-explorer-media-row');
       const copy = create('div', 'content-explorer-media-copy');
       copy.append(
@@ -6198,6 +6273,10 @@
       row.append(copy, remove);
       list.append(row);
     });
+    list.append(pagedListApi.controls(document, state.contentLibrary.paging, paged, {
+      label: 'obrazów',
+      onMore: renderContentExplorer
+    }));
     shell.append(list);
     return shell;
   }
@@ -6294,6 +6373,7 @@
     state.contentLibrary.quizzes = [];
     state.contentLibrary.mediaByOwner.clear();
     state.contentLibrary.mediaLoading.clear();
+    pagedListApi.reset(state.contentLibrary.paging);
     state.contentLibrary.loaded = false;
     state.contentLibrary.error = '';
     renderRepositorySelectors();
@@ -6817,10 +6897,24 @@
     elements.lessonPaletteSearch.addEventListener('input', () => {
       filterPalette(elements.lessonPaletteSearch, 'data-search');
     });
-    elements.dashboardAssetSearch.addEventListener('input', renderRepositoryAssets);
-    elements.lessonAssetSearch.addEventListener('input', renderRepositoryAssets);
-    elements.promptAssetSearch.addEventListener('input', renderRepositoryAssets);
-    elements.contentExplorerSearch?.addEventListener('input', renderContentExplorer);
+    elements.dashboardAssetSearch.addEventListener('input', () => {
+      pagedListApi.reset(state.contentLibrary.paging, 'dashboard-assets');
+      renderRepositoryAssets();
+    });
+    elements.lessonAssetSearch.addEventListener('input', () => {
+      pagedListApi.reset(state.contentLibrary.paging, 'lesson-assets');
+      renderRepositoryAssets();
+    });
+    elements.promptAssetSearch.addEventListener('input', () => {
+      pagedListApi.reset(state.contentLibrary.paging, 'prompt-assets');
+      renderRepositoryAssets();
+    });
+    elements.contentExplorerSearch?.addEventListener('input', () => {
+      ['lesson', 'exam', 'presentation', 'quiz', 'prompt'].forEach((kind) => {
+        pagedListApi.reset(state.contentLibrary.paging, `explorer-${kind}`);
+      });
+      renderContentExplorer();
+    });
     elements.contentExplorerFolders?.addEventListener('click', handleContentExplorerAction);
     elements.contentExplorerRefresh?.addEventListener('click', () => loadRepositoryAssets(true));
     document.addEventListener('chemdisk-content-changed', () => loadRepositoryAssets(true));

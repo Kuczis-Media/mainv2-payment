@@ -3,6 +3,7 @@
 
   const modelApi = window.ChemExamStudioModel;
   const library = window.ChemContentLibrary;
+  const pagedListApi = window.ChemStudioPagedList;
   const DRAFT_KEY = 'chemdisk.studio.exam.v1';
   const BANK_KEY = 'chemdisk.studio.question-bank.v1';
   const TYPE_LABELS = {
@@ -52,6 +53,7 @@
     usersError: '',
     userQuery: '',
     userSearchTimer: 0,
+    libraryPaging: pagedListApi?.createState(),
     mediaUploading: false,
     mediaTarget: 'question',
     mediaObjectUrls: []
@@ -146,7 +148,7 @@
   }
 
   function initialize() {
-    if (state.initialized || !modelApi || !library || !byId('exam-workspace')) return;
+    if (state.initialized || !modelApi || !library || !pagedListApi || !byId('exam-workspace')) return;
     state.initialized = true;
     Object.assign(elements, {
       workspace: byId('exam-workspace'), repository: byId('exam-repository-select'), search: byId('exam-library-search'),
@@ -186,9 +188,13 @@
       state.remoteSha = '';
       state.remoteExamId = '';
       state.bankSha = '';
+      pagedListApi.reset(state.libraryPaging);
       await loadAssets(true);
     });
-    elements.search.addEventListener('input', renderLibrary);
+    elements.search.addEventListener('input', () => {
+      pagedListApi.reset(state.libraryPaging);
+      renderLibrary();
+    });
     elements.library.addEventListener('click', (event) => {
       const button = event.target.closest('[data-exam-asset]');
       if (button) void loadExam(button.dataset.examAsset);
@@ -264,15 +270,29 @@
   function renderLibrary() {
     const query = String(elements.search.value || '').trim().toLocaleLowerCase('pl');
     const assets = state.assets.filter((asset) => !query || `${asset.title} ${asset.filename} ${asset.tags?.join(' ')}`.toLocaleLowerCase('pl').includes(query));
-    elements.library.replaceChildren(...assets.map((asset) => {
-      const button = create('button', 'exam-library-item');
+    const paged = pagedListApi.page(state.libraryPaging, 'exam-library', assets);
+    elements.library.replaceChildren(...paged.items.map((asset) => {
+      const button = create('button', 'repository-asset');
       button.type = 'button';
       button.dataset.examAsset = asset.filename;
       button.classList.toggle('is-active', asset.filename === state.exam.examId && Boolean(state.remoteSha));
-      button.append(create('strong', '', asset.title || asset.filename), create('small', '', asset.filename));
+      const copy = create('span');
+      copy.append(create('strong', '', asset.title || asset.filename), create('small', '', asset.filename));
+      button.append(
+        create('span', 'repository-asset-kind', 'EXAM'),
+        copy,
+        create('span', 'repository-asset-action', 'Otwórz')
+      );
       return button;
     }));
-    if (!assets.length) elements.library.append(create('p', 'exam-library-empty', query ? 'Brak pasujących egzaminów.' : 'Brak egzaminów w tym repozytorium.'));
+    if (!assets.length) {
+      elements.library.append(create('p', 'exam-library-empty', query ? 'Brak pasujących egzaminów.' : 'Brak egzaminów w tym repozytorium.'));
+    } else {
+      elements.library.append(pagedListApi.controls(document, state.libraryPaging, paged, {
+        label: 'egzaminów',
+        onMore: renderLibrary
+      }));
+    }
   }
 
   async function loadExam(examId, options = {}) {

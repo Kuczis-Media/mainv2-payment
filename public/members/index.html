@@ -568,6 +568,7 @@ GITHUB_CONTENT_ROOT=</pre>
             </div>
             <form id="admin-ai-config-form">
               <input id="admin-ai-config-id" type="hidden" />
+              <div class="admin-ai-step-heading"><strong>1. Model i dostawca</strong><small>Nadaj konfiguracji nazwę, wybierz providera i wpisz identyfikator modelu.</small></div>
               <div class="admin-ai-form-grid">
                 <label><span class="field-label">Nazwa konfiguracji</span><input class="text-field" id="admin-ai-name" maxlength="100" placeholder="Np. Główny czat" required /></label>
                 <label><span class="field-label">Dostawca</span><select class="text-field" id="admin-ai-provider"><option value="gemini">Google Gemini</option><option value="openai">OpenAI</option></select></label>
@@ -575,17 +576,17 @@ GITHUB_CONTENT_ROOT=</pre>
                 <label class="admin-ai-description-field"><span class="field-label">Opis</span><textarea class="text-field" id="admin-ai-description" maxlength="500" rows="3" placeholder="Do czego używana jest ta konfiguracja?"></textarea></label>
               </div>
               <datalist id="admin-ai-model-list"></datalist>
-              <div class="admin-ai-editor-actions"><p class="admin-status" id="admin-ai-status" role="status" aria-live="polite"></p><button class="button button-primary" id="admin-ai-save" type="submit">Zapisz konfigurację</button></div>
-            </form>
-
-            <div class="admin-ai-secret-box" id="admin-ai-secret-box" hidden>
-              <div><strong>Klucz API</strong><small id="admin-ai-secret-state">Nie ustawiono klucza.</small></div>
-              <label><span class="field-label">Nowy klucz</span><input class="text-field" id="admin-ai-secret" type="password" maxlength="4096" autocomplete="new-password" placeholder="Wklej klucz — nie będzie można go ponownie odczytać" /></label>
-              <div class="admin-ai-secret-actions">
-                <button class="button button-primary" id="admin-ai-secret-save" type="button">Ustaw / zmień klucz</button>
-                <button class="button button-secondary button-danger-soft" id="admin-ai-secret-remove" type="button">Usuń klucz</button>
+              <div class="admin-ai-secret-box" id="admin-ai-secret-box">
+                <div><strong>2. Klucz API</strong><small id="admin-ai-secret-state">Wklej klucz teraz — zapisze się razem z nową konfiguracją.</small></div>
+                <label><span class="field-label">Klucz API dostawcy</span><input class="text-field" id="admin-ai-secret" type="password" maxlength="4096" autocomplete="new-password" placeholder="Wklej klucz OpenAI lub Gemini — pełna wartość nie wróci do przeglądarki" /></label>
+                <small class="admin-ai-secret-help">Dla Gemini użyj klucza z Google AI Studio, a dla OpenAI — klucza z panelu OpenAI Platform. Klucz jest zapisywany wyłącznie w chronionym magazynie server-side.</small>
+                <div class="admin-ai-secret-actions" id="admin-ai-secret-actions" hidden>
+                  <button class="button button-primary" id="admin-ai-secret-save" type="button">Ustaw / zmień klucz</button>
+                  <button class="button button-secondary button-danger-soft" id="admin-ai-secret-remove" type="button">Usuń klucz</button>
+                </div>
               </div>
-            </div>
+              <div class="admin-ai-editor-actions"><p class="admin-status" id="admin-ai-status" role="status" aria-live="polite"></p><button class="button button-primary" id="admin-ai-save" type="submit">3. Zapisz konfigurację i klucz</button></div>
+            </form>
           </section>
 
           <aside class="admin-ai-routing" aria-labelledby="admin-ai-routing-title">

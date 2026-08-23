@@ -3044,6 +3044,14 @@ html[data-theme="dark"] .accordion-children .accordion-children .accordion-child
 .admin-ai-list-heading h3,
 .admin-ai-routing h3 { margin: 3px 0 0; color: var(--ink); font-size: 16px; }
 
+.admin-ai-step-heading {
+  display: grid;
+  margin-bottom: 11px;
+  gap: 3px;
+}
+.admin-ai-step-heading strong { color: var(--ink); font-size: 12px; }
+.admin-ai-step-heading small { color: var(--muted); font-size: 10px; line-height: 1.5; }
+
 .admin-ai-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3082,7 +3090,9 @@ html[data-theme="dark"] .accordion-children .accordion-children .accordion-child
 .admin-ai-secret-box > div:first-child { display: grid; gap: 3px; }
 .admin-ai-secret-box strong { color: var(--ink); font-size: 12px; }
 .admin-ai-secret-box small { color: var(--muted); font-size: 10px; }
+.admin-ai-secret-help { line-height: 1.55; }
 .admin-ai-secret-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.admin-ai-secret-actions[hidden] { display: none; }
 
 .admin-ai-routing { display: grid; gap: 12px; }
 .admin-ai-routing > p { margin: -4px 0 2px; color: var(--muted); font-size: 10px; line-height: 1.5; }

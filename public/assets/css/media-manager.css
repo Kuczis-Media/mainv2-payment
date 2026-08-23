@@ -37,6 +37,7 @@
 .chem-media-status { min-height: 18px; margin: 10px 26px 7px; color: var(--chem-muted, #65728a); font-size: .65rem; }
 .chem-media-status.is-error { color: var(--chem-danger, #c74755); }
 .chem-media-grid { display: grid; min-height: 0; padding: 4px 26px 22px; grid-template-columns: repeat(4, minmax(0, 1fr)); align-content: start; gap: 12px; overflow-y: auto; scrollbar-gutter: stable; }
+.chem-media-pagination { grid-column: 1 / -1; padding: 10px 4px 2px; }
 .chem-media-card { display: grid; min-width: 0; padding: 8px; grid-template-rows: 132px auto auto auto; gap: 8px; background: var(--chem-bg, #f2f6fa); border: 1px solid var(--chem-line, #d8e1ec); border-radius: 16px; }
 .chem-media-card:hover { border-color: color-mix(in srgb, var(--chem-primary, #087a6b) 45%, var(--chem-line, #d8e1ec)); }
 .chem-media-thumb { display: grid; min-width: 0; place-items: center; color: var(--chem-muted, #65728a); background: repeating-conic-gradient(color-mix(in srgb, var(--chem-line, #d8e1ec) 48%, transparent) 0 25%, transparent 0 50%) 50% / 18px 18px; border-radius: 11px; overflow: hidden; }
@@ -76,4 +77,3 @@
   .chem-media-grid { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { .chem-media-card.is-skeleton { animation: none; } }
-

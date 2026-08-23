@@ -1691,6 +1691,12 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
   border-color: color-mix(in srgb, var(--chem-primary) 42%, var(--chem-line));
 }
 
+.repository-asset.is-active {
+  border-color: var(--chem-primary);
+  background: color-mix(in srgb, var(--chem-primary) 9%, var(--chem-surface));
+  box-shadow: inset 3px 0 0 var(--chem-primary);
+}
+
 .repository-asset-kind {
   display: grid;
   min-width: 27px;
@@ -1726,6 +1732,66 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
   color: var(--chem-primary);
   font-size: 0.52rem;
   font-weight: 800;
+}
+
+.studio-list-pagination {
+  display: flex;
+  min-height: 34px;
+  padding: 5px 3px 1px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.studio-list-pagination p {
+  margin: 0;
+  color: var(--chem-muted);
+  font-size: .54rem;
+  line-height: 1.35;
+}
+
+.studio-list-more {
+  min-height: 30px;
+  padding: 0 10px;
+  flex: 0 0 auto;
+  color: var(--chem-primary);
+  background: var(--chem-primary-soft);
+  border: 1px solid color-mix(in srgb, var(--chem-primary) 28%, var(--chem-line));
+  border-radius: 8px;
+  font: inherit;
+  font-size: .54rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.studio-list-more:hover { border-color: var(--chem-primary); }
+.studio-list-more:focus-visible { outline: 3px solid var(--studio-focus); outline-offset: 1px; }
+
+.studio-library-heading {
+  display: grid;
+  margin-bottom: 12px;
+  gap: 3px;
+}
+
+.studio-library-heading small {
+  color: var(--chem-muted);
+  font-size: .55rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.studio-library-heading strong { font-size: .78rem; }
+.studio-library-heading.is-compact { margin-bottom: 9px; }
+
+.content-explorer-files > .studio-list-pagination,
+.content-explorer-media-list > .studio-list-pagination {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding: 7px 8px;
+  background: color-mix(in srgb, var(--chem-bg) 94%, transparent);
+  border-radius: 9px;
 }
 
 .palette-scroll,
@@ -2859,6 +2925,9 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
 }
 
 .inspector-progress-settings h3 { margin: 0; font-size: .92rem; }
+
+.organizer-insert-tools .field-help { margin: 0; }
+.organizer-insert-tools .button { width: 100%; }
 
 .inspector-form > header {
   padding-bottom: 14px;
@@ -5674,7 +5743,8 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
 .presentation-library-controls label > span { display: block; margin-bottom: 5px; color: var(--chem-muted); font-size: .55rem; font-weight: 750; }
 .presentation-library-controls select, .presentation-library-controls input { width: 100%; height: 35px; padding: 0 9px; color: var(--chem-text); background: var(--chem-bg); border: 1px solid var(--chem-line); border-radius: 9px; font: inherit; font-size: .62rem; }
 .presentation-search { display: block; margin-top: 7px; }
-.presentation-library { display: flex; max-height: 105px; margin-top: 7px; gap: 5px; overflow-x: auto; }
+.presentation-library { display: grid; max-height: 176px; margin-top: 7px; gap: 5px; overflow-y: auto; overscroll-behavior: contain; }
+.presentation-library .repository-asset { min-height: 42px; }
 .presentation-library-item { display: grid; min-width: 115px; padding: 7px; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 6px; color: var(--chem-text); background: var(--chem-surface); border: 1px solid var(--chem-line); border-radius: 8px; font: inherit; cursor: pointer; }
 .presentation-library-item span:first-child { color: var(--studio-blue); font-size: .45rem; font-weight: 900; }
 .presentation-library-item span:last-child { overflow: hidden; font-size: .55rem; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }

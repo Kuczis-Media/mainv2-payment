@@ -20,6 +20,7 @@
   <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
   <script src="/assets/js/auth.js"></script>
   <script src="/assets/js/content-library.js"></script>
+  <script src="paged-list.js"></script>
   <script src="/assets/js/media-manager.js"></script>
   <script src="/members/module/mathjax-config.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js" onload="document.dispatchEvent(new Event('chemdisk-mathjax-ready'))"></script>
@@ -771,7 +772,7 @@
 
         <div class="quiz-builder-shell">
           <aside class="quiz-library-panel">
-            <div class="panel-heading"><div><small>Repozytorium</small><strong>Biblioteka quizów</strong></div></div>
+            <div class="panel-heading"><div><small>Prywatne repozytorium</small><strong>Gotowe quizy</strong></div></div>
             <label class="repository-picker">
               <span>Repozytorium treści</span>
               <select id="quiz-repository-select"></select>
@@ -847,6 +848,10 @@
         <div class="presentation-builder-shell">
           <aside class="presentation-slides-panel">
             <div class="presentation-library-controls">
+              <div class="studio-library-heading is-compact">
+                <small>Prywatne repozytorium</small>
+                <strong>Gotowe prezentacje</strong>
+              </div>
               <label><span>Repozytorium</span><select id="presentation-repository"></select></label>
               <label class="presentation-search"><span class="sr-only">Szukaj prezentacji</span><input id="presentation-search" type="search" placeholder="Szukaj prezentacji…"></label>
               <div id="presentation-library" class="presentation-library"></div>
@@ -905,6 +910,10 @@
 
         <div class="exam-builder-shell">
           <aside class="exam-builder-navigation" aria-label="Sekcje Exam Buildera">
+            <div class="studio-library-heading">
+              <small>Prywatne repozytorium</small>
+              <strong>Gotowe egzaminy</strong>
+            </div>
             <label class="repository-picker">
               <span>Repozytorium treści</span>
               <select id="exam-repository-select"></select>

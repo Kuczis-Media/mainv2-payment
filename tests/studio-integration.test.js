@@ -48,6 +48,9 @@ test('Dashboard Builder loads and conditionally publishes the active Blob versio
   assert.match(html, /data-dashboard-add=["']slides["']/);
   assert.match(html, /data-dashboard-add=["']text["']/);
   assert.match(html, /data-dashboard-add=["']group["']/);
+  assert.match(html, /data-dashboard-add=["']organizer["']/);
+  assert.match(script, /add-organizer-child/);
+  assert.match(script, /Dodaj organizer po kolei do tej harmonijki/);
   assert.match(script, /method:\s*['"]GET['"]/);
   assert.match(script, /method:\s*['"]PUT['"]/);
   assert.match(script, /expectedEtag/);

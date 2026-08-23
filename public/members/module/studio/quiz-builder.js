@@ -3,7 +3,8 @@
 
   const modelApi = root.ChemQuizStudioModel;
   const library = root.ChemContentLibrary;
-  if (!modelApi || !library) return;
+  const pagedListApi = root.ChemStudioPagedList;
+  if (!modelApi || !library || !pagedListApi) return;
 
   const byId = (id) => root.document.getElementById(id);
   const elements = {
@@ -46,6 +47,7 @@
     loaded: false,
     active: false,
     busy: false,
+    libraryPaging: pagedListApi.createState(),
     objectUrls: new Set()
   };
 
@@ -363,12 +365,23 @@
       elements.library.replaceChildren(create('p', 'quiz-library-empty', state.assets.length ? 'Brak wyników.' : 'Brak quizów w tym repozytorium.'));
       return;
     }
-    elements.library.replaceChildren(...assets.map((asset) => {
-      const button = create('button', `quiz-library-item${state.remoteId === asset.filename ? ' is-active' : ''}`);
+    const paged = pagedListApi.page(state.libraryPaging, 'quiz-library', assets);
+    elements.library.replaceChildren(...paged.items.map((asset) => {
+      const button = create('button', `repository-asset${state.remoteId === asset.filename ? ' is-active' : ''}`);
       button.type = 'button';
-      button.append(create('span', '', 'QUIZ'), create('strong', '', asset.title || asset.filename), create('small', '', asset.filename));
+      const copy = create('span');
+      copy.append(create('strong', '', asset.title || asset.filename), create('small', '', asset.filename));
+      button.append(
+        create('span', 'repository-asset-kind', 'QUIZ'),
+        copy,
+        create('span', 'repository-asset-action', 'Otwórz')
+      );
       button.addEventListener('click', () => void openAsset(asset));
       return button;
+    }));
+    elements.library.append(pagedListApi.controls(root.document, state.libraryPaging, paged, {
+      label: 'quizów',
+      onMore: renderLibrary
     }));
   }
 
@@ -629,10 +642,14 @@
       state.assets = [];
       state.remoteId = '';
       state.remoteSha = '';
+      pagedListApi.reset(state.libraryPaging);
       renderSettings();
       await loadLibrary();
     });
-    elements.search.addEventListener('input', renderLibrary);
+    elements.search.addEventListener('input', () => {
+      pagedListApi.reset(state.libraryPaging);
+      renderLibrary();
+    });
     elements.newButton.addEventListener('click', newQuiz);
     elements.saveButton.addEventListener('click', () => void save(false));
     elements.publishButton.addEventListener('click', () => void save(true));

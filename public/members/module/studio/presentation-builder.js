@@ -3,7 +3,8 @@
 
   const modelApi = root.ChemPresentationStudioModel;
   const library = root.ChemContentLibrary;
-  if (!modelApi || !library) return;
+  const pagedListApi = root.ChemStudioPagedList;
+  if (!modelApi || !library || !pagedListApi) return;
 
   const byId = (id) => root.document.getElementById(id);
   const elements = {
@@ -36,6 +37,7 @@
     assets: [],
     active: false,
     loaded: false,
+    libraryPaging: pagedListApi.createState(),
     undo: [],
     redo: [],
     clipboard: null,
@@ -118,14 +120,25 @@
 
   function renderLibrary() {
     const assets = library.search(state.assets, elements.search.value);
-    elements.library.replaceChildren(...assets.map((asset) => {
-      const button = create('button', 'presentation-library-item');
+    const paged = pagedListApi.page(state.libraryPaging, 'presentation-library', assets);
+    elements.library.replaceChildren(...paged.items.map((asset) => {
+      const button = create('button', `repository-asset${state.remoteId === asset.filename ? ' is-active' : ''}`);
       button.type = 'button';
-      button.append(create('span', '', 'SLIDE'), create('span', '', asset.title || asset.filename));
+      const copy = create('span');
+      copy.append(create('strong', '', asset.title || asset.filename), create('small', '', asset.filename));
+      button.append(
+        create('span', 'repository-asset-kind', 'SLIDE'),
+        copy,
+        create('span', 'repository-asset-action', 'Otwórz')
+      );
       button.addEventListener('click', () => void openAsset(asset));
       return button;
     }));
     if (!assets.length) elements.library.append(create('p', 'presentation-library-empty', 'Brak prezentacji w tym repozytorium.'));
+    else elements.library.append(pagedListApi.controls(root.document, state.libraryPaging, paged, {
+      label: 'prezentacji',
+      onMore: renderLibrary
+    }));
   }
 
   function cleanupUrls() {
@@ -754,8 +767,16 @@
       mutate(() => { const fresh = modelApi.createSlide({ layout, title: slide.title, slideId: slide.slideId, notes: slide.notes, required: slide.required, backgroundType: slide.backgroundType, background: slide.background, gradientFrom: slide.gradientFrom, gradientTo: slide.gradientTo, gradientAngle: slide.gradientAngle, backgroundRef: slide.backgroundRef }); slide.layout = fresh.layout; slide.elements = fresh.elements; state.selectedElementId = ''; });
     });
     elements.zoom.addEventListener('change', render);
-    elements.repository.addEventListener('change', async () => { state.repositoryId = elements.repository.value; state.assets = []; await loadLibrary(); });
-    elements.search.addEventListener('input', renderLibrary);
+    elements.repository.addEventListener('change', async () => {
+      state.repositoryId = elements.repository.value;
+      state.assets = [];
+      pagedListApi.reset(state.libraryPaging);
+      await loadLibrary();
+    });
+    elements.search.addEventListener('input', () => {
+      pagedListApi.reset(state.libraryPaging);
+      renderLibrary();
+    });
     elements.canvas.addEventListener('pointerdown', pointerDown);
     root.document.addEventListener('keydown', (event) => {
       if (!state.active || elements.workspace.hidden || ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) return;

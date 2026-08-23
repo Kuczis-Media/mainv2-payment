@@ -65,6 +65,30 @@ test('sequential organizer round-trips and publishes ordered progress settings',
   assert.equal(catalog.nodes.find((node) => node.title === 'Lekcja').settings.manualCompletion, false);
 });
 
+test('an existing accordion accepts a nested sequential organizer', () => {
+  const accordion = studio.createGroup({
+    uid: 'existing-accordion',
+    title: 'Istniejąca harmonijka',
+    blocks: [studio.createModule({ module: 'pdf', id: 'existingPdf123', protection: '1', title: 'Luźny PDF' })]
+  });
+  const model = studio.createModel({ sections: [{ title: 'Dział', blocks: [accordion] }] });
+  const organizer = studio.insertNode(model, accordion.uid, studio.createGroup({
+    uid: 'nested-sequence',
+    title: 'Kroki obowiązkowe',
+    navigation: 'sequential'
+  }));
+  assert.ok(organizer);
+  studio.insertNode(model, organizer.uid, studio.createModule({ module: 'slides', id: 'abcdefghijk', protection: '1', title: 'Slajdy' }));
+  studio.insertNode(model, organizer.uid, studio.createModule({ module: 'lesson', file: 'intro.md', title: 'Lekcja' }));
+
+  assert.equal(studio.validate(model).valid, true);
+  const imported = studio.parseMarkdown(studio.serialize(model));
+  const importedAccordion = imported.sections[0].blocks.find((block) => block.title === 'Istniejąca harmonijka');
+  const importedOrganizer = importedAccordion.blocks.find((block) => block.uid === 'nested-sequence');
+  assert.equal(importedOrganizer.navigation, 'sequential');
+  assert.deepEqual(importedOrganizer.blocks.map((block) => block.title), ['Slajdy', 'Lekcja']);
+});
+
 test('native quiz cards require an explicit submitted result before completion', () => {
   const model = studio.createModel({
     sections: [{

@@ -3,6 +3,7 @@
 
   const MAX_BYTES = 4 * 1024 * 1024;
   const ACCEPTED = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml']);
+  const pagedListApi = root.ChemStudioPagedList;
   const state = {
     dialog: null,
     scope: 'local',
@@ -10,6 +11,7 @@
     assets: [],
     query: '',
     loading: false,
+    paging: pagedListApi?.createState(),
     objectUrls: new Set(),
     observer: null
   };
@@ -64,11 +66,13 @@
       button.addEventListener('click', () => {
         if (button.disabled || state.scope === button.dataset.mediaScope) return;
         state.scope = button.dataset.mediaScope;
+        pagedListApi?.reset(state.paging);
         void loadAssets(false);
       });
     });
     dialog.querySelector('.chem-media-search input').addEventListener('input', (event) => {
       state.query = event.target.value;
+      pagedListApi?.reset(state.paging);
       renderAssets();
     });
     dialog.querySelector('.chem-media-refresh').addEventListener('click', () => loadAssets(true));
@@ -183,8 +187,19 @@
       grid.replaceChildren(empty);
       return;
     }
-    const cards = assets.map((asset) => mediaCard(asset));
+    const paged = pagedListApi
+      ? pagedListApi.page(state.paging, 'media-manager', assets)
+      : { items: assets, total: assets.length, visible: assets.length, remaining: 0, pageSize: assets.length, key: 'media-manager' };
+    const cards = paged.items.map((asset) => mediaCard(asset));
     grid.replaceChildren(...cards);
+    if (pagedListApi) {
+      const controls = pagedListApi.controls(root.document, state.paging, paged, {
+        label: 'obrazów',
+        onMore: renderAssets
+      });
+      controls.classList.add('chem-media-pagination');
+      grid.append(controls);
+    }
     observeThumbnails();
   }
 
@@ -347,6 +362,7 @@
     state.scope = options.scope === 'shared' ? 'shared' : (options.materialKind && options.materialId ? 'local' : 'shared');
     state.query = '';
     state.assets = [];
+    pagedListApi?.reset(state.paging);
     dialog.querySelector('.chem-media-search input').value = '';
     syncChrome();
     if (!dialog.open) dialog.showModal();
@@ -355,4 +371,3 @@
 
   root.ChemMediaManager = Object.freeze({ open });
 })(typeof globalThis !== 'undefined' ? globalThis : window);
-

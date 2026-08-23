@@ -46,7 +46,11 @@ test('administrator UI exposes the AI manager without persisting keys in browser
   assert.match(html, /data-admin-tab=["']ai["']/);
   assert.match(html, /data-admin-panel=["']ai["']/);
   assert.match(html, /id=["']admin-ai-secret["'][^>]*type=["']password["']/);
+  assert.match(html, /<form id=["']admin-ai-config-form["'][\s\S]*id=["']admin-ai-secret["'][\s\S]*<\/form>/);
+  assert.match(html, /3\. Zapisz konfigurację i klucz/);
   assert.match(script, /\/\.netlify\/functions\/admin-ai/);
+  assert.match(script, /const pendingSecret = elements\.adminAiSecret\.value\.trim\(\)/);
+  assert.match(script, /action: 'set-secret', aiConfigId: selectedId, secret: pendingSecret/);
   assert.doesNotMatch(script, /(?:localStorage|sessionStorage)\.setItem\([^\n]*(?:adminAiSecret|ai-secret)/);
 });
 

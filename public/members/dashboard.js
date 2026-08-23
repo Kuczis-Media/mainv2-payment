@@ -266,6 +266,7 @@
     adminAiSecretBox: document.getElementById('admin-ai-secret-box'),
     adminAiSecretState: document.getElementById('admin-ai-secret-state'),
     adminAiSecret: document.getElementById('admin-ai-secret'),
+    adminAiSecretActions: document.getElementById('admin-ai-secret-actions'),
     adminAiSecretSave: document.getElementById('admin-ai-secret-save'),
     adminAiSecretRemove: document.getElementById('admin-ai-secret-remove'),
     adminAiModuleChat: document.getElementById('admin-ai-module-chat'),
@@ -4092,9 +4093,12 @@
     elements.adminAiProvider.value = 'gemini';
     elements.adminAiModel.value = 'gemini-2.5-flash';
     elements.adminAiEditorTitle.textContent = 'Dodaj dostawcę AI';
-    elements.adminAiSecretBox.hidden = true;
+    elements.adminAiSecretBox.hidden = false;
+    elements.adminAiSecretActions.hidden = true;
     elements.adminAiSecret.value = '';
-    setPanelStatus(elements.adminAiStatus, 'Nowa konfiguracja nie wpływa na chat, dopóki jej nie zapiszesz.', 'info');
+    elements.adminAiSecretState.textContent = 'Wklej klucz teraz — zapisze się razem z nową konfiguracją.';
+    elements.adminAiSave.textContent = '3. Zapisz konfigurację i klucz';
+    setPanelStatus(elements.adminAiStatus, '1. Wybierz dostawcę i model. 2. Wklej klucz API. 3. Zapisz konfigurację.', 'info');
   }
 
   function editAdminAiConfig(config) {
@@ -4105,11 +4109,13 @@
     elements.adminAiDescription.value = config.description || '';
     elements.adminAiEditorTitle.textContent = `Edytuj: ${config.name}`;
     elements.adminAiSecretBox.hidden = false;
+    elements.adminAiSecretActions.hidden = false;
     elements.adminAiSecret.value = '';
     elements.adminAiSecretState.textContent = config.secretConfigured
       ? `Klucz ustawiony · końcówka ••••${config.secretHint || ''}`
       : 'Nie ustawiono klucza.';
     elements.adminAiSecretRemove.disabled = !config.secretConfigured;
+    elements.adminAiSave.textContent = 'Zapisz konfigurację';
     setPanelStatus(elements.adminAiStatus, `Wybrano ${adminAiProviderLabel(config.provider)} · ${config.model}.`, 'info');
   }
 
@@ -4203,6 +4209,7 @@
   async function saveAdminAiConfig(event) {
     event.preventDefault();
     const before = new Set((adminAiSettings?.configs || []).map((config) => config.aiConfigId));
+    const pendingSecret = elements.adminAiSecret.value.trim();
     const config = {
       aiConfigId: elements.adminAiConfigId.value || undefined,
       name: elements.adminAiName.value.trim(),
@@ -4215,10 +4222,19 @@
     try {
       adminAiSettings = await adminAiRequest('POST', { action: 'save-config', config });
       const selectedId = config.aiConfigId || adminAiSettings.configs.find((item) => !before.has(item.aiConfigId))?.aiConfigId;
+      if (pendingSecret && selectedId) {
+        adminAiSettings = await adminAiRequest('POST', { action: 'set-secret', aiConfigId: selectedId, secret: pendingSecret });
+      }
       renderAdminAi();
       const selected = adminAiSettings.configs.find((item) => item.aiConfigId === selectedId);
       if (selected) editAdminAiConfig(selected);
-      setPanelStatus(elements.adminAiStatus, 'Konfiguracja zapisana. Teraz możesz ustawić klucz i przetestować połączenie.', 'info');
+      setPanelStatus(
+        elements.adminAiStatus,
+        pendingSecret
+          ? 'Konfiguracja i klucz API zostały zapisane. Możesz teraz przetestować połączenie.'
+          : 'Konfiguracja zapisana bez klucza. Wklej klucz w polu powyżej i kliknij „Ustaw / zmień klucz”.',
+        'info'
+      );
     } catch (error) {
       setPanelStatus(elements.adminAiStatus, error?.message || 'Nie udało się zapisać konfiguracji.', 'error');
     } finally { setAdminAiBusy(false); }
