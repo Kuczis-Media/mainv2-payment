@@ -549,6 +549,10 @@ test('browser content client sends repository mutations only to the same-origin 
     browserLibrary.lessonUrl('nowa.md', 'organiczna'),
     '/members/module/lesson/?file=nowa.md&repo=organiczna'
   );
+  assert.equal(
+    browserLibrary.quizUrl('stechiometria-1', 'organiczna', 'dashboard-quiz-1'),
+    '/members/module/quiz/?quiz=stechiometria-1&repo=organiczna&material=dashboard-quiz-1'
+  );
 });
 
 test('content status endpoint requires an admin and never returns a secret', async (t) => {

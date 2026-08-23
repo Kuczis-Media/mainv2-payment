@@ -3,11 +3,13 @@
 const { canonicalMaterialId } = require('./exam-common.js');
 const {
   activeUserDocument,
+  aggregateUser,
   effectiveSettings,
   mergeProgressEvent,
+  sequenceAccessMap,
   validMaterialId
 } = require('./progress-common.js');
-const { getProgressStore, readCatalog, updateUser } = require('./progress-storage.js');
+const { getProgressStore, readCatalog, readUser, updateUser } = require('./progress-storage.js');
 let injectedProgressStoreFactory = null;
 
 function profileFrom(user) {
@@ -48,6 +50,11 @@ async function updateExamProgress(input) {
     const active = activeUserDocument(document, catalog);
     document.records = active.records;
     document.lastActivityAt = active.lastActivityAt;
+    const requestedNode = validMaterialId(input.materialId) ? resolved.byId.get(input.materialId) : null;
+    const requestedAccess = requestedNode
+      ? sequenceAccessMap(catalog, aggregateUser(active, catalog), active.preferences)[requestedNode.id]
+      : null;
+    if (requestedAccess?.allowed === false) throw sequenceLockedError();
     let changed = false;
     for (const materialId of ids) {
       if (catalog.invalidatedAt[materialId] && !resolved.byId.has(materialId)) continue;
@@ -83,6 +90,34 @@ async function updateExamProgress(input) {
   return { materialId: canonical, records };
 }
 
+async function assertExamSequenceAccess(input) {
+  if (!validMaterialId(input.materialId)) return { allowed: true };
+  const store = input.store || (injectedProgressStoreFactory ? injectedProgressStoreFactory() : getProgressStore());
+  const catalog = await readCatalog(store);
+  const resolved = effectiveSettings(catalog);
+  const node = resolved.byId.get(input.materialId);
+  if (!node || node.type !== 'exam') return { allowed: true };
+  if (
+    node.settings.examId
+    && (
+      node.settings.examId !== input.examId
+      || (node.settings.repositoryId || 'default') !== (input.repositoryId || 'default')
+    )
+  ) return { allowed: true };
+  const stored = await readUser(store, input.userId, profileFrom(input.user));
+  const user = activeUserDocument(stored.document, catalog);
+  const access = sequenceAccessMap(catalog, aggregateUser(user, catalog), user.preferences)[node.id];
+  if (access?.allowed === false) throw sequenceLockedError();
+  return access || { allowed: true };
+}
+
+function sequenceLockedError() {
+  const error = new Error('SEQUENCE_LOCKED');
+  error.code = 'SEQUENCE_LOCKED';
+  error.status = 409;
+  return error;
+}
+
 async function resetExamProgress(input) {
   const store = input.store || (injectedProgressStoreFactory ? injectedProgressStoreFactory() : getProgressStore());
   const catalog = await readCatalog(store);
@@ -107,4 +142,10 @@ function setProgressStoreFactory(factory) {
   injectedProgressStoreFactory = typeof factory === 'function' ? factory : null;
 }
 
-module.exports = { profileFrom, resetExamProgress, setProgressStoreFactory, updateExamProgress };
+module.exports = {
+  assertExamSequenceAccess,
+  profileFrom,
+  resetExamProgress,
+  setProgressStoreFactory,
+  updateExamProgress
+};

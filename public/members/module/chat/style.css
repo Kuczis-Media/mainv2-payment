@@ -359,6 +359,29 @@ button.chip:hover {
   line-height: 1.45;
 }
 
+.ai-own-usage {
+  display: grid;
+  gap: 9px;
+  max-width: 720px;
+  margin: 14px auto 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: var(--surface);
+  text-align: left;
+}
+.ai-own-usage[hidden] { display: none; }
+.ai-own-usage > div:first-child { display: flex; justify-content: space-between; gap: 10px; }
+.ai-own-usage > div:first-child strong { color: var(--text); font-size: 12px; }
+.ai-own-usage > div:first-child small { color: var(--muted); font-size: 9px; }
+.ai-own-usage-periods { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.ai-own-usage-periods article { display: grid; gap: 3px; padding: 9px 10px; border-radius: 10px; background: var(--bg); }
+.ai-own-usage-periods article strong { color: var(--text); font-size: 10px; }
+.ai-own-usage-periods article span { color: var(--muted); font-size: 9px; }
+.ai-own-usage-periods article[data-warning="warning"] { box-shadow: inset 3px 0 #d6a01d; }
+.ai-own-usage-periods article[data-warning="critical"],
+.ai-own-usage-periods article[data-warning="limit"] { box-shadow: inset 3px 0 #c6515d; }
+
 .starter-section {
   margin-top: 54px;
 }

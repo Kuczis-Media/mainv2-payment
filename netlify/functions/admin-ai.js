@@ -8,11 +8,15 @@ const {
   responseForFailure
 } = require('../admin-common.js');
 const manager = require('../ai-provider-manager.js');
-const { getAdapter, normalizeError } = require('../ai-providers.js');
+const router = require('../ai-router.js');
+const { normalizeError } = require('../ai-providers.js');
 
 const MUTATING_ACTIONS = new Set([
   'save-config', 'set-secret', 'remove-secret', 'set-default',
   'set-module', 'test-connection'
+]);
+const PROVIDER_CONNECTION_ERRORS = new Set([
+  'AI_INVALID_KEY', 'AI_MODEL_UNAVAILABLE', 'AI_RATE_LIMITED', 'AI_PROVIDER_ERROR'
 ]);
 
 exports.handler = async (event = {}, context = {}) => {
@@ -44,7 +48,13 @@ exports.handler = async (event = {}, context = {}) => {
       if (view === 'audit') return json({ audit: await manager.listAudit(stores.metadata, 50) });
       if (view !== 'settings') throw apiError('INVALID_VIEW', 400);
       const { settings } = await manager.readSettings(stores.metadata);
-      return json(manager.publicSettings(settings));
+      return json({
+        ...manager.publicSettings(settings),
+        legacyEnvironment: {
+          gemini: Boolean(process.env.GEMINI_API_KEY),
+          openai: Boolean(process.env.OPENAI_API_KEY)
+        }
+      });
     }
     if (method === 'DELETE') {
       assertOnlyFields(body, ['aiConfigId']);
@@ -87,21 +97,26 @@ exports.handler = async (event = {}, context = {}) => {
     const { settings } = await manager.readSettings(stores.metadata);
     const config = settings.configs.find((item) => item.aiConfigId === aiConfigId);
     if (!config) throw apiError('AI_CONFIG_NOT_FOUND', 404);
-    const apiKey = await manager.readSecret(stores.secrets, aiConfigId);
-    if (!apiKey) throw apiError('AI_SECRET_MISSING', 400);
-    const adapter = getAdapter(config.provider);
-
     if (action === 'list-models') {
-      const models = await adapter.listModels({ ...config, apiKey });
-      return json({ models, provider: config.provider });
+      const operation = await router.runProviderOperation({
+        userId: auth.userId,
+        aiConfigId,
+        operation: 'listModels'
+      });
+      return json({ models: operation.result, provider: operation.config.provider });
     }
 
     try {
-      await adapter.testConnection({ ...config, apiKey });
+      await router.runProviderOperation({
+        userId: auth.userId,
+        aiConfigId,
+        operation: 'testConnection'
+      });
       const next = await manager.updateConnectionStatus(stores, aiConfigId, 'ok', auth.userId);
       await manager.appendAudit(stores.metadata, { adminId: auth.userId, action: 'ai.connection.tested', aiConfigId, previousValue: config.connectionStatus, newValue: 'ok' });
       return json({ ...manager.publicSettings(next), test: { status: 'ok' } });
     } catch (error) {
+      if (!PROVIDER_CONNECTION_ERRORS.has(error && error.code)) throw error;
       const normalized = normalizeError(error);
       const next = await manager.updateConnectionStatus(stores, aiConfigId, normalized.status, auth.userId);
       await manager.appendAudit(stores.metadata, { adminId: auth.userId, action: 'ai.connection.tested', aiConfigId, previousValue: config.connectionStatus, newValue: normalized.status });
@@ -136,4 +151,8 @@ function apiError(code, status) {
   return error;
 }
 
-exports._test = { assertOnlyFields, requiredId };
+exports._test = {
+  assertOnlyFields,
+  isProviderConnectionError(error) { return PROVIDER_CONNECTION_ERRORS.has(error && error.code); },
+  requiredId
+};

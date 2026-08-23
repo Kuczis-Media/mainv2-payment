@@ -324,6 +324,9 @@
         <button class="admin-tab" id="admin-tab-ai" type="button" role="tab" aria-selected="false" aria-controls="admin-panel-ai" tabindex="-1" data-admin-tab="ai">
           <span aria-hidden="true">✦</span> AI / Modele
         </button>
+        <button class="admin-tab" id="admin-tab-ai-usage" type="button" role="tab" aria-selected="false" aria-controls="admin-panel-ai-usage" tabindex="-1" data-admin-tab="ai-usage">
+          <span aria-hidden="true">◴</span> AI Limity
+        </button>
         <button class="admin-tab" id="admin-tab-payments" type="button" role="tab" aria-selected="false" aria-controls="admin-panel-payments" tabindex="-1" data-admin-tab="payments">
           <span aria-hidden="true">zł</span> Płatności
         </button>
@@ -592,6 +595,7 @@ GITHUB_CONTENT_ROOT=</pre>
             <label><span class="field-label">Chat</span><select class="text-field" id="admin-ai-module-chat"></select></label>
             <label><span class="field-label">Sprawdzanie AI</span><select class="text-field" id="admin-ai-module-grader"></select></label>
             <label><span class="field-label">Formularze AI</span><select class="text-field" id="admin-ai-module-forms"></select></label>
+            <label><span class="field-label">Inne / przyszłe moduły</span><select class="text-field" id="admin-ai-module-other"></select></label>
           </aside>
         </div>
 
@@ -601,6 +605,69 @@ GITHUB_CONTENT_ROOT=</pre>
         <details class="admin-ai-audit" id="admin-ai-audit">
           <summary><span><strong>Historia zmian AI</strong><small>Zmiany konfiguracji, modeli, kluczy, routingu i testy połączenia — bez wartości sekretów.</small></span><span aria-hidden="true">›</span></summary>
           <div class="admin-ai-audit-list" id="admin-ai-audit-list">Rozwiń sekcję, aby pobrać historię.</div>
+        </details>
+      </section>
+
+      <section class="admin-tab-panel" id="admin-panel-ai-usage" role="tabpanel" aria-labelledby="admin-tab-ai-usage" data-admin-panel="ai-usage" hidden>
+        <div class="admin-guidance">
+          <span aria-hidden="true">◴</span>
+          <p><strong>Każde rzeczywiste wywołanie dostawcy jest sprawdzane i zapisywane po stronie serwera.</strong> Puste pole limitu oznacza bez limitu. Koszt jest estymacją według cennika ustawionego dla konkretnej konfiguracji.</p>
+        </div>
+
+        <div class="admin-ai-usage-toolbar">
+          <label><span class="field-label">Okres raportu</span><select class="text-field" id="admin-ai-usage-period"><option value="day">Dzisiaj</option><option value="week">Ten tydzień</option><option value="month">Ten miesiąc</option></select></label>
+          <button class="button button-secondary" id="admin-ai-usage-refresh" type="button">Odśwież raport</button>
+        </div>
+        <div class="admin-status" id="admin-ai-usage-status" role="status" aria-live="polite"></div>
+        <div class="admin-ai-usage-summary" id="admin-ai-usage-summary" aria-live="polite"></div>
+
+        <div class="admin-ai-usage-layout">
+          <section class="admin-ai-usage-card">
+            <span class="eyebrow">Ustawienia wspólne</span>
+            <h3>Okresy i ostrzeżenia</h3>
+            <div class="admin-ai-usage-general">
+              <label><span class="field-label">Strefa czasowa IANA</span><input class="text-field" id="admin-ai-usage-timezone" value="Europe/Warsaw" maxlength="80" /></label>
+              <label><span class="field-label">Waluta kosztów</span><input class="text-field" id="admin-ai-usage-currency" value="USD" maxlength="8" /></label>
+              <label class="admin-payment-switch"><input id="admin-ai-usage-show-user" type="checkbox" checked /><span><strong>Pokaż uczniowi własne limity</strong><small>Nigdy nie pokazuje danych innych osób.</small></span></label>
+              <div class="admin-ai-warning-fields" aria-label="Progi ostrzeżeń">
+                <label><span class="field-label">Ostrzeżenie %</span><input class="text-field" id="admin-ai-warning-1" type="number" min="1" max="100" value="70" /></label>
+                <label><span class="field-label">Pilne %</span><input class="text-field" id="admin-ai-warning-2" type="number" min="1" max="100" value="90" /></label>
+                <label><span class="field-label">Limit %</span><input class="text-field" id="admin-ai-warning-3" type="number" min="1" max="100" value="100" /></label>
+              </div>
+            </div>
+          </section>
+
+          <section class="admin-ai-usage-card">
+            <span class="eyebrow">Edytor limitów</span>
+            <h3>Zakres reguły</h3>
+            <div class="admin-ai-scope-controls">
+              <label><span class="field-label">Warstwa</span><select class="text-field" id="admin-ai-limit-scope"><option value="global">Globalnie</option><option value="defaultUser">Domyślnie dla użytkownika</option><option value="provider">Dostawca</option><option value="module">Moduł</option><option value="config">Konfiguracja globalnie</option><option value="configUser">Konfiguracja per użytkownik</option><option value="user">Konkretny użytkownik</option></select></label>
+              <label id="admin-ai-limit-scope-id-wrap" hidden><span class="field-label">Obiekt</span><select class="text-field" id="admin-ai-limit-scope-id"></select></label>
+              <label id="admin-ai-limit-module-wrap" hidden><span class="field-label">Stałe ID modułu</span><input class="text-field" id="admin-ai-limit-module-id" maxlength="160" placeholder="np. chat lub exam-coach" /></label>
+              <label id="admin-ai-limit-user-mode-wrap" hidden><span class="field-label">Tryb użytkownika</span><select class="text-field" id="admin-ai-limit-user-mode"><option value="inherit">Dziedzicz domyślne</option><option value="custom">Własne limity</option><option value="unlimited">Bez limitu użytkownika</option><option value="disabled">AI wyłączone</option></select></label>
+            </div>
+            <div class="admin-ai-config-policy" id="admin-ai-config-policy" hidden>
+              <label><span class="field-label">Cena wejścia / 1 mln tokenów</span><input class="text-field" id="admin-ai-price-input" type="number" min="0" step="0.000001" /></label>
+              <label><span class="field-label">Cena wyjścia / 1 mln tokenów</span><input class="text-field" id="admin-ai-price-output" type="number" min="0" step="0.000001" /></label>
+              <label><span class="field-label">Jawny fallback</span><select class="text-field" id="admin-ai-fallback"><option value="">Brak fallbacku</option></select></label>
+            </div>
+            <p class="field-hint">Wartości kosztu podawaj w mikrojednostkach waluty (1 000 000 = 1 jednostka). Zero blokuje dany zakres od razu.</p>
+            <div class="admin-ai-limit-grid" id="admin-ai-limit-grid"></div>
+            <div class="admin-ai-editor-actions"><button class="button button-primary" id="admin-ai-usage-save" type="button">Zapisz wszystkie limity</button></div>
+          </section>
+        </div>
+
+        <div class="admin-ai-usage-tables">
+          <section class="admin-ai-usage-card"><h3>Dostawcy</h3><div id="admin-ai-usage-providers"></div></section>
+          <section class="admin-ai-usage-card"><h3>Modele</h3><div id="admin-ai-usage-models"></div></section>
+          <section class="admin-ai-usage-card"><h3>Konfiguracje</h3><div id="admin-ai-usage-configs"></div></section>
+          <section class="admin-ai-usage-card"><h3>Moduły</h3><div id="admin-ai-usage-modules"></div></section>
+          <section class="admin-ai-usage-card admin-ai-usage-users"><h3>Użytkownicy</h3><div id="admin-ai-usage-users"></div><button class="button button-secondary admin-ai-users-more" id="admin-ai-users-more" type="button" hidden>Wczytaj więcej użytkowników</button></section>
+        </div>
+        <section class="admin-ai-usage-card admin-ai-user-detail" id="admin-ai-user-detail" hidden></section>
+        <details class="admin-ai-audit" id="admin-ai-usage-audit">
+          <summary><span><strong>Historia limitów i resetów</strong><small>Zmiany ustawień oraz ręczne zerowania użycia użytkowników.</small></span><span aria-hidden="true">›</span></summary>
+          <div class="admin-ai-audit-list" id="admin-ai-usage-audit-list">Rozwiń sekcję, aby pobrać historię.</div>
         </details>
       </section>
 

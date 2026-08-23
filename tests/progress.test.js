@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const progressCommon = require('../netlify/progress-common.js');
+const examProgress = require('../netlify/exam-progress.js');
 const progressFunction = require('../netlify/functions/progress.js');
 const adminProgressFunction = require('../netlify/functions/admin-progress.js');
 const { CATALOG_KEY, listEntries } = require('../netlify/progress-storage.js');
@@ -68,6 +69,42 @@ test('tracking inheritance supports section OFF and a material ON override', () 
   assert.equal(resolved.get('inherited').showProgress, false);
   assert.equal(resolved.get('override').tracking, true);
   assert.equal(resolved.get('override').showProgress, true);
+});
+
+test('dashboard organizer unlocks each module only after all previous modules are complete', () => {
+  const source = progressCommon.normalizeCatalog({
+    global: { tracking: 'ON', showProgress: 'ON', recordOpens: true },
+    nodes: [
+      { id: 'course', type: 'course', progress: progress({ tracking: 'ON' }) },
+      { id: 'path', parentId: 'course', type: 'section', title: 'Ścieżka', progress: progress(), settings: { navigation: 'sequential' } },
+      { id: 'slides-step', parentId: 'path', type: 'presentation', title: 'Slajdy', order: 1, progress: progress(), settings: { manualCompletion: true } },
+      { id: 'lesson-step', parentId: 'path', type: 'lesson', title: 'Lekcja', order: 2, progress: progress() },
+      { id: 'exam-step', parentId: 'path', type: 'exam', title: 'Egzamin', order: 3, progress: progress() }
+    ]
+  });
+  const accessFor = (records) => {
+    const user = progressCommon.normalizeUserDocument({ records }, USER_ONE);
+    return progressCommon.sequenceAccessMap(source, progressCommon.aggregateUser(user, source), user.preferences);
+  };
+
+  let access = accessFor({});
+  assert.equal(access['slides-step'].allowed, true);
+  assert.equal(access['lesson-step'].allowed, false);
+  assert.equal(access['lesson-step'].prerequisiteId, 'slides-step');
+  assert.equal(access['exam-step'].allowed, false);
+
+  access = accessFor({
+    'slides-step': { status: 'completed', progressPercent: 100, completedAt: '2026-08-15T10:00:00.000Z' }
+  });
+  assert.equal(access['lesson-step'].allowed, true);
+  assert.equal(access['exam-step'].allowed, false);
+  assert.equal(access['exam-step'].prerequisiteId, 'lesson-step');
+
+  access = accessFor({
+    'slides-step': { status: 'completed', progressPercent: 100, completedAt: '2026-08-15T10:00:00.000Z' },
+    'lesson-step': { status: 'completed', progressPercent: 100, completedAt: '2026-08-15T10:05:00.000Z' }
+  });
+  assert.equal(access['exam-step'].allowed, true);
 });
 
 test('global progress OFF suppresses percentages but can keep open history', () => {
@@ -461,11 +498,32 @@ test('PDF progress is explicitly navigational and quiz progress differs from sco
 
   const quiz = merge(null, {
     materialId: 'quiz-one', materialType: 'quiz', action: 'quiz', progressPercent: 60,
-    details: { started: true, completed: false, scorePercent: 25, attempts: 2 }
+    details: { started: true, completed: false, scorePercent: 25, attempts: 2, passed: false }
   });
   assert.equal(quiz.record.progressPercent, 60);
   assert.equal(quiz.record.details.scorePercent, 25);
   assert.equal(quiz.record.details.attempts, 2);
+  assert.equal(quiz.record.details.passed, false);
+});
+
+test('a native dashboard quiz stays incomplete on open and completes after answers are submitted', () => {
+  const node = progressCommon.normalizeCatalog({ nodes: [{
+    id: 'native-quiz', type: 'quiz', progress: progress({ tracking: 'ON' }),
+    settings: { manualCompletion: true }
+  }] }).nodes[0];
+  const opened = merge(null, {
+    materialId: 'native-quiz', materialType: 'quiz', action: 'open', opened: true
+  }, { node });
+  assert.equal(opened.record.status, 'opened');
+  assert.equal(opened.record.progressPercent, 0);
+
+  const submitted = merge(opened.record, {
+    materialId: 'native-quiz', materialType: 'quiz', action: 'quiz',
+    details: { started: true, completed: true, scorePercent: 80, passed: true, attempts: 1 }
+  }, { node });
+  assert.equal(submitted.record.status, 'completed');
+  assert.equal(submitted.record.progressPercent, 100);
+  assert.equal(submitted.record.details.passed, true);
 });
 
 class MemoryStore {
@@ -680,4 +738,94 @@ test('removing a dashboard node invalidates learner records without scanning eve
   }), contextFor(canonical));
   const freshProgress = await progressFunction.handler(eventFor('GET'), contextFor(canonical));
   assert.equal(JSON.parse(freshProgress.body).records.slides.progressPercent, 100);
+});
+
+test('progress endpoint rejects opening a locked organizer step and unlocks it after completion', async (t) => {
+  const store = new MemoryStore();
+  const sequentialCatalog = progressCommon.normalizeCatalog({
+    global: { tracking: 'ON', showProgress: 'ON', recordOpens: true },
+    nodes: [
+      { id: 'course', type: 'course', progress: progress({ tracking: 'ON' }) },
+      { id: 'path', parentId: 'course', type: 'section', title: 'Organizer', progress: progress(), settings: { navigation: 'sequential' } },
+      { id: 'slides-step', parentId: 'path', type: 'presentation', title: 'Slajdy', order: 1, progress: progress(), settings: { manualCompletion: true } },
+      { id: 'pdf-step', parentId: 'path', type: 'pdf', title: 'PDF', order: 2, progress: progress() },
+      { id: 'lesson-step', parentId: 'path', type: 'lesson', title: 'Lekcja', order: 3, progress: progress() },
+      {
+        id: 'exam-step', parentId: 'path', type: 'exam', title: 'Egzamin', order: 4, progress: progress(),
+        settings: { repositoryId: 'default', examId: 'exam-one' }
+      }
+    ]
+  });
+  await store.set(CATALOG_KEY, JSON.stringify(sequentialCatalog), { onlyIfNew: true });
+  progressFunction._test.setStoreFactory(() => store);
+  t.after(() => progressFunction._test.setStoreFactory(null));
+
+  const originalFetch = global.fetch;
+  const canonical = { id: USER_ONE, email: 'jan@example.com', app_metadata: { roles: ['active'] } };
+  global.fetch = async () => responseJson(canonical);
+  t.after(() => { global.fetch = originalFetch; });
+  const userContext = contextFor(canonical);
+
+  const locked = await progressFunction.handler(eventFor('POST', {
+    materialId: 'lesson-step', materialType: 'lesson', action: 'open', opened: true
+  }), userContext);
+  assert.equal(locked.statusCode, 409);
+  assert.equal(JSON.parse(locked.body).error, 'SEQUENCE_LOCKED');
+
+  const completedFirst = await progressFunction.handler(eventFor('POST', {
+    materialId: 'slides-step', materialType: 'presentation', action: 'open', opened: true
+  }), userContext);
+  assert.equal(completedFirst.statusCode, 200);
+  assert.equal(JSON.parse(completedFirst.body).record.status, 'opened');
+  assert.equal(JSON.parse(completedFirst.body).completion.manualRequired, true);
+
+  const stillLocked = await progressFunction.handler(eventFor('POST', {
+    materialId: 'lesson-step', materialType: 'lesson', action: 'open', opened: true
+  }), userContext);
+  assert.equal(stillLocked.statusCode, 409);
+
+  const markedComplete = await progressFunction.handler(eventFor('POST', {
+    materialId: 'slides-step', materialType: 'presentation', action: 'complete'
+  }), userContext);
+  assert.equal(markedComplete.statusCode, 200);
+  assert.equal(JSON.parse(markedComplete.body).record.status, 'completed');
+
+  const openedPdf = await progressFunction.handler(eventFor('POST', {
+    materialId: 'pdf-step', materialType: 'pdf', action: 'open', opened: true
+  }), userContext);
+  assert.equal(openedPdf.statusCode, 200);
+  assert.equal(JSON.parse(openedPdf.body).record.status, 'completed');
+
+  const unlocked = await progressFunction.handler(eventFor('POST', {
+    materialId: 'lesson-step', materialType: 'lesson', action: 'open', opened: true
+  }), userContext);
+  assert.equal(unlocked.statusCode, 200);
+  assert.equal(JSON.parse(unlocked.body).record.status, 'opened');
+  await assert.rejects(
+    examProgress.assertExamSequenceAccess({
+      store,
+      userId: USER_ONE,
+      user: canonical,
+      repositoryId: 'default',
+      examId: 'exam-one',
+      materialId: 'exam-step'
+    }),
+    (error) => error.code === 'SEQUENCE_LOCKED'
+  );
+
+  const lessonCompleted = await progressFunction.handler(eventFor('POST', {
+    materialId: 'lesson-step', materialType: 'lesson', action: 'complete'
+  }), userContext);
+  assert.equal(lessonCompleted.statusCode, 200);
+  await assert.doesNotReject(examProgress.assertExamSequenceAccess({
+    store,
+    userId: USER_ONE,
+    user: canonical,
+    repositoryId: 'default',
+    examId: 'exam-one',
+    materialId: 'exam-step'
+  }));
+  const state = JSON.parse((await progressFunction.handler(eventFor('GET'), userContext)).body);
+  assert.equal(state.access['lesson-step'].allowed, true);
+  assert.equal(state.access['exam-step'].allowed, true);
 });

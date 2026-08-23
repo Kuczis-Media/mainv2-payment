@@ -28,7 +28,12 @@ const {
   syncAttemptIndexes,
   updateAttempt
 } = require('../exam-storage.js');
-const { profileFrom, setProgressStoreFactory, updateExamProgress } = require('../exam-progress.js');
+const {
+  assertExamSequenceAccess,
+  profileFrom,
+  setProgressStoreFactory,
+  updateExamProgress
+} = require('../exam-progress.js');
 const {
   json,
   mutationGuard,
@@ -66,15 +71,17 @@ exports.handler = async function examHandler(event = {}, context = {}) {
     const status = error instanceof contentRepository.ContentRepositoryError ? error.status : 503;
     const code = error instanceof contentRepository.ContentRepositoryError
       ? error.code
-      : error?.code === 'EXAM_CONFLICT' ? 'EXAM_CONFLICT' : 'EXAM_STORAGE_UNAVAILABLE';
+      : error?.code === 'EXAM_CONFLICT'
+        ? 'EXAM_CONFLICT'
+        : error?.code === 'SEQUENCE_LOCKED' ? 'SEQUENCE_LOCKED' : 'EXAM_STORAGE_UNAVAILABLE';
     console.error('exam function failed', error?.name || 'Error');
-    return json({ error: code }, status === 503 && code === 'EXAM_CONFLICT' ? 409 : status);
+    return json({ error: code }, ['EXAM_CONFLICT', 'SEQUENCE_LOCKED'].includes(code) ? 409 : status);
   }
 };
 
 async function handleGet(event, auth) {
   const query = event.queryStringParameters || {};
-  const allowed = new Set(['action', 'repo', 'exam', 'attemptId', 'preview', 'ref']);
+  const allowed = new Set(['action', 'repo', 'exam', 'attemptId', 'preview', 'ref', 'material']);
   if (Object.keys(query).some((key) => !allowed.has(key))) return json({ error: 'UNEXPECTED_QUERY' }, 400);
   const reference = validateReference(query);
   if (!reference.ok) return json({ error: reference.error }, 400);
@@ -82,6 +89,15 @@ async function handleGet(event, auth) {
   const preview = query.preview === '1';
   if (preview && !auth.roles.includes('admin')) return json({ error: 'ADMIN_REQUIRED' }, 403);
   if (action === 'image') return imageResponse(reference, query.ref, auth, preview);
+  if (!preview && validMaterialId(query.material)) {
+    await assertExamSequenceAccess({
+      userId: auth.userId,
+      user: auth.user,
+      repositoryId: reference.repositoryId,
+      examId: reference.examId,
+      materialId: validMaterialId(query.material)
+    });
+  }
 
   const loaded = await loadDefinition(reference.repositoryId, reference.examId);
   const access = definitionAccess(loaded.definition, auth, preview);
@@ -126,6 +142,16 @@ async function handlePost(event, auth) {
   if (preview && !auth.roles.includes('admin')) return json({ error: 'ADMIN_REQUIRED' }, 403);
   const access = definitionAccess(loaded.definition, auth, preview);
   if (!access.ok) return json({ error: access.error, ...access.details }, access.status);
+
+  if (!preview && ['open', 'start'].includes(body.action) && validMaterialId(body.materialId)) {
+    await assertExamSequenceAccess({
+      userId: auth.userId,
+      user: auth.user,
+      repositoryId: reference.repositoryId,
+      examId: reference.examId,
+      materialId: validMaterialId(body.materialId)
+    });
+  }
 
   if (body.action === 'open') {
     if (!preview) {

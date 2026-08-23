@@ -16,8 +16,6 @@ const MAX_TOTAL_MESSAGE_CHARS = 45_000;
 const MAX_PROMPT_FILE_BYTES = 256 * 1024;
 const MAX_PROMPT_CHARS = 10_000;
 const IDENTITY_TIMEOUT_MS = 5_000;
-const USER_RATE_WINDOW_MS = 60_000;
-const USER_RATE_LIMIT = 12;
 // Base64 is roughly 4/3 of the source size. Keeping this below 4 MiB also
 // leaves enough room for the JSON envelope within Netlify's request limit.
 const MAX_ATTACHMENT_BASE64_CHARS = 4_200_000;
@@ -30,7 +28,6 @@ const ALLOWED_IMAGE_TYPES = new Set([
 const SAFE_PROMPT_FILENAME = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.(json|txt)$/i;
 const PROMPT_POINT_HEADER = /^::punkt[ \t]+([1-9]\d{0,3})[ \t]*$/i;
 const SIMPLE_PROMPT_POINT_HEADER = /^([1-9]\d{0,3})[.)][ \t]+(.+)$/;
-const userRateBuckets = new Map();
 
 export const handler = async (event, context = {}) => {
   if (event.httpMethod === 'OPTIONS') {
@@ -69,15 +66,6 @@ export const handler = async (event, context = {}) => {
     return json({ error: validation.code }, 400);
   }
 
-  const rate = consumeUserRateLimit(authorization.user);
-  if (!rate.ok) {
-    return json(
-      { error: 'RATE_LIMITED' },
-      429,
-      { 'Retry-After': String(rate.retryAfterSeconds) }
-    );
-  }
-
   const { messages, promptConfig, attachmentInline, temperature } = validation.value;
   let system;
   try {
@@ -100,8 +88,12 @@ export const handler = async (event, context = {}) => {
     });
     return json({ text: response.text });
   } catch (error) {
-    if (error && error.code === 'AI_NOT_CONFIGURED') return json({ error: 'SERVICE_UNAVAILABLE' }, 503);
-    if (error && error.code === 'AI_RATE_LIMITED') return json({ error: 'RATE_LIMITED' }, 429);
+    if (error && /^AI_[A-Z0-9_]+$/.test(error.code || '')) {
+      return json(
+        { error: error.code, ...(error.details ? { details: error.details } : {}) },
+        Number.isInteger(error.status) ? error.status : 503
+      );
+    }
     if (error && error.code === 'EMPTY_MODEL_RESPONSE') return json({ error: 'EMPTY_MODEL_RESPONSE' }, 502);
     return json({ error: 'MODEL_UNAVAILABLE' }, 502);
   }
@@ -167,32 +159,6 @@ async function fetchFreshIdentityUser(token) {
     // record cannot be checked, fail closed instead of trusting an old JWT.
     return { status: 'unavailable', required: true };
   }
-}
-
-function consumeUserRateLimit(user, now = Date.now()) {
-  const key = String(user?.id || user?.sub || user?.email || 'unknown');
-  let bucket = userRateBuckets.get(key);
-  if (!bucket || bucket.resetAt <= now) {
-    bucket = { count: 0, resetAt: now + USER_RATE_WINDOW_MS };
-  }
-
-  if (bucket.count >= USER_RATE_LIMIT) {
-    return {
-      ok: false,
-      retryAfterSeconds: Math.max(1, Math.ceil((bucket.resetAt - now) / 1000))
-    };
-  }
-
-  bucket.count += 1;
-  userRateBuckets.set(key, bucket);
-
-  if (userRateBuckets.size > 1_000) {
-    for (const [candidate, value] of userRateBuckets) {
-      if (value.resetAt <= now) userRateBuckets.delete(candidate);
-    }
-  }
-
-  return { ok: true, retryAfterSeconds: 0 };
 }
 
 async function fetchWithTimeout(url, options, timeoutMs) {
@@ -491,12 +457,11 @@ export const _test = {
   parsePromptFile,
   loadPromptInstruction,
   buildSystemPrompt,
-  bearerToken,
-  consumeUserRateLimit
+  bearerToken
 };
 
-// Netlify's deploy-time edge limiter is the first line of cost protection.
-// The in-function per-user bucket above remains useful as defense in depth.
+// The edge limiter protects the Function itself. Provider consumption limits
+// are enforced server-side by ai-router and the durable AI usage ledger.
 export const config = {
   path: '/.netlify/functions/chat',
   rateLimit: {

@@ -830,7 +830,7 @@ Panel ma siedem zakładek.
 - bezpieczne ustawianie, zastępowanie i usuwanie klucza bez deployu;
 - ręczny identyfikator modelu lub lista pobrana od dostawcy;
 - test klucza i dostępności modelu wykonywany server-side;
-- konfiguracja domyślna oraz osobne przypisanie dla chatu i przyszłych modułów AI;
+- konfiguracja domyślna oraz osobne przypisanie dla chatu, sprawdzania AI, formularzy AI i wspólny fallback dla innych/przyszłych modułów;
 - pełny klucz nigdy nie wraca do przeglądarki.
 
 ### Płatności
@@ -848,11 +848,27 @@ Studio jest dostępne tylko dla konta z rolą `admin`. Zawiera:
 
 1. **Dashboard Builder**
 2. **Lesson Builder**
-3. **Prompt Builder**
-4. **Exam Builder**
-5. **Presentation Studio**
+3. **Quiz Builder**
+4. **Prompt Builder**
+5. **Exam Builder**
+6. **Presentation Studio**
+7. skrót do wspólnego **Media Managera**
+8. skrót do **AI / Modele** w chronionym panelu administratora
 
-Na stronie głównej Studio działa **Eksplorator treści**. Wybierz repozytorium i rozwiń folder **Lekcje**, **Egzaminy**, **Prezentacje**, **Quizy**, **Prompty** albo **Media wspólne**. Każdy materiał jest osobnym zwijanym folderem. Po jego otwarciu zobaczysz definicję oraz folder `photos`; zdjęcia są pobierane dopiero w tej chwili, dzięki czemu duże repozytorium nie tworzy od razu ogromnej listy ani wielu zapytań. Kliknij **Otwórz**, aby wczytać plik do odpowiedniego Buildera. **Duplikuj** poprosi o nową nazwę i skopiuje definicję razem z lokalnym `photos`; media wspólne pozostaną współdzielonymi referencjami. Quiz bez aktywnego Buildera można na razie przeglądać i obsługiwać jego zdjęcia w eksploratorze.
+Na stronie głównej Studio działa **Eksplorator treści**. Wybierz repozytorium i rozwiń folder **Lekcje**, **Egzaminy**, **Prezentacje**, **Quizy**, **Prompty** albo **Media wspólne**. Każdy materiał jest osobnym zwijanym folderem. Po jego otwarciu zobaczysz definicję oraz folder `photos`; zdjęcia są pobierane dopiero w tej chwili, dzięki czemu duże repozytorium nie tworzy od razu ogromnej listy ani wielu zapytań. Kliknij **Otwórz**, aby wczytać plik do odpowiedniego Buildera. **Duplikuj** poprosi o nową nazwę i skopiuje definicję razem z lokalnym `photos`; media wspólne pozostaną współdzielonymi referencjami. Quiz otwiera się bezpośrednio w aktywnym Quiz Builderze.
+
+### Quiz Builder
+
+1. Otwórz **Studio treści → Quiz** i wybierz repozytorium.
+2. Ustaw ID, tytuł, opis, próg zaliczenia i opcjonalne losowanie pytań.
+3. Dodaj pytania: **Jedna odpowiedź**, **Wiele odpowiedzi**, **Prawda / fałsz** albo **Odpowiedź tekstowa**.
+4. Zaznacz poprawne warianty lub wpisz akceptowane odpowiedzi tekstowe — po jednej w wierszu.
+5. Obraz okładki lub pytania wybierz w tym samym Media Managerze. Przed pierwszym zapisem dostępne są media wspólne; po utworzeniu `quiz.json` możesz też używać lokalnego `quizzes/<quizId>/photos/`.
+6. Sprawdź działanie w panelu **Podgląd ucznia**, a potem kliknij **Zapisz draft** albo **Opublikuj**.
+
+Quiz jest zapisywany jako strukturalny JSON, bez dowolnego HTML. Przeglądarka i backend walidują typy pytań, stabilne identyfikatory, punktację oraz referencje mediów. Zapis do GitHuba jest wykonywany dopiero po kliknięciu jednej z dwóch jawnych akcji.
+
+Po publikacji otwórz **Dashboard Builder**, dodaj klocek **Quiz ChemDisk**, wybierz repozytorium i quiz z biblioteki, a następnie opublikuj dashboard. Kursant otworzy wspólny odtwarzacz pod `/members/module/quiz/`; draft nie zostanie mu zwrócony. Wynik procentowy, zaliczenie i liczba prób zapisują się w centralnym postępie. Jeśli wyłączysz powtórzenia, ukończony quiz pozostanie zablokowany po odświeżeniu i ponownym logowaniu.
 
 Przycisk **Usuń** przy definicji wymaga potwierdzenia i aktualnej wersji SHA. Jeśli materiał zawiera lokalne obrazy, drugie pytanie pozwala usunąć również `photos` albo zachować ten folder. Przy egzaminie najpierw zobaczysz wykryte odwołania z Dashboardu i lekcji. Usunięcie nie kasuje lokalnego draftu, historii postępu ani kart odwołujących się do pliku. Pliki z **Media wspólne** nigdy nie są automatycznie usuwane razem z materiałem.
 
@@ -892,10 +908,22 @@ Duży dashboard można porządkować podczas edycji: kliknij strzałkę w nagł�
 | --- | --- | --- |
 | Sekcja | Główny dział i pozycja menu | Wpisz tytuł i dodaj klocki |
 | Harmonijka | Rozwijana grupa w sekcji | Wpisz tytuł, umieść treść i karty |
+| Organizer po kolei | Numerowana ścieżka z blokadą kolejnych modułów | Ułóż co najmniej dwa moduły w wymaganej kolejności |
 | Pole tekstowe | Opis działu | Wpisz krótki tekst |
 | Komunikat | Wyróżniona informacja | Wpisz ostrzeżenie lub wskazówkę |
 
 Sekcja **Pomoc i konto** jest wymagana. Jeśli jej zabraknie, aplikacja dołączy bezpieczny domyślny szablon.
+
+### 18.3. Organizer modułów wykonywanych po kolei
+
+1. Przeciągnij **Organizer po kolei** do wybranej sekcji.
+2. Nadaj mu tytuł, na przykład „Powtórka przed egzaminem”.
+3. Dodaj do środka co najmniej dwa moduły, na przykład Prezentację, PDF, Lekcję, Quiz ChemDisk i Egzamin.
+4. Ustaw kolejność przeciąganiem lub przyciskami strzałek.
+5. Skonfiguruj każdy materiał i upewnij się, że ma włączone lub dziedziczone śledzenie postępu.
+6. Opublikuj dashboard.
+
+Uczeń może od razu rozpocząć pierwszy krok. Następny przycisk pozostaje zablokowany do czasu ukończenia wszystkich wcześniejszych kroków. Google Slides w organizerze pokazują przycisk **Zakończ krok** i nie odblokowują kolejnego modułu przy samym otwarciu; jest to świadoma deklaracja ucznia, bo zewnętrzny podgląd Google nie udostępnia ChemDisk wiarygodnego stanu obejrzenia. PDF otwiera się bezpośrednio z numerowanej karty w wybranym trybie i po poprawnym otwarciu odblokowuje następny krok. Lekcja wymaga ukończenia wymaganych kroków, Quiz ChemDisk zapisuje ukończenie po sprawdzeniu odpowiedzi, a egzamin kończy się dopiero po zapisaniu zakończonej próby. Blokada jest sprawdzana przez serwer postępu; Exam Engine sprawdza ją dodatkowo przed otwarciem egzaminu. Organizer nie może zawierać kolejnej harmonijki — jeśli potrzebujesz drugiej ścieżki, dodaj osobny organizer.
 
 ## 19. Wszystkie karty i moduły dashboardu
 
@@ -1312,6 +1340,15 @@ Dodaje rozwijane wyjaśnienie. Może być domyślnie otwarta. Do środka można 
 ### Wideo YouTube
 
 Wklej link albo 11-znakowe ID. Film jest osadzany z `youtube-nocookie.com`.
+
+### Google Slides
+
+1. Przeciągnij **Google Slides** z grupy **Multimedia i aplikacje** na slajd lekcji.
+2. Wklej ID prezentacji albo pełny link z Google Slides lub Dysku.
+3. Jeżeli używasz identyfikatora z linku opublikowanego `/d/e/`, zaznacz **Opublikowana prezentacja Google**. Dla pełnego linku Studio rozpoznaje ten tryb automatycznie.
+4. Wpisz tytuł widoczny pod prezentacją.
+
+Prezentacja jest wyświetlana bezpośrednio wewnątrz lekcji w proporcjach 16:9. Google nadal sprawdza własne uprawnienia, dlatego przed publikacją udostępnij plik odbiorcom kursu. Studio odrzuca linki spoza `docs.google.com` i `drive.google.com`.
 
 ### ATONOM
 
@@ -1848,7 +1885,7 @@ W trybie sekwencyjnym serwer blokuje nieznane i zbyt odległe kroki. W raporcie 
 
 Lista użytkowników pokazuje konta Identity także wtedy, gdy nie mają jeszcze rekordu postępu. Można wyszukiwać po nazwie, e-mailu i ID, filtrować stan oraz sortować po aktywności, postępie, nazwie albo e-mailu.
 
-Po kliknięciu konta zobaczysz procent kursu i kompaktową listę najwyższych działów. Kliknij wiersz, aby wczytać jego szczegóły, przyciski administracyjne i bezpośrednie dzieci; kolejne poziomy rozwija się tak samo. Ustawienia ucznia i reset całego kursu są schowane w osobnym rozwijanym bloku. Otwarcie zwykłego materiału innego niż lekcja i egzamin zalicza go na 100%; lekcja liczy wykonane kroki, a egzamin liczy zapisane odpowiedzi i kończy postęp dopiero po wysłaniu lub timeoutcie. Dla PDF, prezentacji, quizu i filmu zachowane dane szczegółowe trzeba interpretować osobno: ukończenie przy otwarciu nie jest dowodem przeczytania, obejrzenia ani uzyskania wyniku. Dla filmu wiarygodne są zakresy odtworzone przez kontrolowany player, a wynik quizu i egzaminu pozostaje oddzielony od postępu.
+Po kliknięciu konta zobaczysz procent kursu i kompaktową listę najwyższych działów. Kliknij wiersz, aby wczytać jego szczegóły, przyciski administracyjne i bezpośrednie dzieci; kolejne poziomy rozwija się tak samo. Ustawienia ucznia i reset całego kursu są schowane w osobnym rozwijanym bloku. Otwarcie zwykłego materiału innego niż lekcja, Quiz ChemDisk i egzamin zalicza go na 100%; lekcja liczy wykonane kroki, natywny quiz kończy się dopiero po sprawdzeniu odpowiedzi, a egzamin liczy zapisane odpowiedzi i kończy postęp dopiero po wysłaniu lub timeoutcie. Dla PDF, prezentacji, quizu i filmu zachowane dane szczegółowe trzeba interpretować osobno: wynik pozostaje oddzielony od samego postępu. Dla filmu wiarygodne są zakresy odtworzone przez kontrolowany player, a wynik quizu i egzaminu pozostaje zapisany osobno.
 
 Google Slides, Google Drive i Google Forms są obcymi iframe'ami. ChemDisk nie może samodzielnie odczytać ich wewnętrznej nawigacji. Moduł zostanie zaliczony przy otwarciu, ale dokładną pozycję lub wynik zobaczysz tylko dla odtwarzacza, który emituje zweryfikowane komunikaty integracyjne ChemDisk.
 
@@ -2022,7 +2059,65 @@ Po wdrożeniu przetestuj pełny obieg na dwóch kontach: Dashboard → start →
 - [ ] Produkcyjne sekrety są ograniczone do Production.
 - [ ] Utworzono kopię materiałów i zapisano procedurę odzyskania.
 
-## 38. Oficjalne źródła
+## 38. Limity, koszty i raporty AI
+
+### 38.1. Pierwsza konfiguracja
+
+1. Upewnij się, że Netlify ma `NETLIFY_API_TOKEN` z dostępem do bieżącej witryny oraz automatyczne `SITE_ID`.
+2. W **Panel administratora → AI / Modele** utwórz konfigurację, zapisz klucz i sprawdź połączenie.
+3. Otwórz **AI Limity**. Ustaw strefę czasową IANA, najczęściej `Europe/Warsaw`, walutę raportu oraz progi ostrzeżeń.
+4. Wybierz warstwę. Puste pole oznacza brak limitu; `0` blokuje pierwsze żądanie w danym zakresie.
+5. Kliknij **Zapisz wszystkie limity**. Reguły obowiązują od kolejnego requestu.
+
+Możesz mieć jednocześnie np. 20 requestów/godzinę, 100/dzień i 1000/miesiąc. Żądanie przechodzi tylko wtedy, gdy spełnia wszystkie reguły globalne, użytkownika, modułu per użytkownik, dostawcy i konfiguracji. Tryb indywidualny:
+
+- **Dziedzicz domyślne** — bierze domyślny limit użytkownika;
+- **Własne limity** — używa tabeli konkretnego konta;
+- **Bez limitu użytkownika** — pomija limity per-user, modułu i konfiguracji per-user, ale nadal respektuje limity globalne i dostawcy;
+- **AI wyłączone** — serwer zwraca `AI_DISABLED_FOR_USER` bez kontaktu z providerem.
+
+Limit modułu jest liczony per użytkownik. Wpisuj stabilne ID, np. `chat`, `aiGrader`, `aiForms` albo ID nowego modułu używane przez jego backend. Limit providera obejmuje cały ruch OpenAI albo Gemini. Dla `aiConfigId` dostępny jest limit globalny i osobny limit per-user.
+
+### 38.2. Cennik i jawny fallback
+
+W warstwie konfiguracji ustaw cenę tokenów wejścia i wyjścia za 1 000 000 tokenów. Nie kopiuj ceny „na zawsze”: zmieniaj ją po zmianie cennika dostawcy. Raport oznacza koszt jako szacowany. Limity kosztu wpisuje się w mikrojednostkach, czyli `1 000 000` odpowiada jednej jednostce wybranej waluty.
+
+Fallback ustaw jawnie na konkretnej konfiguracji A, wskazując konfigurację B. Nie twórz pętli. Nieustawiony fallback oznacza brak przełączenia. Jeśli primary wykona provider call i dostanie `429`, awarię, błąd klucza albo brak modelu, ten call liczy się jako jeden request; fallback przechodzi własne limity i, jeśli zostanie wywołany, liczy się jako drugi.
+
+### 38.3. Raport i reset
+
+Raport dzień/tydzień/miesiąc pokazuje paski globalne, aktywnych użytkowników oraz tabele dostawców, modeli, konfiguracji, modułów i kont. **Szczegóły** użytkownika pokazują dzień, tydzień, miesiąc oraz rozbicie ruchu. **Wyzeruj** wymaga potwierdzenia, czyści tylko licznik tego konta i zapisuje operację w audycie; sumy globalne pozostają historycznie prawdziwe.
+
+Jeżeli **Pokaż uczniowi własne limity** jest włączone, chat pokazuje użytkownikowi wyłącznie jego dzień i miesiąc. Parametr `userId` w adresie nie jest honorowany — serwer zawsze bierze ID z aktualnej kanonicznej sesji.
+
+Najważniejsze komunikaty:
+
+- `AI_*_LIMIT_REACHED` — wewnętrzny limit ChemDisk, HTTP 429;
+- `AI_RATE_LIMITED` — limit po stronie providera;
+- `AI_PROVIDER_ERROR` — awaria providera;
+- `AI_INVALID_KEY` — klucz odrzucony;
+- `AI_LIMIT_STORAGE_UNAVAILABLE` — brak bezpiecznej możliwości sprawdzenia limitu; request nie idzie do providera;
+- `AI_USAGE_RECORD_FAILED` — provider został wywołany, ale bezpieczne domknięcie wpisu usage nie powiodło się.
+
+### 38.4. Landing Page Builder
+
+1. Otwórz **Studio treści → Landing Page Builder**.
+2. Wybierz sekcję. Zmień tytuł, podtytuł, opis, obraz, CTA i kolory.
+3. Przeciągnij sekcję albo użyj strzałek. Przełącznik **Widoczna** ukrywa ją po publikacji bez kasowania treści.
+4. Kliknij **Zapisz draft**, aby zachować pracę bez zmiany strony publicznej.
+5. Sprawdź bezpieczny podgląd i kliknij **Opublikuj**. Na końcu otwórz stronę główną w nowej karcie.
+
+Obraz musi używać HTTPS albo ścieżki lokalnej `/...`. CTA przyjmuje kotwicę `#sekcja`, ścieżkę lokalną lub HTTPS. Builder nie obsługuje wklejania HTML/JavaScript; tekst jest renderowany jako tekst, więc próba `<script>` nie jest wykonywana. Opublikowany model jest w `chemdisk-landing`, a statyczne `public/index.html` pozostaje awaryjną wersją przy braku Blobs.
+
+### 38.5. Store'y Netlify Blobs dodane dla AI i landing page
+
+- `chemdisk-ai-limit-config` — ustawienia, cenniki, fallbacki i audyt;
+- `chemdisk-ai-usage` — agregaty, krótkie rezerwacje i ograniczony log szczegółowy;
+- `chemdisk-landing` — osobny draft i opublikowany model strony.
+
+Nie są potrzebne nowe zmienne poza `NETLIFY_API_TOKEN` i `SITE_ID`. Klucze providerów nadal konfiguruj w panelu, a ENV traktuj jako migracyjny fallback.
+
+## 39. Oficjalne źródła
 
 - [Netlify — deploy z repozytorium](https://docs.netlify.com/start/quickstarts/deploy-from-repository/)
 - [Netlify — zmienne środowiskowe](https://docs.netlify.com/build/environment-variables/get-started/)

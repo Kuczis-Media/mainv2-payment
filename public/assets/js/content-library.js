@@ -478,6 +478,15 @@
     return `/members/module/presentation/?${params.toString()}`;
   }
 
+  function quizUrl(rawQuizId, rawRepositoryId = '', materialId = '') {
+    const quizId = validateFilename('quiz', rawQuizId);
+    const repositoryId = validateRepositoryId(rawRepositoryId);
+    const params = new URLSearchParams({ quiz: quizId });
+    if (repositoryId) params.set('repo', repositoryId);
+    if (/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(materialId || '')) params.set('material', materialId);
+    return `/members/module/quiz/?${params.toString()}`;
+  }
+
   function search(assets, query) {
     const normalized = String(query || '').trim().toLocaleLowerCase('pl');
     if (!normalized) return Array.isArray(assets) ? assets.slice() : [];
@@ -518,6 +527,7 @@
     lessonUrl,
     examUrl,
     presentationUrl,
+    quizUrl,
     validateFilename,
     validateRepositoryId,
     _test: {

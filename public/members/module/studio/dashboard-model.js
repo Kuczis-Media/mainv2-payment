@@ -48,6 +48,7 @@
     'pdf',
     'film',
     'yt',
+    'quiz',
     'forms',
     'exam',
     'chat',
@@ -100,6 +101,12 @@
       icon: '✓',
       path: 'forms',
       idLabel: 'ID formularza Google'
+    },
+    quiz: {
+      label: 'Quiz ChemDisk',
+      icon: 'Q',
+      path: 'quiz',
+      quizLabel: 'ID quizu z biblioteki'
     },
     exam: {
       label: 'Egzamin',
@@ -312,6 +319,7 @@
     const repositoryId = singleLine(source.repositoryId || source.repo).toLowerCase();
     const examId = singleLine(source.examId || source.exam).toLowerCase();
     const presentationId = singleLine(source.presentationId || source.presentation).toLowerCase();
+    const quizId = singleLine(source.quizId || source.quiz).toLowerCase();
     const sourceMode = source.source === 'file' || (!source.source && file)
       ? 'file'
       : 'prompt';
@@ -333,6 +341,7 @@
       repositoryId,
       examId,
       presentationId,
+      quizId,
       internal: singleLine(source.internal),
       formula: canonical.module === 'atonom' ? singleLine(source.formula) : '',
       href: singleLine(source.href),
@@ -357,12 +366,16 @@
     const source = typeof input === 'string' ? { title: input } : input || {};
     const fallbackLevel = Math.min(6, Math.max(3, Number(parentLevel || 2) + 1));
     const requestedLevel = clampLevel(source.level, fallbackLevel);
+    const navigation = source.navigation === 'sequential' || source.settings?.navigation === 'sequential'
+      ? 'sequential'
+      : 'free';
     const group = {
       kind: 'group',
       uid: safeUid(source.uid, 'group'),
       ...progressMetadata(source, false),
       level: requestedLevel > Number(parentLevel || 2) ? requestedLevel : fallbackLevel,
       title: singleLine(source.title) || 'Nowa harmonijka',
+      navigation,
       blocks: []
     };
     const sourceBlocks = Array.isArray(source.blocks)
@@ -475,6 +488,7 @@
       repositoryId: '',
       examId: '',
       presentationId: '',
+      quizId: '',
       internal: '',
       formula: '',
       hash: '',
@@ -540,6 +554,10 @@
       parsed.repositoryId = take('repo').toLowerCase();
       parsed.presentationId = take('presentation').toLowerCase();
     }
+    if (parsed.module === 'quiz') {
+      parsed.repositoryId = take('repo').toLowerCase();
+      parsed.quizId = take('quiz').toLowerCase();
+    }
     if (parsed.module === 'contact') parsed.internal = take('internal');
     if (parsed.module === 'atonom') parsed.formula = take('formula');
 
@@ -595,6 +613,10 @@
     if (card.module === 'presentation') {
       add('repo', card.repositoryId);
       add('presentation', card.presentationId);
+    }
+    if (card.module === 'quiz') {
+      add('repo', card.repositoryId);
+      add('quiz', card.quizId);
     }
     if (card.module === 'contact') add('internal', card.internal);
     if (card.module === 'atonom') add('formula', card.formula);
@@ -661,6 +683,7 @@
           title: groupMatch[2],
           uid: pendingProgress && pendingProgress.id,
           progress: pendingProgress && pendingProgress.progress,
+          navigation: pendingProgress?.settings?.navigation,
           progressConfigured: Boolean(pendingProgress)
         }, level - 1);
         pendingProgress = null;
@@ -735,7 +758,7 @@
 
   function runtimeMaterialType(block) {
     return ({
-      lesson: 'lesson', presentation: 'presentation', slides: 'presentation', film: 'video', yt: 'video', pdf: 'pdf', forms: 'quiz', exam: 'exam', chat: 'script'
+      lesson: 'lesson', presentation: 'presentation', slides: 'presentation', film: 'video', yt: 'video', pdf: 'pdf', forms: 'quiz', quiz: 'quiz', exam: 'exam', chat: 'script'
     })[block.module] || (block.module === 'link' ? 'embed' : 'other');
   }
 
@@ -804,6 +827,9 @@
       ...(node.kind === 'dashboard' ? {
         settings: { recordOpens: node.recordOpens !== false }
       } : {}),
+      ...(node.kind === 'group' ? {
+        settings: { navigation: node.navigation === 'sequential' ? 'sequential' : 'free' }
+      } : {}),
       ...(node.kind === 'module' ? {
         settings: {
           presentationMode: node.presentationMode,
@@ -818,7 +844,7 @@
     const ownBlocks = container.blocks.filter((block) => block.kind !== 'group');
     const childGroups = container.blocks.filter((block) => block.kind === 'group');
     const lines = [
-      ...(container.progressConfigured ? [serializeProgressMetadata(
+      ...((container.progressConfigured || container.navigation === 'sequential') ? [serializeProgressMetadata(
         container,
         container.kind === 'section' ? 'department' : container.level === 3 ? 'section' : 'subsection'
       )] : []),
@@ -856,6 +882,7 @@
       type: group.level === 3 ? 'section' : group.level === 4 ? 'subsection' : 'other',
       progress: group.progress,
       level: group.level,
+      navigation: group.navigation === 'sequential' ? 'sequential' : 'free',
       title: group.title,
       description: [],
       notices: [],
@@ -939,27 +966,32 @@
       });
     };
     append(normalized, null, 'course', normalized.title);
-    const visitBlocks = (blocks, parentId) => {
+    const visitBlocks = (blocks, parentId, parentNavigation = 'free') => {
       blocks.forEach((block) => {
         if (block.kind === 'group') {
           const type = block.level === 3 ? 'section' : block.level === 4 ? 'subsection' : 'other';
-          append(block, parentId, type, block.title);
-          visitBlocks(block.blocks, block.uid);
+          append(block, parentId, type, block.title, {
+            navigation: block.navigation === 'sequential' ? 'sequential' : 'free'
+          });
+          visitBlocks(block.blocks, block.uid, block.navigation);
         } else if (block.kind === 'module') {
           append(block, parentId, runtimeMaterialType(block), block.title, {
+            manualCompletion: block.module === 'quiz'
+              || (parentNavigation === 'sequential' && block.module === 'slides'),
             presentationMode: block.presentationMode,
             videoCompletionThreshold: block.videoCompletionThreshold,
             contentFile: block.module === 'lesson' ? block.file : '',
-            repositoryId: ['lesson', 'exam', 'presentation'].includes(block.module) ? block.repositoryId : '',
+            repositoryId: ['lesson', 'exam', 'presentation', 'quiz'].includes(block.module) ? block.repositoryId : '',
             examId: block.module === 'exam' ? block.examId : '',
-            presentationId: block.module === 'presentation' ? block.presentationId : ''
+            presentationId: block.module === 'presentation' ? block.presentationId : '',
+            quizId: block.module === 'quiz' ? block.quizId : ''
           });
         }
       });
     };
     normalized.sections.forEach((section) => {
       append(section, normalized.uid, 'department', section.title);
-      visitBlocks(section.blocks, section.uid);
+      visitBlocks(section.blocks, section.uid, 'free');
     });
     return {
       version: 1,
@@ -1112,7 +1144,16 @@
     const inspectBlocks = (blocks) => {
       blocks.forEach((block) => {
         if (block.kind === 'group') {
-          if (!singleLine(block.title)) addError('GROUP_TITLE_REQUIRED', 'Harmonijka wymaga tytułu.', block);
+          if (!singleLine(block.title)) addError('GROUP_TITLE_REQUIRED', 'Harmonijka lub organizer wymaga tytułu.', block);
+          if (block.navigation === 'sequential') {
+            const steps = block.blocks.filter((child) => child.kind === 'module');
+            if (steps.length < 2) {
+              addError('SEQUENCE_STEPS_REQUIRED', 'Organizer wymaga co najmniej dwóch modułów.', block);
+            }
+            if (block.blocks.some((child) => child.kind === 'group')) {
+              addError('SEQUENCE_NESTING_INVALID', 'Organizer może zawierać moduły, ale nie kolejne harmonijki.', block);
+            }
+          }
           inspectBlocks(block.blocks);
           return;
         }
@@ -1137,7 +1178,10 @@
         if (block.module === 'presentation' && !/^[a-z0-9][a-z0-9-]{0,79}$/.test(block.presentationId)) {
           addError('PRESENTATION_ID_REQUIRED', 'Wybierz prawidłową prezentację z biblioteki.', block);
         }
-        if (['lesson', 'chat', 'exam', 'presentation'].includes(block.module) && !safeRepositoryId(block.repositoryId)) {
+        if (block.module === 'quiz' && !/^[a-z0-9][a-z0-9-]{0,79}$/.test(block.quizId)) {
+          addError('QUIZ_ID_REQUIRED', 'Wybierz prawidłowy quiz z biblioteki.', block);
+        }
+        if (['lesson', 'chat', 'exam', 'presentation', 'quiz'].includes(block.module) && !safeRepositoryId(block.repositoryId)) {
           addError('CONTENT_REPOSITORY_INVALID', 'Wybierz poprawne repozytorium materiałów.', block);
         }
         if (block.module === 'chat') {
@@ -1268,6 +1312,7 @@
       const found = findNode(model, parentUid);
       if (!found || !['section', 'group'].includes(found.node.kind) || node.kind === 'section') return null;
       if (containsUid(node, parentUid)) return null;
+      if (found.node.kind === 'group' && found.node.navigation === 'sequential' && node.kind === 'group') return null;
       target = found.node.blocks;
       targetParent = found.node;
       if (node.kind === 'group') {

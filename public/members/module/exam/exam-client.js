@@ -44,7 +44,11 @@
   }
 
   function reference(input) {
-    return { repo: input.repositoryId || 'default', exam: input.examId };
+    return {
+      repo: input.repositoryId || 'default',
+      exam: input.examId,
+      ...(input.materialId ? { material: input.materialId } : {})
+    };
   }
 
   const api = {

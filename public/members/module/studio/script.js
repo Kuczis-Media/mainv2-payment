@@ -77,6 +77,7 @@
     lessonRepositorySave: byId('lesson-repository-save-button'),
     lessonRepositoryDelete: byId('lesson-repository-delete-button'),
     promptWorkspace: byId('prompt-workspace'),
+    quizWorkspace: byId('quiz-workspace'),
     examWorkspace: byId('exam-workspace'),
     presentationWorkspace: byId('presentation-workspace'),
     promptFilename: byId('prompt-filename-input'),
@@ -325,6 +326,7 @@
     if (state.lesson.model) writeStorage(LESSON_DRAFT_KEY, state.lesson.model);
     if (state.prompt.model) writeStorage(PROMPT_DRAFT_KEY, state.prompt.model);
     window.ChemExamBuilder?.flush?.();
+    window.ChemQuizBuilder?.flush?.();
   }
 
   function snapshot(mode) {
@@ -532,12 +534,13 @@
 
   function switchMode(mode) {
     finishEdit();
-    const next = ['home', 'dashboard', 'lesson', 'exam', 'presentation', 'prompt'].includes(mode) ? mode : 'home';
+    const next = ['home', 'dashboard', 'lesson', 'quiz', 'exam', 'presentation', 'prompt'].includes(mode) ? mode : 'home';
     state.mode = next;
     elements.home.hidden = next !== 'home';
     elements.dashboardWorkspace.hidden = next !== 'dashboard';
     elements.lessonWorkspace.hidden = next !== 'lesson';
     elements.promptWorkspace.hidden = next !== 'prompt';
+    elements.quizWorkspace.hidden = next !== 'quiz';
     elements.examWorkspace.hidden = next !== 'exam';
     elements.presentationWorkspace.hidden = next !== 'presentation';
     all('[data-switch-mode]').forEach((button) => {
@@ -548,6 +551,7 @@
     if (next === 'dashboard') renderDashboard();
     if (next === 'lesson') renderLesson();
     if (next === 'prompt') renderPrompt();
+    if (next === 'quiz') void window.ChemQuizBuilder?.activate?.();
     if (next === 'exam') void window.ChemExamBuilder?.activate?.();
     if (next === 'presentation') void window.ChemPresentationBuilder?.activate?.();
     updateHistoryButtons();
@@ -563,6 +567,7 @@
       yt: ['Film YouTube', 'Nagranie z własnymi kontrolkami ChemDisk.'],
       lesson: ['Lekcja interaktywna', 'Przejdź przez prezentację i zadania.'],
       forms: ['Test wiedzy', 'Sprawdź swoją wiedzę w formularzu.'],
+      quiz: ['Quiz ChemDisk', 'Rozwiąż natywny quiz z zapisem wyniku i postępu.'],
       exam: ['Egzamin', 'Rozwiąż egzamin i zapisz wynik w ChemDisk.'],
       chat: ['Asystent AI', 'Skorzystaj z przygotowanej pomocy.'],
       kalkulator: ['Kalkulator naukowy', 'Wykonuj obliczenia potrzebne w zadaniach.'],
@@ -579,6 +584,10 @@
   function createDashboardNode(type) {
     if (type === 'section') return dashboardModelApi.createSection({ title: 'Nowy dział' });
     if (type === 'group') return dashboardModelApi.createGroup({ title: 'Nowa harmonijka' });
+    if (type === 'organizer') return dashboardModelApi.createGroup({
+      title: 'Ścieżka nauki',
+      navigation: 'sequential'
+    });
     if (type === 'text') return dashboardModelApi.createText('Nowy opis.');
     if (type === 'notice') return dashboardModelApi.createNotice('Ważna informacja dla kursantów.');
     const [title, description] = dashboardModuleDefaults(type);
@@ -611,7 +620,7 @@
       title,
       description,
       source: 'prompt',
-      repositoryId: ['lesson', 'chat', 'exam', 'presentation'].includes(type)
+      repositoryId: ['lesson', 'chat', 'exam', 'presentation', 'quiz'].includes(type)
         ? state.contentLibrary.selectedRepositoryId
         : '',
       formula: type === 'atonom' ? 'fenol' : ''
@@ -690,6 +699,14 @@
         title: asset.title || asset.filename,
         description: asset.description || 'Natywna prezentacja ChemDisk z dokładnym śledzeniem slajdów.'
       });
+    } else if (asset.kind === 'quiz') {
+      node = dashboardModelApi.createModule({
+        module: 'quiz',
+        repositoryId: asset.repositoryId,
+        quizId: asset.filename,
+        title: asset.title || asset.filename,
+        description: asset.description || 'Natywny quiz ChemDisk z zapisem wyniku i postępu.'
+      });
     } else {
       const isText = /\.txt$/i.test(asset.filename);
       node = dashboardModelApi.createModule({
@@ -712,13 +729,15 @@
           ? 'Karta egzaminu jest gotowa w dashboardzie.'
           : asset.kind === 'presentation'
             ? 'Karta prezentacji ChemDisk jest gotowa w dashboardzie.'
+            : asset.kind === 'quiz'
+              ? 'Karta quizu ChemDisk jest gotowa w dashboardzie.'
             : 'Karta AI jest gotowa; dla pliku TXT sprawdź numer punktu.'
     );
   }
 
   function dashboardSymbol(node) {
     if (node.kind === 'section') return '§';
-    if (node.kind === 'group') return '⌄';
+    if (node.kind === 'group') return node.navigation === 'sequential' ? '1→' : '⌄';
     if (node.kind === 'text') return 'T';
     if (node.kind === 'notice') return '!';
     const definition = dashboardModelApi.MODULE_DEFINITIONS[node.module];
@@ -732,7 +751,9 @@
 
   function dashboardNodeSubtitle(node) {
     if (node.kind === 'section') return `${node.blocks.length} elementów`;
-    if (node.kind === 'group') return `Poziom ${node.level - 2} · ${node.blocks.length} elementów`;
+    if (node.kind === 'group') return node.navigation === 'sequential'
+      ? `Organizer · ${node.blocks.filter((block) => block.kind === 'module').length} kroków`
+      : `Poziom ${node.level - 2} · ${node.blocks.length} elementów`;
     if (node.kind === 'text') return 'Pole tekstowe';
     if (node.kind === 'notice') return 'Komunikat';
     const definition = dashboardModelApi.MODULE_DEFINITIONS[node.module];
@@ -764,7 +785,9 @@
     const actions = create('span', 'node-actions');
     if (node.kind === 'section' || node.kind === 'group') {
       const collapsed = state.dashboard.collapsedNodes.has(node.uid);
-      const noun = node.kind === 'section' ? 'sekcję' : 'harmonijkę';
+      const noun = node.kind === 'section'
+        ? 'sekcję'
+        : node.navigation === 'sequential' ? 'organizer' : 'harmonijkę';
       const collapse = actionButton(
         'toggle-collapse',
         collapsed ? `Rozwiń ${noun} w edytorze` : `Zwiń ${noun} w edytorze`,
@@ -802,13 +825,18 @@
       const collapsed = state.dashboard.collapsedNodes.has(node.uid);
       group.classList.toggle('is-selected', state.dashboard.selectedUid === node.uid);
       group.classList.toggle('is-editor-collapsed', collapsed);
+      group.classList.toggle('is-sequential', node.navigation === 'sequential');
       group.append(nodeHeader(node));
       const body = create('div', 'group-body');
       node.blocks.forEach((block, blockIndex) => {
         body.append(dashboardDropZone(node.uid, blockIndex));
         body.append(renderDashboardBlock(block, node.uid, blockIndex));
       });
-      body.append(dashboardDropZone(node.uid, node.blocks.length, 'Dodaj do harmonijki'));
+      body.append(dashboardDropZone(
+        node.uid,
+        node.blocks.length,
+        node.navigation === 'sequential' ? 'Dodaj kolejny krok' : 'Dodaj do harmonijki'
+      ));
       body.hidden = collapsed;
       group.append(body);
       return group;
@@ -1210,7 +1238,7 @@
       ? dashboardModelApi.findNode(state.dashboard.model, state.dashboard.selectedUid)
       : { node: state.dashboard.model, parent: null, container: null, index: -1 };
     const node = found.node;
-    if (node.kind === 'module' && ['lesson', 'chat', 'exam', 'presentation'].includes(node.module)) {
+    if (node.kind === 'module' && ['lesson', 'chat', 'exam', 'presentation', 'quiz'].includes(node.module)) {
       syncInspectorRepository(node.repositoryId);
     }
     const form = create('form', 'inspector-form');
@@ -1227,9 +1255,23 @@
       form.append(create('p', 'field-help', 'Ustawienia całej platformy. Wyłączenie postępu nie usuwa wcześniejszej historii.'));
     } else if (node.kind === 'section' || node.kind === 'group') {
       form.append(field(
-        node.kind === 'section' ? 'Nazwa działu' : 'Tytuł harmonijki',
+        node.kind === 'section'
+          ? 'Nazwa działu'
+          : node.navigation === 'sequential' ? 'Tytuł organizera' : 'Tytuł harmonijki',
         textInput(node.title, 'title', { maxLength: 120 })
       ));
+      if (node.kind === 'group') {
+        form.append(field(
+          'Sposób przechodzenia',
+          selectInput(node.navigation || 'free', 'navigation', [
+            { value: 'free', label: 'Dowolna kolejność (harmonijka)' },
+            { value: 'sequential', label: 'Po kolei (organizer)' }
+          ]),
+          node.navigation === 'sequential'
+            ? 'Kolejny moduł odblokuje się dopiero po ukończeniu wszystkich wcześniejszych kroków.'
+            : 'Uczeń może otwierać materiały w dowolnej kolejności.'
+        ));
+      }
     } else if (node.kind === 'text' || node.kind === 'notice') {
       form.append(field(
         node.kind === 'notice' ? 'Treść komunikatu' : 'Treść pola',
@@ -1312,6 +1354,24 @@
             allowCustom: false
           }),
           'Karta wskazuje presentation.json. Stare moduły Google Slides nadal działają niezależnie.'
+        ));
+      }
+      if (node.module === 'quiz') {
+        form.append(field(
+          'Repozytorium',
+          selectInput(node.repositoryId, 'repositoryId', repositoryOptions(true))
+        ));
+        const quizzes = state.contentLibrary.quizzes
+          .filter((asset) => !node.repositoryId || asset.repositoryId === node.repositoryId);
+        form.append(field(
+          'Quiz ChemDisk',
+          materialPicker(textInput(node.quizId, 'quizId', { placeholder: 'Wyszukaj quiz…' }), quizzes, {
+            type: 'Quiz',
+            icon: 'Q',
+            empty: 'Brak quizów w tym repozytorium.',
+            allowCustom: false
+          }),
+          'Karta wskazuje quizzes/<quizId>/quiz.json i otwiera tylko opublikowaną definicję.'
         ));
       }
       if (node.module === 'chat') {
@@ -1397,13 +1457,16 @@
   }
 
   function dashboardPreviewGroup(group) {
-    const wrapper = create('div', 'preview-group');
+    const sequential = group.navigation === 'sequential';
+    const wrapper = create('div', `preview-group${sequential ? ' is-sequential' : ''}`);
     wrapper.append(create('strong', '', group.title));
+    if (sequential) wrapper.append(create('small', 'preview-sequence-label', 'Moduły odblokowywane po kolei'));
     const directCards = group.items || [];
     if (directCards.length) {
       const grid = create('div', 'preview-card-grid');
-      directCards.forEach((item) => {
+      directCards.forEach((item, index) => {
         const card = create('div', 'preview-card');
+        if (sequential) card.append(create('span', 'preview-sequence-step', String(index + 1)));
         card.append(create('strong', '', item.title), create('small', '', item.description || item.href));
         grid.append(card);
       });
@@ -1937,6 +2000,13 @@
         title: 'Film do lekcji'
       });
     }
+    if (type === 'slides') {
+      return lessonModelApi.createBlock('slides', {
+        presentation: '',
+        published: false,
+        title: 'Prezentacja Google Slides'
+      });
+    }
     if (type === 'exam') {
       const firstExam = state.contentLibrary.exams[0];
       return lessonModelApi.createBlock('exam', {
@@ -2216,6 +2286,7 @@
       style: 'Aa',
       accordion: '⌄',
       youtube: 'YT',
+      slides: 'GS',
       exam: 'E',
       atonom: '⚛',
       formula: '∑',
@@ -2240,6 +2311,7 @@
     if (block.type === 'style') return 'Stylowany tekst';
     if (block.type === 'accordion') return block.title || 'Harmonijka';
     if (block.type === 'youtube') return block.title || 'Film YouTube';
+    if (block.type === 'slides') return block.title || 'Prezentacja Google Slides';
     if (block.type === 'exam') return block.title || 'Egzamin';
     if (block.type === 'atonom') return block.title || `ATONOM: ${block.formula}`;
     if (block.type === 'formula') return block.title || (block.mode === 'math' ? 'Wzór matematyczny' : 'Równanie reakcji');
@@ -2260,6 +2332,7 @@
     if (block.type === 'table') return `${block.headers.length} kolumn · ${block.rows.length} wierszy · ${block.align}`;
     if (block.type === 'image') return block.ref || block.url || 'Wybierz obraz';
     if (block.type === 'youtube') return block.video || 'Uzupełnij link lub ID filmu';
+    if (block.type === 'slides') return block.presentation || 'Uzupełnij link lub ID prezentacji';
     if (block.type === 'exam') {
       const requirements = {
         optional: 'opcjonalny',
@@ -3417,6 +3490,24 @@
           'Film zostanie osadzony w bezpiecznym iframe z domeny youtube-nocookie.com.'
         ),
         field('Tytuł filmu', lessonInput(block.title, 'title', { maxLength: 180 }))
+      );
+    } else if (block.type === 'slides') {
+      const published = create('label', 'check-field');
+      published.append(
+        lessonInput('', 'published', { type: 'checkbox', checked: block.published }),
+        create('span', '', 'Opublikowana prezentacja Google (/d/e/)')
+      );
+      form.append(
+        field(
+          'Link lub ID prezentacji Google Slides',
+          lessonInput(block.presentation, 'presentation', {
+            placeholder: 'https://docs.google.com/presentation/d/… lub ID',
+            maxLength: 500
+          }),
+          'Prezentacja zostanie osadzona w lekcji. Plik musi być udostępniony odbiorcom kursu.'
+        ),
+        published,
+        field('Tytuł prezentacji', lessonInput(block.title, 'title', { maxLength: 180 }))
       );
     } else if (block.type === 'exam') {
       syncInspectorRepository(block.repositoryId);
@@ -5885,7 +5976,7 @@
     const kind = create(
       'span',
       'repository-asset-kind',
-      asset.kind === 'lesson' ? 'MD' : asset.kind === 'exam' ? 'EXAM' : asset.kind === 'presentation' ? 'SLIDE' : /\.txt$/i.test(asset.filename) ? 'TXT' : 'JSON'
+      asset.kind === 'lesson' ? 'MD' : asset.kind === 'exam' ? 'EXAM' : asset.kind === 'presentation' ? 'SLIDE' : asset.kind === 'quiz' ? 'QUIZ' : /\.txt$/i.test(asset.filename) ? 'TXT' : 'JSON'
     );
     const copy = create('span');
     copy.append(
@@ -5902,7 +5993,7 @@
     const library = window.ChemContentLibrary;
     if (!library) return;
     const dashboardAssets = library.search(
-      [...state.contentLibrary.lessons, ...state.contentLibrary.prompts, ...state.contentLibrary.exams, ...state.contentLibrary.presentations],
+      [...state.contentLibrary.lessons, ...state.contentLibrary.prompts, ...state.contentLibrary.exams, ...state.contentLibrary.presentations, ...state.contentLibrary.quizzes],
       elements.dashboardAssetSearch.value
     );
     elements.dashboardAssetList.replaceChildren(
@@ -6402,7 +6493,8 @@
         switchMode('presentation');
         await window.ChemPresentationBuilder?.openAsset?.(asset);
       } else {
-        toast('Quiz Builder nie jest jeszcze aktywny', 'Pliki i obrazy quizu możesz bezpiecznie zarządzać w eksploratorze.', 'error');
+        switchMode('quiz');
+        await window.ChemQuizBuilder?.openAsset?.(asset);
       }
     } catch (error) {
       elements.contentExplorerStatus.classList.add('is-error');
@@ -6496,6 +6588,7 @@
       }
       if (kind === 'exam') window.ChemExamBuilder?.assetDeleted?.({ ...asset, repositoryId });
       if (kind === 'presentation') window.ChemPresentationBuilder?.assetDeleted?.({ ...asset, repositoryId });
+      if (kind === 'quiz') window.ChemQuizBuilder?.assetDeleted?.({ ...asset, repositoryId });
       updateRepositoryButtons();
       toast(
         kind === 'lesson' ? 'Lekcja usunięta z GitHuba'
@@ -6555,7 +6648,10 @@
         const definition = JSON.parse(content);
         if (kind === 'exam') { definition.examId = target; definition.status = 'draft'; }
         if (kind === 'presentation') { definition.presentationId = target; definition.metadata = { ...(definition.metadata || {}), status: 'draft' }; }
-        if (kind === 'quiz') definition.quizId = target;
+        if (kind === 'quiz') {
+          definition.quizId = target;
+          definition.metadata = { ...(definition.metadata || {}), status: 'draft' };
+        }
         content = `${JSON.stringify(definition, null, 2)}\n`;
       }
       await library.save(kind, { filename: target, content, repositoryId });
@@ -6694,6 +6790,18 @@
     all('[data-switch-mode]').forEach((button) => {
       button.addEventListener('click', () => switchMode(button.dataset.switchMode));
     });
+    all('[data-studio-tool="media"]').forEach((button) => {
+      button.addEventListener('click', () => {
+        if (!window.ChemMediaManager?.open) {
+          toast('Media Manager jest niedostępny', 'Odśwież Studio i spróbuj ponownie.', 'error');
+          return;
+        }
+        void window.ChemMediaManager.open({
+          scope: 'shared',
+          repositoryId: state.contentLibrary.selectedRepositoryId
+        });
+      });
+    });
     elements.themeToggle.addEventListener('click', toggleTheme);
     document.addEventListener('chemdisk-mathjax-ready', () => typesetMath(elements.lessonPreview));
     elements.undo.addEventListener('click', undo);
@@ -6715,6 +6823,7 @@
     elements.contentExplorerSearch?.addEventListener('input', renderContentExplorer);
     elements.contentExplorerFolders?.addEventListener('click', handleContentExplorerAction);
     elements.contentExplorerRefresh?.addEventListener('click', () => loadRepositoryAssets(true));
+    document.addEventListener('chemdisk-content-changed', () => loadRepositoryAssets(true));
     [elements.dashboardRepository, elements.lessonRepository, elements.promptRepository, elements.contentExplorerRepository].forEach((select) => {
       if (!select) return;
       select.addEventListener('change', () => selectContentRepository(select.value));
@@ -6798,7 +6907,8 @@
     elements.dashboardInspector.addEventListener('change', (event) => {
       handleDashboardInspectorInput(event);
       finishEdit();
-      if (['source', 'variant', 'repositoryId', 'protection'].includes(event.target.dataset.dashboardField)) {
+      if (event.target.dataset.dashboardField === 'navigation') renderDashboardCanvas();
+      if (['source', 'variant', 'repositoryId', 'protection', 'navigation'].includes(event.target.dataset.dashboardField)) {
         renderDashboardInspector();
       }
     });
@@ -6977,7 +7087,7 @@
   }
 
   async function start() {
-    if (!dashboardModelApi || !lessonModelApi || !promptModelApi || !window.ChemExamStudioModel || !window.ChemLesson) {
+    if (!dashboardModelApi || !lessonModelApi || !promptModelApi || !window.ChemExamStudioModel || !window.ChemQuizStudioModel || !window.ChemLesson) {
       setAccessState(
         'Studio nie może się uruchomić',
         'Brakuje jednego z lokalnych modułów buildera. Sprawdź pliki wdrożenia.',

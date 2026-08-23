@@ -15,7 +15,7 @@
   const STYLE_START = /^\s*:::style(?:\s+(.+?))?\s*$/i;
   const ACCORDION_START = /^\s*:::accordion(?:\s+(.+?))?\s*$/i;
   const LAYOUT_START = /^\s*:::layout(?:\s+(.+?))?\s*$/i;
-  const STRUCTURAL_CONTAINER_START = /^\s*:::(?:task|zadanie|question|slide|style|accordion|layout|youtube|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)(?:\s+.*?)?\s*$/i;
+  const STRUCTURAL_CONTAINER_START = /^\s*:::(?:task|zadanie|question|slide|style|accordion|layout|youtube|googleslides|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)(?:\s+.*?)?\s*$/i;
   const RICH_CONTAINER_END = /^\s*:::\s*$/;
   const SAFE_STYLE_COLOR = /^#[0-9a-f]{6}$/i;
   const LINK_ICONS = new Set(['link', 'book', 'video', 'chemistry', 'math', 'file', 'external']);
@@ -46,7 +46,7 @@
     'sin', 'cos', 'tan', 'log', 'ln', 'partial', 'nabla', 'rightarrow', 'leftarrow',
     'leftrightarrow', 'text', 'mathrm', 'mathbf', 'overline', 'vec', 'left', 'right'
   ]);
-  const INTERACTIVE_START = /^\s*:::(youtube|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)\s*$/i;
+  const INTERACTIVE_START = /^\s*:::(youtube|googleslides|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)\s*$/i;
 
   class LessonFormatError extends Error {
     constructor(code, message) {
@@ -530,6 +530,28 @@
     return SAFE_BOARD_PATH.test(filename) ? filename : '';
   }
 
+  function googleSlidesReference(value) {
+    const raw = String(value || '').trim();
+    const isId = (candidate) => /^[A-Za-z0-9_-]{10,200}$/.test(candidate);
+    if (isId(raw)) return { id: raw, published: false };
+    try {
+      const url = new URL(raw);
+      const host = url.hostname.toLowerCase().replace(/^www\./, '');
+      if (!['docs.google.com', 'drive.google.com'].includes(host)) return null;
+      const queryId = url.searchParams.get('id') || '';
+      if (isId(queryId)) return { id: queryId, published: false };
+      const published = url.pathname.match(/^\/presentation\/d\/e\/([A-Za-z0-9_-]{10,200})(?:\/|$)/i);
+      if (published && isId(published[1])) return { id: published[1], published: true };
+      const standard = url.pathname.match(/^\/presentation(?:\/u\/\d+)?\/d\/([A-Za-z0-9_-]{10,200})(?:\/|$)/i);
+      if (standard && isId(standard[1])) return { id: standard[1], published: false };
+      const driveFile = url.pathname.match(/^\/file(?:\/u\/\d+)?\/d\/([A-Za-z0-9_-]{10,200})(?:\/|$)/i);
+      if (driveFile && isId(driveFile[1])) return { id: driveFile[1], published: false };
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   function parseStyleOptions(source) {
     const values = {};
     String(source || '').replace(
@@ -753,6 +775,18 @@
       if (!id) return '<p class="lesson-interactive-error">Nieprawidłowy film YouTube.</p>';
       const title = values.title || 'Film do lekcji';
       return `<figure class="lesson-embed lesson-youtube"><iframe src="https://www.youtube-nocookie.com/embed/${escapeHtml(id)}?playsinline=1&amp;rel=0" title="${escapeHtml(title)}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe><figcaption>${escapeHtml(title)}</figcaption></figure>`;
+    }
+    if (type === 'googleslides') {
+      const reference = googleSlidesReference(values.id || values.url);
+      if (!reference) return '<p class="lesson-interactive-error">Nieprawidłowa prezentacja Google Slides.</p>';
+      const published = reference.published || /^(?:1|true|yes|tak)$/i.test(String(values.published || '').trim());
+      const encodedId = encodeURIComponent(reference.id);
+      const base = published
+        ? `https://docs.google.com/presentation/d/e/${encodedId}`
+        : `https://docs.google.com/presentation/d/${encodedId}`;
+      const title = String(values.title || 'Prezentacja Google Slides').trim().slice(0, 180) || 'Prezentacja Google Slides';
+      const source = `${base}/embed?start=false&amp;loop=false&amp;delayms=3000&amp;rm=minimal`;
+      return `<figure class="lesson-embed lesson-google-slides"><iframe src="${source}" title="${escapeHtml(title)}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" allow="fullscreen" allowfullscreen></iframe><figcaption>${escapeHtml(title)}</figcaption></figure>`;
     }
     if (type === 'atonom') {
       const formula = String(values.formula || '').trim();

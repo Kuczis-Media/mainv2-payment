@@ -173,7 +173,92 @@
       action: 'open',
       opened: true,
       ...(material.details ? { details: material.details } : {})
-    }, { immediate: true });
+    }, { immediate: true, throwOnError: true }).then((payload) => {
+      if (payload?.completion?.manualRequired && payload?.record?.status !== 'completed') {
+        showSequenceCompletion(material);
+      }
+      return payload;
+    }).catch((error) => {
+      if (error?.code === 'SEQUENCE_LOCKED') {
+        showSequenceLocked();
+        throw error;
+      }
+      reportBackgroundError(error);
+      return null;
+    });
+  }
+
+  function showSequenceLocked() {
+    const render = () => {
+      if (document.getElementById('chem-sequence-lock')) return;
+      document.documentElement.dataset.sequenceLocked = 'true';
+      const overlay = document.createElement('section');
+      overlay.id = 'chem-sequence-lock';
+      overlay.setAttribute('role', 'alertdialog');
+      overlay.setAttribute('aria-modal', 'true');
+      overlay.setAttribute('aria-labelledby', 'chem-sequence-lock-title');
+      const icon = document.createElement('span');
+      icon.setAttribute('aria-hidden', 'true');
+      icon.textContent = '🔒';
+      const title = document.createElement('h1');
+      title.id = 'chem-sequence-lock-title';
+      title.textContent = 'Ten krok jest jeszcze zablokowany';
+      const copy = document.createElement('p');
+      copy.textContent = 'Najpierw ukończ poprzedni moduł organizera. Potem ten krok odblokuje się automatycznie.';
+      const back = document.createElement('a');
+      back.href = '/members/';
+      back.textContent = 'Wróć do dashboardu';
+      overlay.append(icon, title, copy, back);
+      const style = document.createElement('style');
+      style.textContent = '#chem-sequence-lock{position:fixed;z-index:2147483647;inset:0;display:grid;place-content:center;justify-items:center;padding:24px;text-align:center;color:#182536;background:rgba(242,247,249,.98);font-family:Inter,system-ui,sans-serif}#chem-sequence-lock>span{font-size:42px}#chem-sequence-lock h1{margin:18px 0 8px;font-size:clamp(24px,5vw,38px)}#chem-sequence-lock p{max-width:540px;margin:0 0 22px;color:#5d6978;line-height:1.65}#chem-sequence-lock a{padding:12px 18px;color:#fff;background:#176b5f;border-radius:12px;font-weight:750;text-decoration:none}html[data-theme="dark"] #chem-sequence-lock{color:#eef4f7;background:rgba(10,16,23,.98)}html[data-theme="dark"] #chem-sequence-lock p{color:#aebbc8}';
+      document.head.append(style);
+      document.body.append(overlay);
+      back.focus();
+    };
+    if (document.body) render();
+    else document.addEventListener('DOMContentLoaded', render, { once: true });
+  }
+
+  function showSequenceCompletion(material) {
+    const render = () => {
+      if (document.getElementById('chem-sequence-completion')) return;
+      const panel = document.createElement('aside');
+      panel.id = 'chem-sequence-completion';
+      panel.setAttribute('aria-label', 'Ukończenie kroku organizera');
+      const copy = document.createElement('span');
+      copy.textContent = 'Po obejrzeniu slajdów zakończ ten krok, aby odblokować kolejny.';
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = 'Zakończ krok';
+      panel.append(copy, button);
+      const style = document.createElement('style');
+      style.textContent = '#chem-sequence-completion{position:fixed;z-index:2147483000;right:18px;bottom:18px;display:flex;align-items:center;gap:14px;max-width:min(560px,calc(100vw - 36px));padding:14px 16px;color:#182536;background:#fff;border:1px solid rgba(23,107,95,.24);border-radius:14px;box-shadow:0 16px 46px rgba(22,39,52,.22);font:650 14px/1.45 Inter,system-ui,sans-serif}#chem-sequence-completion button{flex:none;padding:10px 14px;border:0;border-radius:10px;color:#fff;background:#176b5f;font:inherit;cursor:pointer}#chem-sequence-completion button:disabled{cursor:wait;opacity:.65}@media(max-width:620px){#chem-sequence-completion{left:12px;right:12px;bottom:12px;align-items:stretch;flex-direction:column}#chem-sequence-completion button{width:100%}}html[data-theme="dark"] #chem-sequence-completion{color:#eef4f7;background:#111c27;border-color:rgba(100,211,190,.32)}';
+      const removeWhenComplete = (event) => {
+        if (event.detail?.materialId !== material.materialId || event.detail?.record?.status !== 'completed') return;
+        panel.remove();
+        root.removeEventListener('chemdisk-progress-updated', removeWhenComplete);
+      };
+      root.addEventListener('chemdisk-progress-updated', removeWhenComplete);
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        button.textContent = 'Zapisuję…';
+        try {
+          await send({
+            materialId: material.materialId,
+            materialType: material.materialType || 'presentation',
+            action: 'complete'
+          });
+        } catch (error) {
+          button.disabled = false;
+          button.textContent = 'Spróbuj ponownie';
+          reportBackgroundError(error);
+        }
+      });
+      document.head.append(style);
+      document.body.append(panel);
+    };
+    if (document.body) render();
+    else document.addEventListener('DOMContentLoaded', render, { once: true });
   }
 
   async function flush() {
@@ -253,7 +338,7 @@
   }
 
   function reportBackgroundError(error) {
-    if (!['AUTH_REQUIRED', 'ACCESS_REQUIRED', 'ACCESS_EXPIRED'].includes(error?.code)) {
+    if (!['AUTH_REQUIRED', 'ACCESS_REQUIRED', 'ACCESS_EXPIRED', 'SEQUENCE_LOCKED'].includes(error?.code)) {
       console.warn('Nie udało się zsynchronizować postępu ChemDisk', error?.code || error?.message || error);
     }
     return null;
@@ -273,16 +358,17 @@
     const match = initialUrl.pathname.match(/^\/members\/module\/([^/]+)\/?$/i);
     if (!match || match[1].toLowerCase() === 'studio') return null;
     const moduleName = match[1].toLowerCase();
-    // Exam Player zapisuje otwarcie przez własną funkcję serwerową razem z
-    // repositoryId/examId. Drugi automatyczny zapis zawyżał openCount i mógł
-    // wyprzedzić utworzenie właściwego rekordu egzaminu.
-    if (moduleName === 'exam') return null;
+    // Exam Player i natywny Quiz Player zapisują rozpoczęcie własnym zdarzeniem,
+    // które nie zalicza materiału przy samym otwarciu. Drugi automatyczny zapis
+    // mógłby zawyżyć openCount albo przedwcześnie ukończyć quiz.
+    if (moduleName === 'exam' || moduleName === 'quiz') return null;
     const types = {
-      lesson: 'lesson', slides: 'presentation', film: 'video', yt: 'video', pdf: 'pdf', forms: 'quiz',
+      lesson: 'lesson', slides: 'presentation', film: 'video', yt: 'video', pdf: 'pdf', forms: 'quiz', quiz: 'quiz',
       chat: 'script', bitpaper: 'other', whiteboard: 'other', kalkulator: 'other', classic: 'other',
       contact: 'other', atonom: 'embed'
     };
     const source = initialUrl.searchParams.get('file')
+      || initialUrl.searchParams.get('quiz')
       || initialUrl.searchParams.get('id')
       || initialUrl.searchParams.get('prompt')
       || `${initialUrl.pathname}?${initialUrl.searchParams.toString()}`;

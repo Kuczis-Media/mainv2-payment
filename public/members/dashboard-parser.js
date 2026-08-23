@@ -68,6 +68,7 @@
           id: pendingProgress?.id || '',
           type: pendingProgress?.type || (level === 3 ? 'section' : level === 4 ? 'subsection' : 'other'),
           progress: pendingProgress?.progress || defaultProgress(),
+          navigation: pendingProgress?.settings?.navigation === 'sequential' ? 'sequential' : 'free',
           level,
           title: groupMatch[2].trim(),
           description: [],
@@ -153,7 +154,8 @@
       id: /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(source.id || '') ? source.id : '',
       type: String(source.type || '').toLowerCase(),
       settings: {
-        recordOpens: source.settings?.recordOpens !== false
+        recordOpens: source.settings?.recordOpens !== false,
+        navigation: source.settings?.navigation === 'sequential' ? 'sequential' : 'free'
       },
       progress: {
         tracking: state(progress.tracking),

@@ -25,6 +25,58 @@ test('root dashboard progress cannot inherit while descendants still can', () =>
   assert.equal(model.sections[0].progress.showProgress, 'INHERIT');
 });
 
+test('sequential organizer round-trips and publishes ordered progress settings', () => {
+  const model = studio.createModel({
+    title: 'Kurs',
+    sections: [{
+      title: 'Start',
+      blocks: [{
+        kind: 'group',
+        uid: 'sequence-start',
+        title: 'Ścieżka startowa',
+        navigation: 'sequential',
+        blocks: [
+          { kind: 'module', uid: 'step-slides', module: 'slides', id: 'abcdefghijk', protection: '1', title: 'Slajdy' },
+          { kind: 'module', uid: 'step-pdf', module: 'pdf', id: '1PdfDriveId12345', protection: '1', title: 'PDF' },
+          { kind: 'module', uid: 'step-lesson', module: 'lesson', file: 'intro.md', title: 'Lekcja' },
+          { kind: 'module', uid: 'step-exam', module: 'exam', examId: 'exam-one', title: 'Egzamin' }
+        ]
+      }]
+    }]
+  });
+
+  const validation = studio.validate(model);
+  assert.equal(validation.valid, true);
+  const markdown = studio.serialize(model);
+  assert.match(markdown, /"navigation":"sequential"/);
+  const imported = studio.parseMarkdown(markdown);
+  assert.equal(imported.sections[0].blocks[0].navigation, 'sequential');
+  assert.deepEqual(
+    imported.sections[0].blocks[0].blocks.map((block) => block.title),
+    ['Slajdy', 'PDF', 'Lekcja', 'Egzamin']
+  );
+  const runtime = runtimeParser.parse(markdown);
+  assert.equal(runtime.sections[0].groups[0].navigation, 'sequential');
+  assert.equal(runtime.sections[0].groups[0].items[1].href, '/members/module/pdf/?id=1PdfDriveId12345&type=1');
+  const catalog = studio.toProgressCatalog(imported);
+  assert.equal(catalog.nodes.find((node) => node.id === 'sequence-start').settings.navigation, 'sequential');
+  assert.equal(catalog.nodes.find((node) => node.title === 'Slajdy').settings.manualCompletion, true);
+  assert.equal(catalog.nodes.find((node) => node.title === 'PDF').type, 'pdf');
+  assert.equal(catalog.nodes.find((node) => node.title === 'Lekcja').settings.manualCompletion, false);
+});
+
+test('native quiz cards require an explicit submitted result before completion', () => {
+  const model = studio.createModel({
+    sections: [{
+      title: 'Quizy',
+      blocks: [studio.createModule({ module: 'quiz', repositoryId: 'organiczna', quizId: 'stechiometria-1' })]
+    }]
+  });
+  const quiz = studio.toProgressCatalog(model).nodes.find((node) => node.type === 'quiz');
+  assert.ok(quiz);
+  assert.equal(quiz.settings.manualCompletion, true);
+});
+
 test('studio exposes every requested dashboard block with the runtime protection modes', () => {
   assert.deepEqual(studio.MODULE_ORDER, [
     'presentation',
@@ -32,6 +84,7 @@ test('studio exposes every requested dashboard block with the runtime protection
     'pdf',
     'film',
     'yt',
+    'quiz',
     'forms',
     'exam',
     'chat',
@@ -77,6 +130,10 @@ test('module cards serialize to the exact URLs consumed by existing applications
     ],
     [{ module: 'film', id: 'youtube', protection: 1 }, '/members/module/film/?id=youtube&type=1'],
     [{ module: 'yt', id: 'abc' }, '/members/module/yt/?id=abc'],
+    [
+      { module: 'quiz', repositoryId: 'organiczna', quizId: 'stechiometria-1' },
+      '/members/module/quiz/?repo=organiczna&quiz=stechiometria-1'
+    ],
     [{ module: 'forms', id: 'form' }, '/members/module/forms/?id=form'],
     [{ module: 'chat', source: 'prompt', prompt: 'pomoc.json' }, '/members/module/chat/?prompt=pomoc.json'],
     [{ module: 'chat', source: 'file', file: 'pomoc.txt', point: 4 }, '/members/module/chat/?plik=pomoc.txt&punkt=4'],
@@ -108,6 +165,7 @@ test('module cards serialize to the exact URLs consumed by existing applications
 test('repository selection survives dashboard Markdown import and export', () => {
   for (const href of [
     '/members/module/lesson/?repo=organiczna&file=alkany.md',
+    '/members/module/quiz/?repo=organiczna&quiz=stechiometria-1',
     '/members/module/chat/?repo=organiczna&plik=alkany.txt&punkt=3'
   ]) {
     const parsed = studio.parseModuleHref(href);

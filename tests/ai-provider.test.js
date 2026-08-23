@@ -92,12 +92,15 @@ test('default and per-module AI routing use stable config IDs', async () => {
   await manager.setConfigSecret(stores, openAiId, 'openai-secret-key', 'admin');
   await manager.setDefaultConfig(stores, openAiId, 'admin');
   await manager.setModuleAssignment(stores, 'chat', geminiId, 'admin');
+  await manager.setModuleAssignment(stores, 'other', geminiId, 'admin');
 
   const chat = await router.resolveConfig('chat', { getStores: () => stores });
   const grader = await router.resolveConfig('aiGrader', { getStores: () => stores });
+  const futureModule = await router.resolveConfig('futureTutor', { getStores: () => stores });
   assert.equal(chat.aiConfigId, geminiId);
   assert.equal(chat.apiKey, 'gemini-secret-key');
   assert.equal(grader.aiConfigId, openAiId);
+  assert.equal(futureModule.aiConfigId, geminiId);
 });
 
 test('router preserves legacy Gemini ENV fallback when panel storage is unavailable', async (t) => {
@@ -190,6 +193,13 @@ test('server-side connection tests normalize invalid keys and unavailable models
     }),
     (error) => error.code === 'AI_MODEL_UNAVAILABLE'
   );
+});
+
+test('connection testing does not misclassify an internal ChemDisk limit as a provider failure', () => {
+  assert.equal(adminAi._test.isProviderConnectionError({ code: 'AI_RATE_LIMITED' }), true);
+  assert.equal(adminAi._test.isProviderConnectionError({ code: 'AI_INVALID_KEY' }), true);
+  assert.equal(adminAi._test.isProviderConnectionError({ code: 'AI_GLOBAL_DAY_LIMIT_REACHED' }), false);
+  assert.equal(adminAi._test.isProviderConnectionError({ code: 'AI_LIMIT_STORAGE_UNAVAILABLE' }), false);
 });
 
 test('deleting an AI configuration removes its secret and assignments', async () => {

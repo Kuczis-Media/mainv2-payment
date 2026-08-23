@@ -7,6 +7,22 @@
     box-sizing: border-box;
     text-decoration: none;
 }
+
+[data-landing-managed="true"] .title::after,
+[data-landing-managed="true"] a,
+[data-landing-managed="true"] button {
+    border-color: var(--landing-accent, currentColor);
+}
+[data-landing-managed="true"] .title,
+[data-landing-managed="true"] .text,
+[data-landing-managed="true"] p,
+[data-landing-managed="true"] strong {
+    color: inherit;
+}
+[data-landing-managed="true"] a,
+[data-landing-managed="true"] button {
+    background-color: var(--landing-accent, currentColor);
+}
 html{
     scroll-behavior: smooth;
 }

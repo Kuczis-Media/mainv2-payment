@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="x-members" content="1">
+  <meta name="referrer" content="no-referrer">
+  <title>Landing Page Builder — ChemDisk Studio</title>
+  <script src="/members/module/theme.js"></script>
+  <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+  <script defer src="/assets/js/auth.js"></script>
+  <link rel="stylesheet" href="/members/module/theme.css">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header class="landing-header">
+    <a href="/members/module/studio/" class="back-link">← Studio</a>
+    <div><span>Landing Page Builder</span><small>Draft · podgląd · publikacja</small></div>
+    <div class="header-actions">
+      <button id="save-draft" type="button">Zapisz draft</button>
+      <button id="publish" class="primary" type="button">Opublikuj</button>
+    </div>
+  </header>
+
+  <main id="builder" hidden>
+    <aside class="section-panel">
+      <div class="panel-heading"><div><span class="eyebrow">Struktura</span><h1>Sekcje strony</h1></div><small>Przeciągnij lub użyj strzałek.</small></div>
+      <div id="section-list" class="section-list"></div>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+    </aside>
+
+    <section class="editor-panel" aria-labelledby="editor-title">
+      <div class="panel-heading"><div><span class="eyebrow">Edycja</span><h2 id="editor-title">Sekcja</h2></div><label class="toggle"><input id="section-enabled" type="checkbox"><span>Widoczna</span></label></div>
+      <div class="form-grid">
+        <label><span>Tytuł</span><input id="section-title" maxlength="120"></label>
+        <label><span>Podtytuł</span><input id="section-subtitle" maxlength="180"></label>
+        <label class="wide"><span>Opis</span><textarea id="section-body" rows="5" maxlength="2000"></textarea></label>
+        <label class="wide"><span>Adres obrazu (HTTPS albo ścieżka /assets/...)</span><input id="section-image" maxlength="1000" placeholder="https://…"></label>
+        <label><span>Tekst przycisku</span><input id="section-cta-label" maxlength="80"></label>
+        <label><span>Link przycisku</span><input id="section-cta-href" maxlength="1000" placeholder="#pricing lub /members/"></label>
+      </div>
+      <fieldset>
+        <legend>Styl sekcji</legend>
+        <div class="color-grid">
+          <label><span>Tło</span><input id="section-background" type="color" value="#ffffff"><button type="button" data-clear-color="backgroundColor">Wyczyść</button></label>
+          <label><span>Tekst</span><input id="section-text" type="color" value="#172033"><button type="button" data-clear-color="textColor">Wyczyść</button></label>
+          <label><span>Akcent</span><input id="section-accent" type="color" value="#0e665a"><button type="button" data-clear-color="accentColor">Wyczyść</button></label>
+        </div>
+      </fieldset>
+      <div id="image-preview" class="image-preview" hidden><img alt="Podgląd obrazu sekcji"></div>
+    </section>
+
+    <section class="preview-panel" aria-labelledby="preview-title">
+      <div class="panel-heading"><div><span class="eyebrow">Bezpieczny podgląd</span><h2 id="preview-title">Strona główna</h2></div><a href="/" target="_blank" rel="noopener">Otwórz stronę ↗</a></div>
+      <div id="landing-preview" class="landing-preview"></div>
+    </section>
+  </main>
+
+  <section id="access-state" class="access-state" aria-live="polite"><span class="spinner"></span><h1>Otwieram Landing Builder…</h1><p>Sprawdzam sesję administratora.</p></section>
+  <script defer src="./script.js"></script>
+</body>
+</html>

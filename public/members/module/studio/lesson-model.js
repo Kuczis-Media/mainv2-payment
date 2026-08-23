@@ -12,7 +12,7 @@
   const TASK_START = /^\s*:::(?:task|zadanie)\s*$/i;
   const QUESTION_START = /^\s*:::question\s*$/i;
   const SLIDE_SETTINGS_START = /^\s*:::slide\s*$/i;
-  const CONTAINER_START = /^\s*:::(style|accordion|layout|youtube|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)(?:\s+(.*?))?\s*$/i;
+  const CONTAINER_START = /^\s*:::(style|accordion|layout|youtube|googleslides|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)(?:\s+(.*?))?\s*$/i;
   const CONTAINER_END = /^\s*:::\s*$/;
   const STYLE_FONTS = Object.freeze([
     'sans',
@@ -56,6 +56,7 @@
     'style',
     'accordion',
     'youtube',
+    'slides',
     'atonom',
     'formula',
     'link',
@@ -157,6 +158,28 @@
     }
   }
 
+  function googleSlidesReference(value) {
+    const raw = oneLine(value);
+    const isId = (candidate) => /^[A-Za-z0-9_-]{10,200}$/.test(candidate);
+    if (isId(raw)) return { id: raw, published: false };
+    try {
+      const url = new URL(raw);
+      const host = url.hostname.toLowerCase().replace(/^www\./, '');
+      if (!['docs.google.com', 'drive.google.com'].includes(host)) return null;
+      const queryId = url.searchParams.get('id') || '';
+      if (isId(queryId)) return { id: queryId, published: false };
+      const published = url.pathname.match(/^\/presentation\/d\/e\/([A-Za-z0-9_-]{10,200})(?:\/|$)/i);
+      if (published && isId(published[1])) return { id: published[1], published: true };
+      const standard = url.pathname.match(/^\/presentation(?:\/u\/\d+)?\/d\/([A-Za-z0-9_-]{10,200})(?:\/|$)/i);
+      if (standard && isId(standard[1])) return { id: standard[1], published: false };
+      const driveFile = url.pathname.match(/^\/file(?:\/u\/\d+)?\/d\/([A-Za-z0-9_-]{10,200})(?:\/|$)/i);
+      if (driveFile && isId(driveFile[1])) return { id: driveFile[1], published: false };
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   function safeAtonomFormula(value) {
     const formula = oneLine(value);
     return formula && formula.length <= 140 && !/[\u0000-\u001f<>\\]/.test(formula)
@@ -182,7 +205,7 @@
       .split('\n')
       .map((line) => {
         if (/^\s*---\s*$/.test(line)) return '`---`';
-        if (/^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)?(?:\s+.*?)?\s*$/i.test(line)) {
+        if (/^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|googleslides|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)?(?:\s+.*?)?\s*$/i.test(line)) {
           return `\`${line.trim()}\``;
         }
         return line.replace(/\s+$/g, '');
@@ -358,6 +381,17 @@
         ...base,
         video: oneLine(source.video || source.url || source.videoId),
         title: oneLine(source.title) || 'Film do lekcji'
+      };
+    }
+    if (type === 'slides') {
+      const reference = googleSlidesReference(source.presentation || source.url || source.presentationId);
+      return {
+        ...base,
+        presentation: reference?.id || oneLine(source.presentation || source.url || source.presentationId),
+        published: reference?.published === true
+          || source.published === true
+          || /^(?:1|true|yes|tak)$/i.test(oneLine(source.published)),
+        title: oneLine(source.title) || 'Prezentacja Google Slides'
       };
     }
     if (type === 'atonom') {
@@ -711,6 +745,9 @@
     if (block.type === 'youtube' && !youtubeVideoId(block.video)) {
       errors.push({ code: 'INVALID_YOUTUBE', path: `${path}.video`, message: 'Podaj prawidłowy link lub ID filmu YouTube.' });
     }
+    if (block.type === 'slides' && !googleSlidesReference(block.presentation)) {
+      errors.push({ code: 'INVALID_GOOGLE_SLIDES', path: `${path}.presentation`, message: 'Podaj prawidłowy link lub ID prezentacji Google Slides.' });
+    }
     if (block.type === 'atonom' && !safeAtonomFormula(block.formula)) {
       errors.push({ code: 'INVALID_ATONOM_FORMULA', path: `${path}.formula`, message: 'Podaj nazwę związku dla ATONOM.' });
     }
@@ -930,6 +967,16 @@
       return [
         ':::youtube',
         `id: ${youtubeVideoId(block.video)}`,
+        `title: ${cleanDirectiveValue(block.title)}`,
+        ':::'
+      ].join('\n');
+    }
+    if (block.type === 'slides') {
+      const reference = googleSlidesReference(block.presentation);
+      return [
+        ':::googleslides',
+        `id: ${reference?.id || ''}`,
+        `published: ${block.published || reference?.published ? 'true' : 'false'}`,
         `title: ${cleanDirectiveValue(block.title)}`,
         ':::'
       ].join('\n');
@@ -1342,6 +1389,14 @@
           } else if (type === 'youtube') {
             const values = parseDirectiveFields(bodyLines);
             blocks.push(createBlock({ type, video: values.id || values.url, title: values.title }));
+          } else if (type === 'googleslides') {
+            const values = parseDirectiveFields(bodyLines);
+            blocks.push(createBlock({
+              type: 'slides',
+              presentation: values.id || values.url,
+              published: values.published,
+              title: values.title
+            }));
           } else if (type === 'atonom') {
             const values = parseDirectiveFields(bodyLines);
             blocks.push(createBlock({ type, formula: values.formula, title: values.title }));
@@ -1770,6 +1825,7 @@
     tasks: Object.freeze(['text', 'number', 'choice', 'abcd', 'gaps', 'gaps-text']),
     styledContainers: true,
     youtube: true,
+    googleSlides: true,
     atonom: true,
     formulas: true,
     aiHelp: true,

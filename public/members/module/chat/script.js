@@ -4,6 +4,7 @@
 
 const API = {
   PROXY_URL: '/.netlify/functions/chat',
+  USAGE_URL: '/.netlify/functions/ai-usage',
   TEMPERATURE: 0.2
 };
 
@@ -40,6 +41,9 @@ const LESSON_CONTEXT_MAX_AGE = 10 * 60 * 1000;
     suggestions: $('.suggestions'),
     promptStatus: $('#prompt-status'),
     lessonContextStatus: $('#lesson-context-status'),
+    ownUsage: $('#ai-own-usage'),
+    ownUsageTimezone: $('#ai-own-usage-timezone'),
+    ownUsagePeriods: $('#ai-own-usage-periods'),
     promptModeLabel: $('#prompt-mode-label'),
   };
 
@@ -102,6 +106,7 @@ const LESSON_CONTEXT_MAX_AGE = 10 * 60 * 1000;
     updateMaturaButton();
     initMaturaPrompt();
     initLessonContext();
+    loadOwnAiUsage();
 
     on(els.suggestions, 'click', (e) => {
       const item = e.target.closest('.suggestions-item'); if (!item) return;
@@ -447,6 +452,47 @@ const LESSON_CONTEXT_MAX_AGE = 10 * 60 * 1000;
     return chatViaProxy({ messages, promptConfig, attachment });
   }
 
+  async function loadOwnAiUsage(){
+    if (!els.ownUsage) return;
+    const auth = window.ChemAuth;
+    if (!auth || typeof auth.getAccessToken !== 'function') return;
+    try {
+      const token = await auth.getAccessToken();
+      const response = await fetch(API.USAGE_URL, {
+        method: 'GET', cache: 'no-store', credentials: 'same-origin',
+        headers: { Accept: 'application/json', Authorization: `Bearer ${token}` }
+      });
+      if (!response.ok) return;
+      const payload = await response.json();
+      if (!payload?.visible) {
+        els.ownUsage.hidden = true;
+        return;
+      }
+      els.ownUsageTimezone.textContent = `Okresy wg ${payload.timezone}`;
+      const labels = { day: 'Dzisiaj', month: 'Ten miesiąc' };
+      const cards = ['day', 'month'].map((period) => {
+        const data = payload.periods?.[period];
+        const card = document.createElement('article');
+        const requests = Number(data?.usage?.requests || 0);
+        const tokens = Number(data?.usage?.totalTokens || 0);
+        const requestLimit = data?.limits?.requests;
+        const tokenLimit = data?.limits?.totalTokens;
+        const remaining = (used, limit) => limit == null ? 'bez limitu' : `${Math.max(0, Number(limit) - used).toLocaleString('pl-PL')} pozostało`;
+        card.dataset.warning = data?.warning?.level || 'ok';
+        card.append(
+          Object.assign(document.createElement('strong'), { textContent: labels[period] }),
+          Object.assign(document.createElement('span'), { textContent: `${requests.toLocaleString('pl-PL')} żądań · ${remaining(requests, requestLimit)}` }),
+          Object.assign(document.createElement('span'), { textContent: `${tokens.toLocaleString('pl-PL')} tokenów · ${remaining(tokens, tokenLimit)}` })
+        );
+        return card;
+      });
+      els.ownUsagePeriods.replaceChildren(...cards);
+      els.ownUsage.hidden = false;
+    } catch {
+      // Informacja o limitach jest pomocnicza; awaria podglądu nie blokuje UI.
+    }
+  }
+
   async function chatViaProxy({ messages, promptConfig, attachment }){
     // Zamieniamy ewentualny obrazek na Base64 i wysyłamy JSON-em
     let attachmentInline = null;
@@ -503,8 +549,20 @@ const LESSON_CONTEXT_MAX_AGE = 10 * 60 * 1000;
       };
       throw new Error(authErrors[detail] || 'Sesja wygasła. Zaloguj się ponownie.');
     }
-    if (res.status === 403) throw new Error('To konto nie ma dostępu do czatu.');
-    if (res.status === 429) throw new Error('Przekroczono limit zapytań. Spróbuj ponownie za chwilę.');
+    if (res.status === 403) {
+      if (detail === 'AI_DISABLED_FOR_USER') throw new Error('Administrator wyłączył dostęp do AI dla tego konta.');
+      throw new Error('To konto nie ma dostępu do czatu.');
+    }
+    if (res.status === 429) {
+      if (detail === 'AI_RATE_LIMITED') throw new Error('Dostawca AI chwilowo ogranicza ruch. Spróbuj ponownie później.');
+      if (detail === 'AI_CONCURRENT_REQUEST_LIMIT_REACHED') throw new Error('Trwa zbyt wiele równoległych wywołań AI. Spróbuj ponownie za chwilę.');
+      if (/^AI_(?:GLOBAL|USER|MODULE|PROVIDER|CONFIG)_[A-Z]+(?:_(?:INPUT_TOKEN|OUTPUT_TOKEN|TOKEN|COST))?_LIMIT_REACHED$/.test(detail)) {
+        const period = { HOUR: 'godzinowy', DAY: 'dzienny', WEEK: 'tygodniowy', MONTH: 'miesięczny', LIFETIME: 'łączny' };
+        const match = detail.match(/^AI_[A-Z]+_([A-Z]+)/);
+        throw new Error(`Wykorzystano ${period[match?.[1]] || ''} limit AI w ChemDisk. Spróbuj po rozpoczęciu nowego okresu albo skontaktuj się z administratorem.`);
+      }
+      throw new Error('Przekroczono limit AI w ChemDisk. Spróbuj ponownie później.');
+    }
     if(!res.ok) {
       const friendlyErrors = {
         CONVERSATION_TOO_LONG: 'Historia rozmowy jest zbyt długa. Wyczyść czat i spróbuj ponownie.',
@@ -522,10 +580,17 @@ const LESSON_CONTEXT_MAX_AGE = 10 * 60 * 1000;
         PROMPT_NOT_FOUND: 'Nie znaleziono instrukcji przypisanej do tego linku.',
         PROMPT_POINT_NOT_FOUND: 'Nie znaleziono wskazanego punktu instrukcji.',
         PROMPT_TOO_LONG: 'Wybrana instrukcja jest zbyt długa.',
-        PROMPT_UNAVAILABLE: 'Instrukcja jest chwilowo niedostępna.'
+        PROMPT_UNAVAILABLE: 'Instrukcja jest chwilowo niedostępna.',
+        AI_NOT_CONFIGURED: 'Czat nie jest jeszcze skonfigurowany przez administratora.',
+        AI_INVALID_KEY: 'Klucz dostawcy AI wymaga poprawienia przez administratora.',
+        AI_MODEL_UNAVAILABLE: 'Wybrany model AI jest niedostępny.',
+        AI_PROVIDER_ERROR: 'Dostawca AI jest chwilowo niedostępny.',
+        AI_LIMIT_STORAGE_UNAVAILABLE: 'Serwer nie może teraz bezpiecznie sprawdzić limitu AI. Spróbuj ponownie później.',
+        AI_USAGE_RECORD_FAILED: 'Nie udało się bezpiecznie zapisać użycia AI. Spróbuj ponownie.'
       };
       throw new Error(friendlyErrors[detail] || `Błąd usługi (${res.status})`);
     }
+    loadOwnAiUsage();
     return typeof responseBody?.text === 'string' ? responseBody.text : '';
   }
 

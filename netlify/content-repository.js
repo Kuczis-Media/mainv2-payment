@@ -656,7 +656,9 @@ function validateAssetContent(kind, filename, rawContent) {
     let parsed;
     try { parsed = JSON.parse(rawContent.replace(/^\uFEFF/, '')); }
     catch { throw new ContentRepositoryError('QUIZ_FILE_INVALID', 422); }
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || cleanString(parsed.quizId).toLowerCase() !== filename) {
+    const { validateDefinition } = require('./quiz-common.js');
+    const validation = validateDefinition(parsed, filename);
+    if (!validation.valid) {
       throw new ContentRepositoryError('QUIZ_FILE_INVALID', 422);
     }
   }

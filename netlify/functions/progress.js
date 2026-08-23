@@ -6,6 +6,7 @@ const {
   effectiveSettings,
   mergeProgressEvent,
   plainObject,
+  sequenceAccessMap,
   validMaterialId
 } = require('../progress-common.js');
 const {
@@ -73,6 +74,7 @@ async function handleGet(event, store, auth) {
   if (materialId && !validMaterialId(materialId)) return json({ error: 'INVALID_MATERIAL_ID' }, 400);
   const user = activeUserDocument(stored.document, catalog);
   const aggregate = aggregateUser(user, catalog);
+  const access = sequenceAccessMap(catalog, aggregate, user.preferences);
   return json({
     version: 1,
     userId: auth.userId,
@@ -80,6 +82,7 @@ async function handleGet(event, store, auth) {
     preferences: user.preferences,
     records: materialId ? { [materialId]: user.records[materialId] || null } : user.records,
     aggregate,
+    access: materialId ? { [materialId]: access[materialId] || null } : access,
     revision: user.revision
   });
 }
@@ -107,6 +110,13 @@ async function handleEvent(event, store, auth) {
     const active = activeUserDocument(document, catalog);
     document.records = active.records;
     document.lastActivityAt = active.lastActivityAt;
+    const access = node
+      ? sequenceAccessMap(catalog, aggregateUser(active, catalog), active.preferences)[node.id]
+      : null;
+    if (access?.allowed === false) {
+      rejected = { ok: false, code: 'SEQUENCE_LOCKED', status: 409 };
+      return { abort: true, result: rejected };
+    }
     const merged = mergeProgressEvent(document.records[progressEvent.materialId] || null, progressEvent, {
       userId: auth.userId,
       node,
@@ -136,6 +146,10 @@ async function handleEvent(event, store, auth) {
       tracking: catalog.global.tracking === 'ON' && effective.tracking !== false,
       showProgress: catalog.global.showProgress === 'ON' && effective.showProgress !== false,
       recordOpens: catalog.global.recordOpens
+    },
+    completion: {
+      manualRequired: node?.settings?.manualCompletion === true,
+      completed: record?.status === 'completed'
     }
   });
 }

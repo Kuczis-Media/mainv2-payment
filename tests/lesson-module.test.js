@@ -487,6 +487,24 @@ test('lesson filename and Markdown rendering reject path traversal and active HT
   ].join('\n'));
   assert.doesNotMatch(fencedDirective, /<iframe/);
   assert.match(fencedDirective, /:::youtube/);
+
+  const unsafeSlides = parser.renderMarkdown([
+    ':::googleslides',
+    'id: https://evil.example/presentation/d/1AbCdEfGhIjKlMnOpQrStUvWxYz',
+    'title: Niebezpieczna prezentacja',
+    ':::'
+  ].join('\n'));
+  assert.match(unsafeSlides, /Nieprawidłowa prezentacja Google Slides/);
+  assert.doesNotMatch(unsafeSlides, /<iframe/);
+
+  const publishedSlides = parser.renderMarkdown([
+    ':::googleslides',
+    'id: 2PACX-1vPublishedPresentation12345',
+    'published: true',
+    'title: Opublikowana prezentacja',
+    ':::'
+  ].join('\n'));
+  assert.match(publishedSlides, /presentation\/d\/e\/2PACX-1vPublishedPresentation12345\/embed/);
 });
 
 test('lesson parser reports authoring errors instead of silently skipping tasks', () => {

@@ -1,39 +1,59 @@
 'use strict';
 
 const manager = require('./ai-provider-manager.js');
+const usage = require('./ai-usage.js');
 const { getAdapter } = require('./ai-providers.js');
 
 const LEGACY_DEFAULTS = Object.freeze({
   gemini: 'gemini-2.5-flash',
   openai: 'gpt-4.1-mini'
 });
+const PROVIDER_FAILURES = new Set([
+  'AI_INVALID_KEY', 'AI_MODEL_UNAVAILABLE', 'AI_RATE_LIMITED',
+  'AI_PROVIDER_ERROR', 'EMPTY_MODEL_RESPONSE'
+]);
 
 async function resolveConfig(moduleName = 'chat', options = {}) {
   const storesFactory = options.getStores || manager.getAiStores;
   try {
     const stores = storesFactory();
     const { settings } = await manager.readSettings(stores.metadata);
-    const assignedId = settings.moduleAssignments[moduleName];
-    const candidates = [
-      settings.configs.find((item) => item.aiConfigId === assignedId),
-      settings.configs.find((item) => item.isDefault)
-    ].filter((item, index, list) => item && list.findIndex((other) => other.aiConfigId === item.aiConfigId) === index);
-    for (const config of candidates) {
-      if (!config.secretConfigured) continue;
-      const apiKey = await manager.readSecret(stores.secrets, config.aiConfigId);
-      if (apiKey) return { ...config, apiKey, source: 'panel' };
-    }
+    if (!settings.configs.length) return legacyEnvironmentConfig();
+    const assignmentName = manager.MODULES.includes(moduleName) ? moduleName : 'other';
+    const assignedId = settings.moduleAssignments[assignmentName];
+    const config = assignedId
+      ? settings.configs.find((item) => item.aiConfigId === assignedId)
+      : settings.configs.find((item) => item.isDefault);
+    if (!config) return null;
+    const apiKey = await manager.readSecret(stores.secrets, config.aiConfigId);
+    return apiKey ? { ...config, apiKey, source: 'panel' } : null;
   } catch {
-    // A missing or temporarily unavailable Blob store must not break an
-    // existing deployment that still uses legacy Function environment keys.
+    // Legacy ENV remains a deployment migration path only when the panel
+    // stores cannot be read. A broken panel configuration never silently
+    // selects a different provider.
+    return legacyEnvironmentConfig();
   }
-  return legacyEnvironmentConfig();
 }
 
-function legacyEnvironmentConfig() {
+async function resolveConfigById(aiConfigId, options = {}) {
+  const id = String(aiConfigId || '');
+  if (id === 'env-gemini' || id === 'env-openai') {
+    const legacy = legacyEnvironmentConfig(id.slice(4));
+    return legacy && legacy.aiConfigId === id ? legacy : null;
+  }
+  const storesFactory = options.getStores || manager.getAiStores;
+  const stores = storesFactory();
+  const { settings } = await manager.readSettings(stores.metadata);
+  const config = settings.configs.find((item) => item.aiConfigId === id);
+  if (!config) return null;
+  const apiKey = await manager.readSecret(stores.secrets, id);
+  return apiKey ? { ...config, apiKey, source: 'panel' } : null;
+}
+
+function legacyEnvironmentConfig(requestedProvider = '') {
   const geminiKey = cleanEnv('GEMINI_API_KEY');
-  if (geminiKey) return {
-    aiConfigId: null,
+  if ((!requestedProvider || requestedProvider === 'gemini') && geminiKey) return {
+    aiConfigId: 'env-gemini',
     name: 'Gemini (ENV)',
     provider: 'gemini',
     model: cleanEnv('GEMINI_MODEL') || LEGACY_DEFAULTS.gemini,
@@ -41,8 +61,8 @@ function legacyEnvironmentConfig() {
     source: 'env'
   };
   const openAiKey = cleanEnv('OPENAI_API_KEY');
-  if (openAiKey) return {
-    aiConfigId: null,
+  if ((!requestedProvider || requestedProvider === 'openai') && openAiKey) return {
+    aiConfigId: 'env-openai',
     name: 'OpenAI (ENV)',
     provider: 'openai',
     model: cleanEnv('OPENAI_MODEL') || LEGACY_DEFAULTS.openai,
@@ -53,42 +73,162 @@ function legacyEnvironmentConfig() {
 }
 
 async function sendRequest(input, options = {}) {
-  const policy = await applyPolicy({ module: input.module || 'chat', userId: input.userId || null });
-  if (!policy.ok) throw routerError(policy.code || 'AI_POLICY_REJECTED', 429);
-  const config = await resolveConfig(input.module || 'chat', options);
+  const userId = String(input && input.userId || '');
+  if (!userId) throw routerError('AI_USER_REQUIRED', 401);
+  const moduleId = String(input.moduleId || input.module || 'chat');
+  const usageStores = getUsageStores(options);
+  const settingsResult = await usage.readSettings(usageStores.config);
+  let config = await resolveConfig(moduleId, options);
   if (!config) throw routerError('AI_NOT_CONFIGURED', 503);
-  const adapter = getAdapter(config.provider);
-  const response = await adapter.sendRequest(config, {
+  const visited = new Set();
+  let fallbackFrom = null;
+
+  while (config) {
+    if (visited.has(config.aiConfigId)) throw routerError('AI_FALLBACK_CYCLE', 503);
+    visited.add(config.aiConfigId);
+    const request = providerRequest(input);
+    const configPolicy = settingsResult.settings.configs[config.aiConfigId];
+    const estimate = usage.estimateRequest(request, configPolicy && configPolicy.pricing);
+    let reservation;
+    try {
+      reservation = await usage.reserveRequest(usageStores, {
+        userId,
+        moduleId,
+        aiConfigId: config.aiConfigId,
+        provider: config.provider,
+        model: config.model,
+        estimate
+      }, { settings: settingsResult.settings });
+    } catch (error) {
+      const fallbackId = fallbackFor(error, config.aiConfigId, settingsResult.settings);
+      if (!fallbackId) throw error;
+      fallbackFrom = fallbackFrom || config.aiConfigId;
+      config = await resolveConfigById(fallbackId, options);
+      if (!config) throw routerError('AI_FALLBACK_NOT_CONFIGURED', 503);
+      continue;
+    }
+
+    let response;
+    try {
+      response = await getAdapter(config.provider).sendRequest(config, request, options);
+    } catch (error) {
+      await usage.completeReservation(usageStores, reservation, {
+        success: false,
+        errorCode: error && error.code,
+        usage: error && error.usage || null
+      });
+      const fallbackId = fallbackFor(error, config.aiConfigId, settingsResult.settings);
+      if (!fallbackId) throw error;
+      fallbackFrom = fallbackFrom || config.aiConfigId;
+      config = await resolveConfigById(fallbackId, options);
+      if (!config) throw routerError('AI_FALLBACK_NOT_CONFIGURED', 503);
+      continue;
+    }
+    await usage.completeReservation(usageStores, reservation, {
+      success: true,
+      usage: response.usage || null
+    });
+    return {
+      text: response.text,
+      usage: response.usage || null,
+      provider: config.provider,
+      model: config.model,
+      aiConfigId: config.aiConfigId,
+      source: config.source,
+      fallbackFrom
+    };
+  }
+  throw routerError('AI_NOT_CONFIGURED', 503);
+}
+
+async function runProviderOperation(input, options = {}) {
+  const userId = String(input && input.userId || '');
+  const aiConfigId = String(input && input.aiConfigId || '');
+  const operation = String(input && input.operation || '');
+  if (!userId) throw routerError('AI_USER_REQUIRED', 401);
+  if (!['listModels', 'testConnection'].includes(operation)) throw routerError('INVALID_AI_OPERATION', 400);
+  const config = await resolveConfigById(aiConfigId, options);
+  if (!config) throw routerError('AI_NOT_CONFIGURED', 503);
+  const usageStores = getUsageStores(options);
+  const { settings } = await usage.readSettings(usageStores.config);
+  const reservation = await usage.reserveRequest(usageStores, {
+    userId,
+    moduleId: 'admin-ai',
+    aiConfigId: config.aiConfigId,
+    provider: config.provider,
+    model: config.model,
+    estimate: { inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedCostMicros: 0 }
+  }, { settings });
+  let result;
+  try {
+    result = await getAdapter(config.provider)[operation](config, options);
+  } catch (error) {
+    await usage.completeReservation(usageStores, reservation, { success: false, errorCode: error && error.code, usage: null });
+    throw error;
+  }
+  await usage.completeReservation(usageStores, reservation, { success: true, usage: null });
+  return { result, config };
+}
+
+async function applyPolicy(input = {}, options = {}) {
+  try {
+    const stores = getUsageStores(options);
+    const { settings } = await usage.readSettings(stores.config);
+    const user = settings.users[String(input.userId || '')];
+    return user && user.mode === 'disabled'
+      ? { ok: false, code: 'AI_DISABLED_FOR_USER' }
+      : { ok: true };
+  } catch (error) {
+    return { ok: false, code: error && error.code || 'AI_LIMIT_STORAGE_UNAVAILABLE' };
+  }
+}
+
+function fallbackFor(error, aiConfigId, settings) {
+  const policy = settings.configs[aiConfigId];
+  const fallbackId = policy && policy.fallbackConfigId;
+  if (!fallbackId) return null;
+  if (PROVIDER_FAILURES.has(error && error.code)) return fallbackId;
+  const scope = error && error.details && error.details.scope;
+  return scope === 'config' || scope === 'provider' || error && error.code === 'AI_COST_ESTIMATE_UNAVAILABLE'
+    ? fallbackId : null;
+}
+
+function providerRequest(input) {
+  return {
     system: typeof input.system === 'string' ? input.system : '',
     messages: Array.isArray(input.messages) ? input.messages : [],
     attachments: Array.isArray(input.attachments) ? input.attachments : [],
     temperature: Number.isFinite(input.temperature) ? input.temperature : 0.2,
     maxOutputTokens: Number.isSafeInteger(input.maxOutputTokens) ? input.maxOutputTokens : 4096
-  }, options);
-  return {
-    text: response.text,
-    usage: response.usage || null,
-    provider: config.provider,
-    model: config.model,
-    aiConfigId: config.aiConfigId,
-    source: config.source
   };
 }
 
-async function applyPolicy() {
-  // Central extension point for future request/token/user/module/cost limits.
-  return { ok: true };
+function getUsageStores(options) {
+  try { return (options.getUsageStores || usage.getAiUsageStores)(); }
+  catch (error) {
+    if (error && error.code) throw error;
+    throw routerError('AI_LIMIT_STORAGE_UNAVAILABLE', 503);
+  }
 }
 
 function cleanEnv(name) {
   return typeof process.env[name] === 'string' ? process.env[name].trim() : '';
 }
 
-function routerError(code, status) {
+function routerError(code, status, details) {
   const error = new Error(code);
   error.code = code;
   error.status = status;
+  if (details) error.details = details;
   return error;
 }
 
-module.exports = { applyPolicy, legacyEnvironmentConfig, resolveConfig, sendRequest, _test: { LEGACY_DEFAULTS } };
+module.exports = {
+  applyPolicy,
+  legacyEnvironmentConfig,
+  resolveConfig,
+  resolveConfigById,
+  runProviderOperation,
+  sendRequest,
+  _test: { LEGACY_DEFAULTS, fallbackFor, providerRequest }
+};

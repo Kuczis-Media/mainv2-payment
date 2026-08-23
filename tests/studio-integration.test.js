@@ -121,6 +121,7 @@ test('Studio exposes dashboard, lesson, exam and prompt authoring workflows', ()
   assert.match(html, /id=["']source-dialog["']/);
   assert.match(html, /data-lesson-add=["']quote["']/);
   assert.match(html, /data-lesson-add=["']youtube["']/);
+  assert.match(html, /data-lesson-add=["']slides["']/);
   assert.match(html, /data-lesson-add=["']atonom["']/);
   assert.match(html, /data-lesson-add=["']formula["']/);
   assert.match(html, /data-lesson-add=["']link["']/);
@@ -186,7 +187,7 @@ test('Studio exposes dashboard, lesson, exam and prompt authoring workflows', ()
   assert.match(script, /function lessonRepositoryFilenameInput/);
   assert.match(script, /lessonRepositoryFilenameInput\([\s\S]*?block\.promptFile[\s\S]*?\[['"]json['"],\s*['"]txt['"]\]/);
   assert.match(script, /function syncInspectorRepository/);
-  assert.match(script, /\[['"]lesson['"],\s*['"]chat['"],\s*['"]exam['"],\s*['"]presentation['"]\]\.includes\(node\.module\)/);
+  assert.match(script, /\[['"]lesson['"],\s*['"]chat['"],\s*['"]exam['"],\s*['"]presentation['"],\s*['"]quiz['"]\]\.includes\(node\.module\)/);
   assert.match(script, /block\.type\s*===\s*['"]ai['"][^;\n]*syncInspectorRepository/);
   assert.match(script, /if\s*\(fieldName\s*===\s*['"]repositoryId['"]\)[\s\S]*?selectContentRepository/);
   assert.match(script, /collapsedNodes:\s*new Set\(\)/);

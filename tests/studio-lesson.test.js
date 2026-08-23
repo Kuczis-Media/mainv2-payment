@@ -374,7 +374,7 @@ test('studio round-trips chemistry reactions and safe mathematical formulas', ()
   assert.equal(studio.validateLesson(unsafe).errors[0].code, 'INVALID_MATH_FORMULA');
 });
 
-test('studio publishes backgrounds, YouTube, ATONOM, flashcards and selectable text gaps', () => {
+test('studio publishes backgrounds, YouTube, Google Slides, ATONOM, flashcards and selectable text gaps', () => {
   const lesson = studio.createLesson({
     title: 'Chemia angażująca',
     filename: 'chemia-angazujaca.md',
@@ -390,6 +390,11 @@ test('studio publishes backgrounds, YouTube, ATONOM, flashcards and selectable t
           blocks: [{ type: 'text', text: 'Zapamiętaj grupy funkcyjne.' }]
         },
         { type: 'youtube', video: 'https://youtu.be/M7lc1UVf-VE', title: 'Wprowadzenie' },
+        {
+          type: 'slides',
+          presentation: 'https://docs.google.com/presentation/d/1AbCdEfGhIjKlMnOpQrStUvWxYz/edit',
+          title: 'Prezentacja do lekcji'
+        },
         { type: 'atonom', formula: 'kwas octowy', title: 'Obejrzyj model 3D' },
         {
           type: 'flashcards',
@@ -415,6 +420,7 @@ test('studio publishes backgrounds, YouTube, ATONOM, flashcards and selectable t
   const markdown = studio.serializeLesson(lesson);
   assert.match(markdown, /background=#dff7ed/);
   assert.match(markdown, /:::youtube\nid: M7lc1UVf-VE\n/);
+  assert.match(markdown, /:::googleslides\nid: 1AbCdEfGhIjKlMnOpQrStUvWxYz\npublished: false\n/);
   assert.match(markdown, /:::atonom\nformula: kwas octowy\n/);
   assert.match(markdown, /–OH => grupa hydroksylowa/);
   assert.match(markdown, /type: gaps/);
@@ -423,11 +429,12 @@ test('studio publishes backgrounds, YouTube, ATONOM, flashcards and selectable t
   const imported = studio.parseLesson(markdown, lesson.filename);
   assert.deepEqual(
     imported.slides[0].blocks.map((block) => block.type),
-    ['heading', 'style', 'youtube', 'atonom', 'flashcards']
+    ['heading', 'style', 'youtube', 'slides', 'atonom', 'flashcards']
   );
   assert.equal(imported.slides[0].blocks[1].background, '#dff7ed');
-  assert.equal(imported.slides[0].blocks[3].formula, 'kwas octowy');
-  assert.equal(imported.slides[0].blocks[4].cards.length, 2);
+  assert.equal(imported.slides[0].blocks[3].presentation, '1AbCdEfGhIjKlMnOpQrStUvWxYz');
+  assert.equal(imported.slides[0].blocks[4].formula, 'kwas octowy');
+  assert.equal(imported.slides[0].blocks[5].cards.length, 2);
   assert.equal(imported.slides[0].task.type, 'gaps');
 
   const published = lessonParser.parseLesson(markdown, lesson.filename);
@@ -435,6 +442,9 @@ test('studio publishes backgrounds, YouTube, ATONOM, flashcards and selectable t
   assert.match(slide.html, /youtube-nocookie\.com\/embed\/M7lc1UVf-VE/);
   assert.match(slide.html, /playsinline=1&amp;rel=0/);
   assert.match(slide.html, /referrerpolicy="strict-origin-when-cross-origin"/);
+  assert.match(slide.html, /docs\.google\.com\/presentation\/d\/1AbCdEfGhIjKlMnOpQrStUvWxYz\/embed/);
+  assert.match(slide.html, /class="lesson-embed lesson-google-slides"/);
+  assert.match(slide.html, /sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"/);
   assert.match(slide.html, /\/members\/module\/atonom\/\?formula=kwas%20octowy/);
   assert.match(slide.html, /class="lesson-atonom-card"/);
   assert.match(slide.html, /class="lesson-atonom-open"/);
@@ -726,6 +736,7 @@ test('studio exposes renderer extension capabilities and a strict authoring file
   assert.equal(studio.capabilities.styledContainers, true);
   assert.equal(studio.capabilities.accordions, true);
   assert.equal(studio.capabilities.youtube, true);
+  assert.equal(studio.capabilities.googleSlides, true);
   assert.equal(studio.capabilities.atonom, true);
   assert.equal(studio.capabilities.aiHelp, true);
   assert.equal(studio.capabilities.interactiveBoards, true);

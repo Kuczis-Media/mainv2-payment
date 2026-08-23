@@ -11,6 +11,7 @@
   const PAYMENT_CONFIG_URL = '/.netlify/functions/payment-config';
   const ADMIN_PROGRESS_URL = '/.netlify/functions/admin-progress';
   const ADMIN_AI_URL = '/.netlify/functions/admin-ai';
+  const ADMIN_AI_USAGE_URL = '/.netlify/functions/admin-ai-usage';
   const THEME_STORAGE_KEY = 'chem.theme';
   const SIDEBAR_STORAGE_KEY = 'chem.sidebar';
   const MOBILE_SIDEBAR_QUERY = '(max-width: 920px)';
@@ -48,6 +49,8 @@
   ]);
   const COURSE_ROLE_VALUES = new Set(ACCESS_ROLE_OPTIONS.map((role) => role.value).filter(Boolean));
   const ADMIN_ROLE_VALUES = new Set(['admin', ...COURSE_ROLE_VALUES]);
+  const AI_LIMIT_PERIODS = Object.freeze(['hour', 'day', 'week', 'month', 'lifetime']);
+  const AI_LIMIT_METRICS = Object.freeze(['requests', 'inputTokens', 'outputTokens', 'totalTokens', 'estimatedCostMicros']);
   const ADMIN_ERROR_MESSAGES = Object.freeze({
     ADMIN_REQUIRED: 'Ta operacja jest dostępna tylko dla administratora.',
     ACCESS_EXPIRED: 'Dostęp do kursu wygasł. Zaloguj się ponownie po odnowieniu dostępu.',
@@ -64,6 +67,19 @@
     AI_SECRET_MISSING: 'Najpierw ustaw klucz API dla tej konfiguracji.',
     AI_STORAGE_INVALID: 'Zapisana konfiguracja AI jest uszkodzona.',
     AI_STORAGE_UNAVAILABLE: 'Magazyn konfiguracji AI jest chwilowo niedostępny.',
+    AI_LIMIT_STORAGE_INVALID: 'Magazyn limitów AI zawiera nieprawidłowe dane.',
+    AI_LIMIT_STORAGE_UNAVAILABLE: 'Magazyn limitów i użycia AI jest chwilowo niedostępny.',
+    AI_LIMIT_CONFLICT: 'Użycie AI zmieniło się równocześnie. Odśwież dane i spróbuj ponownie.',
+    AI_CONCURRENT_REQUEST_LIMIT_REACHED: 'Trwa zbyt wiele równoległych wywołań AI. Spróbuj ponownie za chwilę.',
+    AI_COST_ESTIMATE_UNAVAILABLE: 'Nie można bezpiecznie oszacować kosztu tego wywołania. Uzupełnij cennik konfiguracji AI.',
+    AI_USAGE_RESET_BUSY: 'Nie można wyzerować użycia, gdy trwa wywołanie AI. Spróbuj ponownie za chwilę.',
+    AI_FALLBACK_CYCLE: 'Fallback AI tworzy niedozwoloną pętlę.',
+    INVALID_AI_FALLBACK: 'Wybrany fallback AI jest nieprawidłowy.',
+    INVALID_AI_LIMIT_TIMEZONE: 'Podaj poprawną strefę czasową IANA, np. Europe/Warsaw.',
+    INVALID_AI_LIMIT_VALUE: 'Limit musi być pusty albo dodatnią liczbą całkowitą (zero blokuje użycie).',
+    INVALID_AI_PRICING: 'Cena tokenów musi być nieujemną liczbą.',
+    INVALID_AI_WARNING_THRESHOLDS: 'Progi ostrzeżeń muszą rosnąć i mieścić się od 1 do 100%.',
+    RESET_CONFIRMATION_REQUIRED: 'Reset użycia wymaga wyraźnego potwierdzenia.',
     INVALID_AI_ACTION: 'Wybrano nieprawidłową operację AI.',
     INVALID_AI_CONFIG: 'Uzupełnij nazwę, dostawcę i poprawny identyfikator modelu.',
     INVALID_AI_CONFIG_ID: 'Identyfikator konfiguracji AI jest nieprawidłowy.',
@@ -255,10 +271,43 @@
     adminAiModuleChat: document.getElementById('admin-ai-module-chat'),
     adminAiModuleGrader: document.getElementById('admin-ai-module-grader'),
     adminAiModuleForms: document.getElementById('admin-ai-module-forms'),
+    adminAiModuleOther: document.getElementById('admin-ai-module-other'),
     adminAiList: document.getElementById('admin-ai-list'),
     adminAiEmpty: document.getElementById('admin-ai-empty'),
     adminAiAudit: document.getElementById('admin-ai-audit'),
     adminAiAuditList: document.getElementById('admin-ai-audit-list'),
+    adminAiUsagePeriod: document.getElementById('admin-ai-usage-period'),
+    adminAiUsageRefresh: document.getElementById('admin-ai-usage-refresh'),
+    adminAiUsageStatus: document.getElementById('admin-ai-usage-status'),
+    adminAiUsageSummary: document.getElementById('admin-ai-usage-summary'),
+    adminAiUsageTimezone: document.getElementById('admin-ai-usage-timezone'),
+    adminAiUsageCurrency: document.getElementById('admin-ai-usage-currency'),
+    adminAiUsageShowUser: document.getElementById('admin-ai-usage-show-user'),
+    adminAiWarning1: document.getElementById('admin-ai-warning-1'),
+    adminAiWarning2: document.getElementById('admin-ai-warning-2'),
+    adminAiWarning3: document.getElementById('admin-ai-warning-3'),
+    adminAiLimitScope: document.getElementById('admin-ai-limit-scope'),
+    adminAiLimitScopeIdWrap: document.getElementById('admin-ai-limit-scope-id-wrap'),
+    adminAiLimitScopeId: document.getElementById('admin-ai-limit-scope-id'),
+    adminAiLimitModuleWrap: document.getElementById('admin-ai-limit-module-wrap'),
+    adminAiLimitModuleId: document.getElementById('admin-ai-limit-module-id'),
+    adminAiLimitUserModeWrap: document.getElementById('admin-ai-limit-user-mode-wrap'),
+    adminAiLimitUserMode: document.getElementById('admin-ai-limit-user-mode'),
+    adminAiConfigPolicy: document.getElementById('admin-ai-config-policy'),
+    adminAiPriceInput: document.getElementById('admin-ai-price-input'),
+    adminAiPriceOutput: document.getElementById('admin-ai-price-output'),
+    adminAiFallback: document.getElementById('admin-ai-fallback'),
+    adminAiLimitGrid: document.getElementById('admin-ai-limit-grid'),
+    adminAiUsageSave: document.getElementById('admin-ai-usage-save'),
+    adminAiUsageProviders: document.getElementById('admin-ai-usage-providers'),
+    adminAiUsageModels: document.getElementById('admin-ai-usage-models'),
+    adminAiUsageConfigs: document.getElementById('admin-ai-usage-configs'),
+    adminAiUsageModules: document.getElementById('admin-ai-usage-modules'),
+    adminAiUsageUsers: document.getElementById('admin-ai-usage-users'),
+    adminAiUsersMore: document.getElementById('admin-ai-users-more'),
+    adminAiUserDetail: document.getElementById('admin-ai-user-detail'),
+    adminAiUsageAudit: document.getElementById('admin-ai-usage-audit'),
+    adminAiUsageAuditList: document.getElementById('admin-ai-usage-audit-list'),
     adminPricesForm: document.getElementById('admin-prices-form'),
     adminPaymentCurrency: document.getElementById('admin-payment-currency'),
     adminPaymentDisabled: document.getElementById('admin-payment-disabled'),
@@ -316,6 +365,10 @@
   let adminProgressCatalog = null;
   let adminAiLoaded = false;
   let adminAiSettings = null;
+  let adminAiUsageLoaded = false;
+  let adminAiUsageSettings = null;
+  let adminAiUsageReport = null;
+  let adminAiLimitSelection = { scope: 'global', id: '' };
 
   function preferredTheme() {
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -454,7 +507,9 @@
     if (/\/(?:film|yt)\//.test(pathname)) return { kind: 'video', icon: '▶' };
     if (/\/slides\//.test(pathname)) return { kind: 'document', icon: '▤' };
     if (/\/pdf\//.test(pathname)) return { kind: 'document', icon: 'PDF' };
+    if (/\/presentation\//.test(pathname)) return { kind: 'document', icon: '▥' };
     if (/\/lesson\//.test(pathname)) return { kind: 'exercise', icon: 'L' };
+    if (/\/quiz\//.test(pathname)) return { kind: 'exercise', icon: 'Q' };
     if (/\/exam\//.test(pathname)) return { kind: 'exercise', icon: 'E' };
     if (/\/(forms|chat)\//.test(pathname)) return { kind: 'exercise', icon: pathname.includes('/chat/') ? '✦' : '✓' };
     if (/\/(kalkulator|classic)\//.test(pathname)) return { kind: 'calculator', icon: '±' };
@@ -536,6 +591,43 @@
     return card;
   }
 
+  function setSequenceCardState(card, locked, aggregate, prerequisiteTitle) {
+    const link = card.querySelector('.card-link');
+    const label = card.querySelector('.card-open');
+    if (!link || !label) return;
+    if (!link.dataset.sequenceHref && link.getAttribute('href')) {
+      link.dataset.sequenceHref = link.getAttribute('href');
+    }
+    card.classList.toggle('is-sequence-locked', Boolean(locked));
+    card.dataset.sequenceLocked = locked ? 'true' : 'false';
+    if (locked) {
+      link.removeAttribute('href');
+      link.setAttribute('aria-disabled', 'true');
+      link.tabIndex = 0;
+      link.setAttribute('aria-label', `Zablokowane: ${card.dataset.sequenceTitle || 'materiał'}`);
+      label.replaceChildren(document.createTextNode('Najpierw ukończ poprzedni krok '));
+      const lock = document.createElement('span');
+      lock.setAttribute('aria-hidden', 'true');
+      lock.textContent = '🔒';
+      label.append(lock);
+      card.title = prerequisiteTitle ? `Najpierw ukończ: ${prerequisiteTitle}` : 'Najpierw ukończ poprzedni krok.';
+      return;
+    }
+    if (link.dataset.sequenceHref) link.setAttribute('href', link.dataset.sequenceHref);
+    link.removeAttribute('aria-disabled');
+    link.removeAttribute('tabindex');
+    link.setAttribute('aria-label', `Otwórz: ${card.dataset.sequenceTitle || 'materiał'}`);
+    const action = aggregate?.status === 'completed'
+      ? 'Otwórz ponownie'
+      : ['opened', 'in_progress'].includes(aggregate?.status) ? 'Kontynuuj' : 'Rozpocznij';
+    label.replaceChildren(document.createTextNode(`${action} `));
+    const arrow = document.createElement('span');
+    arrow.setAttribute('aria-hidden', 'true');
+    arrow.textContent = '→';
+    label.append(arrow);
+    card.removeAttribute('title');
+  }
+
   function createAccordionGroup(group, sectionTitle, parentTitles = [], depth = 0) {
     const groupPath = [...parentTitles, group.title];
     const cards = group.items
@@ -548,6 +640,9 @@
 
     const details = document.createElement('details');
     details.className = 'resource-accordion';
+    const sequential = group.navigation === 'sequential';
+    details.classList.toggle('is-sequential', sequential);
+    details.open = sequential;
     details.dataset.progressId = group.id || '';
     details.dataset.accordionDepth = String(depth);
     details.addEventListener('toggle', () => {
@@ -579,6 +674,33 @@
     meta.append(total, chevron);
     summary.append(copy, meta);
     details.append(summary);
+
+    if (sequential) {
+      const sequenceLabel = document.createElement('span');
+      sequenceLabel.className = 'sequence-label';
+      sequenceLabel.textContent = 'Po kolei';
+      copy.append(sequenceLabel);
+      cards.forEach((card, index) => {
+        card.dataset.sequenceParent = group.id || '';
+        card.dataset.sequenceIndex = String(index);
+        card.dataset.sequenceTitle = group.items[index]?.title || '';
+        const step = document.createElement('span');
+        step.className = 'sequence-step';
+        step.textContent = String(index + 1);
+        step.setAttribute('aria-label', `Krok ${index + 1} z ${cards.length}`);
+        card.prepend(step);
+        const link = card.querySelector('.card-link');
+        link?.addEventListener('click', (event) => {
+          if (card.dataset.sequenceLocked !== 'true') return;
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          elements.message.hidden = false;
+          elements.message.className = 'dashboard-message';
+          elements.message.textContent = card.title || 'Najpierw ukończ poprzedni krok organizera.';
+        }, true);
+        setSequenceCardState(card, index > 0, null, group.items[index - 1]?.title || '');
+      });
+    }
 
     const body = document.createElement('div');
     body.className = 'accordion-body';
@@ -805,6 +927,22 @@
     try {
       const state = await api.load({ force: Boolean(force) });
       const nodes = state?.aggregate?.nodes || {};
+      const access = state?.access || {};
+      document.querySelectorAll('[data-sequence-parent]').forEach((card) => {
+        const id = card.dataset.progressId;
+        const index = Number(card.dataset.sequenceIndex) || 0;
+        const siblings = Array.from(document.querySelectorAll('[data-sequence-parent]'))
+          .filter((item) => item.dataset.sequenceParent === card.dataset.sequenceParent)
+          .sort((left, right) => Number(left.dataset.sequenceIndex) - Number(right.dataset.sequenceIndex));
+        const previous = siblings.slice(0, index);
+        const fallbackLocked = previous.some((item) => nodes[item.dataset.progressId]?.status !== 'completed');
+        const sequenceAccess = access[id];
+        const locked = sequenceAccess ? sequenceAccess.allowed === false : fallbackLocked;
+        const prerequisite = sequenceAccess?.prerequisiteTitle
+          || previous.find((item) => nodes[item.dataset.progressId]?.status !== 'completed')?.dataset.sequenceTitle
+          || '';
+        setSequenceCardState(card, locked, nodes[id], prerequisite);
+      });
       document.querySelectorAll('[data-progress-host]').forEach((host) => {
         const id = host.dataset.progressHost;
         const aggregate = nodes[id];
@@ -1749,9 +1887,14 @@
     save.className = 'button button-primary';
     save.type = 'submit';
     save.textContent = 'Zapisz użytkownika';
+    const aiLimits = document.createElement('button');
+    aiLimits.className = 'button button-secondary';
+    aiLimits.type = 'button';
+    aiLimits.textContent = 'AI / Limity';
+    aiLimits.addEventListener('click', () => openAdminAiUserLimits(user.id));
     const footerActions = document.createElement('div');
     footerActions.className = 'admin-user-footer-actions';
-    footerActions.append(remove, save);
+    footerActions.append(aiLimits, remove, save);
     footer.append(message, footerActions);
 
     form.append(facts, names, roleFieldset);
@@ -3866,6 +4009,13 @@
     return provider === 'openai' ? 'OpenAI' : 'Google Gemini';
   }
 
+  function availableAdminAiConfigs() {
+    const configs = [...(adminAiSettings?.configs || [])];
+    if (adminAiSettings?.legacyEnvironment?.gemini) configs.push({ aiConfigId: 'env-gemini', name: 'Gemini (ENV)', provider: 'gemini' });
+    if (adminAiSettings?.legacyEnvironment?.openai) configs.push({ aiConfigId: 'env-openai', name: 'OpenAI (ENV)', provider: 'openai' });
+    return configs;
+  }
+
   async function adminAiRequest(method, body, query) {
     const token = await getAdminToken();
     const response = await fetch(`${ADMIN_AI_URL}${query || ''}`, {
@@ -3984,6 +4134,7 @@
     fillAdminAiModuleSelect(elements.adminAiModuleChat, 'chat');
     fillAdminAiModuleSelect(elements.adminAiModuleGrader, 'aiGrader');
     fillAdminAiModuleSelect(elements.adminAiModuleForms, 'aiForms');
+    fillAdminAiModuleSelect(elements.adminAiModuleOther, 'other');
     configs.forEach((config) => {
       const card = document.createElement('article');
       card.className = `admin-ai-card${config.isDefault ? ' is-default' : ''}`;
@@ -4142,7 +4293,7 @@
   }
 
   async function setAdminAiModule(moduleName, aiConfigId) {
-    [elements.adminAiModuleChat, elements.adminAiModuleGrader, elements.adminAiModuleForms].forEach((select) => { select.disabled = true; });
+    [elements.adminAiModuleChat, elements.adminAiModuleGrader, elements.adminAiModuleForms, elements.adminAiModuleOther].forEach((select) => { select.disabled = true; });
     try {
       adminAiSettings = await adminAiRequest('POST', { action: 'set-module', module: moduleName, aiConfigId: aiConfigId || null });
       renderAdminAi();
@@ -4151,7 +4302,7 @@
       renderAdminAi();
       setPanelStatus(elements.adminAiStatus, error?.message || 'Nie udało się zapisać routingu.', 'error');
     } finally {
-      [elements.adminAiModuleChat, elements.adminAiModuleGrader, elements.adminAiModuleForms].forEach((select) => { select.disabled = false; });
+      [elements.adminAiModuleChat, elements.adminAiModuleGrader, elements.adminAiModuleForms, elements.adminAiModuleOther].forEach((select) => { select.disabled = false; });
     }
   }
 
@@ -4167,8 +4318,443 @@
     finally { setAdminAiBusy(false); }
   }
 
+  async function adminAiUsageRequest(method, body, query) {
+    const token = await getAdminToken();
+    const response = await fetch(`${ADMIN_AI_USAGE_URL}${query || ''}`, {
+      method,
+      cache: 'no-store',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...(body ? { 'Content-Type': 'application/json' } : {})
+      },
+      ...(body ? { body: JSON.stringify(body) } : {})
+    });
+    return readAdminResponse(response);
+  }
+
+  function emptyAdminAiLimitSet() {
+    return Object.fromEntries(AI_LIMIT_METRICS.map((metric) => [
+      metric,
+      Object.fromEntries(AI_LIMIT_PERIODS.map((period) => [period, null]))
+    ]));
+  }
+
+  function emptyAdminAiConfigPolicy() {
+    return {
+      global: emptyAdminAiLimitSet(),
+      perUser: emptyAdminAiLimitSet(),
+      pricing: { inputPerMillion: null, outputPerMillion: null },
+      fallbackConfigId: null
+    };
+  }
+
+  function adminAiUserLabel(userId) {
+    const user = adminUsers.find((item) => (item.id || item.sub) === userId);
+    if (!user) return userId;
+    const metadata = user.user_metadata || {};
+    const name = [metadata.first_name || metadata.firstName, metadata.last_name || metadata.lastName].filter(Boolean).join(' ');
+    return `${name || user.email || userId}${user.email && name ? ` · ${user.email}` : ''}`;
+  }
+
+  function populateAdminAiLimitScope() {
+    if (!adminAiUsageSettings) return;
+    const scope = elements.adminAiLimitScope.value;
+    const usesModuleInput = scope === 'module';
+    const usesId = ['provider', 'config', 'configUser', 'user'].includes(scope);
+    elements.adminAiLimitScopeIdWrap.hidden = !usesId;
+    elements.adminAiLimitModuleWrap.hidden = !usesModuleInput;
+    elements.adminAiLimitUserModeWrap.hidden = scope !== 'user';
+    elements.adminAiConfigPolicy.hidden = !['config', 'configUser'].includes(scope);
+    let choices = [];
+    if (scope === 'provider') choices = ['gemini', 'openai'].map((id) => ({ id, label: adminAiProviderLabel(id) }));
+    if (scope === 'config' || scope === 'configUser') choices = availableAdminAiConfigs().map((config) => ({ id: config.aiConfigId, label: `${config.name} · ${config.aiConfigId}` }));
+    if (scope === 'user') {
+      const ids = new Set([
+        ...adminUsers.map((user) => user.id || user.sub),
+        ...Object.keys(adminAiUsageSettings.users || {}),
+        ...(adminAiUsageReport?.users || []).map((user) => user.userId)
+      ].filter(Boolean));
+      choices = Array.from(ids).map((id) => ({ id, label: adminAiUserLabel(id) }));
+    }
+    if (usesId) {
+      const previous = adminAiLimitSelection.scope === scope ? adminAiLimitSelection.id : '';
+      elements.adminAiLimitScopeId.replaceChildren(...choices.map((choice) => Object.assign(document.createElement('option'), {
+        value: choice.id, textContent: choice.label
+      })));
+      elements.adminAiLimitScopeId.value = choices.some((choice) => choice.id === previous) ? previous : choices[0]?.id || '';
+    }
+    if (usesModuleInput) {
+      const known = Object.keys(adminAiUsageSettings.modules || {});
+      elements.adminAiLimitModuleId.value = adminAiLimitSelection.scope === scope && adminAiLimitSelection.id
+        ? adminAiLimitSelection.id : known[0] || 'chat';
+    }
+    adminAiLimitSelection = {
+      scope,
+      id: usesModuleInput ? elements.adminAiLimitModuleId.value.trim() : usesId ? elements.adminAiLimitScopeId.value : ''
+    };
+    renderAdminAiLimitEditor();
+  }
+
+  function selectedAdminAiLimitSet(create) {
+    const settings = adminAiUsageSettings;
+    if (!settings) return null;
+    const { scope, id } = adminAiLimitSelection;
+    if (scope === 'global') return settings.global;
+    if (scope === 'defaultUser') return settings.defaultUser;
+    if (!id) return null;
+    if (scope === 'provider' || scope === 'module') {
+      const map = scope === 'provider' ? settings.providers : settings.modules;
+      if (!map[id] && create) map[id] = emptyAdminAiLimitSet();
+      return map[id] || null;
+    }
+    if (scope === 'config' || scope === 'configUser') {
+      if (!settings.configs[id] && create) settings.configs[id] = emptyAdminAiConfigPolicy();
+      const policy = settings.configs[id];
+      return policy ? policy[scope === 'config' ? 'global' : 'perUser'] : null;
+    }
+    if (scope === 'user') {
+      if (!settings.users[id] && create) settings.users[id] = { mode: 'inherit', limits: emptyAdminAiLimitSet() };
+      return settings.users[id]?.limits || null;
+    }
+    return null;
+  }
+
+  function commitAdminAiLimitEditor() {
+    if (!adminAiUsageSettings) return;
+    const limitSet = selectedAdminAiLimitSet(true);
+    if (limitSet) {
+      elements.adminAiLimitGrid.querySelectorAll('input[data-ai-limit-metric]').forEach((input) => {
+        const raw = input.value.trim();
+        if (!raw) limitSet[input.dataset.aiLimitMetric][input.dataset.aiLimitPeriod] = null;
+        else {
+          const value = Number(raw);
+          if (!Number.isSafeInteger(value) || value < 0) throw new Error('Limit musi być pusty albo nieujemną liczbą całkowitą.');
+          limitSet[input.dataset.aiLimitMetric][input.dataset.aiLimitPeriod] = value;
+        }
+      });
+    }
+    const { scope, id } = adminAiLimitSelection;
+    if (scope === 'user' && id && adminAiUsageSettings.users[id]) {
+      adminAiUsageSettings.users[id].mode = elements.adminAiLimitUserMode.value;
+    }
+    if (['config', 'configUser'].includes(scope) && id) {
+      const policy = adminAiUsageSettings.configs[id] || (adminAiUsageSettings.configs[id] = emptyAdminAiConfigPolicy());
+      const parsePrice = (input) => {
+        if (!input.value.trim()) return null;
+        const value = Number(input.value);
+        if (!Number.isFinite(value) || value < 0) throw new Error('Cena tokenów musi być nieujemną liczbą.');
+        return value;
+      };
+      policy.pricing.inputPerMillion = parsePrice(elements.adminAiPriceInput);
+      policy.pricing.outputPerMillion = parsePrice(elements.adminAiPriceOutput);
+      policy.fallbackConfigId = elements.adminAiFallback.value || null;
+    }
+  }
+
+  function renderAdminAiLimitEditor() {
+    const limitSet = selectedAdminAiLimitSet(true);
+    const disabled = !limitSet || (adminAiLimitSelection.scope === 'user' && elements.adminAiLimitUserMode.value !== 'custom');
+    const table = document.createElement('table');
+    table.className = 'admin-ai-limit-table';
+    const labels = { requests: 'Żądania', inputTokens: 'Tokeny wejścia', outputTokens: 'Tokeny wyjścia', totalTokens: 'Tokeny łącznie', estimatedCostMicros: 'Koszt (mikro)' };
+    const periodLabels = { hour: 'Godzina', day: 'Dzień', week: 'Tydzień', month: 'Miesiąc', lifetime: 'Łącznie' };
+    const head = document.createElement('thead');
+    const header = document.createElement('tr');
+    header.append(Object.assign(document.createElement('th'), { textContent: 'Metryka' }));
+    AI_LIMIT_PERIODS.forEach((period) => header.append(Object.assign(document.createElement('th'), { textContent: periodLabels[period] })));
+    head.append(header);
+    const body = document.createElement('tbody');
+    AI_LIMIT_METRICS.forEach((metric) => {
+      const row = document.createElement('tr');
+      row.append(Object.assign(document.createElement('th'), { textContent: labels[metric] }));
+      AI_LIMIT_PERIODS.forEach((period) => {
+        const cell = document.createElement('td');
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.min = '0';
+        input.step = '1';
+        input.className = 'text-field';
+        input.dataset.aiLimitMetric = metric;
+        input.dataset.aiLimitPeriod = period;
+        input.disabled = disabled;
+        const value = limitSet && limitSet[metric] && limitSet[metric][period];
+        input.value = value == null ? '' : String(value);
+        input.setAttribute('aria-label', `${labels[metric]} — ${periodLabels[period]}`);
+        cell.append(input);
+        row.append(cell);
+      });
+      body.append(row);
+    });
+    table.append(head, body);
+    elements.adminAiLimitGrid.replaceChildren(table);
+
+    const { scope, id } = adminAiLimitSelection;
+    if (scope === 'user' && id) {
+      elements.adminAiLimitUserMode.value = adminAiUsageSettings.users[id]?.mode || 'inherit';
+      const custom = elements.adminAiLimitUserMode.value === 'custom';
+      elements.adminAiLimitGrid.querySelectorAll('input').forEach((input) => { input.disabled = !custom; });
+    }
+    if (['config', 'configUser'].includes(scope) && id) {
+      const policy = adminAiUsageSettings.configs[id] || (adminAiUsageSettings.configs[id] = emptyAdminAiConfigPolicy());
+      elements.adminAiPriceInput.value = policy.pricing.inputPerMillion == null ? '' : String(policy.pricing.inputPerMillion);
+      elements.adminAiPriceOutput.value = policy.pricing.outputPerMillion == null ? '' : String(policy.pricing.outputPerMillion);
+      const fallbackOptions = [Object.assign(document.createElement('option'), { value: '', textContent: 'Brak fallbacku' })];
+      availableAdminAiConfigs().filter((config) => config.aiConfigId !== id).forEach((config) => fallbackOptions.push(Object.assign(document.createElement('option'), { value: config.aiConfigId, textContent: config.name })));
+      elements.adminAiFallback.replaceChildren(...fallbackOptions);
+      elements.adminAiFallback.value = policy.fallbackConfigId || '';
+    }
+  }
+
+  function formatAdminAiCost(micros) {
+    return `${(Number(micros || 0) / 1_000_000).toLocaleString('pl-PL', { maximumFractionDigits: 6 })} ${adminAiUsageReport?.currency || adminAiUsageSettings?.currency || ''}`.trim();
+  }
+
+  function renderAdminAiUsageSummary() {
+    const totals = adminAiUsageReport?.totals || {};
+    const period = adminAiUsageReport?.period || 'day';
+    const cards = [
+      ['Żądania', totals.requests || 0, 'requests'],
+      ['Tokeny łącznie', totals.totalTokens || 0, 'totalTokens'],
+      ['Szacowany koszt', formatAdminAiCost(totals.estimatedCostMicros), 'estimatedCostMicros'],
+      ['Aktywni użytkownicy', (adminAiUsageReport?.users || []).filter((user) => user.requests > 0).length, null]
+    ].map(([label, value, metric]) => {
+      const card = document.createElement('article');
+      const limit = metric ? adminAiUsageSettings?.global?.[metric]?.[period] : null;
+      const raw = metric ? Number(totals[metric] || 0) : Number(value || 0);
+      const percent = limit == null || limit <= 0 ? 0 : Math.min(100, Math.round((raw / limit) * 100));
+      const thresholds = adminAiUsageSettings?.warningThresholds || [70, 90, 100];
+      card.dataset.warning = percent >= thresholds[2] ? 'limit' : percent >= thresholds[1] ? 'critical' : percent >= thresholds[0] ? 'warning' : 'ok';
+      card.append(
+        Object.assign(document.createElement('span'), { textContent: label }),
+        Object.assign(document.createElement('strong'), { textContent: typeof value === 'number' ? value.toLocaleString('pl-PL') : String(value) })
+      );
+      const progress = document.createElement('progress');
+      progress.max = 100;
+      progress.value = percent;
+      progress.setAttribute('aria-label', limit == null ? `${label}: bez limitu` : `${label}: ${percent}% limitu`);
+      const note = document.createElement('small');
+      note.textContent = limit == null ? 'bez limitu globalnego' : `${percent}% z ${metric === 'estimatedCostMicros' ? formatAdminAiCost(limit) : Number(limit).toLocaleString('pl-PL')}`;
+      card.append(progress, note);
+      return card;
+    });
+    elements.adminAiUsageSummary.replaceChildren(...cards);
+  }
+
+  function renderAdminAiUsageTable(host, rows, options = {}) {
+    const table = document.createElement('table');
+    table.className = 'admin-ai-usage-table';
+    const head = document.createElement('thead');
+    const header = document.createElement('tr');
+    const headings = ['Nazwa / ID', 'Żądania', 'OK', 'Błędy', 'Wejście', 'Wyjście', 'Łącznie', 'Śr./request', 'Koszt'];
+    if (options.reset) headings.push('Limit req.', 'Użycie');
+    headings.forEach((label) => header.append(Object.assign(document.createElement('th'), { textContent: label })));
+    if (options.reset) header.append(Object.assign(document.createElement('th'), { textContent: 'Akcje' }));
+    head.append(header);
+    const body = document.createElement('tbody');
+    (rows || []).forEach((row) => {
+      const tr = document.createElement('tr');
+      tr.dataset.warning = row.warning?.level || 'ok';
+      const label = options.label ? options.label(row) : row.id;
+      const average = row.avgTokensPerRequest == null
+        ? (row.requests ? Math.round(Number(row.totalTokens || 0) / row.requests) : 0)
+        : row.avgTokensPerRequest;
+      const values = [label, row.requests || 0, row.successfulRequests || 0, row.errors || 0, row.inputTokens || 0, row.outputTokens || 0, row.totalTokens || 0, average, formatAdminAiCost(row.estimatedCostMicros)];
+      if (options.reset) values.push(row.limit == null ? '∞' : row.limit, `${Number(row.usagePercent || 0)}%`);
+      values.forEach((value, index) => {
+        const cell = document.createElement(index === 0 ? 'th' : 'td');
+        cell.textContent = typeof value === 'number' ? value.toLocaleString('pl-PL') : String(value || '—');
+        tr.append(cell);
+      });
+      if (options.reset) {
+        const cell = document.createElement('td');
+        const detail = Object.assign(document.createElement('button'), { className: 'button button-secondary', type: 'button', textContent: 'Szczegóły' });
+        detail.addEventListener('click', () => renderAdminAiUserDetail(row));
+        const button = Object.assign(document.createElement('button'), { className: 'button button-secondary button-danger-soft', type: 'button', textContent: 'Wyzeruj' });
+        button.addEventListener('click', () => resetAdminAiUserUsage(row.userId));
+        cell.append(detail, button);
+        tr.append(cell);
+      }
+      body.append(tr);
+    });
+    if (!body.childElementCount) {
+      const row = document.createElement('tr');
+      const cell = Object.assign(document.createElement('td'), { colSpan: options.reset ? 12 : 9, textContent: 'Brak danych w tym okresie.' });
+      row.append(cell);
+      body.append(row);
+    }
+    table.append(head, body);
+    const scroll = document.createElement('div');
+    scroll.className = 'admin-ai-table-scroll';
+    scroll.append(table);
+    host.replaceChildren(scroll);
+  }
+
+  function renderAdminAiUserDetail(row) {
+    const heading = document.createElement('div');
+    heading.className = 'admin-ai-list-heading';
+    const copy = document.createElement('div');
+    copy.append(
+      Object.assign(document.createElement('span'), { className: 'eyebrow', textContent: 'Szczegóły użytkownika' }),
+      Object.assign(document.createElement('h3'), { textContent: adminAiUserLabel(row.userId) })
+    );
+    const close = Object.assign(document.createElement('button'), { className: 'button button-secondary', type: 'button', textContent: 'Zamknij' });
+    close.addEventListener('click', () => { elements.adminAiUserDetail.hidden = true; });
+    heading.append(copy, close);
+    const grid = document.createElement('div');
+    grid.className = 'admin-ai-usage-tables';
+    const periods = document.createElement('div');
+    periods.className = 'admin-ai-usage-summary admin-ai-user-periods';
+    [['Dzisiaj', 'day'], ['Tydzień', 'week'], ['Miesiąc', 'month']].forEach(([label, key]) => {
+      const metrics = row.periods?.[key] || {};
+      const card = document.createElement('article');
+      card.append(
+        Object.assign(document.createElement('span'), { textContent: label }),
+        Object.assign(document.createElement('strong'), { textContent: `${Number(metrics.requests || 0).toLocaleString('pl-PL')} req.` }),
+        Object.assign(document.createElement('small'), { textContent: `${Number(metrics.totalTokens || 0).toLocaleString('pl-PL')} tokenów · ${formatAdminAiCost(metrics.estimatedCostMicros)}` })
+      );
+      periods.append(card);
+    });
+    [['Moduły', 'modules'], ['Dostawcy', 'providers'], ['Konfiguracje', 'configs'], ['Modele', 'models']].forEach(([label, key]) => {
+      const section = document.createElement('section');
+      section.append(Object.assign(document.createElement('h3'), { textContent: label }));
+      const host = document.createElement('div');
+      section.append(host);
+      renderAdminAiUsageTable(host, row.breakdown?.[key] || []);
+      grid.append(section);
+    });
+    elements.adminAiUserDetail.replaceChildren(heading, periods, grid);
+    elements.adminAiUserDetail.hidden = false;
+    elements.adminAiUserDetail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function renderAdminAiUsage() {
+    if (!adminAiUsageSettings || !adminAiUsageReport) return;
+    elements.adminAiUsageTimezone.value = adminAiUsageSettings.timezone;
+    elements.adminAiUsageCurrency.value = adminAiUsageSettings.currency;
+    elements.adminAiUsageShowUser.checked = adminAiUsageSettings.showUserLimits !== false;
+    [elements.adminAiWarning1, elements.adminAiWarning2, elements.adminAiWarning3].forEach((input, index) => { input.value = String(adminAiUsageSettings.warningThresholds[index]); });
+    renderAdminAiUsageSummary();
+    renderAdminAiUsageTable(elements.adminAiUsageProviders, adminAiUsageReport.providers);
+    renderAdminAiUsageTable(elements.adminAiUsageModels, adminAiUsageReport.models);
+    renderAdminAiUsageTable(elements.adminAiUsageConfigs, adminAiUsageReport.configs, {
+      label: (row) => adminAiSettings?.configs?.find((config) => config.aiConfigId === row.id)?.name || row.id
+    });
+    renderAdminAiUsageTable(elements.adminAiUsageModules, adminAiUsageReport.modules);
+    renderAdminAiUsageTable(elements.adminAiUsageUsers, adminAiUsageReport.users, {
+      reset: true,
+      label: (row) => adminAiUserLabel(row.userId)
+    });
+    elements.adminAiUsersMore.hidden = !adminAiUsageReport.cursor;
+    populateAdminAiLimitScope();
+  }
+
+  async function loadAdminAiUsage(force) {
+    if (adminAiUsageLoaded && !force) return;
+    elements.adminAiUsageRefresh.disabled = true;
+    setPanelStatus(elements.adminAiUsageStatus, 'Wczytywanie limitów i użycia AI…', 'loading');
+    try {
+      const period = elements.adminAiUsagePeriod.value || 'day';
+      const [settings, report, providerSettings] = await Promise.all([
+        adminAiUsageRequest('GET', null, '?view=settings'),
+        adminAiUsageRequest('GET', null, `?view=report&period=${encodeURIComponent(period)}`),
+        adminAiRequest('GET'),
+        adminUsers.length ? Promise.resolve() : loadAdminUsers()
+      ]);
+      adminAiUsageSettings = settings;
+      adminAiUsageReport = report;
+      adminAiSettings = providerSettings;
+      adminAiUsageLoaded = true;
+      renderAdminAiUsage();
+      setPanelStatus(elements.adminAiUsageStatus, `Raport: ${report.key} · strefa ${report.timezone}.`, 'info');
+    } catch (error) {
+      adminAiUsageLoaded = false;
+      setPanelStatus(elements.adminAiUsageStatus, error?.message || 'Nie udało się wczytać limitów AI.', 'error');
+    } finally { elements.adminAiUsageRefresh.disabled = false; }
+  }
+
+  async function openAdminAiUserLimits(userId) {
+    activateAdminTab('ai-usage', false);
+    if (!adminAiUsageLoaded) await loadAdminAiUsage(false);
+    if (!adminAiUsageSettings) return;
+    elements.adminAiLimitScope.value = 'user';
+    adminAiLimitSelection = { scope: 'user', id: userId };
+    populateAdminAiLimitScope();
+    elements.adminAiLimitScopeId.value = userId;
+    adminAiLimitSelection.id = userId;
+    renderAdminAiLimitEditor();
+    elements.adminAiLimitUserMode.focus();
+  }
+
+  async function saveAdminAiUsageSettings() {
+    try {
+      commitAdminAiLimitEditor();
+      adminAiUsageSettings.timezone = elements.adminAiUsageTimezone.value.trim();
+      adminAiUsageSettings.currency = elements.adminAiUsageCurrency.value.trim().toUpperCase();
+      adminAiUsageSettings.showUserLimits = elements.adminAiUsageShowUser.checked;
+      adminAiUsageSettings.warningThresholds = [elements.adminAiWarning1, elements.adminAiWarning2, elements.adminAiWarning3].map((input) => Number(input.value));
+      elements.adminAiUsageSave.disabled = true;
+      setPanelStatus(elements.adminAiUsageStatus, 'Zapisywanie limitów…', 'loading');
+      adminAiUsageSettings = await adminAiUsageRequest('PUT', { settings: adminAiUsageSettings });
+      adminAiUsageLoaded = false;
+      await loadAdminAiUsage(true);
+      setPanelStatus(elements.adminAiUsageStatus, 'Limity AI zostały zapisane i obowiązują od następnego żądania.', 'info');
+    } catch (error) {
+      setPanelStatus(elements.adminAiUsageStatus, error?.message || 'Nie udało się zapisać limitów AI.', 'error');
+    } finally { elements.adminAiUsageSave.disabled = false; }
+  }
+
+  async function loadMoreAdminAiUsers() {
+    if (!adminAiUsageReport?.cursor) return;
+    elements.adminAiUsersMore.disabled = true;
+    try {
+      const period = elements.adminAiUsagePeriod.value || 'day';
+      const page = await adminAiUsageRequest('GET', null, `?view=report&period=${encodeURIComponent(period)}&cursor=${encodeURIComponent(adminAiUsageReport.cursor)}`);
+      adminAiUsageReport.users.push(...(page.users || []));
+      adminAiUsageReport.cursor = page.cursor || null;
+      renderAdminAiUsageTable(elements.adminAiUsageUsers, adminAiUsageReport.users, { reset: true, label: (row) => adminAiUserLabel(row.userId) });
+      elements.adminAiUsersMore.hidden = !adminAiUsageReport.cursor;
+    } catch (error) { setPanelStatus(elements.adminAiUsageStatus, error?.message || 'Nie udało się wczytać kolejnej strony.', 'error'); }
+    finally { elements.adminAiUsersMore.disabled = false; }
+  }
+
+  async function resetAdminAiUserUsage(userId) {
+    if (!window.confirm(`Wyzerować całe zarejestrowane użycie AI użytkownika „${adminAiUserLabel(userId)}”? Operacja zostanie zapisana w audycie.`)) return;
+    setPanelStatus(elements.adminAiUsageStatus, 'Zerowanie użycia użytkownika…', 'loading');
+    try {
+      await adminAiUsageRequest('POST', { action: 'reset-user', userId, confirmed: true });
+      adminAiUsageLoaded = false;
+      await loadAdminAiUsage(true);
+      setPanelStatus(elements.adminAiUsageStatus, 'Użycie użytkownika wyzerowano. Liczniki globalne pozostały bez zmian.', 'info');
+    } catch (error) { setPanelStatus(elements.adminAiUsageStatus, error?.message || 'Nie udało się wyzerować użycia.', 'error'); }
+  }
+
+  async function loadAdminAiUsageAudit() {
+    if (!elements.adminAiUsageAudit.open) return;
+    elements.adminAiUsageAuditList.textContent = 'Wczytywanie historii…';
+    try {
+      const payload = await adminAiUsageRequest('GET', null, '?view=audit');
+      const audit = Array.isArray(payload.audit) ? payload.audit : [];
+      if (!audit.length) return void (elements.adminAiUsageAuditList.textContent = 'Historia zmian jest jeszcze pusta.');
+      const list = document.createElement('ol');
+      audit.forEach((entry) => {
+        const item = document.createElement('li');
+        const copy = document.createElement('span');
+        copy.append(
+          Object.assign(document.createElement('strong'), { textContent: entry.action === 'ai.usage.user.reset' ? 'Wyzerowano użycie użytkownika' : 'Zmieniono limity AI' }),
+          Object.assign(document.createElement('small'), { textContent: entry.targetUserId || 'ustawienia globalne' }),
+          Object.assign(document.createElement('small'), { textContent: `${new Date(entry.timestamp).toLocaleString('pl-PL')} · admin ${entry.adminId || '—'}` })
+        );
+        item.append(Object.assign(document.createElement('span'), { className: 'admin-ai-audit-marker', textContent: '•' }), copy);
+        list.append(item);
+      });
+      elements.adminAiUsageAuditList.replaceChildren(list);
+    } catch (error) { elements.adminAiUsageAuditList.textContent = error?.message || 'Nie udało się wczytać historii.'; }
+  }
+
   function activateAdminTab(name, focusTab) {
-    const allowed = new Set(['users', 'forms', 'dashboard', 'content', 'progress', 'ai', 'payments']);
+    const allowed = new Set(['users', 'forms', 'dashboard', 'content', 'progress', 'ai', 'ai-usage', 'payments']);
     const activeName = allowed.has(name) ? name : 'users';
     elements.adminTabs.forEach((tab) => {
       const active = tab.dataset.adminTab === activeName;
@@ -4183,7 +4769,9 @@
     if (activeName === 'content' && !adminContentLoaded) loadAdminContentStatus(false);
     if (activeName === 'progress' && !adminProgressLoaded) loadAdminProgress(false);
     if (activeName === 'ai' && !adminAiLoaded) loadAdminAi(false);
+    if (activeName === 'ai-usage' && !adminAiUsageLoaded) loadAdminAiUsage(false);
     if (activeName === 'payments' && !adminPricesLoaded) loadAdminPrices();
+    return activeName;
   }
 
   function openAdminPanel(event) {
@@ -4198,9 +4786,12 @@
     if (typeof elements.adminDialog.showModal === 'function') elements.adminDialog.showModal();
     else elements.adminDialog.setAttribute('open', '');
     closeMenu();
-    activateAdminTab('users', false);
-    loadAdminUsers();
-    window.setTimeout(() => elements.adminSearch.focus(), 0);
+    const requestedTab = event && typeof event.adminTab === 'string' ? event.adminTab : 'users';
+    const activeTab = activateAdminTab(requestedTab, false);
+    if (activeTab === 'users') {
+      loadAdminUsers();
+      window.setTimeout(() => elements.adminSearch.focus(), 0);
+    }
   }
 
   function closeAdminPanel() {
@@ -4363,7 +4954,38 @@
     elements.adminAiModuleChat.addEventListener('change', () => setAdminAiModule('chat', elements.adminAiModuleChat.value));
     elements.adminAiModuleGrader.addEventListener('change', () => setAdminAiModule('aiGrader', elements.adminAiModuleGrader.value));
     elements.adminAiModuleForms.addEventListener('change', () => setAdminAiModule('aiForms', elements.adminAiModuleForms.value));
+    elements.adminAiModuleOther.addEventListener('change', () => setAdminAiModule('other', elements.adminAiModuleOther.value));
     elements.adminAiAudit.addEventListener('toggle', loadAdminAiAudit);
+    elements.adminAiUsageRefresh.addEventListener('click', () => loadAdminAiUsage(true));
+    elements.adminAiUsagePeriod.addEventListener('change', () => {
+      adminAiUsageLoaded = false;
+      loadAdminAiUsage(true);
+    });
+    elements.adminAiLimitScope.addEventListener('change', () => {
+      try { commitAdminAiLimitEditor(); } catch (error) { return setPanelStatus(elements.adminAiUsageStatus, error.message, 'error'); }
+      populateAdminAiLimitScope();
+    });
+    elements.adminAiLimitScopeId.addEventListener('change', () => {
+      try { commitAdminAiLimitEditor(); } catch (error) { return setPanelStatus(elements.adminAiUsageStatus, error.message, 'error'); }
+      adminAiLimitSelection.id = elements.adminAiLimitScopeId.value;
+      renderAdminAiLimitEditor();
+    });
+    elements.adminAiLimitModuleId.addEventListener('change', () => {
+      try { commitAdminAiLimitEditor(); } catch (error) { return setPanelStatus(elements.adminAiUsageStatus, error.message, 'error'); }
+      adminAiLimitSelection.id = elements.adminAiLimitModuleId.value.trim();
+      renderAdminAiLimitEditor();
+    });
+    elements.adminAiLimitUserMode.addEventListener('change', () => {
+      const id = adminAiLimitSelection.id;
+      if (id) {
+        const policy = adminAiUsageSettings.users[id] || (adminAiUsageSettings.users[id] = { mode: 'inherit', limits: emptyAdminAiLimitSet() });
+        policy.mode = elements.adminAiLimitUserMode.value;
+      }
+      renderAdminAiLimitEditor();
+    });
+    elements.adminAiUsageSave.addEventListener('click', saveAdminAiUsageSettings);
+    elements.adminAiUsersMore.addEventListener('click', loadMoreAdminAiUsers);
+    elements.adminAiUsageAudit.addEventListener('toggle', loadAdminAiUsageAudit);
     elements.adminPricesForm.addEventListener('submit', saveAdminPrices);
     elements.adminPricesReload.addEventListener('click', loadAdminPrices);
     elements.adminDashboardSource.addEventListener('input', () => {
@@ -4421,6 +5043,12 @@
       } catch (_) {
         // Ochrona brzegowa Netlify nadal zabezpiecza plik Markdown.
       }
+    }
+    const requestedAdminTab = new URL(window.location.href).searchParams.get('admin');
+    const activeUser = auth && typeof auth.getUser === 'function' ? auth.getUser() : null;
+    if (requestedAdminTab && isAdminUser(activeUser)) {
+      updateProfileDisplay(activeUser, typeof auth.getProfile === 'function' ? auth.getProfile() : null);
+      openAdminPanel({ currentTarget: elements.adminButton, adminTab: requestedAdminTab });
     }
     loadDashboard();
   }

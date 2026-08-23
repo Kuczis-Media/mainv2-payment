@@ -55,7 +55,8 @@
     QUESTION_TIME_EXPIRED: 'Czas na to pytanie minął.',
     ANSWER_BATCH_INVALID: 'Nie udało się przygotować paczki odpowiedzi do zapisu.',
     UNANSWERED_QUESTIONS: 'Odpowiedz na wszystkie wymagane pytania przed zakończeniem.',
-    EXAM_UNAVAILABLE: 'Egzamin jest chwilowo niedostępny.'
+    EXAM_UNAVAILABLE: 'Egzamin jest chwilowo niedostępny.',
+    SEQUENCE_LOCKED: 'Najpierw ukończ poprzedni moduł organizera.'
   };
 
   function parseReference() {
@@ -93,7 +94,7 @@
     try { auth = await window.ChemAuth.ready; } catch (_) { auth = null; }
     if (!auth?.authenticated || !auth.session?.ok) return fatal('Sesja nie jest aktywna. Zaloguj się ponownie.');
     try {
-      const payload = await client.definition({ ...state.reference, preview: state.preview });
+      const payload = await client.definition({ ...state.reference, materialId: state.materialId, preview: state.preview });
       state.definition = payload.exam;
       state.attempts = payload.attempts || [];
       syncServerTime(payload.serverNow);
@@ -201,7 +202,7 @@
 
   async function resumeAttempt(attemptId) {
     try {
-      const payload = await client.attempt({ ...state.reference, attemptId, preview: state.preview });
+      const payload = await client.attempt({ ...state.reference, materialId: state.materialId, attemptId, preview: state.preview });
       syncServerTime(payload.serverNow);
       initializeAttempt(payload.attempt, true);
       if (state.attempt.status === 'active') {
@@ -215,7 +216,7 @@
 
   async function showStoredResult(attemptId) {
     try {
-      const payload = await client.result({ ...state.reference, attemptId, preview: state.preview });
+      const payload = await client.result({ ...state.reference, materialId: state.materialId, attemptId, preview: state.preview });
       renderResult(payload.result);
     } catch (error) { setMessage(elements.startMessage, errorMessage(error)); }
   }
@@ -816,7 +817,12 @@
     clearTimer();
     if (mode === 'exam') {
       try {
-        const payload = await client.attempt({ ...state.reference, attemptId: state.attempt.attemptId, preview: state.preview });
+        const payload = await client.attempt({
+          ...state.reference,
+          materialId: state.materialId,
+          attemptId: state.attempt.attemptId,
+          preview: state.preview
+        });
         acceptServerAttempt(payload.attempt);
         if (state.attempt.status !== 'active') renderResult(state.attempt.result);
       } catch (error) { setMessage(elements.attemptMessage, errorMessage(error)); }
@@ -869,7 +875,11 @@
 
   async function reloadAttemptHistory() {
     try {
-      const payload = await client.definition({ ...state.reference, preview: state.preview });
+      const payload = await client.definition({
+        ...state.reference,
+        materialId: state.materialId,
+        preview: state.preview
+      });
       state.definition = payload.exam;
       state.attempts = payload.attempts || [];
       syncServerTime(payload.serverNow);

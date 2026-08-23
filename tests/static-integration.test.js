@@ -14,7 +14,7 @@ test('every members module has stable asset paths and waits for initial auth', (
 
   assert.deepEqual(moduleNames, [
     'atonom', 'bitpaper', 'chat', 'classic', 'contact', 'exam', 'film', 'forms',
-    'kalkulator', 'lesson', 'pdf', 'presentation', 'slides', 'studio', 'whiteboard', 'yt'
+    'kalkulator', 'lesson', 'pdf', 'presentation', 'quiz', 'slides', 'studio', 'whiteboard', 'yt'
   ]);
 
   for (const name of moduleNames) {
@@ -139,7 +139,7 @@ test('large member modules keep CSS and JavaScript outside index.html', () => {
     fs.existsSync(path.join(modulesRoot, 'mathjax-config.js')),
     'shared MathJax configuration is missing'
   );
-  for (const name of ['atonom', 'bitpaper', 'whiteboard', 'forms', 'lesson', 'yt']) {
+  for (const name of ['atonom', 'bitpaper', 'whiteboard', 'forms', 'lesson', 'quiz', 'yt']) {
     const directory = path.join(modulesRoot, name);
     const html = fs.readFileSync(path.join(directory, 'index.html'), 'utf8');
     assert.doesNotMatch(html, /<style\b/i, `${name}: CSS remains inline`);

@@ -110,6 +110,7 @@ function normalizeNode(input, index = 0) {
     },
     settings: {
       navigation: settings.navigation === 'sequential' ? 'sequential' : 'free',
+      manualCompletion: settings.manualCompletion === true,
       presentationMode: ['highest', 'visited', 'required'].includes(settings.presentationMode)
         ? settings.presentationMode : 'highest',
       requiredSlideIds: Array.isArray(settings.requiredSlideIds)
@@ -442,6 +443,7 @@ function mergeProgressEvent(existingInput, eventInput, context) {
   const completesOnOpen = event.action === 'open'
     && canTrack
     && context.isLeaf !== false
+    && node?.settings?.manualCompletion !== true
     && !DOES_NOT_COMPLETE_ON_OPEN.has(openedType);
   if (event.action === 'open' && !canOpen && !completesOnOpen) {
     return { ok: true, record: existingInput || null, changed: false };
@@ -574,6 +576,7 @@ function applyTypedProgress(record, event, node, now) {
     record.details.started = Boolean(record.details.started || details.started);
     record.details.scorePercent = Number.isFinite(Number(details.scorePercent)) ? clamp(details.scorePercent) : record.details.scorePercent ?? null;
     record.details.attempts = Math.max(0, Math.floor(Number(details.attempts) || Number(record.details.attempts) || 0));
+    if (typeof details.passed === 'boolean') record.details.passed = details.passed;
     if (details.completed === true) {
       record.progressPercent = 100;
       record.completedAt = record.completedAt || now;
@@ -732,6 +735,50 @@ function aggregateUser(userInput, catalogInput) {
   };
 }
 
+function sequenceAccessMap(catalogInput, aggregateInput, preferencesInput) {
+  const catalog = normalizeCatalog(catalogInput);
+  const nodes = aggregateInput?.nodes && plainObject(aggregateInput.nodes)
+    ? aggregateInput.nodes
+    : {};
+  const preferences = normalizePreferences(preferencesInput);
+  const unlocked = new Set(preferences.unlockedStepIds);
+  const explicitlyLocked = new Set(preferences.lockedStepIds);
+  const byId = new Map(catalog.nodes.map((node) => [node.id, node]));
+  const children = new Map();
+  catalog.nodes.forEach((node, sourceIndex) => {
+    if (!node.parentId) return;
+    if (!children.has(node.parentId)) children.set(node.parentId, []);
+    children.get(node.parentId).push({ node, sourceIndex });
+  });
+  children.forEach((entries) => entries.sort((left, right) => (
+    left.node.order - right.node.order || left.sourceIndex - right.sourceIndex
+  )));
+
+  const access = {};
+  catalog.nodes.forEach((node) => {
+    const parent = node.parentId && byId.get(node.parentId);
+    if (!parent || parent.settings.navigation !== 'sequential') return;
+    const siblings = children.get(parent.id) || [];
+    const index = siblings.findIndex((entry) => entry.node.id === node.id);
+    const unmet = siblings.slice(0, Math.max(0, index)).find((entry) => {
+      const progress = nodes[entry.node.id];
+      return !progress || (progress.tracked !== false && progress.status !== 'completed');
+    });
+    const manuallyUnlocked = preferences.skipMode === 'ALLOW' || unlocked.has(node.id);
+    const locked = explicitlyLocked.has(node.id) || (!manuallyUnlocked && Boolean(unmet));
+    access[node.id] = {
+      allowed: !locked,
+      locked,
+      sequenceId: parent.id,
+      step: index + 1,
+      totalSteps: siblings.length,
+      prerequisiteId: unmet?.node.id || null,
+      prerequisiteTitle: unmet?.node.title || null
+    };
+  });
+  return access;
+}
+
 function distributionBucket(percent) {
   const value = clamp(percent);
   if (value < 25) return '0-25';
@@ -799,5 +846,6 @@ module.exports = {
   normalizeRanges,
   normalizeUserDocument,
   plainObject,
+  sequenceAccessMap,
   validMaterialId
 };

@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" id="theme-color" content="#edf2f7">
   <meta name="robots" content="noindex,nofollow">
-  <meta name="description" content="ChemDisk Studio — graficzny kreator dashboardu, lekcji i promptów AI.">
+  <meta name="description" content="ChemDisk Studio — graficzny kreator dashboardu, lekcji, quizów, egzaminów i prezentacji.">
   <title>Studio treści — ChemDisk</title>
   <link rel="icon" href="/members/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -30,8 +30,10 @@
   <script src="prompt-model.js"></script>
   <script src="exam-model.js"></script>
   <script src="presentation-model.js"></script>
+  <script src="quiz-model.js"></script>
   <script src="exam-builder.js" defer></script>
   <script src="presentation-builder.js" defer></script>
+  <script src="quiz-builder.js" defer></script>
   <script src="script.js" defer></script>
 </head>
 <body>
@@ -58,6 +60,7 @@
       <button type="button" data-switch-mode="home">Start</button>
       <button type="button" data-switch-mode="dashboard">Dashboard</button>
       <button type="button" data-switch-mode="lesson">Lekcja</button>
+      <button type="button" data-switch-mode="quiz">Quiz</button>
       <button type="button" data-switch-mode="exam">Egzamin</button>
       <button type="button" data-switch-mode="presentation">Prezentacja</button>
       <button type="button" data-switch-mode="prompt">Prompt AI</button>
@@ -156,6 +159,78 @@
             </span>
             <span class="project-arrow" aria-hidden="true">→</span>
           </button>
+
+          <button class="project-card project-card-quiz" type="button" data-open-mode="quiz">
+            <span class="project-icon" aria-hidden="true">
+              <svg viewBox="0 0 40 40"><path d="M8 6h24v28H8z"></path><path d="m13 14 2 2 4-5M22 14h5M13 23h14M13 29h9"></path></svg>
+            </span>
+            <span class="project-copy">
+              <small>Draft, podgląd i publikacja</small>
+              <strong>Quiz Builder</strong>
+              <span>Twórz pytania jednokrotnego i wielokrotnego wyboru, prawda/fałsz oraz odpowiedzi tekstowe.</span>
+            </span>
+            <span class="project-arrow" aria-hidden="true">→</span>
+          </button>
+
+          <button class="project-card project-card-media" type="button" data-studio-tool="media">
+            <span class="project-icon" aria-hidden="true">
+              <svg viewBox="0 0 40 40"><rect x="5" y="7" width="30" height="26" rx="4"></rect><circle cx="14" cy="16" r="3"></circle><path d="m9 29 8-8 5 5 4-4 5 7"></path></svg>
+            </span>
+            <span class="project-copy">
+              <small>Jedna biblioteka obrazów</small>
+              <strong>Media Manager</strong>
+              <span>Otwórz współdzielone media i zarządzaj plikami używanymi przez wszystkie buildery.</span>
+            </span>
+            <span class="project-arrow" aria-hidden="true">→</span>
+          </button>
+
+          <a class="project-card project-card-dashboard" href="/members/module/studio/landing/">
+            <span class="project-icon" aria-hidden="true">
+              <svg viewBox="0 0 40 40"><rect x="5" y="6" width="30" height="28" rx="4"></rect><path d="M5 14h30M12 21h16M12 27h10"></path></svg>
+            </span>
+            <span class="project-copy">
+              <small>Draft, podgląd i publikacja</small>
+              <strong>Landing Page Builder</strong>
+              <span>Układaj sekcje strony głównej, zmieniaj teksty, obrazy i style bez edycji HTML.</span>
+            </span>
+            <span class="project-arrow" aria-hidden="true">→</span>
+          </a>
+
+          <a class="project-card project-card-ai" href="/members/?admin=ai">
+            <span class="project-icon" aria-hidden="true">
+              <svg viewBox="0 0 40 40"><path d="M20 5v5M20 30v5M5 20h5M30 20h5"></path><path d="M20 11a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z"></path><path d="m16 21 3 3 6-8"></path></svg>
+            </span>
+            <span class="project-copy">
+              <small>OpenAI i Google Gemini</small>
+              <strong>AI / Modele</strong>
+              <span>Przejdź do chronionego panelu konfiguracji dostawców, modeli, kluczy i routingu.</span>
+            </span>
+            <span class="project-arrow" aria-hidden="true">→</span>
+          </a>
+
+          <a class="project-card project-card-ai" href="/members/?admin=ai-usage">
+            <span class="project-icon" aria-hidden="true">
+              <svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="14"></circle><path d="M20 20V10M20 20l8 4M10 31l4-5M30 31l-4-5"></path></svg>
+            </span>
+            <span class="project-copy">
+              <small>Requesty, tokeny i koszty</small>
+              <strong>AI Limits / Usage</strong>
+              <span>Ustawiaj limity wszystkich warstw, fallbacki, cenniki i analizuj użycie.</span>
+            </span>
+            <span class="project-arrow" aria-hidden="true">→</span>
+          </a>
+
+          <a class="project-card project-card-dashboard" href="/members/?admin=progress">
+            <span class="project-icon" aria-hidden="true">
+              <svg viewBox="0 0 40 40"><path d="M7 31V20M16 31V12M25 31V17M34 31V7"></path><path d="M5 34h31"></path></svg>
+            </span>
+            <span class="project-copy">
+              <small>Materiały, uczniowie i egzaminy</small>
+              <strong>Progress / Reports</strong>
+              <span>Otwórz raporty postępu, szczegóły użytkowników, próby i operacje resetu.</span>
+            </span>
+            <span class="project-arrow" aria-hidden="true">→</span>
+          </a>
         </div>
 
         <section class="content-explorer" aria-labelledby="content-explorer-title">
@@ -228,7 +303,7 @@
             </label>
             <details class="repository-library" open>
               <summary>
-                <span><strong>Materiały z GitHuba</strong><small>Lekcje i prompty AI</small></span>
+                <span><strong>Materiały z GitHuba</strong><small>Lekcje, quizy, egzaminy i prompty</small></span>
                 <span aria-hidden="true">⌄</span>
               </summary>
               <div class="repository-library-body">
@@ -251,6 +326,9 @@
                   </button>
                   <button class="palette-item" type="button" draggable="true" data-dashboard-add="group" data-search="harmonijka grupa">
                     <span class="palette-symbol is-teal">⌄</span><span><strong>Harmonijka</strong><small>Zagnieżdżona grupa</small></span>
+                  </button>
+                  <button class="palette-item palette-item-wide" type="button" draggable="true" data-dashboard-add="organizer" data-search="organizer ścieżka kolejność sekwencja moduły">
+                    <span class="palette-symbol is-teal">1→</span><span><strong>Organizer po kolei</strong><small>Odblokowuje następny moduł</small></span>
                   </button>
                   <button class="palette-item" type="button" draggable="true" data-dashboard-add="text" data-search="tekst opis">
                     <span class="palette-symbol is-blue">T</span><span><strong>Pole tekstowe</strong><small>Opis sekcji</small></span>
@@ -284,6 +362,9 @@
                   </button>
                   <button class="palette-item" type="button" draggable="true" data-dashboard-add="forms" data-search="formularz forms test">
                     <span class="palette-symbol is-blue">✓</span><span><strong>Google Forms</strong><small>Test lub ankieta</small></span>
+                  </button>
+                  <button class="palette-item" type="button" draggable="true" data-dashboard-add="quiz" data-search="quiz test sprawdzian chemdisk">
+                    <span class="palette-symbol is-violet">Q</span><span><strong>Quiz ChemDisk</strong><small>Quiz Builder</small></span>
                   </button>
                   <button class="palette-item" type="button" draggable="true" data-dashboard-add="exam" data-search="egzamin exam test próba">
                     <span class="palette-symbol is-amber">E</span><span><strong>Egzamin</strong><small>Exam Engine</small></span>
@@ -477,6 +558,9 @@
                   <button class="palette-item" type="button" draggable="true" data-lesson-add="youtube" data-search="youtube film wideo iframe">
                     <span class="palette-symbol is-red">YT</span><span><strong>Wideo YouTube</strong><small>Film wewnątrz lekcji</small></span>
                   </button>
+                  <button class="palette-item" type="button" draggable="true" data-lesson-add="slides" data-search="google slides prezentacja slajdy iframe">
+                    <span class="palette-symbol is-amber">GS</span><span><strong>Google Slides</strong><small>Prezentacja wewnątrz lekcji</small></span>
+                  </button>
                   <button class="palette-item" type="button" draggable="true" data-lesson-add="exam" data-search="egzamin exam próba zaliczenie wynik">
                     <span class="palette-symbol is-amber">E</span><span><strong>Egzamin</strong><small>Odwołanie z biblioteki</small></span>
                   </button>
@@ -667,6 +751,80 @@
             </div>
             <div class="prompt-validation-status" id="prompt-validation-status" role="status" aria-live="polite"></div>
             <pre class="prompt-source-preview" id="prompt-source-preview"></pre>
+          </aside>
+        </div>
+      </section>
+
+      <section class="workspace-view quiz-workspace" id="quiz-workspace" data-workspace="quiz" hidden>
+        <div class="workspace-toolbar">
+          <div>
+            <span class="eyebrow">Quiz Builder</span>
+            <h1>Quizy i szybkie sprawdziany</h1>
+          </div>
+          <div class="toolbar-actions">
+            <button class="button button-soft" id="quiz-new-button" type="button">＋ Nowy</button>
+            <button class="button button-danger" id="quiz-delete-button" type="button" disabled>Usuń z GitHuba</button>
+            <button class="button button-soft" id="quiz-save-draft-button" type="button">Zapisz draft</button>
+            <button class="button button-primary" id="quiz-publish-button" type="button">Opublikuj</button>
+          </div>
+        </div>
+
+        <div class="quiz-builder-shell">
+          <aside class="quiz-library-panel">
+            <div class="panel-heading"><div><small>Repozytorium</small><strong>Biblioteka quizów</strong></div></div>
+            <label class="repository-picker">
+              <span>Repozytorium treści</span>
+              <select id="quiz-repository-select"></select>
+            </label>
+            <label class="palette-search">
+              <span class="sr-only">Szukaj quizu</span>
+              <input id="quiz-library-search" type="search" placeholder="Szukaj quizu…" autocomplete="off">
+            </label>
+            <div class="quiz-library" id="quiz-library" aria-label="Quizy w repozytorium"></div>
+            <div class="quiz-add-menu">
+              <small>Dodaj pytanie</small>
+              <button type="button" data-quiz-add="single"><b>○</b><span>Jedna odpowiedź</span></button>
+              <button type="button" data-quiz-add="multiple"><b>☑</b><span>Wiele odpowiedzi</span></button>
+              <button type="button" data-quiz-add="true_false"><b>✓</b><span>Prawda / fałsz</span></button>
+              <button type="button" data-quiz-add="text"><b>T</b><span>Odpowiedź tekstowa</span></button>
+            </div>
+          </aside>
+
+          <main class="quiz-editor-panel">
+            <section class="quiz-settings-card" aria-labelledby="quiz-settings-title">
+              <div class="quiz-card-heading">
+                <div><small>Definicja</small><h2 id="quiz-settings-title">Ustawienia quizu</h2></div>
+                <span class="quiz-status-badge" id="quiz-status-badge">Draft lokalny</span>
+              </div>
+              <div class="quiz-settings-grid">
+                <label><span>ID quizu</span><input id="quiz-id" type="text" maxlength="80" pattern="[a-z0-9][a-z0-9-]{0,79}" placeholder="np. stechiometria-1"></label>
+                <label><span>Tytuł</span><input id="quiz-title" type="text" maxlength="180" placeholder="Tytuł quizu"></label>
+                <label class="quiz-wide-field"><span>Opis</span><textarea id="quiz-description" rows="3" maxlength="1200" placeholder="Krótka informacja dla ucznia"></textarea></label>
+                <label><span>Próg zaliczenia (%)</span><input id="quiz-passing-score" type="number" min="0" max="100" step="1"></label>
+                <label><span>Tagi</span><input id="quiz-tags" type="text" maxlength="500" placeholder="chemia, klasa 8"></label>
+                <label class="quiz-check"><input id="quiz-shuffle" type="checkbox"><span>Losuj kolejność pytań</span></label>
+                <label class="quiz-check"><input id="quiz-show-feedback" type="checkbox"><span>Pokazuj wyjaśnienia</span></label>
+                <label class="quiz-check"><input id="quiz-allow-retry" type="checkbox"><span>Pozwól powtórzyć quiz</span></label>
+                <div class="quiz-cover-field quiz-wide-field">
+                  <div><span>Okładka</span><code id="quiz-cover-reference">Brak obrazu</code></div>
+                  <button class="mini-button" id="quiz-cover-select" type="button">Wybierz w Media Managerze</button>
+                  <button class="mini-button is-danger" id="quiz-cover-remove" type="button">Usuń referencję</button>
+                </div>
+              </div>
+            </section>
+
+            <div class="quiz-question-heading">
+              <div><small>Scenariusz</small><h2>Pytania</h2></div>
+              <span id="quiz-question-count">0 pytań</span>
+            </div>
+            <div class="quiz-question-list" id="quiz-question-list"></div>
+            <p class="quiz-builder-status" id="quiz-builder-status" role="status" aria-live="polite">Gotowe.</p>
+          </main>
+
+          <aside class="quiz-preview-panel">
+            <div class="panel-heading"><div><small>Podgląd ucznia</small><strong>Walidacja na żywo</strong></div></div>
+            <div class="quiz-validation" id="quiz-validation" role="status" aria-live="polite"></div>
+            <div class="quiz-preview" id="quiz-preview"></div>
           </aside>
         </div>
       </section>
