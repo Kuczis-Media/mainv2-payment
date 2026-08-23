@@ -4777,7 +4777,7 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
   margin: 0;
   color: var(--chem-text);
   font-size: 0.69rem;
-  line-height: 2.4;
+  line-height: calc(38px + .8rem);
 }
 
 .preview-gap-field,
@@ -4787,7 +4787,9 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
   background: var(--chem-surface);
   border: 1px solid color-mix(in srgb, var(--studio-violet) 25%, var(--chem-line));
   border-radius: 9px;
+  line-height: 1.2;
   outline: 0;
+  vertical-align: middle;
 }
 
 .preview-gap-field:focus,
@@ -4811,6 +4813,7 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
 .preview-text-gap {
   display: inline-flex !important;
   margin: 0 4px;
+  align-items: center;
   vertical-align: middle;
 }
 
@@ -4829,6 +4832,7 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
   border-radius: 0 9px 9px 0;
   cursor: pointer;
   font-weight: 900;
+  line-height: 1;
 }
 
 .preview-text-gap:has(.preview-gap-check) input {

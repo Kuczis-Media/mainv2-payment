@@ -1451,7 +1451,7 @@ fieldset:focus-within {
   color: var(--text);
   font-size: clamp(1rem, 2vw, 1.13rem);
   font-weight: 620;
-  line-height: 2.35;
+  line-height: calc(42px + 1rem);
 }
 
 .gap-exercise select {
@@ -1464,6 +1464,8 @@ fieldset:focus-within {
   background: var(--surface);
   font: inherit;
   font-size: 0.9rem;
+  line-height: 1.2;
+  vertical-align: middle;
 }
 
 .text-gap-control {
@@ -1484,6 +1486,7 @@ fieldset:focus-within {
   border-radius: 10px;
   font: inherit;
   font-size: 0.9rem;
+  line-height: 1.2;
 }
 
 .text-gap-control input:focus {
@@ -1511,6 +1514,7 @@ fieldset:focus-within {
   cursor: pointer;
   font: inherit;
   font-weight: 900;
+  line-height: 1;
 }
 
 .gap-check-one:disabled {
