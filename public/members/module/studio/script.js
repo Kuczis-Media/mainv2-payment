@@ -2044,7 +2044,37 @@
       return lessonModelApi.createBlock('slides', {
         presentation: '',
         published: false,
+        controls: true,
         title: 'Prezentacja Google Slides'
+      });
+    }
+    if (type === 'presentation') {
+      const firstPresentation = state.contentLibrary.presentations[0];
+      return lessonModelApi.createBlock('presentation', {
+        title: firstPresentation?.title || 'Prezentacja ChemDisk',
+        description: 'Otwórz prezentację przygotowaną do tej lekcji.',
+        button: 'Otwórz prezentację',
+        repositoryId: state.contentLibrary.selectedRepositoryId,
+        presentationId: firstPresentation?.filename || ''
+      });
+    }
+    if (type === 'quiz') {
+      const firstQuiz = state.contentLibrary.quizzes[0];
+      return lessonModelApi.createBlock('quiz', {
+        title: firstQuiz?.title || 'Quiz ChemDisk',
+        description: 'Rozwiąż quiz przygotowany do tej lekcji.',
+        button: 'Otwórz quiz',
+        repositoryId: state.contentLibrary.selectedRepositoryId,
+        quizId: firstQuiz?.filename || ''
+      });
+    }
+    if (type === 'pdf') {
+      return lessonModelApi.createBlock('pdf', {
+        title: 'Dokument PDF',
+        description: 'Otwórz dokument PDF do tej lekcji.',
+        button: 'Otwórz PDF',
+        pdfId: '',
+        protection: '1'
       });
     }
     if (type === 'exam') {
@@ -2327,6 +2357,9 @@
       accordion: '⌄',
       youtube: 'YT',
       slides: 'GS',
+      presentation: 'S',
+      quiz: 'Q',
+      pdf: 'PDF',
       exam: 'E',
       atonom: '⚛',
       formula: '∑',
@@ -2352,6 +2385,9 @@
     if (block.type === 'accordion') return block.title || 'Harmonijka';
     if (block.type === 'youtube') return block.title || 'Film YouTube';
     if (block.type === 'slides') return block.title || 'Prezentacja Google Slides';
+    if (block.type === 'presentation') return block.title || 'Prezentacja ChemDisk';
+    if (block.type === 'quiz') return block.title || 'Quiz ChemDisk';
+    if (block.type === 'pdf') return block.title || 'Dokument PDF';
     if (block.type === 'exam') return block.title || 'Egzamin';
     if (block.type === 'atonom') return block.title || `ATONOM: ${block.formula}`;
     if (block.type === 'formula') return block.title || (block.mode === 'math' ? 'Wzór matematyczny' : 'Równanie reakcji');
@@ -2373,6 +2409,9 @@
     if (block.type === 'image') return block.ref || block.url || 'Wybierz obraz';
     if (block.type === 'youtube') return block.video || 'Uzupełnij link lub ID filmu';
     if (block.type === 'slides') return block.presentation || 'Uzupełnij link lub ID prezentacji';
+    if (block.type === 'presentation') return block.presentationId || 'Wybierz prezentację';
+    if (block.type === 'quiz') return block.quizId || 'Wybierz quiz';
+    if (block.type === 'pdf') return `${block.pdfId || 'Uzupełnij ID lub adres PDF'} · tryb ${block.protection}`;
     if (block.type === 'exam') {
       const requirements = {
         optional: 'opcjonalny',
@@ -3537,6 +3576,11 @@
         lessonInput('', 'published', { type: 'checkbox', checked: block.published }),
         create('span', '', 'Opublikowana prezentacja Google (/d/e/)')
       );
+      const controls = create('label', 'check-field');
+      controls.append(
+        lessonInput('', 'controls', { type: 'checkbox', checked: block.controls !== false }),
+        create('span', '', 'Pokaż pasek nawigacji i strzałki Google Slides')
+      );
       form.append(
         field(
           'Link lub ID prezentacji Google Slides',
@@ -3547,7 +3591,77 @@
           'Prezentacja zostanie osadzona w lekcji. Plik musi być udostępniony odbiorcom kursu.'
         ),
         published,
+        controls,
         field('Tytuł prezentacji', lessonInput(block.title, 'title', { maxLength: 180 }))
+      );
+    } else if (block.type === 'presentation') {
+      syncInspectorRepository(block.repositoryId);
+      const presentations = (state.contentLibrary.presentations || [])
+        .filter((asset) => !block.repositoryId || asset.repositoryId === block.repositoryId);
+      form.append(
+        field(
+          'Repozytorium prezentacji',
+          lessonSelect(block.repositoryId, 'repositoryId', repositoryOptions(true)),
+          'Lekcja przechowuje stabilną referencję. Edycja prezentacji w bibliotece automatycznie zaktualizuje materiał otwierany z lekcji.'
+        ),
+        field(
+          'Prezentacja z biblioteki',
+          materialPicker(lessonInput(block.presentationId, 'presentationId', { placeholder: 'Wyszukaj prezentację…' }), presentations, {
+            type: 'Prezentacja',
+            icon: 'S',
+            empty: 'Brak prezentacji w tym repozytorium.',
+            allowCustom: false
+          })
+        ),
+        field('Tytuł kafelka', lessonInput(block.title, 'title', { maxLength: 180 })),
+        field('Opis dla ucznia', lessonTextarea(block.description, 'description', { rows: 4, maxLength: 500 })),
+        field('Tekst przycisku', lessonInput(block.button, 'button', { maxLength: 80 }))
+      );
+    } else if (block.type === 'quiz') {
+      syncInspectorRepository(block.repositoryId);
+      const quizzes = (state.contentLibrary.quizzes || [])
+        .filter((asset) => !block.repositoryId || asset.repositoryId === block.repositoryId);
+      form.append(
+        field(
+          'Repozytorium quizu',
+          lessonSelect(block.repositoryId, 'repositoryId', repositoryOptions(true)),
+          'Lekcja wskazuje opublikowaną definicję quizu z biblioteki i nie kopiuje pytań.'
+        ),
+        field(
+          'Quiz z biblioteki',
+          materialPicker(lessonInput(block.quizId, 'quizId', { placeholder: 'Wyszukaj quiz…' }), quizzes, {
+            type: 'Quiz',
+            icon: 'Q',
+            empty: 'Brak quizów w tym repozytorium.',
+            allowCustom: false
+          })
+        ),
+        field('Tytuł kafelka', lessonInput(block.title, 'title', { maxLength: 180 })),
+        field('Opis dla ucznia', lessonTextarea(block.description, 'description', { rows: 4, maxLength: 500 })),
+        field('Tekst przycisku', lessonInput(block.button, 'button', { maxLength: 80 }))
+      );
+    } else if (block.type === 'pdf') {
+      form.append(
+        field(
+          'ID, link Google Drive lub adres HTTPS',
+          lessonInput(block.pdfId, 'pdfId', {
+            placeholder: ['4', '5'].includes(block.protection) ? 'https://…/material.pdf' : 'ID lub link udostępniania Google Drive',
+            maxLength: 500
+          }),
+          ['4', '5'].includes(block.protection)
+            ? 'W tym trybie wymagany jest pełny, bezpieczny adres HTTPS.'
+            : 'Możesz wkleić samo ID pliku albo link udostępniania z Dysku Google.'
+        ),
+        field('Tryb wyświetlania / ochrony', lessonSelect(block.protection, 'protection', [
+          { value: '1', label: '1 — podgląd chroniony' },
+          { value: '2', label: '2 — wymuszone pobranie' },
+          { value: '3', label: '3 — zwykły podgląd' },
+          { value: '4', label: '4 — osadź dowolny adres HTTPS' },
+          { value: '5', label: '5 — otwórz adres w przeglądarce' }
+        ]), 'To te same tryby PDF, które są dostępne w konfiguratorze dashboardu.'),
+        field('Tytuł kafelka', lessonInput(block.title, 'title', { maxLength: 180 })),
+        field('Opis dla ucznia', lessonTextarea(block.description, 'description', { rows: 4, maxLength: 500 })),
+        field('Tekst przycisku', lessonInput(block.button, 'button', { maxLength: 80 }))
       );
     } else if (block.type === 'exam') {
       syncInspectorRepository(block.repositoryId);
@@ -4083,50 +4197,55 @@
 
   function appendPreviewGapExercise(container, task, fieldId) {
     let gapIndex = 0;
-    String(task.text || '').split(/(\{\{[^{}]*\}\})/).forEach((part) => {
-      const gap = /^\{\{([^{}]*)\}\}$/.exec(part);
-      if (!gap) {
-        container.append(document.createTextNode(part));
-        return;
-      }
-      const currentIndex = gapIndex;
-      const gapLabel = gap[1].trim() || `luka ${currentIndex + 1}`;
-      gapIndex += 1;
-      if (task.type === 'gaps') {
-        const select = create('select', 'preview-gap-field');
-        select.name = `${fieldId}-${currentIndex}`;
-        select.dataset.previewGapIndex = String(currentIndex);
-        select.setAttribute('aria-label', `Luka ${currentIndex + 1}: ${gapLabel}`);
-        const blank = create('option', '', gapLabel);
-        blank.value = '';
-        select.append(blank);
-        task.options.forEach((option) => {
-          const item = create('option', '', option);
-          item.value = option;
-          select.append(item);
-        });
-        container.append(select);
-        return;
-      }
+    String(task.text || '').split('\n').forEach((sourceLine) => {
+      const line = create('span', 'preview-gap-exercise-line');
+      sourceLine.split(/(\{\{[^{}]*\}\})/).forEach((part) => {
+        const gap = /^\{\{([^{}]*)\}\}$/.exec(part);
+        if (!gap) {
+          line.append(document.createTextNode(part));
+          return;
+        }
+        const currentIndex = gapIndex;
+        const gapLabel = gap[1].trim() || `luka ${currentIndex + 1}`;
+        gapIndex += 1;
+        if (task.type === 'gaps') {
+          const select = create('select', 'preview-gap-field');
+          select.name = `${fieldId}-${currentIndex}`;
+          select.dataset.previewGapIndex = String(currentIndex);
+          select.setAttribute('aria-label', `Luka ${currentIndex + 1}: ${gapLabel}`);
+          const blank = create('option', '', gapLabel);
+          blank.value = '';
+          select.append(blank);
+          task.options.forEach((option) => {
+            const item = create('option', '', option);
+            item.value = option;
+            select.append(item);
+          });
+          line.append(select);
+          return;
+        }
 
-      const wrapper = create('span', 'preview-text-gap');
-      const input = create('input', 'preview-gap-field');
-      input.type = 'text';
-      input.name = `${fieldId}-${currentIndex}`;
-      input.dataset.previewGapIndex = String(currentIndex);
-      input.autocomplete = 'off';
-      input.spellcheck = false;
-      input.placeholder = gapLabel;
-      input.setAttribute('aria-label', `Luka ${currentIndex + 1}: ${gapLabel}`);
-      wrapper.append(input);
-      if (task.checkMode === 'each') {
-        const check = create('button', 'preview-gap-check', '✓');
-        check.type = 'button';
-        check.dataset.previewGapCheck = String(currentIndex);
-        check.setAttribute('aria-label', `Sprawdź lukę ${currentIndex + 1}`);
-        wrapper.append(check);
-      }
-      container.append(wrapper);
+        const wrapper = create('span', 'preview-text-gap');
+        const input = create('input', 'preview-gap-field');
+        input.type = 'text';
+        input.name = `${fieldId}-${currentIndex}`;
+        input.dataset.previewGapIndex = String(currentIndex);
+        input.autocomplete = 'off';
+        input.spellcheck = false;
+        input.placeholder = gapLabel;
+        input.setAttribute('aria-label', `Luka ${currentIndex + 1}: ${gapLabel}`);
+        wrapper.append(input);
+        if (task.checkMode === 'each') {
+          const check = create('button', 'preview-gap-check', '✓');
+          check.type = 'button';
+          check.dataset.previewGapCheck = String(currentIndex);
+          check.setAttribute('aria-label', `Sprawdź lukę ${currentIndex + 1}`);
+          wrapper.append(check);
+        }
+        line.append(wrapper);
+      });
+      if (!line.childNodes.length) line.append(create('br'));
+      container.append(line);
     });
   }
 
@@ -7029,7 +7148,7 @@
       handleLessonInspectorInput(event);
       finishEdit();
       if (
-        ['type', 'mode', 'arrow', 'variant', 'repositoryId', 'promptFile', 'examId', 'requirement', 'options', 'optionItem', 'gapLabel', 'gapSegment', 'useColor', 'conditionType', 'slideLayout', 'slideBackground']
+        ['type', 'mode', 'arrow', 'variant', 'repositoryId', 'promptFile', 'examId', 'presentationId', 'quizId', 'protection', 'requirement', 'options', 'optionItem', 'gapLabel', 'gapSegment', 'useColor', 'conditionType', 'slideLayout', 'slideBackground']
           .includes(event.target.dataset.lessonField)
       ) {
         renderLessonInspector();

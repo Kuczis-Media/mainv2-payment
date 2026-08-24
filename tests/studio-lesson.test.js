@@ -421,6 +421,7 @@ test('studio publishes backgrounds, YouTube, Google Slides, ATONOM, flashcards a
   assert.match(markdown, /background=#dff7ed/);
   assert.match(markdown, /:::youtube\nid: M7lc1UVf-VE\n/);
   assert.match(markdown, /:::googleslides\nid: 1AbCdEfGhIjKlMnOpQrStUvWxYz\npublished: false\n/);
+  assert.match(markdown, /published: false\ncontrols: true\n/);
   assert.match(markdown, /:::atonom\nformula: kwas octowy\n/);
   assert.match(markdown, /–OH => grupa hydroksylowa/);
   assert.match(markdown, /type: gaps/);
@@ -433,6 +434,7 @@ test('studio publishes backgrounds, YouTube, Google Slides, ATONOM, flashcards a
   );
   assert.equal(imported.slides[0].blocks[1].background, '#dff7ed');
   assert.equal(imported.slides[0].blocks[3].presentation, '1AbCdEfGhIjKlMnOpQrStUvWxYz');
+  assert.equal(imported.slides[0].blocks[3].controls, true);
   assert.equal(imported.slides[0].blocks[4].formula, 'kwas octowy');
   assert.equal(imported.slides[0].blocks[5].cards.length, 2);
   assert.equal(imported.slides[0].task.type, 'gaps');
@@ -445,6 +447,13 @@ test('studio publishes backgrounds, YouTube, Google Slides, ATONOM, flashcards a
   assert.match(slide.html, /docs\.google\.com\/presentation\/d\/1AbCdEfGhIjKlMnOpQrStUvWxYz\/embed/);
   assert.match(slide.html, /class="lesson-embed lesson-google-slides"/);
   assert.match(slide.html, /sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"/);
+  assert.doesNotMatch(slide.html, /rm=minimal/);
+  const hiddenControls = lessonParser.renderMarkdown(studio.serializeBlock(studio.createBlock('slides', {
+    presentation: '1AbCdEfGhIjKlMnOpQrStUvWxYz',
+    controls: false,
+    title: 'Prezentacja bez kontrolek'
+  })));
+  assert.match(hiddenControls, /rm=minimal/);
   assert.match(slide.html, /\/members\/module\/atonom\/\?formula=kwas%20octowy/);
   assert.match(slide.html, /class="lesson-atonom-card"/);
   assert.match(slide.html, /class="lesson-atonom-open"/);
@@ -842,6 +851,60 @@ test('lesson keeps a stable exam reference and derives pass conditions without c
   assert.match(runtime.slides[0].html, /class="lesson-support-card lesson-exam-card"/);
   assert.match(runtime.slides[0].html, /\/members\/module\/exam\/\?repo=default&amp;exam=alkohole-test/);
   assert.match(runtime.slides[0].html, /data-exam-requirement="minimum_score"/);
+});
+
+test('lesson round-trips quiz, PDF and native presentation references from the material library', () => {
+  const lesson = studio.createLesson({
+    title: 'Materiały w lekcji',
+    filename: 'materialy-w-lekcji.md',
+    slides: [{
+      blocks: [
+        studio.createBlock('presentation', {
+          repositoryId: 'organiczna',
+          presentationId: 'alkohole-slajdy',
+          title: 'Prezentacja o alkoholach'
+        }),
+        studio.createBlock('quiz', {
+          repositoryId: 'organiczna',
+          quizId: 'alkohole-quiz',
+          title: 'Szybki quiz'
+        }),
+        studio.createBlock('pdf', {
+          pdfId: '1PdfDriveId12345',
+          protection: '1',
+          title: 'Karta pracy'
+        })
+      ]
+    }]
+  });
+
+  assert.equal(studio.validateLesson(lesson).valid, true);
+  const markdown = studio.serializeLesson(lesson);
+  assert.match(markdown, /:::presentation[\s\S]*repository: organiczna[\s\S]*presentation: alkohole-slajdy/);
+  assert.match(markdown, /:::quiz[\s\S]*repository: organiczna[\s\S]*quiz: alkohole-quiz/);
+  assert.match(markdown, /:::pdf[\s\S]*id: 1PdfDriveId12345[\s\S]*protection: 1/);
+
+  const editable = studio.parseEditableLesson(markdown, lesson.filename);
+  const materials = editable.slides[0].blocks.filter((block) => ['presentation', 'quiz', 'pdf'].includes(block.type));
+  assert.deepEqual(materials.map((block) => block.type), ['presentation', 'quiz', 'pdf']);
+  assert.equal(materials[0].presentationId, 'alkohole-slajdy');
+  assert.equal(materials[1].quizId, 'alkohole-quiz');
+  assert.equal(materials[2].pdfId, '1PdfDriveId12345');
+
+  const runtime = lessonParser.parseLesson(markdown, lesson.filename);
+  assert.match(runtime.slides[0].html, /class="lesson-support-card lesson-presentation-card"/);
+  assert.match(runtime.slides[0].html, /\/members\/module\/presentation\/\?repo=organiczna&amp;presentation=alkohole-slajdy/);
+  assert.match(runtime.slides[0].html, /class="lesson-support-card lesson-quiz-card"/);
+  assert.match(runtime.slides[0].html, /\/members\/module\/quiz\/\?repo=organiczna&amp;quiz=alkohole-quiz&amp;material=quiz%3Aorganiczna%3Aalkohole-quiz/);
+  assert.match(runtime.slides[0].html, /class="lesson-support-card lesson-pdf-card"/);
+  assert.match(runtime.slides[0].html, /\/members\/module\/pdf\/\?id=1PdfDriveId12345&amp;type=1/);
+
+  const unsafePdf = studio.validateLesson({
+    title: 'Niebezpieczny PDF',
+    slides: [{ blocks: [{ type: 'pdf', pdfId: 'https://evil.example/file.pdf', protection: '1' }] }]
+  });
+  assert.equal(unsafePdf.valid, false);
+  assert.equal(unsafePdf.errors.some((error) => error.code === 'INVALID_PDF_REFERENCE'), true);
 });
 
 test('lesson canvas layout round-trips positioned blocks and remains safe in the student renderer', () => {

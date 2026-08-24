@@ -15,7 +15,7 @@
   const STYLE_START = /^\s*:::style(?:\s+(.+?))?\s*$/i;
   const ACCORDION_START = /^\s*:::accordion(?:\s+(.+?))?\s*$/i;
   const LAYOUT_START = /^\s*:::layout(?:\s+(.+?))?\s*$/i;
-  const STRUCTURAL_CONTAINER_START = /^\s*:::(?:task|zadanie|question|slide|style|accordion|layout|youtube|googleslides|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)(?:\s+.*?)?\s*$/i;
+  const STRUCTURAL_CONTAINER_START = /^\s*:::(?:task|zadanie|question|slide|style|accordion|layout|youtube|googleslides|presentation|quiz|pdf|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)(?:\s+.*?)?\s*$/i;
   const RICH_CONTAINER_END = /^\s*:::\s*$/;
   const SAFE_STYLE_COLOR = /^#[0-9a-f]{6}$/i;
   const LINK_ICONS = new Set(['link', 'book', 'video', 'chemistry', 'math', 'file', 'external']);
@@ -46,7 +46,7 @@
     'sin', 'cos', 'tan', 'log', 'ln', 'partial', 'nabla', 'rightarrow', 'leftarrow',
     'leftrightarrow', 'text', 'mathrm', 'mathbf', 'overline', 'vec', 'left', 'right'
   ]);
-  const INTERACTIVE_START = /^\s*:::(youtube|googleslides|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)\s*$/i;
+  const INTERACTIVE_START = /^\s*:::(youtube|googleslides|presentation|quiz|pdf|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)\s*$/i;
 
   class LessonFormatError extends Error {
     constructor(code, message) {
@@ -542,6 +542,35 @@
     return SAFE_BOARD_PATH.test(filename) ? filename : '';
   }
 
+  function safePdfReference(value, protection) {
+    const reference = String(value || '').trim();
+    const mode = String(protection || '1');
+    if (!reference || reference.length > 500 || /[\u0000-\u0020\\]/.test(reference)) return false;
+    const idPattern = /^[A-Za-z0-9_-]{10,200}$/;
+    if (['4', '5'].includes(mode)) {
+      try {
+        const url = new URL(reference);
+        return url.protocol === 'https:' && Boolean(url.hostname) && !url.username && !url.password;
+      } catch (_) {
+        return false;
+      }
+    }
+    if (idPattern.test(reference)) return true;
+    try {
+      const url = new URL(reference);
+      if (url.protocol !== 'https:' || url.username || url.password) return false;
+      const host = url.hostname.toLowerCase().replace(/^www\./, '');
+      if (!['drive.google.com', 'docs.google.com'].includes(host)) return false;
+      const pathId = url.pathname.match(
+        /\/(?:file|document|presentation|spreadsheets)(?:\/u\/\d+)?\/d\/(?:e\/)?([A-Za-z0-9_-]{10,200})(?:\/|$)/i
+      );
+      const queryId = url.searchParams.get('id') || '';
+      return Boolean((pathId && idPattern.test(pathId[1])) || idPattern.test(queryId));
+    } catch (_) {
+      return false;
+    }
+  }
+
   function googleSlidesReference(value) {
     const raw = String(value || '').trim();
     const isId = (candidate) => /^[A-Za-z0-9_-]{10,200}$/.test(candidate);
@@ -797,8 +826,47 @@
         ? `https://docs.google.com/presentation/d/e/${encodedId}`
         : `https://docs.google.com/presentation/d/${encodedId}`;
       const title = String(values.title || 'Prezentacja Google Slides').trim().slice(0, 180) || 'Prezentacja Google Slides';
-      const source = `${base}/embed?start=false&amp;loop=false&amp;delayms=3000&amp;rm=minimal`;
+      const controls = !/^(?:0|false|no|nie|off)$/i.test(String(values.controls || 'true').trim());
+      const source = `${base}/embed?start=false&amp;loop=false&amp;delayms=3000${controls ? '' : '&amp;rm=minimal'}`;
       return `<figure class="lesson-embed lesson-google-slides"><iframe src="${source}" title="${escapeHtml(title)}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" allow="fullscreen" allowfullscreen></iframe><figcaption>${escapeHtml(title)}</figcaption></figure>`;
+    }
+    if (type === 'presentation') {
+      const repository = safeRepositoryId(values.repository || 'default');
+      const presentationId = String(values.presentation || '').trim().toLowerCase();
+      const title = String(values.title || 'Prezentacja ChemDisk').trim();
+      const description = String(values.description || 'Otwórz prezentację przygotowaną w ChemDisk.').trim();
+      const button = String(values.button || 'Otwórz prezentację').trim();
+      if (!repository || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(presentationId) || !title || !button) {
+        return '<p class="lesson-interactive-error">Nieprawidłowe odwołanie do prezentacji.</p>';
+      }
+      const href = `/members/module/presentation/?repo=${encodeURIComponent(repository)}&amp;presentation=${encodeURIComponent(presentationId)}`;
+      return `<section class="lesson-support-card lesson-presentation-card" data-presentation-repository="${escapeHtml(repository)}" data-presentation-id="${escapeHtml(presentationId)}"><span class="lesson-support-icon" aria-hidden="true">S</span><span class="lesson-support-copy"><small>Prezentacja ChemDisk</small><strong>${escapeHtml(title)}</strong><span>${escapeHtml(description)}</span></span><a class="lesson-support-action" href="${href}">${escapeHtml(button)} <b aria-hidden="true">→</b></a></section>`;
+    }
+    if (type === 'quiz') {
+      const repository = safeRepositoryId(values.repository || 'default');
+      const quizId = String(values.quiz || '').trim().toLowerCase();
+      const title = String(values.title || 'Quiz ChemDisk').trim();
+      const description = String(values.description || 'Rozwiąż quiz przygotowany do tej lekcji.').trim();
+      const button = String(values.button || 'Otwórz quiz').trim();
+      if (!repository || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(quizId) || !title || !button) {
+        return '<p class="lesson-interactive-error">Nieprawidłowe odwołanie do quizu.</p>';
+      }
+      const materialId = `quiz:${repository}:${quizId}`.slice(0, 128);
+      const href = `/members/module/quiz/?repo=${encodeURIComponent(repository)}&amp;quiz=${encodeURIComponent(quizId)}&amp;material=${encodeURIComponent(materialId)}`;
+      return `<section class="lesson-support-card lesson-quiz-card" data-quiz-repository="${escapeHtml(repository)}" data-quiz-id="${escapeHtml(quizId)}" data-quiz-material="${escapeHtml(materialId)}"><span class="lesson-support-icon" aria-hidden="true">Q</span><span class="lesson-support-copy"><small>Quiz ChemDisk</small><strong>${escapeHtml(title)}</strong><span>${escapeHtml(description)}</span></span><a class="lesson-support-action" href="${href}">${escapeHtml(button)} <b aria-hidden="true">→</b></a></section>`;
+    }
+    if (type === 'pdf') {
+      const protection = ['1', '2', '3', '4', '5'].includes(String(values.protection || values.type || '1'))
+        ? String(values.protection || values.type || '1') : '1';
+      const pdfId = String(values.id || values.url || '').trim();
+      const title = String(values.title || 'Dokument PDF').trim();
+      const description = String(values.description || 'Otwórz dokument PDF do tej lekcji.').trim();
+      const button = String(values.button || 'Otwórz PDF').trim();
+      if (!safePdfReference(pdfId, protection) || !title || !button) {
+        return '<p class="lesson-interactive-error">Nieprawidłowe odwołanie do dokumentu PDF.</p>';
+      }
+      const href = `/members/module/pdf/?id=${encodeURIComponent(pdfId)}&amp;type=${protection}`;
+      return `<section class="lesson-support-card lesson-pdf-card" data-pdf-protection="${protection}"><span class="lesson-support-icon" aria-hidden="true">PDF</span><span class="lesson-support-copy"><small>Dokument PDF</small><strong>${escapeHtml(title)}</strong><span>${escapeHtml(description)}</span></span><a class="lesson-support-action" href="${href}">${escapeHtml(button)} <b aria-hidden="true">→</b></a></section>`;
     }
     if (type === 'atonom') {
       const formula = String(values.formula || '').trim();

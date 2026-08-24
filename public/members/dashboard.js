@@ -12,6 +12,7 @@
   const ADMIN_PROGRESS_URL = '/.netlify/functions/admin-progress';
   const ADMIN_AI_URL = '/.netlify/functions/admin-ai';
   const ADMIN_AI_USAGE_URL = '/.netlify/functions/admin-ai-usage';
+  const ADMIN_PROGRESS_PAGE_SIZE = 30;
   const THEME_STORAGE_KEY = 'chem.theme';
   const SIDEBAR_STORAGE_KEY = 'chem.sidebar';
   const MOBILE_SIDEBAR_QUERY = '(max-width: 920px)';
@@ -247,6 +248,7 @@
     adminProgressRefresh: document.getElementById('admin-progress-refresh'),
     adminProgressStatus: document.getElementById('admin-progress-status'),
     adminProgressUserList: document.getElementById('admin-progress-user-list'),
+    adminProgressMore: document.getElementById('admin-progress-more'),
     adminProgressDetail: document.getElementById('admin-progress-detail'),
     adminProgressGlobalReport: document.getElementById('admin-progress-global-report'),
     adminProgressAudit: document.getElementById('admin-progress-audit'),
@@ -361,9 +363,15 @@
   let adminPricesEtag = null;
   let adminProgressLoaded = false;
   let adminProgressUsers = [];
+  let adminProgressUsersCursor = '';
+  let adminProgressVisibleCount = ADMIN_PROGRESS_PAGE_SIZE;
+  let adminProgressLoadingMore = false;
   let adminProgressActiveIds = new Set();
   let adminProgressReport = null;
   let adminProgressCatalog = null;
+  let adminProgressAuditEntries = [];
+  let adminProgressAuditCursor = '';
+  let adminProgressAuditLoadingMore = false;
   let adminAiLoaded = false;
   let adminAiSettings = null;
   let adminAiUsageLoaded = false;
@@ -3315,7 +3323,7 @@
     };
   }
 
-  function renderAdminProgressUsers() {
+  function filteredAdminProgressUsers() {
     const query = normalizeText(elements.adminProgressSearch?.value || '');
     const filter = elements.adminProgressFilter?.value || 'all';
     const sort = elements.adminProgressSort?.value || 'lastActivityAt';
@@ -3330,7 +3338,13 @@
       if (sort === 'progressPercent') return right.progressPercent - left.progressPercent;
       return String(right[sort] || '').localeCompare(String(left[sort] || ''), 'pl', { sensitivity: 'base' });
     });
-    const cards = rows.map((user) => {
+    return rows;
+  }
+
+  function renderAdminProgressUsers() {
+    const rows = filteredAdminProgressUsers();
+    const visibleRows = rows.slice(0, adminProgressVisibleCount);
+    const cards = visibleRows.map((user) => {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'admin-progress-user';
@@ -3352,6 +3366,56 @@
       return button;
     });
     elements.adminProgressUserList?.replaceChildren(...cards);
+    if (elements.adminProgressMore) {
+      const hiddenRows = visibleRows.length < rows.length;
+      elements.adminProgressMore.hidden = !hiddenRows && !adminProgressUsersCursor;
+      elements.adminProgressMore.disabled = adminProgressLoadingMore;
+      elements.adminProgressMore.textContent = adminProgressLoadingMore
+        ? 'Wczytywanie…'
+        : hiddenRows
+          ? `Pokaż więcej (${visibleRows.length} z ${rows.length})`
+          : 'Pobierz kolejne konta';
+    }
+  }
+
+  async function loadMoreAdminProgressUsers() {
+    if (adminProgressLoadingMore) return;
+    adminProgressLoadingMore = true;
+    renderAdminProgressUsers();
+    try {
+      if (adminProgressUsersCursor) {
+        const payload = await adminProgressRequest(
+          'GET',
+          null,
+          `?view=users&limit=${ADMIN_PROGRESS_PAGE_SIZE}&cursor=${encodeURIComponent(adminProgressUsersCursor)}`
+        );
+        const page = Array.isArray(payload.users) ? payload.users : [];
+        const rows = new Map(adminProgressUsers.map((user) => [user.id, user]));
+        page.forEach((user) => {
+          if (user?.id) {
+            rows.set(user.id, user);
+            adminProgressActiveIds.add(user.id);
+          }
+        });
+        adminProgressUsers = [...rows.values()];
+        adminProgressUsersCursor = typeof payload.cursor === 'string' ? payload.cursor : '';
+        adminProgressCatalog = payload.catalog || adminProgressCatalog;
+        reconcileAdminProgressUsers();
+      }
+      adminProgressVisibleCount += ADMIN_PROGRESS_PAGE_SIZE;
+      setPanelStatus(
+        elements.adminProgressStatus,
+        adminProgressUsersCursor
+          ? 'Wczytano kolejną partię. Następne konta są dostępne na żądanie.'
+          : 'Wczytano wszystkie dostępne rekordy postępu.',
+        'success'
+      );
+    } catch (error) {
+      setPanelStatus(elements.adminProgressStatus, error?.message || 'Nie udało się wczytać kolejnych kont.', 'error');
+    } finally {
+      adminProgressLoadingMore = false;
+      renderAdminProgressUsers();
+    }
   }
 
   function renderAdminProgressMetrics(report) {
@@ -3586,7 +3650,7 @@
       Object.assign(document.createElement('p'), { textContent: 'Tutaj widać ręczne zmiany postępu, resety i publikacje konfiguracji. Wpisu nie tworzy zwykła aktywność ucznia.' })
     );
     section.append(header);
-    const rows = (entries || []).slice(0, 20);
+    const rows = entries || [];
     if (!rows.length) {
       section.append(Object.assign(document.createElement('p'), { className: 'admin-progress-report-empty', textContent: 'Nie zapisano jeszcze żadnej operacji administratora.' }));
       elements.adminProgressAudit.replaceChildren(section);
@@ -3615,7 +3679,39 @@
       list.append(item);
     });
     section.append(list);
+    if (adminProgressAuditCursor) {
+      const pagination = document.createElement('div');
+      pagination.className = 'admin-progress-audit-pagination';
+      const more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'button button-secondary';
+      more.textContent = adminProgressAuditLoadingMore ? 'Wczytywanie…' : 'Pokaż starsze wpisy';
+      more.disabled = adminProgressAuditLoadingMore;
+      more.addEventListener('click', loadMoreAdminProgressAudit);
+      pagination.append(more);
+      section.append(pagination);
+    }
     elements.adminProgressAudit.replaceChildren(section);
+  }
+
+  async function loadMoreAdminProgressAudit() {
+    if (!adminProgressAuditCursor || adminProgressAuditLoadingMore) return;
+    adminProgressAuditLoadingMore = true;
+    renderAdminProgressAudit(adminProgressAuditEntries);
+    try {
+      const payload = await adminProgressRequest(
+        'GET',
+        null,
+        `?view=audit&limit=20&cursor=${encodeURIComponent(adminProgressAuditCursor)}`
+      );
+      adminProgressAuditEntries.push(...(Array.isArray(payload.audit) ? payload.audit : []));
+      adminProgressAuditCursor = typeof payload.cursor === 'string' ? payload.cursor : '';
+    } catch (error) {
+      setPanelStatus(elements.adminProgressStatus, error?.message || 'Nie udało się wczytać starszej historii.', 'error');
+    } finally {
+      adminProgressAuditLoadingMore = false;
+      renderAdminProgressAudit(adminProgressAuditEntries);
+    }
   }
 
   async function adminProgressRequest(method, body, query = '') {
@@ -3655,14 +3751,18 @@
     setPanelStatus(elements.adminProgressStatus, 'Wczytywanie raportów…', 'loading');
     try {
       const [users, global, audit] = await Promise.all([
-        adminProgressRequest('GET', null, '?view=users&limit=200'),
+        adminProgressRequest('GET', null, `?view=users&limit=${ADMIN_PROGRESS_PAGE_SIZE}`),
         adminProgressRequest('GET', null, '?view=global&limit=200'),
-        adminProgressRequest('GET', null, '?view=audit&limit=30')
+        adminProgressRequest('GET', null, '?view=audit&limit=20')
       ]);
       adminProgressUsers = Array.isArray(users.users) ? users.users : [];
+      adminProgressUsersCursor = typeof users.cursor === 'string' ? users.cursor : '';
+      adminProgressVisibleCount = ADMIN_PROGRESS_PAGE_SIZE;
       adminProgressActiveIds = new Set(adminProgressUsers.map((user) => user.id));
       adminProgressReport = global.report || null;
       adminProgressCatalog = users.catalog || adminProgressCatalog;
+      adminProgressAuditEntries = Array.isArray(audit.audit) ? audit.audit : [];
+      adminProgressAuditCursor = typeof audit.cursor === 'string' ? audit.cursor : '';
       reconcileAdminProgressUsers();
       const globalSettings = adminProgressCatalog?.global || {};
       elements.adminProgressGlobalTracking.value = globalSettings.tracking === 'OFF' ? 'OFF' : 'ON';
@@ -3671,9 +3771,15 @@
       renderAdminProgressUsers();
       renderAdminProgressMetrics(adjustedAdminProgressReport());
       renderAdminProgressGlobal(adjustedAdminProgressReport());
-      renderAdminProgressAudit(audit.audit);
+      renderAdminProgressAudit(adminProgressAuditEntries);
       adminProgressLoaded = true;
-      setPanelStatus(elements.adminProgressStatus, `Wczytano ${adminProgressUsers.length} kont.`, 'success');
+      setPanelStatus(
+        elements.adminProgressStatus,
+        adminProgressUsersCursor
+          ? 'Wczytano pierwszą partię rekordów postępu. Kolejne są dostępne pod listą.'
+          : 'Wczytano wszystkie dostępne rekordy postępu.',
+        'success'
+      );
     } catch (error) {
       adminProgressLoaded = false;
       setPanelStatus(elements.adminProgressStatus, error?.message || 'Nie udało się wczytać raportów.', 'error');
@@ -4946,9 +5052,19 @@
     elements.adminContentRefresh.addEventListener('click', () => loadAdminContentStatus(true));
     elements.adminProgressRefresh.addEventListener('click', () => loadAdminProgress(true));
     elements.adminProgressSaveSettings.addEventListener('click', saveAdminProgressSettings);
-    elements.adminProgressSearch.addEventListener('input', renderAdminProgressUsers);
-    elements.adminProgressFilter.addEventListener('change', renderAdminProgressUsers);
-    elements.adminProgressSort.addEventListener('change', renderAdminProgressUsers);
+    elements.adminProgressMore.addEventListener('click', loadMoreAdminProgressUsers);
+    elements.adminProgressSearch.addEventListener('input', () => {
+      adminProgressVisibleCount = ADMIN_PROGRESS_PAGE_SIZE;
+      renderAdminProgressUsers();
+    });
+    elements.adminProgressFilter.addEventListener('change', () => {
+      adminProgressVisibleCount = ADMIN_PROGRESS_PAGE_SIZE;
+      renderAdminProgressUsers();
+    });
+    elements.adminProgressSort.addEventListener('change', () => {
+      adminProgressVisibleCount = ADMIN_PROGRESS_PAGE_SIZE;
+      renderAdminProgressUsers();
+    });
     elements.adminContentRepositorySelect.addEventListener('change', () => {
       adminContentRepositoryId = elements.adminContentRepositorySelect.value;
       adminContentLoaded = false;

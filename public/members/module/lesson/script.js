@@ -923,62 +923,68 @@
     if (task.type === 'gaps' || task.type === 'gaps-text') {
       const exercise = document.createElement('p');
       exercise.className = 'gap-exercise';
-      String(task.text || '').split(/(\{\{[^{}]*\}\})/).forEach((part) => {
-        const gap = /^\{\{([^{}]*)\}\}$/.exec(part);
-        if (!gap) {
-          exercise.appendChild(document.createTextNode(part));
-          return;
-        }
-        const gapIndex = gapFields.length;
-        const gapLabel = gap[1].trim() || `luka ${gapIndex + 1}`;
-        if (task.type === 'gaps') {
-          const select = document.createElement('select');
-          const blank = document.createElement('option');
-          blank.value = '';
-          blank.textContent = gapLabel;
-          select.id = `${fieldId}-${gapIndex}`;
-          select.name = `${fieldId}-${gapIndex}`;
-          select.setAttribute('aria-label', `Luka ${gapIndex + 1}: ${gapLabel}`);
-          select.disabled = solved;
-          select.appendChild(blank);
-          task.options.forEach((option) => {
-            const item = document.createElement('option');
-            item.value = option;
-            item.textContent = option;
-            select.appendChild(item);
-          });
-          gapFields.push(select);
-          exercise.appendChild(select);
-          return;
-        }
+      String(task.text || '').split('\n').forEach((sourceLine) => {
+        const line = document.createElement('span');
+        line.className = 'gap-exercise-line';
+        sourceLine.split(/(\{\{[^{}]*\}\})/).forEach((part) => {
+          const gap = /^\{\{([^{}]*)\}\}$/.exec(part);
+          if (!gap) {
+            line.appendChild(document.createTextNode(part));
+            return;
+          }
+          const gapIndex = gapFields.length;
+          const gapLabel = gap[1].trim() || `luka ${gapIndex + 1}`;
+          if (task.type === 'gaps') {
+            const select = document.createElement('select');
+            const blank = document.createElement('option');
+            blank.value = '';
+            blank.textContent = gapLabel;
+            select.id = `${fieldId}-${gapIndex}`;
+            select.name = `${fieldId}-${gapIndex}`;
+            select.setAttribute('aria-label', `Luka ${gapIndex + 1}: ${gapLabel}`);
+            select.disabled = solved;
+            select.appendChild(blank);
+            task.options.forEach((option) => {
+              const item = document.createElement('option');
+              item.value = option;
+              item.textContent = option;
+              select.appendChild(item);
+            });
+            gapFields.push(select);
+            line.appendChild(select);
+            return;
+          }
 
-        const wrapper = document.createElement('span');
-        const input = document.createElement('input');
-        wrapper.className = 'text-gap-control';
-        wrapper.dataset.state = solved ? 'success' : '';
-        input.type = 'text';
-        input.id = `${fieldId}-${gapIndex}`;
-        input.name = `${fieldId}-${gapIndex}`;
-        input.autocomplete = 'off';
-        input.spellcheck = false;
-        input.placeholder = gapLabel;
-        input.setAttribute('aria-label', `Luka ${gapIndex + 1}: ${gapLabel}`);
-        input.setAttribute('aria-describedby', `${fieldId}-feedback`);
-        input.disabled = solved;
-        wrapper.appendChild(input);
-        if (task.checkMode === 'each') {
-          const check = document.createElement('button');
-          check.type = 'button';
-          check.className = 'gap-check-one';
-          check.dataset.gapIndex = String(gapIndex);
-          check.textContent = '✓';
-          check.setAttribute('aria-label', `Sprawdź lukę ${gapIndex + 1}`);
-          check.disabled = solved;
-          wrapper.appendChild(check);
-          perGapMode = true;
-        }
-        gapFields.push(input);
-        exercise.appendChild(wrapper);
+          const wrapper = document.createElement('span');
+          const input = document.createElement('input');
+          wrapper.className = 'text-gap-control';
+          wrapper.dataset.state = solved ? 'success' : '';
+          input.type = 'text';
+          input.id = `${fieldId}-${gapIndex}`;
+          input.name = `${fieldId}-${gapIndex}`;
+          input.autocomplete = 'off';
+          input.spellcheck = false;
+          input.placeholder = gapLabel;
+          input.setAttribute('aria-label', `Luka ${gapIndex + 1}: ${gapLabel}`);
+          input.setAttribute('aria-describedby', `${fieldId}-feedback`);
+          input.disabled = solved;
+          wrapper.appendChild(input);
+          if (task.checkMode === 'each') {
+            const check = document.createElement('button');
+            check.type = 'button';
+            check.className = 'gap-check-one';
+            check.dataset.gapIndex = String(gapIndex);
+            check.textContent = '✓';
+            check.setAttribute('aria-label', `Sprawdź lukę ${gapIndex + 1}`);
+            check.disabled = solved;
+            wrapper.appendChild(check);
+            perGapMode = true;
+          }
+          gapFields.push(input);
+          line.appendChild(wrapper);
+        });
+        if (!line.childNodes.length) line.appendChild(document.createElement('br'));
+        exercise.appendChild(line);
       });
       controls.classList.add('gap-controls');
       controls.appendChild(exercise);

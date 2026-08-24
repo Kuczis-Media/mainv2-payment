@@ -229,19 +229,20 @@ test('lesson tasks support manually typed gaps checked separately or together', 
   assert.equal(parser.checkGapAnswer(together, 'o', 0), true);
 });
 
-test('inline gap controls reserve vertical space between wrapped quiz lines', () => {
+test('inline gap controls create rows only for author-entered line breaks', () => {
   const playerStyles = fs.readFileSync(path.join(lessonRoot, 'style.css'), 'utf8');
   const studioStyles = fs.readFileSync(
     path.join(root, 'public', 'members', 'module', 'studio', 'style.css'),
     'utf8'
   );
 
-  assert.match(playerStyles, /\.gap-exercise\s*\{[\s\S]*?line-height:\s*calc\(42px \+ 1rem\)/);
-  assert.match(playerStyles, /\.gap-exercise\s*\{[\s\S]*?white-space:\s*pre-line/);
+  assert.match(playerStyles, /\.gap-exercise\s*\{[\s\S]*?display:\s*grid/);
+  assert.match(playerStyles, /\.gap-exercise-line\s*\{[\s\S]*?display:\s*block/);
+  assert.doesNotMatch(playerStyles, /\.gap-exercise\s*\{[\s\S]*?line-height:\s*calc\(42px \+ 1rem\)/);
   assert.match(playerStyles, /\.text-gap-control input\s*\{[\s\S]*?line-height:\s*1\.2/);
   assert.match(playerStyles, /\.gap-check-one\s*\{[\s\S]*?line-height:\s*1/);
-  assert.match(studioStyles, /\.preview-gap-exercise\s*\{[\s\S]*?line-height:\s*calc\(38px \+ \.8rem\)/);
-  assert.match(studioStyles, /\.preview-gap-exercise\s*\{[\s\S]*?white-space:\s*pre-line/);
+  assert.match(studioStyles, /\.preview-gap-exercise\s*\{[\s\S]*?display:\s*grid/);
+  assert.match(studioStyles, /\.preview-gap-exercise-line\s*\{[\s\S]*?display:\s*block/);
   assert.match(studioStyles, /\.preview-text-gap\s*\{[\s\S]*?align-items:\s*center/);
 });
 

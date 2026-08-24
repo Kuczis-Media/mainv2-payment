@@ -179,11 +179,14 @@ async function listEntries(store, options = {}) {
     }
   }
   const entries = [];
-  for (const blob of selected) {
-    const key = typeof blob === 'string' ? blob : blob.key;
-    if (!key) continue;
-    const entry = await readEntry(store, key);
-    if (entry) entries.push({ key, ...entry });
+  for (let batchStart = 0; batchStart < selected.length; batchStart += 12) {
+    const batch = await Promise.all(selected.slice(batchStart, batchStart + 12).map(async (blob) => {
+      const key = typeof blob === 'string' ? blob : blob.key;
+      if (!key) return null;
+      const entry = await readEntry(store, key);
+      return entry ? { key, ...entry } : null;
+    }));
+    entries.push(...batch.filter(Boolean));
   }
   return {
     entries,

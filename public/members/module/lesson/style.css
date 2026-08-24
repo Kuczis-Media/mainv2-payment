@@ -1125,6 +1125,9 @@ fieldset:focus-within {
 .lesson-ai-help { --lesson-support-color: #7c3aed; }
 .lesson-board-card { --lesson-support-color: #2563eb; }
 .lesson-contact-card { --lesson-support-color: #b7791f; }
+.lesson-presentation-card { --lesson-support-color: #2563eb; }
+.lesson-quiz-card { --lesson-support-color: #0f766e; }
+.lesson-pdf-card { --lesson-support-color: #b91c1c; }
 .lesson-exam-card { --lesson-support-color: #6d28d9; }
 .lesson-exam-card[data-gate="locked"] {
   border-style: dashed;
@@ -1153,6 +1156,11 @@ fieldset:focus-within {
   border-radius: 16px;
   font-size: 1.35rem;
   font-weight: 850;
+}
+
+.lesson-pdf-card .lesson-support-icon {
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
 }
 
 .lesson-support-copy,
@@ -1447,17 +1455,23 @@ fieldset:focus-within {
 }
 
 .gap-exercise {
+  display: grid;
+  gap: 12px;
   margin: 0;
   color: var(--text);
   font-size: clamp(1rem, 2vw, 1.13rem);
   font-weight: 620;
-  line-height: calc(42px + 1rem);
-  white-space: pre-line;
+  line-height: 1.65;
+}
+
+.gap-exercise-line {
+  display: block;
+  min-width: 0;
 }
 
 .gap-exercise select {
   min-height: 42px;
-  margin: 0 5px;
+  margin: 4px 5px;
   padding: 0 34px 0 11px;
   border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
   border-radius: 10px;
@@ -1471,7 +1485,7 @@ fieldset:focus-within {
 
 .text-gap-control {
   display: inline-flex;
-  margin: 0 5px;
+  margin: 4px 5px;
   align-items: center;
   vertical-align: middle;
   gap: 5px;

@@ -125,6 +125,9 @@ test('Studio exposes dashboard, lesson, exam and prompt authoring workflows', ()
   assert.match(html, /data-lesson-add=["']quote["']/);
   assert.match(html, /data-lesson-add=["']youtube["']/);
   assert.match(html, /data-lesson-add=["']slides["']/);
+  assert.match(html, /data-lesson-add=["']presentation["']/);
+  assert.match(html, /data-lesson-add=["']quiz["']/);
+  assert.match(html, /data-lesson-add=["']pdf["']/);
   assert.match(html, /data-lesson-add=["']atonom["']/);
   assert.match(html, /data-lesson-add=["']formula["']/);
   assert.match(html, /data-lesson-add=["']link["']/);

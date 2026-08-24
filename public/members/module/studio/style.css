@@ -4786,11 +4786,17 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
 }
 
 .preview-gap-exercise {
+  display: grid;
+  gap: 6px;
   margin: 0;
   color: var(--chem-text);
   font-size: 0.69rem;
-  line-height: calc(38px + .8rem);
-  white-space: pre-line;
+  line-height: 1.65;
+}
+
+.preview-gap-exercise-line {
+  display: block;
+  min-width: 0;
 }
 
 .preview-gap-field,
@@ -4820,6 +4826,13 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
   width: auto;
   max-width: min(100%, 210px);
   margin: 0 4px;
+  padding: 0 28px 0 9px;
+}
+
+.preview-gap-exercise-line > select {
+  width: auto;
+  max-width: min(100%, 210px);
+  margin: 3px 4px;
   padding: 0 28px 0 9px;
 }
 

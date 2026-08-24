@@ -12,7 +12,7 @@
   const TASK_START = /^\s*:::(?:task|zadanie)\s*$/i;
   const QUESTION_START = /^\s*:::question\s*$/i;
   const SLIDE_SETTINGS_START = /^\s*:::slide\s*$/i;
-  const CONTAINER_START = /^\s*:::(style|accordion|layout|youtube|googleslides|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)(?:\s+(.*?))?\s*$/i;
+  const CONTAINER_START = /^\s*:::(style|accordion|layout|youtube|googleslides|presentation|quiz|pdf|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)(?:\s+(.*?))?\s*$/i;
   const CONTAINER_END = /^\s*:::\s*$/;
   const STYLE_FONTS = Object.freeze([
     'sans',
@@ -57,6 +57,9 @@
     'accordion',
     'youtube',
     'slides',
+    'presentation',
+    'quiz',
+    'pdf',
     'atonom',
     'formula',
     'link',
@@ -140,6 +143,35 @@
     return /^(?:https?:\/\/|mailto:)[^\s]+$/i.test(raw) ? raw : '';
   }
 
+  function safePdfReference(value, protection) {
+    const reference = oneLine(value);
+    const mode = String(protection || '1');
+    if (!reference || reference.length > 500 || /[\u0000-\u0020\\]/.test(reference)) return false;
+    const idPattern = /^[A-Za-z0-9_-]{10,200}$/;
+    if (['4', '5'].includes(mode)) {
+      try {
+        const url = new URL(reference);
+        return url.protocol === 'https:' && Boolean(url.hostname) && !url.username && !url.password;
+      } catch (_) {
+        return false;
+      }
+    }
+    if (idPattern.test(reference)) return true;
+    try {
+      const url = new URL(reference);
+      if (url.protocol !== 'https:' || url.username || url.password) return false;
+      const host = url.hostname.toLowerCase().replace(/^www\./, '');
+      if (!['drive.google.com', 'docs.google.com'].includes(host)) return false;
+      const pathId = url.pathname.match(
+        /\/(?:file|document|presentation|spreadsheets)(?:\/u\/\d+)?\/d\/(?:e\/)?([A-Za-z0-9_-]{10,200})(?:\/|$)/i
+      );
+      const queryId = url.searchParams.get('id') || '';
+      return Boolean((pathId && idPattern.test(pathId[1])) || idPattern.test(queryId));
+    } catch (_) {
+      return false;
+    }
+  }
+
   function youtubeVideoId(value) {
     const raw = oneLine(value);
     if (/^[A-Za-z0-9_-]{11}$/.test(raw)) return raw;
@@ -205,7 +237,7 @@
       .split('\n')
       .map((line) => {
         if (/^\s*---\s*$/.test(line)) return '`---`';
-        if (/^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|googleslides|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)?(?:\s+.*?)?\s*$/i.test(line)) {
+        if (/^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|googleslides|presentation|quiz|pdf|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)?(?:\s+.*?)?\s*$/i.test(line)) {
           return `\`${line.trim()}\``;
         }
         return line.replace(/\s+$/g, '');
@@ -385,13 +417,47 @@
     }
     if (type === 'slides') {
       const reference = googleSlidesReference(source.presentation || source.url || source.presentationId);
+      const controls = source.controls !== false
+        && !/^(?:0|false|no|nie|off)$/i.test(oneLine(source.controls));
       return {
         ...base,
         presentation: reference?.id || oneLine(source.presentation || source.url || source.presentationId),
         published: reference?.published === true
           || source.published === true
           || /^(?:1|true|yes|tak)$/i.test(oneLine(source.published)),
+        controls,
         title: oneLine(source.title) || 'Prezentacja Google Slides'
+      };
+    }
+    if (type === 'presentation') {
+      return {
+        ...base,
+        title: oneLine(source.title) || 'Prezentacja ChemDisk',
+        description: oneLine(source.description) || 'Otwórz prezentację przygotowaną w ChemDisk.',
+        button: oneLine(source.button) || 'Otwórz prezentację',
+        repositoryId: oneLine(source.repositoryId || source.repository).toLowerCase(),
+        presentationId: oneLine(source.presentationId || source.presentation).toLowerCase()
+      };
+    }
+    if (type === 'quiz') {
+      return {
+        ...base,
+        title: oneLine(source.title) || 'Quiz ChemDisk',
+        description: oneLine(source.description) || 'Rozwiąż quiz przygotowany do tej lekcji.',
+        button: oneLine(source.button) || 'Otwórz quiz',
+        repositoryId: oneLine(source.repositoryId || source.repository).toLowerCase(),
+        quizId: oneLine(source.quizId || source.quiz).toLowerCase()
+      };
+    }
+    if (type === 'pdf') {
+      const requestedProtection = oneLine(source.protection || source.viewerType || '1');
+      return {
+        ...base,
+        title: oneLine(source.title) || 'Dokument PDF',
+        description: oneLine(source.description) || 'Otwórz dokument PDF do tej lekcji.',
+        button: oneLine(source.button) || 'Otwórz PDF',
+        pdfId: oneLine(source.pdfId || source.id || source.url),
+        protection: ['1', '2', '3', '4', '5'].includes(requestedProtection) ? requestedProtection : '1'
       };
     }
     if (type === 'atonom') {
@@ -748,6 +814,21 @@
     if (block.type === 'slides' && !googleSlidesReference(block.presentation)) {
       errors.push({ code: 'INVALID_GOOGLE_SLIDES', path: `${path}.presentation`, message: 'Podaj prawidłowy link lub ID prezentacji Google Slides.' });
     }
+    if (block.type === 'presentation' && (
+      !SAFE_REPOSITORY_ID.test(block.repositoryId || '')
+      || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(block.presentationId || '')
+    )) {
+      errors.push({ code: 'INVALID_PRESENTATION_REFERENCE', path, message: 'Wybierz prawidłowe repozytorium i prezentację z biblioteki.' });
+    }
+    if (block.type === 'quiz' && (
+      !SAFE_REPOSITORY_ID.test(block.repositoryId || '')
+      || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(block.quizId || '')
+    )) {
+      errors.push({ code: 'INVALID_QUIZ_REFERENCE', path, message: 'Wybierz prawidłowe repozytorium i quiz z biblioteki.' });
+    }
+    if (block.type === 'pdf' && !safePdfReference(block.pdfId, block.protection)) {
+      errors.push({ code: 'INVALID_PDF_REFERENCE', path: `${path}.pdfId`, message: 'Podaj prawidłowy identyfikator Dysku Google albo adres HTTPS zgodny z wybranym trybem.' });
+    }
     if (block.type === 'atonom' && !safeAtonomFormula(block.formula)) {
       errors.push({ code: 'INVALID_ATONOM_FORMULA', path: `${path}.formula`, message: 'Podaj nazwę związku dla ATONOM.' });
     }
@@ -977,7 +1058,41 @@
         ':::googleslides',
         `id: ${reference?.id || ''}`,
         `published: ${block.published || reference?.published ? 'true' : 'false'}`,
+        `controls: ${block.controls ? 'true' : 'false'}`,
         `title: ${cleanDirectiveValue(block.title)}`,
+        ':::'
+      ].join('\n');
+    }
+    if (block.type === 'presentation') {
+      return [
+        ':::presentation',
+        `repository: ${cleanDirectiveValue(block.repositoryId)}`,
+        `presentation: ${cleanDirectiveValue(block.presentationId)}`,
+        `title: ${cleanDirectiveValue(block.title)}`,
+        `description: ${cleanDirectiveValue(block.description)}`,
+        `button: ${cleanDirectiveValue(block.button)}`,
+        ':::'
+      ].join('\n');
+    }
+    if (block.type === 'quiz') {
+      return [
+        ':::quiz',
+        `repository: ${cleanDirectiveValue(block.repositoryId)}`,
+        `quiz: ${cleanDirectiveValue(block.quizId)}`,
+        `title: ${cleanDirectiveValue(block.title)}`,
+        `description: ${cleanDirectiveValue(block.description)}`,
+        `button: ${cleanDirectiveValue(block.button)}`,
+        ':::'
+      ].join('\n');
+    }
+    if (block.type === 'pdf') {
+      return [
+        ':::pdf',
+        `id: ${cleanDirectiveValue(block.pdfId)}`,
+        `protection: ${block.protection}`,
+        `title: ${cleanDirectiveValue(block.title)}`,
+        `description: ${cleanDirectiveValue(block.description)}`,
+        `button: ${cleanDirectiveValue(block.button)}`,
         ':::'
       ].join('\n');
     }
@@ -1406,7 +1521,38 @@
               type: 'slides',
               presentation: values.id || values.url,
               published: values.published,
+              controls: values.controls,
               title: values.title
+            }));
+          } else if (type === 'presentation') {
+            const values = parseDirectiveFields(bodyLines);
+            blocks.push(createBlock({
+              type: 'presentation',
+              repositoryId: values.repository,
+              presentationId: values.presentation,
+              title: values.title,
+              description: values.description,
+              button: values.button
+            }));
+          } else if (type === 'quiz') {
+            const values = parseDirectiveFields(bodyLines);
+            blocks.push(createBlock({
+              type: 'quiz',
+              repositoryId: values.repository,
+              quizId: values.quiz,
+              title: values.title,
+              description: values.description,
+              button: values.button
+            }));
+          } else if (type === 'pdf') {
+            const values = parseDirectiveFields(bodyLines);
+            blocks.push(createBlock({
+              type: 'pdf',
+              pdfId: values.id || values.url,
+              protection: values.protection || values.type,
+              title: values.title,
+              description: values.description,
+              button: values.button
             }));
           } else if (type === 'atonom') {
             const values = parseDirectiveFields(bodyLines);
@@ -1837,6 +1983,9 @@
     styledContainers: true,
     youtube: true,
     googleSlides: true,
+    presentations: true,
+    quizzes: true,
+    pdfs: true,
     atonom: true,
     formulas: true,
     aiHelp: true,

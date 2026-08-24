@@ -81,3 +81,18 @@ test('global progress report explains metrics and renders readable audit entries
   assert.match(css, /\.admin-progress-distribution\s*\{[\s\S]*repeat\(4/);
   assert.match(css, /\.admin-progress-audit-list li:not\(:last-child\)::before/);
 });
+
+test('admin progress lists render in bounded pages and fetch more only on demand', () => {
+  const css = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.css'), 'utf8');
+  const dashboard = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.js'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'public', 'members', 'index.html'), 'utf8');
+
+  assert.match(html, /id="admin-progress-more"[^>]*hidden/);
+  assert.match(dashboard, /const ADMIN_PROGRESS_PAGE_SIZE = 30/);
+  assert.match(dashboard, /rows\.slice\(0, adminProgressVisibleCount\)/);
+  assert.match(dashboard, /function loadMoreAdminProgressUsers\(\)/);
+  assert.match(dashboard, /view=users&limit=\$\{ADMIN_PROGRESS_PAGE_SIZE\}&cursor=/);
+  assert.match(dashboard, /function loadMoreAdminProgressAudit\(\)/);
+  assert.match(dashboard, /Pokaż starsze wpisy/);
+  assert.match(css, /\.admin-progress-pagination/);
+});

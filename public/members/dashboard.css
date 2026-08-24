@@ -2636,6 +2636,18 @@ html[data-theme="dark"] .accordion-children .accordion-children .accordion-child
   gap: .7rem;
 }
 
+.admin-progress-pagination,
+.admin-progress-audit-pagination {
+  display: flex;
+  padding: .9rem 0 0;
+  justify-content: center;
+}
+
+.admin-progress-pagination .button,
+.admin-progress-audit-pagination .button {
+  min-width: min(100%, 220px);
+}
+
 .admin-progress-user {
   display: grid;
   grid-template-columns: minmax(180px, 1.4fr) minmax(180px, 1fr) auto;
