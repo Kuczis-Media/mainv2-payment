@@ -15,6 +15,7 @@ const MAX_HISTORY_MESSAGES = 24;
 const MAX_HISTORY_CHARS = 36_000;
 const LESSON_CONTEXT_PREFIX = 'chem.lesson-ai-context.';
 const LESSON_CONTEXT_MAX_AGE = 10 * 60 * 1000;
+const LESSON_CONTEXT_MAX_CHARS = 12_000;
 
 (() => {
   'use strict';
@@ -260,12 +261,18 @@ const LESSON_CONTEXT_MAX_AGE = 10 * 60 * 1000;
 
     try {
       const value = JSON.parse(raw);
-      const context = String(value?.context || '').replace(/\s+/g, ' ').trim();
+      const context = String(value?.context || '')
+        .replace(/\r\n?/g, '\n')
+        .split('\n')
+        .map((line) => line.replace(/[\t\f\v ]+/g, ' ').trim())
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
       const title = String(value?.title || 'bieżący slajd').replace(/\s+/g, ' ').trim().slice(0, 180);
       const createdAt = Number(value?.createdAt);
       if (
         !context
-        || context.length > 6000
+        || context.length > LESSON_CONTEXT_MAX_CHARS
         || !Number.isFinite(createdAt)
         || createdAt > Date.now() + 60_000
         || Date.now() - createdAt > LESSON_CONTEXT_MAX_AGE
@@ -275,7 +282,7 @@ const LESSON_CONTEXT_MAX_AGE = 10 * 60 * 1000;
       if (els.lessonContextStatus) {
         els.lessonContextStatus.hidden = false;
         els.lessonContextStatus.textContent =
-          `AI otrzyma treść slajdu „${title}” jako kontekst pierwszego pytania.`;
+          `AI otrzyma przygotowany kontekst lekcji „${title}” przy pierwszym pytaniu.`;
       }
     } catch {
       // Uszkodzony albo nieaktualny kontekst jest pomijany.

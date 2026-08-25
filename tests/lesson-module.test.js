@@ -416,6 +416,9 @@ test('lesson renderer creates AI help and allowlisted interactive board cards', 
     'repository: glowne',
     'prompt: nauczyciel.txt',
     'point: 2',
+    `context_json: ${JSON.stringify('Na obrazie po lewej znajduje się wykres.\nSlajd Google pokazuje reakcję <A → B>.')}`,
+    'include_slide: true',
+    'include_task: true',
     ':::',
     '',
     ':::board',
@@ -445,6 +448,9 @@ test('lesson renderer creates AI help and allowlisted interactive board cards', 
   assert.match(html, /data-ai-prompt="nauczyciel\.txt"/);
   assert.match(html, /data-ai-repository="glowne"/);
   assert.match(html, /data-ai-point="2"/);
+  assert.match(html, /data-ai-author-context="&quot;Na obrazie po lewej znajduje się wykres\.[\s\S]*Slajd Google pokazuje reakcję &lt;A → B&gt;\.&quot;"/);
+  assert.match(html, /data-ai-include-slide="true"/);
+  assert.match(html, /data-ai-include-task="true"/);
   assert.match(html, /data-lesson-ai-open/);
   assert.match(html, /href="\/members\/module\/whiteboard\/"/);
   assert.match(html, /href="\/members\/module\/bitpaper\/\?path=redoks\.json"/);
@@ -460,6 +466,13 @@ test('lesson renderer creates AI help and allowlisted interactive board cards', 
   assert.match(unsafeAi, /Nieprawidłowy klocek pomocy AI/);
   assert.doesNotMatch(unsafeAi, /\.\.\/sekret/);
 
+  const brokenAiContext = parser.renderMarkdown([
+    ':::aihelp',
+    'context_json: {to nie jest JSON}',
+    ':::'
+  ].join('\n'));
+  assert.match(brokenAiContext, /Nieprawidłowy klocek pomocy AI/);
+
   const unsafeBoard = parser.renderMarkdown([
     ':::board',
     'variant: bitpaper',
@@ -468,6 +481,83 @@ test('lesson renderer creates AI help and allowlisted interactive board cards', 
   ].join('\n'));
   assert.match(unsafeBoard, /Nieprawidłowy klocek tablicy/);
   assert.doesNotMatch(unsafeBoard, /\.\.\/plansza/);
+});
+
+test('lesson AI context describes every task type without exposing the answer key', () => {
+  const gaps = parser.taskAiContext({
+    type: 'gaps',
+    label: 'Uzupełnij zdanie.',
+    text: 'Woda ma wzór {{wzór}}, a jej masa molowa to {{masa}}.',
+    options: ['H2O', 'CO2', '18 g/mol'],
+    answers: ['TAJNY-KLUCZ', '18 g/mol'],
+    hint: 'TAJNA-PODPOWIEDŹ',
+    success: 'TAJNY-SUKCES'
+  }, ['H2O', '']);
+  assert.match(gaps, /Zadanie \(luki z listy\)/);
+  assert.match(gaps, /\[luka 1: wzór\]/);
+  assert.match(gaps, /A\. H2O/);
+  assert.match(gaps, /Luka 1: H2O/);
+  assert.doesNotMatch(gaps, /TAJNY-KLUCZ|TAJNA-PODPOWIEDŹ|TAJNY-SUKCES/);
+
+  const abcd = parser.taskAiContext({
+    type: 'choice',
+    choiceStyle: 'abcd',
+    label: 'Wybierz pierwiastek.',
+    options: ['Wodór', 'Tlen', 'Azot', 'Węgiel'],
+    answers: ['B']
+  }, 'B — Tlen');
+  assert.match(abcd, /Zadanie \(wybór ABCD\)/);
+  assert.match(abcd, /D\. Węgiel/);
+  assert.match(abcd, /Aktualna odpowiedź ucznia: B — Tlen/);
+  assert.doesNotMatch(abcd, /Poprawna odpowiedź/);
+
+  const fakeSlide = {
+    querySelectorAll: (selector) => {
+      if (selector === '[data-lesson-media-alt]') {
+        return [{ dataset: { lessonMediaAlt: 'Wykres energii aktywacji z maksimum pośrodku.' } }];
+      }
+      if (selector === '.lesson-google-slides') {
+        return [{
+          querySelector: (nested) => nested === 'figcaption'
+            ? { textContent: 'Mechanizm reakcji SN2' }
+            : null
+        }];
+      }
+      if (selector === '.lesson-flashcard') {
+        return [{
+          querySelector: (nested) => nested.includes('front')
+            ? { textContent: 'Utleniacz' }
+            : { textContent: 'Przyjmuje elektrony' }
+        }];
+      }
+      if (selector === '[data-lesson-ai-formula]') {
+        return [{ dataset: { lessonAiFormula: '2 H2 + O2 -> 2 H2O' } }];
+      }
+      return [];
+    },
+    cloneNode: () => ({
+      textContent: 'Widoczna treść o wiązaniach chemicznych.',
+      querySelectorAll: () => []
+    })
+  };
+  const composed = parser.buildLessonAiContext({
+    root: fakeSlide,
+    task: { type: 'text', label: 'Wyjaśnij zjawisko.', options: [], answers: ['sekret'] },
+    currentResponse: 'Moja próba',
+    authorContext: 'Najważniejszy opis autora.',
+    includeSlide: true,
+    includeTask: true
+  });
+  assert.match(composed, /^Dodatkowy kontekst autora:/);
+  assert.match(composed, /Wyjaśnij zjawisko/);
+  assert.match(composed, /Moja próba/);
+  assert.match(composed, /Widoczna treść o wiązaniach/);
+  assert.match(composed, /Wykres energii aktywacji/);
+  assert.match(composed, /Mechanizm reakcji SN2/);
+  assert.match(composed, /Utleniacz → Przyjmuje elektrony/);
+  assert.match(composed, /2 H2 \+ O2 -> 2 H2O/);
+  assert.doesNotMatch(composed, /sekret/);
+  assert.ok(composed.length <= parser.MAX_AI_CONTEXT_CHARS);
 });
 
 test('lesson filename and Markdown rendering reject path traversal and active HTML', () => {

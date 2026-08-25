@@ -1450,6 +1450,20 @@ fieldset:focus-within {
 
 .task-controls input[aria-invalid="true"] { border-color: var(--error); }
 
+.task-controls input[data-state="success"],
+.gap-exercise select[data-state="success"] {
+  border-color: var(--accent-strong);
+  background: color-mix(in srgb, var(--accent) 13%, var(--surface));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.task-controls input[data-state="error"],
+.gap-exercise select[data-state="error"] {
+  border-color: var(--error);
+  background: color-mix(in srgb, var(--error) 8%, var(--surface));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--error) 11%, transparent);
+}
+
 .gap-controls {
   grid-column: 1 / -1;
 }
@@ -1645,6 +1659,30 @@ fieldset:focus-within {
   background: var(--accent-strong);
 }
 
+.choice-grid label[data-state="success"] {
+  border-color: var(--accent-strong);
+  background: color-mix(in srgb, var(--accent) 13%, var(--surface));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.choice-grid label[data-state="success"] .choice-letter {
+  border-color: var(--accent-strong);
+  color: #fff;
+  background: var(--accent-strong);
+}
+
+.choice-grid label[data-state="error"] {
+  border-color: var(--error);
+  background: color-mix(in srgb, var(--error) 8%, var(--surface));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--error) 11%, transparent);
+}
+
+.choice-grid label[data-state="error"] .choice-letter {
+  border-color: var(--error);
+  color: #fff;
+  background: var(--error);
+}
+
 @media (max-width: 680px) {
   .lesson-flashcard-grid { grid-template-columns: 1fr; }
   .lesson-atonom iframe { min-height: 520px; }
@@ -1659,6 +1697,10 @@ fieldset:focus-within {
 
 :root[data-theme="dark"] .choice-grid label:has(input:checked) .choice-letter {
   color: #102018;
+}
+
+:root[data-theme="dark"] .choice-grid label[data-state="error"] .choice-letter {
+  color: #fff;
 }
 
 .lesson-navigation {

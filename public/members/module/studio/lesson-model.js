@@ -9,6 +9,7 @@
   const SAFE_REPOSITORY_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
   const SAFE_BOARD_PATH = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.json$/i;
   const SAFE_MEDIA_REF = /^(?:photos\/|assets\/shared\/)(?!.*\.\.)[a-z0-9][a-z0-9_.-]{0,99}\.(?:png|jpe?g|webp|gif|svg)$/i;
+  const MAX_AI_AUTHOR_CONTEXT_CHARS = 6000;
   const TASK_START = /^\s*:::(?:task|zadanie)\s*$/i;
   const QUESTION_START = /^\s*:::question\s*$/i;
   const SLIDE_SETTINGS_START = /^\s*:::slide\s*$/i;
@@ -489,6 +490,9 @@
     if (type === 'ai') {
       const promptFile = oneLine(source.promptFile || source.prompt);
       const point = Number(source.promptPoint ?? source.point);
+      const authorContext = normalizeNewlines(
+        source.authorContext ?? source.contextNotes ?? source.context ?? ''
+      ).trim().slice(0, MAX_AI_AUTHOR_CONTEXT_CHARS);
       return {
         ...base,
         title: oneLine(source.title) || 'Masz pytanie do tego slajdu?',
@@ -496,7 +500,12 @@
         button: oneLine(source.button) || 'Zapytaj AI',
         repositoryId: oneLine(source.repositoryId || source.repository).toLowerCase(),
         promptFile,
-        promptPoint: Number.isSafeInteger(point) && point > 0 && point <= 9999 ? point : 1
+        promptPoint: Number.isSafeInteger(point) && point > 0 && point <= 9999 ? point : 1,
+        authorContext,
+        includeSlide: source.includeSlide !== false
+          && !/^(?:0|false|no|nie|off)$/i.test(oneLine(source.includeSlide ?? source.include_slide)),
+        includeTask: source.includeTask !== false
+          && !/^(?:0|false|no|nie|off)$/i.test(oneLine(source.includeTask ?? source.include_task))
       };
     }
     if (type === 'board') {
@@ -1133,6 +1142,9 @@
         `repository: ${cleanDirectiveValue(block.repositoryId)}`,
         `prompt: ${cleanDirectiveValue(block.promptFile)}`,
         `point: ${block.promptPoint}`,
+        `include_slide: ${block.includeSlide ? 'true' : 'false'}`,
+        `include_task: ${block.includeTask ? 'true' : 'false'}`,
+        `context_json: ${JSON.stringify(block.authorContext || '')}`,
         ':::'
       ].join('\n');
     }
@@ -1572,6 +1584,27 @@
             }));
           } else if (type === 'aihelp') {
             const values = parseDirectiveFields(bodyLines);
+            let authorContext = values.context || '';
+            if (Object.prototype.hasOwnProperty.call(values, 'context_json')) {
+              try {
+                const parsedContext = JSON.parse(values.context_json);
+                if (typeof parsedContext !== 'string') throw new TypeError('AI context must be text');
+                authorContext = parsedContext;
+              } catch (_) {
+                throw new StudioLessonError(
+                  'INVALID_AI_CONTEXT',
+                  'Dodatkowy kontekst klocka AI jest uszkodzony.',
+                  'block.authorContext'
+                );
+              }
+            }
+            if (normalizeNewlines(authorContext).trim().length > MAX_AI_AUTHOR_CONTEXT_CHARS) {
+              throw new StudioLessonError(
+                'AI_CONTEXT_TOO_LONG',
+                `Dodatkowy kontekst klocka AI może mieć maksymalnie ${MAX_AI_AUTHOR_CONTEXT_CHARS} znaków.`,
+                'block.authorContext'
+              );
+            }
             blocks.push(createBlock({
               type: 'ai',
               title: values.title,
@@ -1579,7 +1612,10 @@
               button: values.button,
               repositoryId: values.repository,
               promptFile: values.prompt,
-              promptPoint: values.point
+              promptPoint: values.point,
+              authorContext,
+              includeSlide: values.include_slide,
+              includeTask: values.include_task
             }));
           } else if (type === 'board') {
             const values = parseDirectiveFields(bodyLines);

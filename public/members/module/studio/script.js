@@ -2113,7 +2113,10 @@
         button: 'Zapytaj AI',
         repositoryId: state.contentLibrary.selectedRepositoryId,
         promptFile: '',
-        promptPoint: 1
+        promptPoint: 1,
+        authorContext: '',
+        includeSlide: true,
+        includeTask: true
       });
     }
     if (type === 'board') {
@@ -2428,9 +2431,10 @@
         : `${block.left || '…'}${block.arrow ? ` ${block.arrow} ${block.right || '…'}` : ''}`;
     }
     if (block.type === 'ai') {
-      return block.promptFile
+      const source = block.promptFile
         ? `AI · ${block.promptFile}${/\.txt$/i.test(block.promptFile) ? ` · punkt ${block.promptPoint}` : ''}`
         : 'AI · ogólny asystent';
+      return `${source}${block.authorContext ? ' · opis autora' : ' · bez dodatkowego opisu'}`;
     }
     if (block.type === 'board') {
       return block.variant === 'bitpaper'
@@ -3537,7 +3541,11 @@
       form.append(
         mediaCard,
         field('Zewnętrzny adres HTTPS — zgodność ze starymi lekcjami', lessonInput(block.url, 'url', { type: 'url', placeholder: 'https://…' }), 'Gdy wybierzesz plik z Media Managera, stabilna referencja ma pierwszeństwo przed tym adresem.'),
-        field('Opis alternatywny ALT', lessonInput(block.alt, 'alt', { maxLength: 220 })),
+        field(
+          'Opis alternatywny ALT',
+          lessonInput(block.alt, 'alt', { maxLength: 220 }),
+          'Opisz konkretnie, co przedstawia obraz. Ten tekst pomaga osobom korzystającym z czytnika ekranu i jest automatycznie przekazywany do AI.'
+        ),
         field('Szerokość obrazu (%)', lessonInput(String(block.width || 100), 'width', { type: 'range', min: 20, max: 100 })),
         field('Wyrównanie', lessonSelect(block.align || 'center', 'align', [
           { value: 'left', label: 'Do lewej' },
@@ -3592,7 +3600,11 @@
         ),
         published,
         controls,
-        field('Tytuł prezentacji', lessonInput(block.title, 'title', { maxLength: 180 }))
+        field(
+          'Tytuł prezentacji',
+          lessonInput(block.title, 'title', { maxLength: 180 }),
+          'AI rozpozna tytuł, ale nie może odczytać zawartości iframe Google. Treść slajdów możesz opisać w klocku „Zapytaj AI”.'
+        )
       );
     } else if (block.type === 'presentation') {
       syncInspectorRepository(block.repositoryId);
@@ -3851,10 +3863,31 @@
         );
       }
     } else if (block.type === 'ai') {
+      const includeSlide = create('label', 'check-field');
+      includeSlide.append(
+        lessonInput('', 'includeSlide', { type: 'checkbox', checked: block.includeSlide !== false }),
+        create('span', '', 'Dołącz widoczną treść slajdu, ALT obrazów, tytuły osadzonych materiałów i fiszki')
+      );
+      const includeTask = create('label', 'check-field');
+      includeTask.append(
+        lessonInput('', 'includeTask', { type: 'checkbox', checked: block.includeTask !== false }),
+        create('span', '', 'Dołącz zadanie, warianty odpowiedzi i bieżącą próbę ucznia')
+      );
       form.append(
         field('Tytuł kafelka AI', lessonInput(block.title, 'title', { maxLength: 180 })),
         field('Opis dla ucznia', lessonTextarea(block.description, 'description', { rows: 4, maxLength: 500 })),
         field('Tekst przycisku', lessonInput(block.button, 'button', { maxLength: 80 })),
+        field(
+          'Dodatkowy kontekst autora dla AI',
+          lessonTextarea(block.authorContext, 'authorContext', {
+            rows: 10,
+            maxLength: 6000,
+            placeholder: 'Np. Na prezentacji Google: slajd 1 pokazuje…\nPo lewej stronie ilustracji znajduje się…\nWażne oznaczenia i relacje: …'
+          }),
+          'Tekst nie jest pokazywany kursantowi. Opisz tutaj obrazy, wykresy, rozmieszczenie elementów oraz treść slajdów Google, których AI nie może samodzielnie odczytać.'
+        ),
+        includeSlide,
+        includeTask,
         field(
           'Repozytorium promptu',
           lessonSelect(block.repositoryId, 'repositoryId', repositoryOptions(true)),
@@ -3881,7 +3914,7 @@
       form.append(create(
         'p',
         'formula-builder-tip',
-        'Po kliknięciu uczeń przejdzie do ChemDisk AI w nowej karcie. Treść bieżącego slajdu zostanie przekazana jako kontekst pierwszego pytania.'
+        'Kontekst jest jednorazowo dołączany do pierwszego pytania: najpierw opis autora, następnie zadanie, media i widoczna treść. Poprawne odpowiedzi nie są ujawniane AI.'
       ));
     } else if (block.type === 'board') {
       const newTab = create('label', 'check-field');
@@ -4094,13 +4127,44 @@
     });
   }
 
-  function previewAiContext(root) {
-    const clone = root.cloneNode(true);
-    all(
-      '.lesson-ai-help, .lesson-preview-meta, .preview-task, button, input, select, textarea, iframe, script, style',
-      clone
-    ).forEach((node) => node.remove());
-    return String(clone.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 6000);
+  function previewTaskAiResponse(task, root) {
+    const form = root?.querySelector('.preview-quiz');
+    if (!task || !form) return '';
+    if (task.type === 'gaps' || task.type === 'gaps-text') {
+      return all('[data-preview-gap-index]', form).map((field) => field.value || '');
+    }
+    if (task.type === 'choice' || task.type === 'abcd') {
+      const selected = form.querySelector('input[type="radio"]:checked');
+      if (!selected) return '';
+      const copy = selected.closest('label')?.querySelector('.preview-choice-copy')?.textContent?.trim() || '';
+      return copy && copy !== selected.value ? `${selected.value} — ${copy}` : selected.value;
+    }
+    return form.querySelector('.preview-answer-field')?.value || '';
+  }
+
+  function previewAiAuthorContext(card) {
+    const raw = card?.dataset.aiAuthorContext || '';
+    if (!raw) return '';
+    try {
+      const parsed = JSON.parse(raw);
+      return typeof parsed === 'string' ? parsed : '';
+    } catch (_) {
+      return raw;
+    }
+  }
+
+  function previewAiContext(root, card, task) {
+    if (typeof window.ChemLesson?.buildLessonAiContext === 'function') {
+      return window.ChemLesson.buildLessonAiContext({
+        root,
+        task,
+        currentResponse: previewTaskAiResponse(task, root),
+        authorContext: previewAiAuthorContext(card),
+        includeSlide: card?.dataset.aiIncludeSlide !== 'false',
+        includeTask: card?.dataset.aiIncludeTask !== 'false'
+      });
+    }
+    return String(root?.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 6000);
   }
 
   function openPreviewAiHelp(button, root) {
@@ -4121,7 +4185,11 @@
       const contextId = typeof window.crypto?.randomUUID === 'function'
         ? window.crypto.randomUUID()
         : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-      const context = previewAiContext(root);
+      const slideRoot = button.closest('.lesson-preview-shell') || root;
+      const slideId = slideRoot.dataset.lessonPreviewSlideId || '';
+      const slide = state.lesson.model.slides.find((entry) => entry.id === slideId)
+        || selectedLessonSlide();
+      const context = previewAiContext(slideRoot, card, slide?.task || null);
       if (context) {
         localStorage.setItem(`chem.lesson-ai-context.${contextId}`, JSON.stringify({
           context,
@@ -4344,14 +4412,60 @@
         return form.querySelector('.preview-answer-field')?.value || '';
       };
 
+      const setPreviewAnswerState = (field, result) => {
+        if (!field) return;
+        field.dataset.state = result;
+        if (result === 'error') field.setAttribute('aria-invalid', 'true');
+        else field.removeAttribute('aria-invalid');
+        field.closest('.preview-text-gap')?.setAttribute('data-state', result);
+        field.closest('.preview-choice-option')?.setAttribute('data-state', result);
+      };
+
+      const clearPreviewAnswerState = (field) => {
+        if (!field || field.disabled) return;
+        field.removeAttribute('data-state');
+        field.removeAttribute('aria-invalid');
+        field.closest('.preview-text-gap')?.removeAttribute('data-state');
+        if (field.type === 'radio') {
+          all('.preview-choice-option[data-state]', form).forEach((option) => {
+            option.removeAttribute('data-state');
+          });
+        } else {
+          field.closest('.preview-choice-option')?.removeAttribute('data-state');
+        }
+        if (form.dataset.state !== 'success') {
+          form.removeAttribute('data-state');
+          showFeedback('', '');
+        }
+      };
+
+      const markPreviewAnswerStates = (answer) => {
+        if (task.type === 'gaps' || task.type === 'gaps-text') {
+          let correctCount = 0;
+          let firstWrong = null;
+          gapFields.forEach((field, index) => {
+            const correct = window.ChemLesson.checkGapAnswer(task, answer[index], index);
+            setPreviewAnswerState(field, correct ? 'success' : 'error');
+            if (correct) correctCount += 1;
+            else if (!firstWrong) firstWrong = field;
+          });
+          return { correctCount, total: gapFields.length, firstWrong };
+        }
+        if (task.type === 'choice' || task.type === 'abcd') {
+          const selected = form.querySelector('input[type="radio"]:checked');
+          const correct = window.ChemLesson.checkAnswer(task, answer);
+          setPreviewAnswerState(selected, correct ? 'success' : 'error');
+          return { correctCount: correct ? 1 : 0, total: 1, firstWrong: correct ? null : selected };
+        }
+        const field = form.querySelector('.preview-answer-field');
+        const correct = window.ChemLesson.checkAnswer(task, answer);
+        setPreviewAnswerState(field, correct ? 'success' : 'error');
+        return { correctCount: correct ? 1 : 0, total: 1, firstWrong: correct ? null : field };
+      };
+
       all('input, select', form).forEach((field) => {
         field.addEventListener('input', () => {
-          field.removeAttribute('aria-invalid');
-          field.closest('.preview-text-gap')?.removeAttribute('data-state');
-          if (form.dataset.state !== 'success') {
-            form.removeAttribute('data-state');
-            showFeedback('', '');
-          }
+          clearPreviewAnswerState(field);
         });
       });
 
@@ -4359,18 +4473,16 @@
         button.addEventListener('click', () => {
           const gapIndex = Number(button.dataset.previewGapCheck);
           const input = gapFields[gapIndex];
-          const wrapper = button.closest('.preview-text-gap');
           if (window.ChemLesson.checkGapAnswer(task, input.value, gapIndex)) {
             checkedGaps.add(gapIndex);
-            input.removeAttribute('aria-invalid');
+            setPreviewAnswerState(input, 'success');
             input.disabled = true;
             button.disabled = true;
-            wrapper.dataset.state = 'success';
             showFeedback('success', `Luka ${gapIndex + 1} jest poprawna.`);
             if (checkedGaps.size === gapFields.length) finish();
             else gapFields.find((field, index) => !checkedGaps.has(index))?.focus();
           } else {
-            wrapper.dataset.state = 'error';
+            setPreviewAnswerState(input, 'error');
             showError(input, `Luka ${gapIndex + 1} jest niepoprawna`);
           }
         });
@@ -4379,20 +4491,23 @@
       form.addEventListener('submit', (event) => {
         event.preventDefault();
         if (form.dataset.state === 'success' || perGapMode) return;
-        if (window.ChemLesson.checkAnswer(task, readValue())) {
+        const answer = readValue();
+        const result = markPreviewAnswerStates(answer);
+        if (window.ChemLesson.checkAnswer(task, answer)) {
           finish();
           return;
         }
-        const firstField = form.querySelector(
-          'select:not([disabled]), input:not([type="radio"]):not([disabled]), input[type="radio"]:checked, input[type="radio"]'
-        );
-        showError(firstField);
+        const prefix = result.total > 1
+          ? `${result.correctCount} z ${result.total} odpowiedzi jest poprawnych`
+          : 'Ta odpowiedź jest niepoprawna';
+        showError(result.firstWrong, prefix);
       });
     });
   }
 
   function buildLessonPreviewShell(slide, index, includeValidation, animateTransition) {
     const shell = create('div', 'lesson-preview-shell');
+    shell.dataset.lessonPreviewSlideId = slide.id;
     const transition = lessonModelApi.SLIDE_TRANSITIONS.includes(slide.transition)
       ? slide.transition
       : 'fade';

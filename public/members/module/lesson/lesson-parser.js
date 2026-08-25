@@ -8,6 +8,8 @@
   const SAFE_REPOSITORY_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
   const SAFE_BOARD_PATH = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.json$/i;
   const SAFE_MEDIA_REF = /^(?:photos\/|assets\/shared\/)(?!.*\.\.)[a-z0-9][a-z0-9_.-]{0,99}\.(?:png|jpe?g|webp|gif|svg)$/i;
+  const MAX_AI_AUTHOR_CONTEXT_CHARS = 6000;
+  const MAX_AI_CONTEXT_CHARS = 12000;
   const TASK_START = /^\s*:::(?:task|zadanie)\s*$/i;
   const TASK_END = /^\s*:::\s*$/;
   const QUESTION_START = /^\s*:::question\s*$/i;
@@ -121,6 +123,152 @@
       }
     }
     return false;
+  }
+
+  function cleanAiContextText(value, maxChars = MAX_AI_CONTEXT_CHARS, preserveLines = true) {
+    const normalized = String(value ?? '')
+      .replace(/^\uFEFF/, '')
+      .replace(/\r\n?/g, '\n')
+      .replace(/\0/g, '');
+    const text = preserveLines
+      ? normalized
+        .split('\n')
+        .map((line) => line.replace(/[\t\f\v ]+/g, ' ').trim())
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim()
+      : normalized.replace(/\s+/g, ' ').trim();
+    return text.slice(0, Math.max(0, Number(maxChars) || 0));
+  }
+
+  function taskAiContext(task, currentResponse) {
+    if (!task || typeof task !== 'object') return '';
+    const type = task.type === 'abcd' || task.choiceStyle === 'abcd'
+      ? 'wybór ABCD'
+      : {
+          choice: 'wybór odpowiedzi',
+          gaps: 'luki z listy',
+          'gaps-text': 'luki wpisywane ręcznie',
+          number: 'odpowiedź liczbowa',
+          text: 'odpowiedź tekstowa'
+        }[task.type] || 'zadanie';
+    const parts = [`Zadanie (${type})`];
+    const question = cleanAiContextText(task.question || task.label, 1000, false);
+    if (question) parts.push(`Polecenie: ${question}`);
+    if (task.text) {
+      let gapIndex = 0;
+      const text = cleanAiContextText(task.text, 3000, true).replace(/\{\{([^{}]*)\}\}/g, (_, label) => {
+        gapIndex += 1;
+        return `[luka ${gapIndex}${String(label || '').trim() ? `: ${String(label).trim()}` : ''}]`;
+      });
+      if (text && text !== question) parts.push(`Treść:\n${text}`);
+    }
+    const options = (Array.isArray(task.options) ? task.options : [])
+      .map((option) => cleanAiContextText(option, 500, false))
+      .filter(Boolean);
+    if (options.length) {
+      parts.push(`Możliwe odpowiedzi:\n${options.map((option, index) => `${String.fromCharCode(65 + index)}. ${option}`).join('\n')}`);
+    }
+    const responses = Array.isArray(currentResponse) ? currentResponse : [currentResponse];
+    const current = responses
+      .map((response, index) => {
+        const value = cleanAiContextText(response, 500, false);
+        return value ? `${responses.length > 1 ? `Luka ${index + 1}: ` : ''}${value}` : '';
+      })
+      .filter(Boolean);
+    if (current.length) parts.push(`Aktualna odpowiedź ucznia: ${current.join('; ')}`);
+    return cleanAiContextText(parts.join('\n'), 5000, true);
+  }
+
+  function lessonMediaAiContext(root) {
+    if (!root || typeof root.querySelectorAll !== 'function') return '';
+    const rows = [];
+    const seen = new Set();
+    const add = (label, value) => {
+      const text = cleanAiContextText(value, 1600, false);
+      if (!text) return;
+      const key = `${label}:${text}`.toLocaleLowerCase('pl');
+      if (seen.has(key)) return;
+      seen.add(key);
+      rows.push(`${label}: ${text}`);
+    };
+
+    root.querySelectorAll('[data-lesson-media-alt]').forEach((figure) => {
+      add('Ilustracja', figure.dataset?.lessonMediaAlt || figure.getAttribute?.('data-lesson-media-alt'));
+    });
+    root.querySelectorAll('img[alt]').forEach((image) => add('Ilustracja', image.getAttribute('alt')));
+    root.querySelectorAll('.lesson-google-slides').forEach((figure) => {
+      add(
+        'Osadzona prezentacja Google Slides (tytuł, nie treść iframe)',
+        figure.querySelector('figcaption')?.textContent || figure.querySelector('iframe')?.getAttribute('title')
+      );
+    });
+    root.querySelectorAll('.lesson-youtube iframe[title]').forEach((frame) => {
+      add('Osadzony film (tytuł)', frame.getAttribute('title'));
+    });
+    root.querySelectorAll('.lesson-atonom').forEach((figure) => {
+      add('Interaktywny model', figure.dataset?.atonomFormula || figure.querySelector('figcaption')?.textContent);
+    });
+    root.querySelectorAll('[data-lesson-ai-formula]').forEach((figure) => {
+      add('Wzór lub równanie', figure.dataset?.lessonAiFormula || figure.getAttribute?.('data-lesson-ai-formula'));
+    });
+    root.querySelectorAll('.lesson-flashcard').forEach((card, index) => {
+      const front = card.querySelector('.flashcard-front strong')?.textContent;
+      const back = card.querySelector('.flashcard-back strong')?.textContent;
+      if (front || back) add(`Fiszka ${index + 1}`, `${front || ''}${back ? ` → ${back}` : ''}`);
+    });
+    return cleanAiContextText(rows.join('\n'), 5000, true);
+  }
+
+  function visibleLessonAiContext(root) {
+    if (!root || typeof root.cloneNode !== 'function') return '';
+    const clone = root.cloneNode(true);
+    if (typeof clone.querySelectorAll === 'function') {
+      clone.querySelectorAll([
+        '.lesson-ai-help',
+        '.lesson-preview-meta',
+        '.lesson-managed-image-placeholder',
+        '.lesson-flashcards',
+        '.lesson-google-slides',
+        '.lesson-youtube',
+        '.lesson-atonom',
+        '.lesson-formula',
+        '.preview-task',
+        '.task-card',
+        'button',
+        'input',
+        'select',
+        'textarea',
+        'iframe',
+        'script',
+        'style',
+        '[aria-hidden="true"]'
+      ].join(', ')).forEach((node) => node.remove());
+    }
+    return cleanAiContextText(clone.textContent || '', 9000, true);
+  }
+
+  function buildLessonAiContext(options = {}) {
+    const includeSlide = options.includeSlide !== false;
+    const includeTask = options.includeTask !== false;
+    const parts = [];
+    const authorContext = cleanAiContextText(
+      options.authorContext,
+      MAX_AI_AUTHOR_CONTEXT_CHARS,
+      true
+    );
+    if (authorContext) parts.push(`Dodatkowy kontekst autora:\n${authorContext}`);
+    if (includeTask) {
+      const task = taskAiContext(options.task, options.currentResponse);
+      if (task) parts.push(task);
+    }
+    if (includeSlide) {
+      const media = lessonMediaAiContext(options.root);
+      if (media) parts.push(`Media i elementy interaktywne:\n${media}`);
+      const visible = visibleLessonAiContext(options.root);
+      if (visible) parts.push(`Widoczna treść slajdu:\n${visible}`);
+    }
+    return cleanAiContextText(parts.join('\n\n'), options.maxChars || MAX_AI_CONTEXT_CHARS, true);
   }
 
   function parseTask(lines, slideNumber) {
@@ -692,6 +840,20 @@
     return values;
   }
 
+  function directiveJsonText(values, jsonKey, fallbackKey, maxChars) {
+    let value = values[fallbackKey] || '';
+    if (Object.prototype.hasOwnProperty.call(values, jsonKey)) {
+      try {
+        value = JSON.parse(values[jsonKey]);
+      } catch (_) {
+        return null;
+      }
+      if (typeof value !== 'string') return null;
+    }
+    const normalized = cleanAiContextText(value, maxChars + 1, true);
+    return normalized.length <= maxChars ? normalized : null;
+  }
+
   function safeChemistryText(value, condition) {
     const text = String(value || '').trim().replace(/\s+/g, ' ');
     if (!text || text.length > (condition ? 120 : 300)) return '';
@@ -732,7 +894,7 @@
       if (!expression) {
         return '<p class="lesson-interactive-error">Nieprawidłowy wzór matematyczny.</p>';
       }
-      return `<figure class="lesson-formula lesson-formula-math"><div class="lesson-formula-display" aria-label="${escapeHtml(title)}">\\(\\displaystyle ${escapeHtml(expression)}\\)</div><figcaption>${escapeHtml(title)}</figcaption></figure>`;
+      return `<figure class="lesson-formula lesson-formula-math" data-lesson-ai-formula="${escapeHtml(expression)}"><div class="lesson-formula-display" aria-label="${escapeHtml(title)}">\\(\\displaystyle ${escapeHtml(expression)}\\)</div><figcaption>${escapeHtml(title)}</figcaption></figure>`;
     }
 
     const left = safeChemistryText(values.left, false);
@@ -756,7 +918,7 @@
     }
     const labels = `${above ? `[${above}]` : ''}${below ? `[${below}]` : ''}`;
     const reaction = `${left}${arrow ? ` ${arrow}${labels} ${right}` : ''}`;
-    return `<figure class="lesson-formula lesson-formula-chemistry"><div class="lesson-formula-display" aria-label="${escapeHtml(title)}">\\(\\ce{${escapeHtml(reaction)}}\\)</div><figcaption>${escapeHtml(title)}</figcaption></figure>`;
+    return `<figure class="lesson-formula lesson-formula-chemistry" data-lesson-ai-formula="${escapeHtml(reaction)}"><div class="lesson-formula-display" aria-label="${escapeHtml(title)}">\\(\\ce{${escapeHtml(reaction)}}\\)</div><figcaption>${escapeHtml(title)}</figcaption></figure>`;
   }
 
   function tableBlockHtml(body) {
@@ -890,9 +1052,18 @@
       const repository = rawRepository ? safeRepositoryId(rawRepository) : '';
       const rawPoint = String(values.point || '').trim();
       const point = /^[1-9]\d{0,3}$/.test(rawPoint) ? rawPoint : '';
+      const authorContext = directiveJsonText(
+        values,
+        'context_json',
+        'context',
+        MAX_AI_AUTHOR_CONTEXT_CHARS
+      );
+      const includeSlide = !/^(?:0|false|no|nie|off)$/i.test(String(values.include_slide || 'true').trim());
+      const includeTask = !/^(?:0|false|no|nie|off)$/i.test(String(values.include_task || 'true').trim());
       if (
         !title
         || !button
+        || authorContext === null
         || (rawPrompt && !prompt)
         || (rawRepository && !repository)
         || (rawPoint && !point)
@@ -902,7 +1073,7 @@
       if (/\.txt$/i.test(prompt) && !point) {
         return '<p class="lesson-interactive-error">Prompt TXT wymaga numeru punktu.</p>';
       }
-      return `<section class="lesson-support-card lesson-ai-help" data-ai-prompt="${escapeHtml(prompt)}" data-ai-repository="${escapeHtml(repository)}" data-ai-point="${escapeHtml(point || '1')}"><span class="lesson-support-icon" aria-hidden="true">✦</span><span class="lesson-support-copy"><small>Pomoc do bieżącego slajdu</small><strong>${escapeHtml(title)}</strong><span>${escapeHtml(description)}</span></span><button class="lesson-support-action" type="button" data-lesson-ai-open>${escapeHtml(button)} <b aria-hidden="true">→</b></button></section>`;
+      return `<section class="lesson-support-card lesson-ai-help" data-ai-prompt="${escapeHtml(prompt)}" data-ai-repository="${escapeHtml(repository)}" data-ai-point="${escapeHtml(point || '1')}" data-ai-author-context="${escapeHtml(JSON.stringify(authorContext))}" data-ai-include-slide="${includeSlide ? 'true' : 'false'}" data-ai-include-task="${includeTask ? 'true' : 'false'}"><span class="lesson-support-icon" aria-hidden="true">✦</span><span class="lesson-support-copy"><small>Pomoc do bieżącego slajdu</small><strong>${escapeHtml(title)}</strong><span>${escapeHtml(description)}</span></span><button class="lesson-support-action" type="button" data-lesson-ai-open>${escapeHtml(button)} <b aria-hidden="true">→</b></button></section>`;
     }
     if (type === 'board') {
       const variant = values.variant === 'bitpaper' ? 'bitpaper' : 'whiteboard';
@@ -1206,9 +1377,13 @@
   }
 
   const api = {
+    MAX_AI_AUTHOR_CONTEXT_CHARS,
+    MAX_AI_CONTEXT_CHARS,
     LessonFormatError,
+    buildLessonAiContext,
     checkGapAnswer,
     checkAnswer,
+    taskAiContext,
     parseLesson,
     renderMarkdown,
     validateFilename

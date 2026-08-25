@@ -650,7 +650,10 @@ test('studio round-trips slide AI help and both interactive board variants', () 
           button: 'Otwórz pomoc',
           repositoryId: 'organiczna',
           promptFile: 'korepetytor.txt',
-          promptPoint: 4
+          promptPoint: 4,
+          authorContext: 'Slajd Google pokazuje utlenianie alkoholu.\nPo lewej jest substrat, po prawej produkt; podpis zawiera ::: i <znacznik>.',
+          includeSlide: true,
+          includeTask: false
         },
         {
           type: 'board',
@@ -672,6 +675,9 @@ test('studio round-trips slide AI help and both interactive board variants', () 
   assert.equal(studio.validateLesson(lesson).valid, true);
   const markdown = studio.serializeLesson(lesson);
   assert.match(markdown, /:::aihelp[\s\S]*repository: organiczna[\s\S]*prompt: korepetytor\.txt[\s\S]*point: 4/);
+  assert.match(markdown, /include_slide: true/);
+  assert.match(markdown, /include_task: false/);
+  assert.ok(markdown.includes(`context_json: ${JSON.stringify(lesson.slides[0].blocks[1].authorContext)}`));
   assert.match(markdown, /:::board[\s\S]*variant: whiteboard[\s\S]*new_tab: false/);
   assert.match(markdown, /:::board[\s\S]*variant: bitpaper[\s\S]*path: redoks\.json[\s\S]*new_tab: true/);
 
@@ -681,6 +687,9 @@ test('studio round-trips slide AI help and both interactive board variants', () 
   assert.equal(ai.repositoryId, 'organiczna');
   assert.equal(ai.promptFile, 'korepetytor.txt');
   assert.equal(ai.promptPoint, 4);
+  assert.equal(ai.authorContext, lesson.slides[0].blocks[1].authorContext);
+  assert.equal(ai.includeSlide, true);
+  assert.equal(ai.includeTask, false);
   assert.deepEqual(boards.map((block) => block.variant), ['whiteboard', 'bitpaper']);
   assert.equal(boards[0].newTab, false);
   assert.equal(boards[1].path, 'redoks.json');
@@ -689,6 +698,9 @@ test('studio round-trips slide AI help and both interactive board variants', () 
   assert.match(published.slides[0].html, /class="lesson-support-card lesson-ai-help"/);
   assert.match(published.slides[0].html, /data-ai-prompt="korepetytor\.txt"/);
   assert.match(published.slides[0].html, /data-ai-repository="organiczna"/);
+  assert.match(published.slides[0].html, /data-ai-include-slide="true"/);
+  assert.match(published.slides[0].html, /data-ai-include-task="false"/);
+  assert.match(published.slides[0].html, /data-ai-author-context="&quot;Slajd Google pokazuje utlenianie alkoholu\.[\s\S]*&lt;znacznik&gt;\.&quot;"/);
   assert.match(published.slides[0].html, /href="\/members\/module\/whiteboard\/"/);
   assert.match(published.slides[0].html, /href="\/members\/module\/bitpaper\/\?path=redoks\.json"/);
 
@@ -704,6 +716,11 @@ test('studio round-trips slide AI help and both interactive board variants', () 
   assert.equal(invalid.valid, false);
   assert.equal(invalid.errors.some((error) => error.code === 'INVALID_AI_PROMPT'), true);
   assert.equal(invalid.errors.some((error) => error.code === 'INVALID_BOARD_PATH'), true);
+
+  assert.throws(
+    () => studio.parseLesson('# AI\n\n:::aihelp\ncontext_json: {broken}\n:::', 'ai.md'),
+    (error) => error.code === 'INVALID_AI_CONTEXT'
+  );
 });
 
 test('studio rejects unsafe image URLs, malformed quizzes and ambiguous code fences', () => {

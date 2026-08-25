@@ -4785,6 +4785,28 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
   font-size: inherit;
 }
 
+.preview-choice-option[data-state="success"] {
+  border-color: var(--chem-primary);
+  background: color-mix(in srgb, var(--chem-primary-soft) 58%, var(--chem-surface));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--chem-primary) 12%, transparent);
+}
+
+.preview-choice-option[data-state="success"] .preview-choice-marker {
+  color: #fff;
+  background: var(--chem-primary);
+}
+
+.preview-choice-option[data-state="error"] {
+  border-color: var(--chem-danger);
+  background: color-mix(in srgb, var(--chem-danger) 7%, var(--chem-surface));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--chem-danger) 10%, transparent);
+}
+
+.preview-choice-option[data-state="error"] .preview-choice-marker {
+  color: #fff;
+  background: var(--chem-danger);
+}
+
 .preview-gap-exercise {
   display: grid;
   gap: 6px;
@@ -4820,6 +4842,20 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
 .preview-gap-field[aria-invalid="true"],
 .preview-answer-field[aria-invalid="true"] {
   border-color: var(--chem-danger);
+}
+
+.preview-gap-field[data-state="success"],
+.preview-answer-field[data-state="success"] {
+  border-color: var(--chem-primary);
+  background: color-mix(in srgb, var(--chem-primary-soft) 58%, var(--chem-surface));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--chem-primary) 12%, transparent);
+}
+
+.preview-gap-field[data-state="error"],
+.preview-answer-field[data-state="error"] {
+  border-color: var(--chem-danger);
+  background: color-mix(in srgb, var(--chem-danger) 7%, var(--chem-surface));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--chem-danger) 10%, transparent);
 }
 
 .preview-gap-exercise > select {

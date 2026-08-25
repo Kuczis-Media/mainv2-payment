@@ -740,15 +740,45 @@
       .catch(() => undefined);
   }
 
-  function slideAiContext(root) {
-    const clone = root.cloneNode(true);
-    clone.querySelectorAll(
-      '.lesson-ai-help, button, input, select, textarea, iframe, script, style'
-    ).forEach((node) => node.remove());
-    return String(clone.textContent || '')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 6000);
+  function currentTaskAiResponse(task, root = elements.taskHost) {
+    if (!task || !root) return '';
+    if (task.type === 'gaps' || task.type === 'gaps-text') {
+      return Array.from(root.querySelectorAll('.gap-exercise select, .gap-exercise input'))
+        .map((field) => field.value || '');
+    }
+    if (task.type === 'choice') {
+      const selected = root.querySelector('input[type="radio"]:checked');
+      if (!selected) return '';
+      const copy = selected.closest('label')?.querySelector('.choice-copy')?.textContent?.trim() || '';
+      return copy && copy !== selected.value ? `${selected.value} — ${copy}` : selected.value;
+    }
+    return root.querySelector('.task-controls input')?.value || '';
+  }
+
+  function aiAuthorContext(card) {
+    const raw = card?.dataset.aiAuthorContext || '';
+    if (!raw) return '';
+    try {
+      const parsed = JSON.parse(raw);
+      return typeof parsed === 'string' ? parsed : '';
+    } catch (_) {
+      return raw;
+    }
+  }
+
+  function slideAiContext(root, card) {
+    const task = state.lesson?.slides?.[state.index]?.task || null;
+    if (typeof window.ChemLesson?.buildLessonAiContext === 'function') {
+      return window.ChemLesson.buildLessonAiContext({
+        root,
+        task,
+        currentResponse: currentTaskAiResponse(task),
+        authorContext: aiAuthorContext(card),
+        includeSlide: card?.dataset.aiIncludeSlide !== 'false',
+        includeTask: card?.dataset.aiIncludeTask !== 'false'
+      });
+    }
+    return String(root?.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 6000);
   }
 
   function openSlideAiHelp(button, root) {
@@ -770,7 +800,7 @@
       const contextId = typeof window.crypto?.randomUUID === 'function'
         ? window.crypto.randomUUID()
         : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-      const context = slideAiContext(root);
+      const context = slideAiContext(root, card);
       if (context) {
         const slideTitle = root.querySelector('h1, h2, h3')?.textContent?.trim()
           || state.lesson?.title
@@ -1073,6 +1103,61 @@
       field?.focus();
     };
 
+    const setAnswerFieldState = (field, result) => {
+      if (!field) return;
+      field.dataset.state = result;
+      if (result === 'error') field.setAttribute('aria-invalid', 'true');
+      else field.removeAttribute('aria-invalid');
+      field.closest('.text-gap-control')?.setAttribute('data-state', result);
+      field.closest('.choice-grid label')?.setAttribute('data-state', result);
+    };
+
+    const clearAnswerFieldState = (field) => {
+      if (!field || field.disabled) return;
+      field.removeAttribute('data-state');
+      field.removeAttribute('aria-invalid');
+      field.closest('.text-gap-control')?.removeAttribute('data-state');
+      if (field.type === 'radio') {
+        form.querySelectorAll('.choice-grid label[data-state]').forEach((option) => {
+          option.removeAttribute('data-state');
+        });
+      } else {
+        field.closest('.choice-grid label')?.removeAttribute('data-state');
+      }
+      if (!state.solved.has(state.index)) {
+        feedback.removeAttribute('data-state');
+        feedback.textContent = '';
+      }
+    };
+
+    const markTaskAnswerStates = (answer) => {
+      if (task.type === 'gaps' || task.type === 'gaps-text') {
+        let correctCount = 0;
+        let firstWrong = null;
+        gapFields.forEach((field, index) => {
+          const correct = parser.checkGapAnswer(task, answer[index], index);
+          setAnswerFieldState(field, correct ? 'success' : 'error');
+          if (correct) correctCount += 1;
+          else if (!firstWrong) firstWrong = field;
+        });
+        return { correctCount, total: gapFields.length, firstWrong };
+      }
+      if (task.type === 'choice') {
+        const selected = form.querySelector('input[type="radio"]:checked');
+        const correct = parser.checkAnswer(task, answer);
+        setAnswerFieldState(selected, correct ? 'success' : 'error');
+        return { correctCount: correct ? 1 : 0, total: 1, firstWrong: correct ? null : selected };
+      }
+      const field = form.querySelector('.task-controls input');
+      const correct = parser.checkAnswer(task, answer);
+      setAnswerFieldState(field, correct ? 'success' : 'error');
+      return { correctCount: correct ? 1 : 0, total: 1, firstWrong: correct ? null : field };
+    };
+
+    form.querySelectorAll('input, select').forEach((field) => {
+      field.addEventListener('input', () => clearAnswerFieldState(field));
+    });
+
     if (perGapMode) {
       form.querySelectorAll('.gap-check-one').forEach((button) => {
         button.addEventListener('click', () => {
@@ -1083,16 +1168,15 @@
           state.attempts.set(state.index, attempts);
           if (parser.checkGapAnswer(task, input.value, gapIndex)) {
             checkedGaps.add(gapIndex);
-            input.removeAttribute('aria-invalid');
+            setAnswerFieldState(input, 'success');
             input.disabled = true;
             button.disabled = true;
-            button.closest('.text-gap-control').dataset.state = 'success';
             feedback.dataset.state = 'success';
             feedback.textContent = `Luka ${gapIndex + 1} jest poprawna.`;
             if (checkedGaps.size === gapFields.length) completeTask();
             else gapFields.find((field, index) => !checkedGaps.has(index))?.focus();
           } else {
-            button.closest('.text-gap-control').dataset.state = 'error';
+            setAnswerFieldState(input, 'error');
             showWrongAnswer(input, `Luka ${gapIndex + 1} jest niepoprawna`);
           }
         });
@@ -1105,12 +1189,15 @@
       const answer = readValue();
       const attempts = (state.attempts.get(state.index) || 0) + 1;
       state.attempts.set(state.index, attempts);
+      const result = markTaskAnswerStates(answer);
 
       if (parser.checkAnswer(task, answer)) {
         completeTask();
       } else {
-        const firstInput = form.querySelector('select:not([disabled]), input:not([type="radio"]), input[type="radio"]:checked, input[type="radio"]');
-        showWrongAnswer(firstInput);
+        const prefix = result.total > 1
+          ? `${result.correctCount} z ${result.total} odpowiedzi jest poprawnych`
+          : 'Ta odpowiedź jest niepoprawna';
+        showWrongAnswer(result.firstWrong, prefix);
       }
     });
     elements.taskHost.appendChild(form);
