@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" role="img" aria-labelledby="title description">
+  <title id="title">Schemat cząsteczki wody</title>
+  <desc id="description">Czerwony atom tlenu pośrodku i dwa białe atomy wodoru połączone wiązaniami pod kątem.</desc>
+  <rect width="960" height="540" rx="40" fill="#eef8f5"/>
+  <path d="M480 270 295 155M480 270l185-115" stroke="#184f49" stroke-width="24" stroke-linecap="round"/>
+  <circle cx="480" cy="270" r="105" fill="#dc4c4c" stroke="#8f2424" stroke-width="12"/>
+  <circle cx="270" cy="140" r="72" fill="#fff" stroke="#93aaa7" stroke-width="12"/>
+  <circle cx="690" cy="140" r="72" fill="#fff" stroke="#93aaa7" stroke-width="12"/>
+  <g fill="#132238" font-family="Arial, sans-serif" font-size="64" font-weight="700" text-anchor="middle">
+    <text x="480" y="293">O</text>
+    <text x="270" y="162">H</text>
+    <text x="690" y="162">H</text>
+  </g>
+  <text x="480" y="475" fill="#184f49" font-family="Arial, sans-serif" font-size="38" font-weight="700" text-anchor="middle">H₂O — cząsteczka polarna</text>
+</svg>

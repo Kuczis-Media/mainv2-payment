@@ -1,0 +1,138 @@
+{
+  "version": 1,
+  "quizId": "quiz-wszystkie-mozliwosci",
+  "metadata": {
+    "title": "Quiz pokazowy — wszystkie możliwości",
+    "description": "Kompletny przykład quizu ChemDisk: pytanie jednokrotnego i wielokrotnego wyboru, prawda/fałsz oraz odpowiedź tekstowa.",
+    "status": "published",
+    "tags": [
+      "przykład",
+      "chemia",
+      "wszystkie-typy"
+    ],
+    "cover": {
+      "ref": "assets/shared/example-diagram.svg",
+      "alt": "Schemat cząsteczki wody z atomem tlenu i dwoma atomami wodoru"
+    }
+  },
+  "settings": {
+    "passingScore": 70,
+    "shuffleQuestions": true,
+    "showFeedback": true,
+    "allowRetry": true
+  },
+  "questions": [
+    {
+      "questionId": "quiz-single-water",
+      "type": "single",
+      "prompt": "Który wzór przedstawia cząsteczkę wody?",
+      "points": 2,
+      "required": true,
+      "image": {
+        "ref": "assets/shared/example-diagram.svg",
+        "alt": "Model cząsteczki z jednym atomem tlenu i dwoma atomami wodoru"
+      },
+      "options": [
+        {
+          "optionId": "quiz-single-water-h2o",
+          "text": "H₂O",
+          "correct": true
+        },
+        {
+          "optionId": "quiz-single-water-co2",
+          "text": "CO₂",
+          "correct": false
+        },
+        {
+          "optionId": "quiz-single-water-o2",
+          "text": "O₂",
+          "correct": false
+        },
+        {
+          "optionId": "quiz-single-water-nacl",
+          "text": "NaCl",
+          "correct": false
+        }
+      ],
+      "acceptedAnswers": [],
+      "explanation": "Cząsteczka wody składa się z dwóch atomów wodoru i jednego atomu tlenu, dlatego jej wzór to H₂O."
+    },
+    {
+      "questionId": "quiz-multiple-elements",
+      "type": "multiple",
+      "prompt": "Zaznacz wszystkie pierwiastki występujące w cząsteczce wody.",
+      "points": 3,
+      "required": true,
+      "image": {
+        "ref": "",
+        "alt": ""
+      },
+      "options": [
+        {
+          "optionId": "quiz-multiple-elements-hydrogen",
+          "text": "Wodór",
+          "correct": true
+        },
+        {
+          "optionId": "quiz-multiple-elements-oxygen",
+          "text": "Tlen",
+          "correct": true
+        },
+        {
+          "optionId": "quiz-multiple-elements-carbon",
+          "text": "Węgiel",
+          "correct": false
+        },
+        {
+          "optionId": "quiz-multiple-elements-sodium",
+          "text": "Sód",
+          "correct": false
+        }
+      ],
+      "acceptedAnswers": [],
+      "explanation": "Woda zawiera wodór (H) i tlen (O). W jej cząsteczce nie ma węgla ani sodu."
+    },
+    {
+      "questionId": "quiz-true-false-polar",
+      "type": "true_false",
+      "prompt": "Cząsteczka wody jest polarna.",
+      "points": 1,
+      "required": true,
+      "image": {
+        "ref": "",
+        "alt": ""
+      },
+      "options": [
+        {
+          "optionId": "quiz-true-false-polar-true",
+          "text": "Prawda",
+          "correct": true
+        },
+        {
+          "optionId": "quiz-true-false-polar-false",
+          "text": "Fałsz",
+          "correct": false
+        }
+      ],
+      "acceptedAnswers": [],
+      "explanation": "Wiązania O–H są polarne, a kątowa geometria sprawia, że momenty dipolowe nie znoszą się."
+    },
+    {
+      "questionId": "quiz-text-element",
+      "type": "text",
+      "prompt": "Podaj polską nazwę pierwiastka o symbolu O.",
+      "points": 2,
+      "required": false,
+      "image": {
+        "ref": "",
+        "alt": ""
+      },
+      "options": [],
+      "acceptedAnswers": [
+        "tlen",
+        "Tlen"
+      ],
+      "explanation": "Symbol O oznacza tlen. W pytaniu tekstowym można podać kilka akceptowanych wariantów odpowiedzi."
+    }
+  ]
+}

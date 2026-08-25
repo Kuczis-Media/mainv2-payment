@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 420" role="img" aria-labelledby="title description">
+  <title id="title">Kolba laboratoryjna</title>
+  <desc id="description">Niebieska kolba z turkusowym płynem i trzema bąbelkami na jasnym tle.</desc>
+  <rect width="640" height="420" rx="32" fill="#eff6ff"/>
+  <path d="M280 65h80M300 65v105L195 335c-12 19 2 44 25 44h200c23 0 37-25 25-44L340 170V65" fill="none" stroke="#1e3a8a" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M230 320h180l28 45H202z" fill="#2dd4bf" opacity=".86"/>
+  <circle cx="275" cy="270" r="18" fill="#60a5fa"/>
+  <circle cx="350" cy="235" r="24" fill="#60a5fa"/>
+  <circle cx="320" cy="185" r="13" fill="#60a5fa"/>
+</svg>
