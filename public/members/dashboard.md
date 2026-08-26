@@ -59,13 +59,13 @@ Rozwiń listę, aby zobaczyć materiały do czytania.
 
 Filmy z lekcji i omówienia zadań.
 
-- [Nagranie lekcji](/members/module/film/?id=CH50zuS8DD0&type=1) — Film z lekcji w odtwarzaczu kursowym.
+- [Ciekawostka chemiczna](/members/module/film/?id=sU6epNBjvzo&type=1) — Przekazany film YouTube w odtwarzaczu kursowym.
 
 ## Ćwiczenia i powtórki
 
 Sprawdź wiedzę i przećwicz zadania przed maturą.
 
-- [Izotopy węgla — lekcja interaktywna](/members/module/lesson/?file=izotopy-wegla.md) — Przejdź przez krótką prezentację i quiz ABCD o izotopach węgla.
+- [Chemia organiczna — lekcja interaktywna](/members/module/lesson/?file=lekcja-chemia-organiczna.md) — Przejdź przez kompletną lekcję o grupach funkcyjnych, aldehydach i ketonach.
 - [Asystent Gemini](/members/module/chat/?prompt=test.json) — Zapytaj asystenta korzystającego z przygotowanego promptu.
 - [Asystent naprowadzający — przykład](/members/module/chat/?plik=prompty-przyklad.txt&punkt=1) — Instrukcja wybrana z wielopunktowego pliku TXT.
 
@@ -86,30 +86,27 @@ Zestaw kontrolny wszystkich modułów i dostępnych trybów. Użyj go po wdroże
 
 ### Lekcja interaktywna
 
-- [Izotopy węgla — przykład Markdown](/members/module/lesson/?file=izotopy-wegla.md) — Prezentacja krokowa z zadaniem liczbowym i quizem ABCD.
+- [Chemia organiczna — kompletny przykład Markdown](/members/module/lesson/?file=lekcja-chemia-organiczna.md) — Wszystkie klocki Lesson Buildera, pytania zamknięte i otwarte oraz powiązane materiały.
 
 ### Formularze
 
 - [Ćwiczenie 3 — szybkość reakcji chemicznych i równowaga chemiczna](/members/module/forms/?id=1FAIpQLSeKEXX7ooRB7ZaPJ8UwnqNlPsucgjwnQFzmSlZ3OvrdFlURsA) — Ćwiczenie w Google Forms.
-- [Test Forms](/members/module/forms/?id=1YmTr2X0Fx-0T5a8CHpH0sBBz9rTzmIELo2bLnlsdd3M) — Drugi formularz sprawdzający wiedzę.
 
 ### Film — odtwarzacz podstawowy
 
 - [Ciekawostka 1 — tryb chroniony](/members/module/film/?id=sU6epNBjvzo&type=1) — YouTube z ograniczonym interfejsem.
 - [Ciekawostka 2 — tryb chroniony](/members/module/film/?id=PG6fB57aAoA&type=1) — YouTube z ograniczonym interfejsem.
 - [Ciekawostka 3 — tryb chroniony](/members/module/film/?id=kOoRildWO0s&type=1) — YouTube z ograniczonym interfejsem.
-- [Film testowy — type=1](/members/module/film/?id=p_5yt5IX38I&type=1) — YouTube w trybie chronionym.
-- [Film testowy — type=2](/members/module/film/?id=1qKkDarVM8qn1GHkNalt9f8n7IXNUawZF&type=2) — Test osadzenia pliku z Google Drive.
-- [Film testowy — type=3](/members/module/film/?id=p_5yt5IX38I&type=3) — YouTube z pełniejszym interfejsem.
+- [Ciekawostka 1 — tryb pełniejszy](/members/module/film/?id=sU6epNBjvzo&type=3) — Ten sam przekazany film z pełniejszym interfejsem YouTube.
 
 ### Odtwarzacz YT
 
-- [Film w odtwarzaczu YT](/members/module/yt/?id=p_5yt5IX38I) — YouTube z własnymi kontrolkami ChemDisk.
+- [Film w odtwarzaczu YT](/members/module/yt/?id=kOoRildWO0s) — Przekazany film YouTube z własnymi kontrolkami ChemDisk.
 
 ### Prezentacje
 
-- [Prezentacja bez ograniczenia pobierania — type=1](/members/module/slides/?id=1H5__hUC_iQxeR5jW6kg4TBICCL2XK_mL&type=1) — Zwykły podgląd prezentacji Google.
-- [Prezentacja z ograniczonym interfejsem — type=2](/members/module/slides/?id=1H5__hUC_iQxeR5jW6kg4TBICCL2XK_mL&type=2) — Podgląd z maskami i bez bezpośredniego przejścia do Google.
+- [Aldehydy — prezentacja bez ograniczenia pobierania](/members/module/slides/?id=1rxPm5CJl2LDzrzq89fogz-_PWwO_BbqF&type=1) — Zwykły podgląd przekazanej prezentacji Google.
+- [Aldehydy — prezentacja z ograniczonym interfejsem](/members/module/slides/?id=1rxPm5CJl2LDzrzq89fogz-_PWwO_BbqF&type=2) — Ta sama prezentacja z maskami i bez bezpośredniego przejścia do Google.
 
 ### Dokumenty PDF
 

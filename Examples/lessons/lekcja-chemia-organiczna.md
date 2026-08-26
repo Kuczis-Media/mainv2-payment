@@ -9,11 +9,11 @@ decoration: molecules
 text_tone: auto
 :::
 
-# Lekcja pokazowa — wszystkie możliwości
+# Chemia organiczna — kompletna lekcja interaktywna
 
 ## Wprowadzenie
 
-Ta lekcja jest kompletnym wzorcem pliku Markdown dla kreatora lekcji ChemDisk. Każdy kolejny slajd pokazuje inną grupę klocków, ustawień albo zadań.
+Ta lekcja prowadzi od rozpoznawania grup funkcyjnych do reakcji aldehydów i ketonów. Jednocześnie jest kompletnym, gotowym do importu wzorcem Lesson Buildera ChemDisk.
 
 ### W tym przykładzie znajdziesz
 
@@ -24,11 +24,11 @@ Ta lekcja jest kompletnym wzorcem pliku Markdown dla kreatora lekcji ChemDisk. K
 
 1. Otwórz lekcję w Studio.
 2. Klikaj kolejne slajdy i sprawdzaj ustawienia inspektora.
-3. Zastąp przykładowe identyfikatory własnymi materiałami.
+3. Rozwiąż zadania, zapisz odpowiedź otwartą, porównaj ją z kluczem i zakończ egzamin.
 
 > Wiedza jest najbardziej użyteczna wtedy, gdy potrafimy ją zastosować.
 
-> **Ważne:** To jest materiał demonstracyjny. Przed publikacją podmień przykładowe linki oraz ID.
+> **Ważne:** Identyfikatory Google Slides, PDF, Forms i YouTube w tym pliku są prawdziwymi identyfikatorami przekazanych materiałów. Ich osadzenie wymaga ustawienia dostępu „każdy, kto ma link”.
 
 ---
 
@@ -41,40 +41,40 @@ decoration: bubbles
 text_tone: dark
 :::
 
-## Tabele i komunikaty
+## Mapa grup funkcyjnych
 
 :::table
-caption: Wyrównanie tabeli do lewej
+caption: Najważniejsze grupy funkcyjne
 align: left
-headers: Pierwiastek | Symbol | Liczba atomowa
-row: Wodór | H | 1
-row: Węgiel | C | 6
-row: Tlen | O | 8
+headers: Klasa | Grupa | Przykład
+row: Alkohol | –OH | etanol
+row: Aldehyd | –CHO | etanal
+row: Keton | >C=O | propanon
 :::
 
 :::table
-caption: Wyrównanie tabeli do środka
+caption: Produkty łagodnego utleniania alkoholi
 align: center
-headers: Wielkość | Symbol | Jednostka
-row: Masa | m | g
-row: Liczność materii | n | mol
+headers: Alkohol | Produkt | Klasa produktu
+row: pierwszorzędowy | aldehyd | związek karbonylowy
+row: drugorzędowy | keton | związek karbonylowy
 :::
 
 :::table
-caption: Wyrównanie tabeli do prawej
+caption: Przykłady homologów
 align: right
-headers: Związek | Wzór
-row: Woda | H₂O
-row: Dwutlenek węgla | CO₂
+headers: Związek | Wzór półstrukturalny
+row: Metanal | HCHO
+row: Etanal | CH₃CHO
 :::
 
-> **Ważne:** Komunikat informacyjny przekazuje ważny kontekst.
+> **Ważne:** W aldehydzie atom węgla grupy karbonylowej jest związany przynajmniej z jednym atomem wodoru.
 
-> **Wskazówka:** Tytuł „Wskazówka” nadaje komunikatowi ton porady.
+> **Wskazówka:** Końcówka `-al` pomaga rozpoznać aldehyd, a `-on` — keton.
 
-> **Uwaga:** Ten wariant służy do ostrzeżeń.
+> **Uwaga:** Nie utożsamiaj każdego związku zawierającego tlen z alkoholem.
 
-> **Brawo:** Ten wariant podkreśla sukces ucznia.
+> **Brawo:** Umiejętność rozpoznawania grupy funkcyjnej pozwala przewidywać właściwości związku.
 
 ---
 
@@ -87,42 +87,42 @@ decoration: glow
 text_tone: dark
 :::
 
-## Style tekstu
+## Nazewnictwo — ten sam temat w różnych stylach
 
 :::style font=sans size=small align=left color=#17324d background=#eef8f5
-Sans, mały rozmiar, wyrównanie do lewej, kolor tekstu i tła.
+Metanal to najprostszy aldehyd.
 :::
 
 :::style font=arial size=normal align=center bold=true color=#0e665a
-Arial, rozmiar normalny, wyśrodkowanie i pogrubienie.
+Etanal ma wzór CH₃CHO.
 :::
 
 :::style font=verdana size=large align=right
-Verdana, duży rozmiar i wyrównanie do prawej.
+Propanon jest najprostszym ketonem.
 :::
 
 :::style font=serif size=xlarge align=left
-Serif w największym rozmiarze.
+Końcówka aldehydów: -al.
 :::
 
 :::style font=georgia size=normal align=left
-Krój Georgia.
+Końcówka ketonów: -on.
 :::
 
 :::style font=times size=normal align=left
-Krój Times.
+Grupa karbonylowa: C=O.
 :::
 
 :::style font=rounded size=normal align=left
-Krój zaokrąglony.
+Grupa aldehydowa: –CHO.
 :::
 
 :::style font=mono size=normal align=left
-Krój monospace.
+CH3CH2OH → CH3CHO
 :::
 
 :::style font=courier size=normal align=left
-Krój Courier.
+CH3CHO → CH3COOH
 :::
 
 ---
@@ -141,7 +141,7 @@ text_tone: auto
 :::image
 ref: assets/shared/example-diagram.svg
 repository: default
-alt: Czerwony atom tlenu pośrodku, dwa białe atomy wodoru u góry oraz wiązania tworzące kąt; podpis H₂O — cząsteczka polarna
+alt: Cztery pola przedstawiają grupy funkcyjne alkoholu –OH, aldehydu –CHO, ketonu >C=O i kwasu karboksylowego –COOH
 width: 70
 align: center
 :::
@@ -149,8 +149,8 @@ align: center
 :::image
 ref: photos/example-photo.svg
 repository: default
-owner: lekcja-wszystkie-mozliwosci.md
-alt: Lokalny obraz lekcji wyrównany do lewej; niebieska kolba z trzema bąbelkami
+owner: lekcja-chemia-organiczna.md
+alt: Lokalny schemat próby Tollensa; kolba z warstwą srebra symbolizującą dodatni wynik dla aldehydu
 width: 35
 align: left
 :::
@@ -158,19 +158,19 @@ align: left
 :::image
 ref: photos/example-photo.svg
 repository: default
-owner: lekcja-wszystkie-mozliwosci.md
-alt: Ten sam lokalny obraz lekcji wyrównany do prawej
+owner: lekcja-chemia-organiczna.md
+alt: Ten sam schemat próby Tollensa wyrównany do prawej
 width: 35
 align: right
 :::
 
-![Zewnętrzny model cząsteczki wody](https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Water_molecule_3D.svg/640px-Water_molecule_3D.svg.png)
+![Miniatura zewnętrznego filmu użytego w lekcji](https://i.ytimg.com/vi/sU6epNBjvzo/hqdefault.jpg)
 
 Opis ALT obrazu z Media Managera jest dostępny dla czytników ekranu i trafia do kontekstu AI. Przykłady wyżej pokazują współdzielony zasób, lokalne zdjęcie lekcji, szerokość oraz wszystkie trzy wyrównania: `left`, `center` i `right`.
 
 ```javascript
-const molarMass = (atoms) => atoms.reduce((sum, atom) => sum + atom.mass, 0);
-console.log(molarMass([{ mass: 1 }, { mass: 1 }, { mass: 16 }]));
+const suffixByGroup = { '-CHO': '-al', '>C=O': '-on', '-COOH': '-owy' };
+console.log(suffixByGroup['-CHO']); // -al
 ```
 
 ---
@@ -186,24 +186,24 @@ text_tone: dark
 
 ## Harmonijki i fiszki
 
-:::accordion Harmonijka domyślnie zamknięta
-Tutaj można ukryć dodatkowe wyjaśnienie, listę albo inny zwykły klocek.
+:::accordion Dlaczego aldehydy utleniają się łatwiej? 
+Atom wodoru przy węglu karbonylowym umożliwia przejście do grupy karboksylowej.
 
-- Pierwszy szczegół
-- Drugi szczegół
+- etanal utlenia się do kwasu etanowego,
+- dodatnia próba Tollensa może dać „lustro srebrne”.
 :::
 
-:::accordion Harmonijka domyślnie otwarta open=true
-Ta sekcja jest od razu rozwinięta. Harmonijki i sekcje stylowane nie mogą być zagnieżdżane jedna w drugiej.
+:::accordion Aldehyd a keton — szybkie porównanie open=true
+Aldehyd ma grupę karbonylową na końcu łańcucha, a keton — wewnątrz łańcucha. Ta harmonijka jest domyślnie otwarta.
 :::
 
 :::flashcards
-title: Fiszki — symbole i nazwy
+title: Fiszki — grupy i nazwy
 color: #7c3aed
-H => wodór
-O => tlen
-Na => sód
-Cl => chlor
+–OH => grupa hydroksylowa
+–CHO => grupa aldehydowa
+>C=O => grupa karbonylowa ketonu
+–COOH => grupa karboksylowa
 :::
 
 ---
@@ -228,7 +228,7 @@ expression: \frac{-b \pm \sqrt{b^{2}-4ac}}{2a}
 :::formula
 mode: chemistry
 title: Sam zapis chemiczny — bez strzałki
-left: H_{2}O
+left: CH_{3}CHO
 arrow: 
 above: 
 below: 
@@ -238,66 +238,66 @@ right:
 :::formula
 mode: chemistry
 title: Reakcja w prawo
-left: 2H_{2} + O_{2}
+left: CH_{3}CH_{2}OH + [O]
 arrow: ->
-above: zapłon
+above: łagodne utlenianie
 below: 
-right: 2H_{2}O
+right: CH_{3}CHO + H_{2}O
 :::
 
 :::formula
 mode: chemistry
-title: Reakcja w lewo
-left: produkty
+title: Reakcja w lewo — demonstracja strzałki
+left: aldehyd
 arrow: <-
 above: 
-below: chłodzenie
-right: substraty
+below: redukcja
+right: alkohol pierwszorzędowy
 :::
 
 :::formula
 mode: chemistry
-title: Strzałka dwukierunkowa
-left: A
+title: Addycja i eliminacja
+left: alken + H_{2}O
 arrow: <->
 above: 
 below: 
-right: B
+right: alkohol
 :::
 
 :::formula
 mode: chemistry
-title: Równowaga
-left: N_{2} + 3H_{2}
+title: Estryfikacja — równowaga
+left: CH_{3}COOH + C_{2}H_{5}OH
 arrow: <=>
-above: Fe
-below: temperatura
-right: 2NH_{3}
+above: katalizator kwasowy
+below: ogrzewanie
+right: CH_{3}COOC_{2}H_{5} + H_{2}O
 :::
 
 :::formula
 mode: chemistry
-title: Równowaga przesunięta w prawo
-left: A
+title: Równowaga przesunięta w prawo — wariant zapisu
+left: substraty organiczne
 arrow: <=>>
 above: 
 below: 
-right: B
+right: produkt główny
 :::
 
 :::formula
 mode: chemistry
-title: Równowaga przesunięta w lewo
-left: A
+title: Równowaga przesunięta w lewo — wariant zapisu
+left: substraty
 arrow: <<=>
 above: 
 below: 
-right: B
+right: produkty
 :::
 
 ---
 
-<!-- chemdisk-step:{"id":"example-video-model","includeInLesson":"INHERIT","requiredToAdvance":true,"condition":{"type":"material_completed","materialId":"youtube:FSyAehMdpyI","minimumScore":0}} -->
+<!-- chemdisk-step:{"id":"example-video-model","includeInLesson":"INHERIT","requiredToAdvance":true,"condition":{"type":"material_completed","materialId":"youtube:sU6epNBjvzo","minimumScore":0}} -->
 
 :::slide
 transition: rise
@@ -306,21 +306,31 @@ decoration: glow
 text_tone: dark
 :::
 
-## Film i model cząsteczki
+## Film i model związku organicznego
 
 :::youtube
-id: FSyAehMdpyI
-title: Przykładowy film YouTube do lekcji
+id: sU6epNBjvzo
+title: Ciekawostka chemiczna — film 1
+:::
+
+:::youtube
+id: PG6fB57aAoA
+title: Ciekawostka chemiczna — film 2
+:::
+
+:::youtube
+id: kOoRildWO0s
+title: Ciekawostka chemiczna — film 3
 :::
 
 :::atonom
-formula: woda
-title: Interaktywny model cząsteczki w ATONOM
+formula: etanal
+title: Interaktywny model etanalu w ATONOM
 :::
 
 ---
 
-<!-- chemdisk-step:{"id":"example-google-slides","includeInLesson":"INHERIT","requiredToAdvance":true,"condition":{"type":"material_completed","materialId":"slides:google-example","minimumScore":0}} -->
+<!-- chemdisk-step:{"id":"example-google-slides","includeInLesson":"INHERIT","requiredToAdvance":true,"condition":{"type":"material_completed","materialId":"slides:1rxPm5CJl2LDzrzq89fogz-_PWwO_BbqF","minimumScore":0}} -->
 
 :::slide
 transition: slide
@@ -332,24 +342,24 @@ text_tone: dark
 ## Google Slides — sterowanie włączone i wyłączone
 
 :::googleslides
-id: 1AbCdEfGhIjKlMnOpQrStUvWxYz1234567890
+id: 1rxPm5CJl2LDzrzq89fogz-_PWwO_BbqF
 published: false
 controls: true
-title: Standardowa prezentacja Google — przyciski sterowania włączone
+title: Aldehydy — prezentacja Google z przyciskami sterowania
 :::
 
 :::googleslides
-id: 1ZyXwVuTsRqPoNmLkJiHgFeDcBa0987654321
-published: true
+id: 1rxPm5CJl2LDzrzq89fogz-_PWwO_BbqF
+published: false
 controls: false
-title: Opublikowana prezentacja Google — przyciski sterowania wyłączone
+title: Aldehydy — ta sama standardowa prezentacja bez przycisków sterowania
 :::
 
 Google Slides działa w zewnętrznym iframe. AI nie może odczytać jego zawartości bezpośrednio, dlatego dokładny opis slajdów znajduje się w polu ręcznego kontekstu klocka AI na kolejnym slajdzie.
 
 ---
 
-<!-- chemdisk-step:{"id":"example-native-materials","includeInLesson":"INHERIT","requiredToAdvance":true,"condition":{"type":"quiz_completed","materialId":"quiz:default:quiz-wszystkie-mozliwosci","minimumScore":0}} -->
+<!-- chemdisk-step:{"id":"example-native-materials","includeInLesson":"INHERIT","requiredToAdvance":true,"condition":{"type":"quiz_completed","materialId":"quiz:default:quiz-chemia-organiczna","minimumScore":0}} -->
 
 :::slide
 transition: zoom
@@ -362,17 +372,17 @@ text_tone: dark
 
 :::presentation
 repository: default
-presentation: prezentacja-przykladowa
-title: Prezentacja ChemDisk
-description: Otwiera natywną prezentację wskazaną przez presentation.json.
+presentation: prezentacja-aldehydy
+title: Aldehydy — prezentacja ChemDisk
+description: Otwiera dołączoną prezentację `prezentacja-aldehydy/presentation.json` i zapisuje jej postęp.
 button: Otwórz prezentację
 :::
 
 :::quiz
 repository: default
-quiz: quiz-wszystkie-mozliwosci
-title: Quiz ze wszystkich typów pytań
-description: Otwiera przykładowy quiz dołączony do katalogu Examples.
+quiz: quiz-chemia-organiczna
+title: Chemia organiczna — quiz przekrojowy
+description: Otwiera `quiz-chemia-organiczna/quiz.json`, zawierający wszystkie cztery typy pytań.
 button: Rozpocznij quiz
 :::
 
@@ -387,45 +397,45 @@ decoration: glow
 text_tone: light
 :::
 
-## PDF — pięć trybów ochrony
+## Cykloaddycja — PDF w pięciu trybach
 
 :::pdf
-id: 1AbCdEfGhIjKlMnOpQrStUvWxYz1234567890
+id: 1qKkDarVM8qn1GHkNalt9f8n7IXNUawZF
 protection: 1
-title: PDF z Dysku Google — tryb 1
-description: Dokument wskazany identyfikatorem Google Drive.
+title: Cykloaddycja — chroniony podgląd
+description: Dokument wskazany prawdziwym identyfikatorem Google Drive.
 button: Otwórz PDF
 :::
 
 :::pdf
-id: 1AbCdEfGhIjKlMnOpQrStUvWxYz1234567890
+id: 1qKkDarVM8qn1GHkNalt9f8n7IXNUawZF
 protection: 2
-title: PDF z Dysku Google — tryb 2
-description: Drugi wariant osadzania dokumentu Google.
+title: Cykloaddycja — pobieranie
+description: Wariant uruchamiający pobranie dokumentu.
 button: Otwórz PDF
 :::
 
 :::pdf
-id: 1AbCdEfGhIjKlMnOpQrStUvWxYz1234567890
+id: 1qKkDarVM8qn1GHkNalt9f8n7IXNUawZF
 protection: 3
-title: PDF z Dysku Google — tryb 3
-description: Trzeci wariant osadzania dokumentu Google.
+title: Cykloaddycja — zwykły podgląd
+description: Wariant podglądu bez ograniczonego interfejsu.
 button: Otwórz PDF
 :::
 
 :::pdf
-id: https://example.com/material.pdf
+id: https://drive.google.com/file/d/1qKkDarVM8qn1GHkNalt9f8n7IXNUawZF/view?usp=sharing
 protection: 4
-title: Zewnętrzny PDF HTTPS — tryb 4
-description: Bezpieczny pełny adres HTTPS.
+title: Cykloaddycja — pełny link HTTPS, tryb 4
+description: Ten sam prawdziwy plik przekazany jako pełny adres HTTPS.
 button: Otwórz PDF
 :::
 
 :::pdf
-id: https://example.com/material.pdf
+id: https://drive.google.com/file/d/1qKkDarVM8qn1GHkNalt9f8n7IXNUawZF/view?usp=sharing
 protection: 5
-title: Zewnętrzny PDF HTTPS — tryb 5
-description: Bezpieczny pełny adres HTTPS z alternatywnym odtwarzaczem.
+title: Cykloaddycja — pełny link HTTPS, tryb 5
+description: Ten sam dokument otwierany alternatywnym sposobem.
 button: Otwórz PDF
 :::
 
@@ -452,7 +462,7 @@ prompt: example-prompt.txt
 point: 1
 include_slide: true
 include_task: true
-context_json: "Na ilustracji atom tlenu jest czerwony i znajduje się centralnie. Dwa białe atomy wodoru leżą wyżej, po lewej i prawej stronie. Wiązania tworzą kąt, co pomaga wyjaśnić polarność cząsteczki. W prezentacji Google poprzedniego slajdu: slajd 1 pokazuje budowę H₂O, slajd 2 rozkład ładunku, a slajd 3 doświadczenie z odchylaniem strumienia wody."
+context_json: "Na diagramie porównano cztery grupy funkcyjne: –OH alkoholu, –CHO aldehydu, wewnętrzną >C=O ketonu oraz –COOH kwasu karboksylowego. Lokalna ilustracja pokazuje symboliczne lustro srebrne w próbie Tollensa. Prezentacja Google na poprzednim slajdzie dotyczy aldehydów; autor powinien tu dopisać szczegóły konkretnych slajdów, których AI nie może odczytać z iframe ani z obrazu."
 :::
 
 :::aihelp
@@ -464,11 +474,11 @@ prompt:
 point: 1
 include_slide: false
 include_task: false
-context_json: "Autor może podać osobny, wielowierszowy opis dla każdego klocka AI. To dobre miejsce na opis elementów obrazu, diagramu albo kolejnych slajdów Google."
+context_json: "Autor może podać osobny, wielowierszowy opis dla każdego klocka AI. Przykład: po lewej znajduje się etanal, strzałka jest opisana odczynnikiem Tollensa, a po prawej zaznaczono kwas etanowy i srebrny osad."
 :::
 
 :::question
-Cząsteczka wody ma geometrię kątową.
+Aldehydy zawierają końcową grupę karbonylową.
 :::
 
 :::task
@@ -476,7 +486,7 @@ type: choice
 label: Wybierz Prawda albo Fałsz
 options: Prawda | Fałsz
 answer: Prawda
-hint: Spójrz na położenie atomów wodoru względem tlenu.
+hint: Porównaj położenie grupy C=O w aldehydzie i ketonie.
 success: Dobrze! Zaznaczenie zostanie pokazane na zielono, a błędne na czerwono.
 :::
 
@@ -494,63 +504,63 @@ text_tone: auto
 ## Kafelki linków — wszystkie ikony
 
 :::linkcard
-title: Zwykły link
-description: Ikona link i otwarcie w tej samej karcie.
-url: /members/
+title: Test szybkości reakcji — Google Forms
+description: Wewnętrzny moduł Forms; po otwarciu z lekcji pokaże przycisk powrotu.
+url: /members/module/forms/?id=1FAIpQLSeKEXX7ooRB7ZaPJ8UwnqNlPsucgjwnQFzmSlZ3OvrdFlURsA
 icon: link
 color: #0e665a
 new_tab: false
 :::
 
 :::linkcard
-title: Książka
-description: Materiał do czytania.
-url: https://example.com/book
+title: Cykloaddycja — materiał do czytania
+description: Oryginalny link Google Drive do przekazanego PDF.
+url: https://drive.google.com/file/d/1qKkDarVM8qn1GHkNalt9f8n7IXNUawZF/view?usp=sharing
 icon: book
 color: #2563eb
 new_tab: true
 :::
 
 :::linkcard
-title: Film
-description: Dodatkowy materiał wideo.
-url: https://example.com/video
+title: Ciekawostka chemiczna 1
+description: Pierwszy z przekazanych filmów YouTube.
+url: https://www.youtube.com/watch?v=sU6epNBjvzo
 icon: video
 color: #dc2626
 new_tab: true
 :::
 
 :::linkcard
-title: Chemia
-description: Materiał chemiczny.
-url: https://example.com/chemistry
+title: Aldehydy — prezentacja źródłowa
+description: Oryginalny link do przekazanej prezentacji Google.
+url: https://docs.google.com/presentation/d/1rxPm5CJl2LDzrzq89fogz-_PWwO_BbqF/edit?usp=drive_link
 icon: chemistry
 color: #059669
 new_tab: true
 :::
 
 :::linkcard
-title: Matematyka
-description: Materiał matematyczny.
-url: https://example.com/math
+title: Szybkość reakcji — ćwiczenie
+description: Formularz sprawdzający wpływ warunków na szybkość reakcji.
+url: https://docs.google.com/forms/d/e/1FAIpQLSeKEXX7ooRB7ZaPJ8UwnqNlPsucgjwnQFzmSlZ3OvrdFlURsA/viewform?usp=sharing
 icon: math
 color: #7c3aed
 new_tab: true
 :::
 
 :::linkcard
-title: Plik
-description: Link do pliku.
-url: https://example.com/file
+title: Cykloaddycja — plik
+description: Pełny adres HTTPS dokumentu z Dysku Google.
+url: https://drive.google.com/file/d/1qKkDarVM8qn1GHkNalt9f8n7IXNUawZF/view?usp=sharing
 icon: file
 color: #d97706
 new_tab: true
 :::
 
 :::linkcard
-title: Zewnętrzna strona
-description: Ikona external.
-url: https://example.com/
+title: Ciekawostka chemiczna 2
+description: Drugi z przekazanych filmów YouTube, otwierany jako link zewnętrzny.
+url: https://www.youtube.com/watch?v=PG6fB57aAoA
 icon: external
 color: #475569
 new_tab: true
@@ -583,7 +593,7 @@ title: Plansza BitPaper
 description: Otwórz wcześniej przygotowaną planszę w nowej karcie.
 button: Otwórz BitPaper
 variant: bitpaper
-path: example-board.json
+path: 
 new_tab: true
 :::
 
@@ -591,7 +601,7 @@ new_tab: true
 title: Zapytaj prowadzącego
 description: Otwiera wewnętrzny formularz kontaktowy platformy.
 button: Napisz wiadomość
-internal: Pytanie do lekcji pokazowej — slajd „Tablice i kontakt”.
+internal: Pytanie do lekcji „Chemia organiczna” — slajd „Tablice i kontakt”.
 new_tab: false
 :::
 
@@ -599,13 +609,13 @@ new_tab: false
 title: Formularz w nowej karcie
 description: Ten wariant otwiera formularz osobno.
 button: Otwórz formularz
-internal: Proszę o pomoc z materiałem demonstracyjnym.
+internal: Proszę o pomoc z materiałem o aldehydach i ketonach.
 new_tab: true
 :::
 
 ---
 
-<!-- chemdisk-step:{"id":"example-exams","includeInLesson":"INHERIT","requiredToAdvance":true,"condition":{"type":"exam_passed","materialId":"exam:default:egzamin-wszystkie-mozliwosci","minimumScore":0}} -->
+<!-- chemdisk-step:{"id":"example-exams","includeInLesson":"INHERIT","requiredToAdvance":true,"condition":{"type":"exam_passed","materialId":"exam:default:egzamin-chemia-organiczna","minimumScore":0}} -->
 
 :::slide
 transition: zoom
@@ -618,7 +628,7 @@ text_tone: dark
 
 :::exam
 repository: default
-exam: egzamin-wszystkie-mozliwosci
+exam: egzamin-chemia-organiczna
 title: Egzamin opcjonalny
 description: Karta nie blokuje przejścia dalej.
 button: Otwórz egzamin
@@ -628,7 +638,7 @@ minimum_score: 0
 
 :::exam
 repository: default
-exam: egzamin-wszystkie-mozliwosci
+exam: egzamin-chemia-organiczna
 title: Wymagane ukończenie egzaminu
 description: Uczeń musi zakończyć próbę.
 button: Rozpocznij egzamin
@@ -638,7 +648,7 @@ minimum_score: 0
 
 :::exam
 repository: default
-exam: egzamin-wszystkie-mozliwosci
+exam: egzamin-chemia-organiczna
 title: Wymagane zaliczenie egzaminu
 description: Uczeń musi osiągnąć próg zapisany w exam.json.
 button: Rozpocznij egzamin
@@ -648,7 +658,7 @@ minimum_score: 0
 
 :::exam
 repository: default
-exam: egzamin-wszystkie-mozliwosci
+exam: egzamin-chemia-organiczna
 title: Wymagany własny próg
 description: Uczeń musi zdobyć co najmniej 80 procent.
 button: Rozpocznij egzamin
@@ -658,7 +668,7 @@ minimum_score: 80
 
 ---
 
-<!-- chemdisk-step:{"id":"example-canvas","includeInLesson":"ON","requiredToAdvance":true,"condition":{"type":"minimum_score","materialId":"exam:default:egzamin-wszystkie-mozliwosci","minimumScore":80}} -->
+<!-- chemdisk-step:{"id":"example-canvas","includeInLesson":"ON","requiredToAdvance":true,"condition":{"type":"minimum_score","materialId":"exam:default:egzamin-chemia-organiczna","minimumScore":80}} -->
 
 :::slide
 transition: none
@@ -682,7 +692,7 @@ Klocek można ustawić przez współrzędne X i Y oraz szerokość i wysokość.
 :::image
 ref: assets/shared/example-diagram.svg
 repository: default
-alt: Schemat wody umieszczony po prawej stronie slajdu canvas
+alt: Schemat grup funkcyjnych umieszczony po prawej stronie slajdu canvas
 width: 100
 align: center
 :::
@@ -702,17 +712,17 @@ text_tone: dark
 ## Zadanie tekstowe
 
 :::question
-Podaj symbol chemiczny tlenu.
-Możesz wpisać wielką albo małą literę, ponieważ sprawdzanie wielkości liter jest wyłączone.
+Podaj skrótowy zapis grupy aldehydowej bez kreski poprzedzającej.
+Możesz wpisać wielkie albo małe litery, ponieważ sprawdzanie wielkości liter jest wyłączone.
 :::
 
 :::task
 type: text
-label: Symbol tlenu
-placeholder: Wpisz symbol
-answer: O
-hint: Symbol ma jedną literę.
-success: Poprawnie — symbolem tlenu jest O.
+label: Grupa aldehydowa
+placeholder: Wpisz CHO
+answer: CHO
+hint: Grupa zawiera atom węgla, wodoru i tlenu.
+success: Poprawnie — aldehydy zawierają grupę –CHO.
 :::
 
 ---
@@ -728,15 +738,15 @@ text_tone: dark
 
 ## Zadanie liczbowe
 
-Ile atomów znajduje się łącznie w jednej cząsteczce H₂O?
+Ile atomów węgla znajduje się w cząsteczce 2-metylopropanalu?
 
 :::task
 type: number
-label: Liczba atomów
+label: Liczba atomów węgla
 placeholder: Wpisz liczbę
-answer: 3
-hint: Dodaj dwa atomy wodoru i jeden atom tlenu.
-success: Zgadza się — 2 + 1 = 3.
+answer: 4
+hint: Łańcuch propanalu ma trzy atomy węgla, a podstawnik metylowy wnosi jeszcze jeden.
+success: Zgadza się — 2-metylopropanal ma łącznie 4 atomy węgla.
 :::
 
 ---
@@ -753,16 +763,16 @@ text_tone: dark
 ## Zadanie ABCD
 
 :::question
-Która odpowiedź opisuje geometrię cząsteczki wody?
+Jaki jest produkt łagodnego utleniania etanolu?
 :::
 
 :::task
 type: abcd
 label: Wybierz jedną odpowiedź
-options: liniowa | tetraedryczna | kątowa | trygonalna płaska
-answer: C
-hint: Wolne pary elektronowe wpływają na kształt cząsteczki.
-success: Dobrze — cząsteczka wody ma geometrię kątową.
+options: eten | etanal | etanon | kwas metanowy
+answer: B
+hint: Alkohol pierwszorzędowy przechodzi najpierw w aldehyd o tej samej liczbie atomów węgla.
+success: Dobrze — łagodne utlenianie etanolu prowadzi do etanalu.
 :::
 
 ---
@@ -783,10 +793,10 @@ Uzupełnij zdanie, wybierając pojęcia z listy. Każda luka jest wyświetlana w
 :::task
 type: gaps
 label: Wybierz odpowiedzi
-options: dwa | jeden | wodór | tlen
-text_json: "Cząsteczka wody zawiera {{pierwsza luka}} atomy wodoru.\nZawiera także {{druga luka}} atom tlenu."
-answer: dwa | jeden
-hint: Odczytaj indeksy we wzorze H₂O.
+options: końcu | wewnątrz | hydroksylowa | aminowa
+text_json: "W aldehydzie grupa karbonylowa znajduje się na {{położenie aldehydu}} łańcucha.\nW ketonie grupa karbonylowa znajduje się {{położenie ketonu}} łańcucha."
+answer: końcu | wewnątrz
+hint: Porównaj wzory R–CHO oraz R–CO–R′.
 success: Obie luki uzupełniono poprawnie.
 :::
 
@@ -808,11 +818,11 @@ Wielowierszowy tekst jest zapisany w `text_json`. Autor sam decyduje, gdzie wsta
 :::task
 type: gaps-text
 label: Wpisz brakujące pojęcia
-text_json: "Wzór wody to {{wzór}}.\nPierwiastkiem o symbolu O jest {{nazwa}}."
+text_json: "Etanol utlenia się łagodnie do {{aldehyd}}.\nDalsze utlenianie prowadzi do {{kwas}}."
 check_mode: each
-answer: H2O | tlen
+answer: etanalu | kwasu etanowego
 case_sensitive: false
-hint: Pierwsza odpowiedź to wzór, druga to polska nazwa pierwiastka.
+hint: Użyj nazw systematycznych produktów utleniania związku dwuwęglowego.
 success: Wszystkie wpisane odpowiedzi są poprawne.
 :::
 
@@ -833,14 +843,14 @@ text_tone: dark
 Ten krok ma `includeInLesson: OFF`, żeby pokazać możliwość wyłączenia go z organizera postępu. W Studio nadal można go edytować.
 
 :::question
-Wpisz dokładnie zapis `NaCl`, zachowując wielkość liter.
+Wpisz dokładnie zapis `CH3CHO`, zachowując wielkość liter.
 :::
 
 :::task
 type: text
-label: Wzór chlorku sodu
-placeholder: NaCl
-answer: NaCl
+label: Wzór etanalu
+placeholder: CH3CHO
+answer: CH3CHO
 case_sensitive: true
 hint: Wielkość liter ma znaczenie.
 success: Zapis jest poprawny.
@@ -862,8 +872,8 @@ text_tone: dark
 Ten przykład pokazuje odpowiedź wielowierszową, wymagany wpis, limit znaków, możliwość późniejszej edycji i zapis w istniejącym postępie lekcji.
 
 :::studentanswer
-question_id: q_example_carbon_14
-question_json: "Dlaczego atom węgla-14 jest izotopem węgla? Odwołaj się do liczby protonów i neutronów."
+question_id: q_organic_aldehyde_vs_ketone
+question_json: "Dlaczego aldehydy zwykle utleniają się łatwiej niż ketony? Odwołaj się do budowy grupy karbonylowej i atomu wodoru przy węglu karbonylowym."
 label: Twoja odpowiedź
 placeholder_json: "Napisz własne wyjaśnienie w kilku zdaniach…"
 min_height: 220
@@ -891,13 +901,13 @@ text_tone: dark
 Najpierw pojawia się dokładnie zapisana odpowiedź ucznia, potem bogaty klucz autora. Żaden request do AI nie jest wykonywany przy otwarciu slajdu — analiza rusza wyłącznie po kliknięciu przycisku.
 
 :::answerreview
-question_id: q_example_carbon_14
-question_json: "Dlaczego atom węgla-14 jest izotopem węgla? Odwołaj się do liczby protonów i neutronów."
+question_id: q_organic_aldehyde_vs_ketone
+question_json: "Dlaczego aldehydy zwykle utleniają się łatwiej niż ketony? Odwołaj się do budowy grupy karbonylowej i atomu wodoru przy węglu karbonylowym."
 show_student_answer: true
 ai_enabled: true
-ai_instruction_json: "Oceniaj poprawność merytoryczną, a nie identyczność słów. Wskaż krótko, czy uczeń uwzględnił tę samą liczbę protonów oraz inną liczbę neutronów."
+ai_instruction_json: "Oceniaj poprawność merytoryczną, a nie identyczność słów. Sprawdź, czy uczeń wskazał atom wodoru przy węglu karbonylowym aldehydu, możliwość utworzenia grupy –COOH oraz brak takiego wodoru w typowym ketonie."
 order: student-first
-key_json: "### Poprawna odpowiedź / klucz\n\nIzotopy jednego pierwiastka mają tę samą liczbę protonów, ale różną liczbę neutronów. Węgiel-14 ma **6 protonów** i 8 neutronów, dlatego nadal jest węglem.\n\n- liczba atomowa: **6** — tyle samo protonów,\n- liczba masowa: **14** — protony i neutrony łącznie,\n- liczba neutronów: **14 − 6 = 8**.\n\nW zapisie ^14^C indeks górny oznacza liczbę masową; zapis H~2~O pokazuje również obsługę indeksu dolnego.\n\n:::formula\nmode: math\ntitle: Obliczenie liczby neutronów\nexpression: 14 - 6 = 8\n:::\n\n:::table\ncaption: Budowa węgla-14\nalign: center\nheaders: Wielkość | Wartość\nrow: Protony | 6\nrow: Neutrony | 8\nrow: Nukleony | 14\n:::\n\n:::image\nref: assets/shared/example-diagram.svg\nrepository: default\nalt: Przykładowy schemat ilustrujący, że klucz odpowiedzi może zawierać obraz\nwidth: 42\nalign: center\n:::"
+key_json: "### Poprawna odpowiedź / klucz\n\nW aldehydzie atom węgla grupy karbonylowej jest związany z **atomem wodoru**. Utlenienie może zastąpić ten wodór grupą –OH, tworząc kwas karboksylowy. W ketonie węgiel karbonylowy jest połączony z dwiema grupami węglowymi, więc analogiczne utlenienie wymagałoby rozerwania wiązania C–C.\n\n- aldehyd: **R–CHO** — łatwo przechodzi w R–COOH,\n- keton: **R–CO–R′** — zwykle nie daje próby Tollensa,\n- dodatnia próba Tollensa może prowadzić do powstania lustra srebrnego.\n\nZapis CH~3~CHO pokazuje obsługę indeksu dolnego, a Ag^+^ — indeksu górnego.\n\n:::formula\nmode: chemistry\ntitle: Utlenianie aldehydu\nleft: RCHO + [O]\narrow: ->\nabove: utlenianie\nbelow: \nright: RCOOH\n:::\n\n:::table\ncaption: Porównanie związków karbonylowych\nalign: center\nheaders: Cecha | Aldehyd | Keton\nrow: Wzór ogólny | R–CHO | R–CO–R′\nrow: Wodór przy C=O | tak | nie\nrow: Próba Tollensa | zwykle dodatnia | zwykle ujemna\n:::\n\n:::image\nref: assets/shared/example-diagram.svg\nrepository: default\nalt: Diagram grup funkcyjnych użyty również w kluczu odpowiedzi\nwidth: 42\nalign: center\n:::"
 :::
 
 ---
@@ -916,10 +926,10 @@ text_tone: dark
 Ten wariant jest opcjonalny, ma jedno pole tekstowe bez limitu ustawionego przez autora i nie zapisuje treści do profilu ucznia. Po zapisaniu blokuje ponowną edycję.
 
 :::studentanswer
-question_id: q_example_symbol_oxygen
-question_json: "Podaj symbol chemiczny tlenu."
+question_id: q_organic_aldehyde_suffix
+question_json: "Jaką końcówką kończą się systematyczne polskie nazwy aldehydów?"
 label: Krótka odpowiedź
-placeholder_json: "Np. O"
+placeholder_json: "Np. -…"
 min_height: 80
 multiline: false
 max_length: 0
@@ -945,18 +955,18 @@ text_tone: dark
 Alternatywny układ może pokazywać najpierw klucz, ukryć odpowiedź ucznia i całkowicie wyłączyć przycisk AI.
 
 :::answerreview
-question_id: q_example_symbol_oxygen
-question_json: "Podaj symbol chemiczny tlenu."
+question_id: q_organic_aldehyde_suffix
+question_json: "Jaką końcówką kończą się systematyczne polskie nazwy aldehydów?"
 show_student_answer: false
 ai_enabled: false
 ai_instruction_json: ""
 order: key-first
-key_json: "### Klucz odpowiedzi\n\nPoprawny symbol chemiczny tlenu to **O**."
+key_json: "### Klucz odpowiedzi\n\nSystematyczne polskie nazwy aldehydów kończą się na **-al**, np. metanal i etanal."
 :::
 
 ---
 
-<!-- chemdisk-step:{"id":"example-summary","includeInLesson":"ON","requiredToAdvance":true,"condition":{"type":"exam_completed","materialId":"exam:default:egzamin-wszystkie-mozliwosci","minimumScore":0}} -->
+<!-- chemdisk-step:{"id":"example-summary","includeInLesson":"ON","requiredToAdvance":true,"condition":{"type":"exam_completed","materialId":"exam:default:egzamin-chemia-organiczna","minimumScore":0}} -->
 
 :::slide
 transition: rise
@@ -967,7 +977,7 @@ text_tone: auto
 
 ## Koniec przykładu
 
-W lekcji użyto wszystkich obsługiwanych typów klocków i zadań. Powiązany quiz zawiera wszystkie typy pytań quizowych, a egzamin — wszystkie typy pytań egzaminacyjnych oraz pełny zestaw ustawień.
+W lekcji użyto wszystkich obsługiwanych typów klocków i zadań. Powiązany `quiz-chemia-organiczna` zawiera wszystkie typy pytań quizowych, a `egzamin-chemia-organiczna` — wszystkie typy pytań egzaminacyjnych oraz pełny zestaw ustawień.
 
 > **Brawo:** Możesz skopiować wybrane slajdy i traktować je jako wzorce dla własnych materiałów.
 

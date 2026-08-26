@@ -156,6 +156,31 @@
     return state.materialId;
   }
 
+  function lessonReturnUrl() {
+    if (!state.filename) return '';
+    const url = new URL('/members/module/lesson/', window.location.origin);
+    url.searchParams.set('file', state.filename);
+    if (state.repositoryId) url.searchParams.set('repo', state.repositoryId);
+    const material = new URLSearchParams(window.location.search).get('material');
+    if (material && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,159}$/.test(material)) url.searchParams.set('material', material);
+    return `${url.pathname}${url.search}`;
+  }
+
+  function decorateLessonModuleLinks(root) {
+    const returnUrl = lessonReturnUrl();
+    if (!returnUrl || !root?.querySelectorAll) return;
+    root.querySelectorAll('a[href]').forEach((link) => {
+      try {
+        const target = new URL(link.getAttribute('href'), window.location.origin);
+        if (target.origin !== window.location.origin) return;
+        if (!/^\/members\/module\/[^/]+\/?$/.test(target.pathname)) return;
+        if (/^\/members\/module\/lesson\/?$/.test(target.pathname)) return;
+        target.searchParams.set('lesson_return', returnUrl);
+        link.href = `${target.pathname}${target.search}${target.hash}`;
+      } catch (_) {}
+    });
+  }
+
   const LESSON_ANSWER_LIMIT = 6_000;
   const LESSON_AI_RESPONSE_LIMIT = 8_000;
   const QUESTION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
@@ -721,6 +746,7 @@
     state.mediaObjectUrls.splice(0).forEach((url) => URL.revokeObjectURL(url));
     elements.slideContent.classList.toggle('is-canvas-layout', slide.layout === 'canvas');
     elements.slideContent.innerHTML = slide.html;
+    decorateLessonModuleLinks(elements.slideContent);
     initializeInteractiveBlocks(elements.slideContent);
     void hydrateManagedImages(elements.slideContent);
     scheduleLessonImagePrefetch();
@@ -933,6 +959,8 @@
       url.searchParams.set('punkt', point);
     }
     if (repository) url.searchParams.set('repo', repository);
+    const returnUrl = lessonReturnUrl();
+    if (returnUrl) url.searchParams.set('lesson_return', returnUrl);
 
     try {
       const contextId = typeof window.crypto?.randomUUID === 'function'

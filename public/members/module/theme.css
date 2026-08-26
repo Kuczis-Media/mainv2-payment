@@ -39,3 +39,29 @@
   --chem-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.22), 0 8px 24px rgba(0, 0, 0, 0.2);
   --chem-shadow-lg: 0 28px 80px rgba(0, 0, 0, 0.48);
 }
+
+.chem-module-lesson-return {
+  position: fixed;
+  left: max(16px, env(safe-area-inset-left));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 10000;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--chem-line);
+  border-radius: 999px;
+  color: var(--chem-text);
+  background: var(--chem-surface);
+  box-shadow: var(--chem-shadow-lg);
+  font: 700 14px/1.2 Inter, system-ui, sans-serif;
+  text-decoration: none;
+}
+
+.chem-module-lesson-return:hover,
+.chem-module-lesson-return:focus-visible {
+  color: var(--chem-surface);
+  background: var(--chem-primary);
+  border-color: var(--chem-primary);
+  outline: none;
+}

@@ -47,6 +47,24 @@ test('all member applications follow the persistent dashboard theme', () => {
   assert.match(themeStyles, /--chem-bg:\s*#edf2f7/);
   assert.match(themeStyles, /:root\[data-theme=["']dark["']\]/);
   assert.match(themeStyles, /--chem-primary:\s*#70cfbc/);
+  assert.match(themeScript, /function safeLessonReturn/);
+  assert.match(themeScript, /lesson_return/);
+  assert.match(themeScript, /dataset\.chemLessonReturn/);
+  assert.match(themeStyles, /\.chem-module-lesson-return/);
+});
+
+test('modules opened by a lesson retain a safe return route', () => {
+  const themeScript = fs.readFileSync(path.join(modulesRoot, 'theme.js'), 'utf8');
+  const lessonScript = fs.readFileSync(path.join(modulesRoot, 'lesson', 'script.js'), 'utf8');
+  const presentationScript = fs.readFileSync(path.join(modulesRoot, 'presentation', 'script.js'), 'utf8');
+
+  assert.match(themeScript, /url\.origin !== origin/);
+  assert.match(themeScript, /\/members\\\/module\\\/lesson/);
+  assert.match(themeScript, /params\.getAll\('lesson_return'\)/);
+  assert.match(lessonScript, /function decorateLessonModuleLinks/);
+  assert.match(lessonScript, /target\.searchParams\.set\('lesson_return', returnUrl\)/);
+  assert.match(lessonScript, /url\.searchParams\.set\('lesson_return', returnUrl\)/);
+  assert.match(presentationScript, /window\.ChemModuleReturn\?\.url \|\| '\/members\/'/);
 });
 
 test('Atonom is published locally with protected assets and the shared theme', () => {

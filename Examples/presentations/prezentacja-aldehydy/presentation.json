@@ -1,0 +1,98 @@
+{
+  "version": 2,
+  "presentationId": "prezentacja-aldehydy",
+  "metadata": {
+    "title": "Aldehydy — prezentacja ChemDisk",
+    "description": "Natywna prezentacja uzupełniająca kompletną lekcję z chemii organicznej.",
+    "status": "published",
+    "tags": ["chemia-organiczna", "aldehydy", "przykład"]
+  },
+  "settings": {
+    "aspectRatio": "16:9",
+    "theme": "chemistry",
+    "fontFamily": "inter",
+    "headingFont": "playfair",
+    "bodyFont": "inter",
+    "showSlideNumbers": true,
+    "allowFullscreen": true
+  },
+  "progress": { "mode": "all_required" },
+  "slides": [
+    {
+      "slideId": "aldehydy-intro",
+      "title": "Aldehydy",
+      "layout": "title",
+      "backgroundType": "gradient",
+      "gradientFrom": "#dff3ee",
+      "gradientTo": "#ffffff",
+      "gradientAngle": 135,
+      "notes": "Wprowadź grupę –CHO i przypomnij pojęcie grupy karbonylowej.",
+      "required": true,
+      "elements": [
+        { "elementId": "intro-title", "type": "heading", "x": 9, "y": 24, "width": 82, "height": 22, "z": 2, "content": "Aldehydy", "fontFamily": "playfair", "fontSize": 62, "fontWeight": 800, "color": "#17233a", "align": "center", "verticalAlign": "center" },
+        { "elementId": "intro-copy", "type": "text", "x": 15, "y": 51, "width": 70, "height": 18, "z": 2, "content": "Budowa • nazewnictwo • otrzymywanie • reakcje charakterystyczne", "fontSize": 25, "color": "#0e665a", "align": "center", "verticalAlign": "center" },
+        { "elementId": "intro-icon", "type": "icon", "x": 43, "y": 73, "width": 14, "height": 14, "z": 2, "symbol": "⚗", "color": "#ffffff", "background": "#0e665a", "fontSize": 56, "borderRadius": 30 }
+      ]
+    },
+    {
+      "slideId": "aldehydy-grupa",
+      "title": "Grupa aldehydowa",
+      "layout": "text-image",
+      "backgroundType": "solid",
+      "background": "#ffffff",
+      "notes": "Wyjaśnij, że grupa –CHO leży na końcu łańcucha.",
+      "required": true,
+      "elements": [
+        { "elementId": "group-heading", "type": "heading", "x": 6, "y": 6, "width": 88, "height": 14, "z": 3, "content": "Grupa aldehydowa –CHO", "fontFamily": "playfair", "fontSize": 38, "fontWeight": 800, "color": "#17233a" },
+        { "elementId": "group-copy", "type": "text", "x": 7, "y": 26, "width": 40, "height": 54, "z": 2, "content": "• końcowa grupa karbonylowa\n• wodór przy węglu C=O\n• końcówka nazwy: -al\n• przykłady: metanal, etanal", "fontSize": 25, "color": "#38465c", "lineHeight": 1.45 },
+        { "elementId": "group-image", "type": "image", "x": 51, "y": 24, "width": 43, "height": 62, "z": 2, "ref": "assets/shared/example-diagram.svg", "repositoryId": "default", "alt": "Porównanie grup funkcyjnych ze wskazaną grupą aldehydową –CHO", "fit": "contain", "borderRadius": 18 }
+      ]
+    },
+    {
+      "slideId": "aldehydy-utlenianie",
+      "title": "Otrzymywanie i utlenianie",
+      "layout": "title-content",
+      "backgroundType": "gradient",
+      "gradientFrom": "#fff7e8",
+      "gradientTo": "#ffffff",
+      "gradientAngle": 120,
+      "notes": "Zwróć uwagę na kontrolowanie warunków, aby nie utlenić od razu aldehydu do kwasu.",
+      "required": true,
+      "elements": [
+        { "elementId": "oxidation-heading", "type": "heading", "x": 6, "y": 6, "width": 88, "height": 14, "z": 3, "content": "Alkohol I-rzędowy → aldehyd → kwas", "fontSize": 38, "fontWeight": 800, "color": "#17233a", "align": "center" },
+        { "elementId": "oxidation-formula", "type": "formula", "x": 10, "y": 30, "width": 80, "height": 25, "z": 2, "expression": "CH3CH2OH → CH3CHO → CH3COOH", "mode": "chemistry", "color": "#0e665a", "fontSize": 42 },
+        { "elementId": "oxidation-table", "type": "table", "x": 10, "y": 61, "width": 80, "height": 27, "z": 2, "headers": ["Substrat", "Produkt", "Klasa"], "rows": [["etanol", "etanal", "aldehyd"], ["etanal", "kwas etanowy", "kwas karboksylowy"]], "headerColor": "#0e665a", "accentColor": "#dff3ee", "fontSize": 18 }
+      ]
+    },
+    {
+      "slideId": "aldehydy-tollens",
+      "title": "Próba Tollensa",
+      "layout": "question",
+      "backgroundType": "solid",
+      "background": "#f5f8fb",
+      "notes": "Zapytaj, jaki efekt makroskopowy świadczy o dodatnim wyniku.",
+      "required": true,
+      "elements": [
+        { "elementId": "tollens-heading", "type": "heading", "x": 8, "y": 10, "width": 84, "height": 16, "z": 3, "content": "Jak rozpoznać aldehyd?", "fontSize": 42, "fontWeight": 800, "color": "#17233a", "align": "center" },
+        { "elementId": "tollens-shape", "type": "shape", "x": 11, "y": 34, "width": 78, "height": 34, "z": 1, "shape": "rounded", "fill": "#ffffff", "border": "#d5dee9", "borderWidth": 2, "opacity": 1 },
+        { "elementId": "tollens-copy", "type": "text", "x": 16, "y": 41, "width": 68, "height": 20, "z": 2, "content": "Dodatnia próba Tollensa: redukcja jonów srebra i powstanie lustra srebrnego.", "fontSize": 28, "fontWeight": 700, "color": "#38465c", "align": "center", "verticalAlign": "center" },
+        { "elementId": "tollens-code", "type": "code", "x": 19, "y": 74, "width": 62, "height": 14, "z": 2, "code": "R–CHO + [O] → R–COOH", "language": "chemistry", "color": "#e8eef8", "background": "#101927", "fontSize": 22 }
+      ]
+    },
+    {
+      "slideId": "aldehydy-materialy",
+      "title": "Materiały uzupełniające",
+      "layout": "two-columns",
+      "backgroundType": "solid",
+      "background": "#ffffff",
+      "notes": "Przycisk prowadzi do prawdziwej prezentacji Google podanej przez autora kursu.",
+      "required": false,
+      "elements": [
+        { "elementId": "materials-heading", "type": "heading", "x": 6, "y": 7, "width": 88, "height": 13, "z": 3, "content": "Kontynuuj naukę", "fontSize": 38, "fontWeight": 800, "color": "#17233a", "align": "center" },
+        { "elementId": "materials-google", "type": "button", "x": 10, "y": 31, "width": 36, "height": 18, "z": 2, "label": "Otwórz Google Slides", "href": "https://docs.google.com/presentation/d/1rxPm5CJl2LDzrzq89fogz-_PWwO_BbqF/edit?usp=drive_link", "color": "#ffffff", "background": "#0e665a", "borderRadius": 18 },
+        { "elementId": "materials-form", "type": "button", "x": 54, "y": 31, "width": 36, "height": 18, "z": 2, "label": "Test szybkości reakcji", "href": "/members/module/forms/?id=1FAIpQLSeKEXX7ooRB7ZaPJ8UwnqNlPsucgjwnQFzmSlZ3OvrdFlURsA", "color": "#ffffff", "background": "#5b46b2", "borderRadius": 18 },
+        { "elementId": "materials-embed", "type": "embed", "x": 18, "y": 57, "width": 64, "height": 34, "z": 2, "title": "Ciekawostka chemiczna", "url": "https://www.youtube-nocookie.com/embed/kOoRildWO0s" }
+      ]
+    }
+  ]
+}

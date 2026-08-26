@@ -1105,7 +1105,7 @@ test('open-answer model rejects duplicate, missing and recursively nested questi
 });
 
 test('complete lesson example stays importable and covers every block and task type', () => {
-  const filename = 'lekcja-wszystkie-mozliwosci.md';
+  const filename = 'lekcja-chemia-organiczna.md';
   const source = fs.readFileSync(path.join(root, 'Examples', 'lessons', filename), 'utf8');
   const lesson = studio.parseEditableLesson(source, filename);
   const validation = studio.validateLesson(lesson);
@@ -1131,10 +1131,10 @@ test('complete lesson example stays importable and covers every block and task t
 
   const question = lesson.slides
     .flatMap((slide) => slide.blocks)
-    .find((block) => block.type === 'student-answer' && block.questionId === 'q_example_carbon_14');
+    .find((block) => block.type === 'student-answer' && block.questionId === 'q_organic_aldehyde_vs_ketone');
   const review = lesson.slides
     .flatMap((slide) => slide.blocks)
-    .find((block) => block.type === 'answer-review' && block.questionId === 'q_example_carbon_14');
+    .find((block) => block.type === 'answer-review' && block.questionId === 'q_organic_aldehyde_vs_ketone');
   assert.ok(question);
   assert.ok(review);
   assert.equal(review.question, question.question);

@@ -1,34 +1,60 @@
-# ChemDisk — kompletne przykłady materiałów
+# ChemDisk — kompletne przykłady z chemii organicznej
 
-Ten katalog zawiera poprawne przykłady importu pokazujące wszystkie aktualnie obsługiwane typy treści:
+Katalog zawiera spójny zestaw gotowy do importu. Lekcja, quiz, egzamin i natywna prezentacja używają stabilnych identyfikatorów, które są już ze sobą poprawnie powiązane:
 
-- `lessons/lekcja-wszystkie-mozliwosci.md` — wszystkie 25 typów klocków lekcji, 6 typów zadań, tryb płynny i canvas, ustawienia wyglądu, postępu i nawigacji;
-- `quizzes/quiz-wszystkie-mozliwosci/quiz.json` — wszystkie 4 typy pytań quizu;
-- `exams/egzamin-wszystkie-mozliwosci/exam.json` — wszystkie 8 typów pytań egzaminu oraz komplet ustawień egzaminu;
-- `assets/shared/example-diagram.svg` — przykładowe współdzielone medium użyte w materiałach;
-- `lessons/lekcja-wszystkie-mozliwosci/photos/example-photo.svg` — przykładowe medium należące do konkretnej lekcji;
-- `prompts/example-prompt.txt` — przykładowy prompt dla klocka AI.
+- lekcja: `lekcja-chemia-organiczna.md`;
+- quiz: `quiz-chemia-organiczna`;
+- egzamin: `egzamin-chemia-organiczna`;
+- prezentacja ChemDisk: `prezentacja-aldehydy`.
 
-## Jak użyć
+Nie zmieniaj pojedynczej nazwy bez równoczesnej zmiany odwołań w lekcji. Nazwa folderu quizu, egzaminu i prezentacji musi być identyczna z odpowiednio `quizId`, `examId` i `presentationId` w JSON.
 
-Skopiuj zawartość odpowiednich podfolderów do repozytorium treści, zachowując ścieżki:
+## Co pokazują pliki
+
+- `lessons/lekcja-chemia-organiczna.md` — wszystkie 25 typów klocków lekcji, wszystkie 6 typów zadań, pytania otwarte i omówienia, tryb płynny i canvas, multimedia, AI, ustawienia wyglądu, postępu i nawigacji;
+- `quizzes/quiz-chemia-organiczna/quiz.json` — wszystkie 4 typy pytań quizu: `single`, `multiple`, `true_false`, `text`;
+- `exams/egzamin-chemia-organiczna/exam.json` — wszystkie 8 typów pytań egzaminu oraz kompletną konfigurację egzaminu;
+- `presentations/prezentacja-aldehydy/presentation.json` — natywną prezentację ChemDisk ze stabilnymi ID slajdów i elementów;
+- `assets/shared/example-diagram.svg` — diagram grup funkcyjnych współdzielony przez materiały;
+- `lessons/lekcja-chemia-organiczna/photos/example-photo.svg` — lokalne medium lekcji ilustrujące próbę Tollensa;
+- `prompts/example-prompt.txt` — prompt używany przez klocek AI.
+
+## Jak wgrać do repozytorium treści
+
+Skopiuj pliki z zachowaniem dokładnych ścieżek:
 
 ```text
-lessons/lekcja-wszystkie-mozliwosci.md
-quizzes/quiz-wszystkie-mozliwosci/quiz.json
-exams/egzamin-wszystkie-mozliwosci/exam.json
+lessons/lekcja-chemia-organiczna.md
+lessons/lekcja-chemia-organiczna/photos/example-photo.svg
+quizzes/quiz-chemia-organiczna/quiz.json
+exams/egzamin-chemia-organiczna/exam.json
+presentations/prezentacja-aldehydy/presentation.json
 assets/shared/example-diagram.svg
-lessons/lekcja-wszystkie-mozliwosci/photos/example-photo.svg
 prompts/example-prompt.txt
 ```
 
-W lekcji odwołania mają `repository: default`. Jeżeli repozytorium treści ma inne ID, zmień tę wartość w blokach `image`, `presentation`, `quiz`, `aihelp` i `exam`.
+W lekcji odwołania mają `repository: default`. Jeżeli repozytorium treści ma inne ID, zmień `repository` w klockach `image`, `presentation`, `quiz`, `aihelp` i `exam`.
 
-Blok prezentacji ChemDisk odwołuje się do przykładowego ID `prezentacja-przykladowa`. Przed publikacją utwórz prezentację o tym ID albo podmień odwołanie. Przykładowe linki Google Slides, YouTube i PDF także należy zastąpić własnymi, jeżeli materiał ma być używany produkcyjnie.
+Do dashboardu dodaj dokładnie:
 
-## Typy i warianty
+```markdown
+- [Chemia organiczna — lekcja](/members/module/lesson/?file=lekcja-chemia-organiczna.md) — Kompletna lekcja o grupach funkcyjnych, aldehydach i ketonach.
+```
 
-Lekcja prezentuje wszystkie typy klocków:
+## Rzeczywiste materiały Google i YouTube
+
+Przykłady używają przekazanych identyfikatorów:
+
+- Google Slides o aldehydach: `1rxPm5CJl2LDzrzq89fogz-_PWwO_BbqF`;
+- PDF o cykloaddycji: `1qKkDarVM8qn1GHkNalt9f8n7IXNUawZF`;
+- Google Forms o szybkości reakcji: `1FAIpQLSeKEXX7ooRB7ZaPJ8UwnqNlPsucgjwnQFzmSlZ3OvrdFlURsA`;
+- YouTube: `sU6epNBjvzo`, `PG6fB57aAoA`, `kOoRildWO0s`.
+
+ID jest poprawnie wyodrębnione z podanych linków. Osadzenie zadziała tylko wtedy, gdy właściciel materiału zezwolił osobom z linkiem na wyświetlanie; dla Google Slides przydatna jest także publikacja prezentacji w internecie. To ustawienie należy wykonać po stronie Google.
+
+## Typy i warianty lekcji
+
+Lekcja zawiera wszystkie typy klocków:
 
 ```text
 heading, text, list, table, image, quote, callout, code, style,
@@ -43,33 +69,21 @@ oraz wszystkie typy zadań:
 text, number, choice, abcd, gaps, gaps-text
 ```
 
-W quizie dostępne są `single`, `multiple`, `true_false`, `text`.
+Wybrane ustawienia są wzajemnie wykluczające, dlatego materiał demonstruje je na różnych krokach:
 
-W egzaminie dostępne są `single_choice`, `multiple_choice`, `true_false`, `short_text`, `number`, `matching`, `ordering`, `fill_blanks`.
-
-Niektóre ustawienia są wzajemnie wykluczające, więc jeden materiał nie może aktywować ich jednocześnie. Obsługiwane alternatywy to:
-
-| Obszar | Dostępne wartości |
+| Obszar | Pokazane możliwości |
 | --- | --- |
-| Nawigacja lekcji | `sequential`, `free` |
-| Widoczność kroku | `ON`, `OFF`, `INHERIT`; krok wymagany albo opcjonalny |
-| Warunek kroku | `next_click`, `previous_completed`, `material_completed`, `quiz_completed`, `correct_answer`, `exam_completed`, `exam_passed`, `minimum_score` |
-| Przejście slajdu | `none`, `fade`, `rise`, `slide`, `zoom` |
-| Tło slajdu | `default`, `paper`, `grid`, `dots`, `mint`, `sky`, `lavender`, `sand`, `gradient`, `night`, `custom` |
-| Dekoracja slajdu | `none`, `molecules`, `bubbles`, `glow` |
-| Ton tekstu | `auto`, `dark`, `light` |
-| Luki tekstowe | sprawdzanie `each` albo `all`; wielkość liter włączona albo wyłączona |
-| Pytanie otwarte | wielowierszowe albo jednowierszowe; wymagane albo opcjonalne; zapis w postępie albo tylko w sesji; edycja włączona albo blokowana po zapisie |
-| Omówienie odpowiedzi | odpowiedź ucznia albo klucz jako pierwszy; odpowiedź widoczna albo ukryta; AI włączone albo wyłączone; analiza wyłącznie po kliknięciu ucznia |
-| Google Slides | link standardowy lub opublikowany; kontrolki włączone albo wyłączone |
-| Status quizu/egzaminu | `draft`, `published` |
-| Tryb wyświetlania egzaminu | `one`, `page`, `all` |
-| Dostępność egzaminu | `always`, `from`, `until`, `range` |
-| Odbiorcy egzaminu | `all`, `selected` |
-| Zegar | `none`, `exam`, `question`; widok `countdown`, `countup`, `hidden` |
-| Próby | `one`, `limited`, `unlimited`; wynik `best`, `first`, `last`, `average` |
-| Opuszczenie egzaminu | `allow_resume`, `end_attempt`, `warn`, `log` |
-| Informacja zwrotna | `immediate`, `after_submit`, `never` |
-| Punktacja wielokrotnego wyboru | `all_or_nothing`, `per_option`, `correct_minus_incorrect` |
+| Nawigacja lekcji | `sequential`; dostępny jest też `free` |
+| Widoczność kroku | `ON`, `OFF`, `INHERIT`; krok wymagany i opcjonalny |
+| Warunki kroku | kliknięcie dalej, poprzedni krok, materiał, quiz, poprawna odpowiedź, ukończenie/zaliczenie/wynik egzaminu |
+| Przejścia | `none`, `fade`, `rise`, `slide`, `zoom` |
+| Tła i dekoracje | wszystkie tła systemowe, własny kolor i dekoracje |
+| Układ | płynny oraz pozycjonowany `canvas` |
+| Luki | lista rozwijana oraz ręczne wpisywanie; nowe linie zapisane jawnie przez autora w `text_json` |
+| Pytanie otwarte | wielo- i jednowierszowe, wymagane lub opcjonalne, zapis do postępu lub tylko sesyjny |
+| Omówienie | odpowiedź ucznia albo klucz jako pierwszy, AI włączone lub wyłączone |
+| Google Slides | kontrolki włączone i wyłączone dla tej samej prawdziwej prezentacji |
+| PDF | wszystkie obsługiwane tryby otwierania tego samego prawdziwego pliku |
+| Egzamin | karta opcjonalna, wymagane ukończenie, zaliczenie i własny próg |
 
-JSON nie obsługuje komentarzy, dlatego opis wariantów znajduje się tutaj, a pliki przykładów pozostają gotowe do importu.
+JSON nie obsługuje komentarzy, dlatego opisy wariantów znajdują się tutaj, a pliki materiałów pozostają gotowe do importu.
