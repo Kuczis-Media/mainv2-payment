@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.join(__dirname, '..');
@@ -966,4 +967,179 @@ test('lesson canvas layout round-trips positioned blocks and remains safe in the
   assert.match(runtime.slides[0].html, /--lesson-canvas-x:58%/);
   assert.match(runtime.slides[0].html, /H<sub>2<\/sub>O/);
   assert.doesNotMatch(runtime.slides[0].html, /<script/i);
+});
+
+test('open student answers and linked reviews round-trip with stable IDs and nested answer-key blocks', () => {
+  const lesson = studio.createLesson({
+    title: 'Samodzielne porównanie odpowiedzi',
+    filename: 'samodzielne-odpowiedzi.md',
+    slides: [
+      {
+        blocks: [{
+          type: 'student-answer',
+          questionId: 'q_chem_001',
+          question: 'Dlaczego **węgiel-14** jest izotopem węgla?\n\nOdwołaj się do protonów i neutronów.',
+          placeholder: 'Wpisz własne wyjaśnienie…',
+          minHeight: 220,
+          multiline: true,
+          maxLength: 1400,
+          required: true,
+          saveToProgress: true,
+          allowEdit: true
+        }]
+      },
+      { blocks: [{ type: 'text', text: 'Slajd można wstawić pomiędzy parę bez zrywania powiązania.' }] },
+      {
+        blocks: [{
+          type: 'answer-review',
+          questionId: 'q_chem_001',
+          showStudentAnswer: true,
+          aiEnabled: true,
+          aiInstruction: 'Oceniaj sens merytoryczny.\nNie wymagaj identycznych słów.',
+          order: 'student-first',
+          answerKeyBlocks: [
+            { type: 'heading', level: 3, text: 'Poprawna odpowiedź' },
+            { type: 'text', text: 'Izotopy mają tę samą liczbę protonów, ale inną liczbę neutronów.\nWęgiel-14 nadal ma 6 protonów.' },
+            { type: 'formula', mode: 'math', expression: '14 - 6 = 8', title: 'Liczba neutronów' },
+            {
+              type: 'table',
+              caption: 'Porównanie',
+              headers: ['Cecha', 'Węgiel-14'],
+              rows: [['Protony', '6'], ['Neutrony', '8']]
+            }
+          ]
+        }]
+      }
+    ]
+  });
+
+  assert.equal(studio.validateLesson(lesson).valid, true);
+  const markdown = studio.serializeLesson(lesson);
+  assert.match(markdown, /:::studentanswer\nquestion_id: q_chem_001/);
+  assert.match(markdown, /question_json: "Dlaczego \*\*węgiel-14\*\* jest izotopem węgla\?\\n\\nOdwołaj się/);
+  assert.match(markdown, /:::answerreview\nquestion_id: q_chem_001/);
+  assert.match(markdown, /ai_instruction_json: "Oceniaj sens merytoryczny\.\\nNie wymagaj identycznych słów\."/);
+  assert.match(markdown, /key_json: ".*:::formula\\n.*:::table\\n/);
+
+  const editable = studio.parseLesson(markdown, lesson.filename);
+  const question = editable.slides[0].blocks.find((block) => block.type === 'student-answer');
+  const review = editable.slides[2].blocks.find((block) => block.type === 'answer-review');
+  assert.equal(question.questionId, 'q_chem_001');
+  assert.equal(question.maxLength, 1400);
+  assert.equal(question.saveToProgress, true);
+  assert.equal(review.questionId, question.questionId);
+  assert.equal(review.question, question.question);
+  assert.equal(review.order, 'student-first');
+  assert.deepEqual(review.answerKeyBlocks.map((block) => block.type), ['heading', 'text', 'formula', 'table']);
+
+  const reordered = studio.createLesson({
+    ...editable,
+    slides: [editable.slides[0], { blocks: [{ type: 'text', text: 'Jeszcze jeden slajd.' }] }, ...editable.slides.slice(1)]
+  });
+  assert.equal(studio.validateLesson(reordered).valid, true);
+  assert.equal(
+    reordered.slides[3].blocks.find((block) => block.type === 'answer-review').questionId,
+    'q_chem_001'
+  );
+});
+
+test('open-answer model rejects duplicate, missing and recursively nested question links', () => {
+  assert.equal(studio.MAX_OPEN_QUESTION_CHARS, 8000);
+  assert.equal(studio.MAX_STUDENT_ANSWER_CHARS, 6000);
+  assert.equal(studio.MAX_AI_REVIEW_INSTRUCTION_CHARS, 2000);
+
+  const duplicate = studio.validateLesson({
+    title: 'Duplikaty',
+    slides: [
+      { blocks: [{ type: 'student-answer', questionId: 'q_same', question: 'Pierwsze?' }] },
+      { blocks: [{ type: 'student-answer', questionId: 'q_same', question: 'Drugie?' }] }
+    ]
+  });
+  assert.equal(duplicate.valid, false);
+  assert.equal(duplicate.errors.some((error) => error.code === 'DUPLICATE_OPEN_QUESTION_ID'), true);
+
+  const missing = studio.validateLesson({
+    title: 'Brak pytania',
+    slides: [{
+      blocks: [{
+        type: 'answer-review',
+        questionId: 'q_missing',
+        answerKeyBlocks: [{ type: 'text', text: 'Klucz.' }]
+      }]
+    }]
+  });
+  assert.equal(missing.valid, false);
+  assert.equal(missing.errors.some((error) => error.code === 'MISSING_OPEN_QUESTION'), true);
+  assert.equal(
+    missing.errors.some((error) => error.code === 'MISSING_ANSWER_REVIEW_QUESTION'),
+    true
+  );
+
+  const longInstruction = studio.validateLesson({
+    title: 'Za długa instrukcja',
+    slides: [
+      { blocks: [{ type: 'student-answer', questionId: 'q_limit', question: 'Pytanie?' }] },
+      {
+        blocks: [{
+          type: 'answer-review',
+          questionId: 'q_limit',
+          aiInstruction: 'x'.repeat(2001),
+          answerKeyBlocks: [{ type: 'text', text: 'Klucz.' }]
+        }]
+      }
+    ]
+  });
+  assert.equal(longInstruction.valid, false);
+  assert.equal(
+    longInstruction.errors.some((error) => error.code === 'AI_REVIEW_INSTRUCTION_TOO_LONG'),
+    true
+  );
+
+  assert.throws(
+    () => studio.createBlock('answer-review', {
+      questionId: 'q_nested',
+      answerKeyBlocks: [{ type: 'student-answer', questionId: 'q_inner', question: 'Nie wolno.' }]
+    }),
+    /nie może zawierać kontenerów ani kolejnego pytania/i
+  );
+});
+
+test('complete lesson example stays importable and covers every block and task type', () => {
+  const filename = 'lekcja-wszystkie-mozliwosci.md';
+  const source = fs.readFileSync(path.join(root, 'Examples', 'lessons', filename), 'utf8');
+  const lesson = studio.parseEditableLesson(source, filename);
+  const validation = studio.validateLesson(lesson);
+  const blockTypes = new Set();
+  const taskTypes = new Set();
+
+  const collectBlocks = (blocks) => {
+    (blocks || []).forEach((block) => {
+      blockTypes.add(block.type);
+      collectBlocks(block.blocks);
+      collectBlocks(block.answerKeyBlocks);
+    });
+  };
+  lesson.slides.forEach((slide) => {
+    collectBlocks(slide.blocks);
+    if (slide.task?.type) taskTypes.add(slide.task.type);
+  });
+
+  assert.equal(validation.valid, true, validation.errors.map((error) => error.message).join('\n'));
+  assert.deepEqual(studio.BLOCK_TYPES.filter((type) => !blockTypes.has(type)), []);
+  assert.deepEqual(studio.TASK_TYPES.filter((type) => !taskTypes.has(type)), []);
+  assert.doesNotThrow(() => lessonParser.parseLesson(source, filename));
+
+  const question = lesson.slides
+    .flatMap((slide) => slide.blocks)
+    .find((block) => block.type === 'student-answer' && block.questionId === 'q_example_carbon_14');
+  const review = lesson.slides
+    .flatMap((slide) => slide.blocks)
+    .find((block) => block.type === 'answer-review' && block.questionId === 'q_example_carbon_14');
+  assert.ok(question);
+  assert.ok(review);
+  assert.equal(review.question, question.question);
+  assert.deepEqual(
+    review.answerKeyBlocks.map((block) => block.type),
+    ['heading', 'text', 'list', 'text', 'formula', 'table', 'image']
+  );
 });

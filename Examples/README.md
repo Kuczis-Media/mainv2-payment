@@ -2,7 +2,7 @@
 
 Ten katalog zawiera poprawne przykłady importu pokazujące wszystkie aktualnie obsługiwane typy treści:
 
-- `lessons/lekcja-wszystkie-mozliwosci.md` — wszystkie 24 typy klocków lekcji, 6 typów zadań, tryb płynny i canvas, ustawienia wyglądu, postępu i nawigacji;
+- `lessons/lekcja-wszystkie-mozliwosci.md` — wszystkie 25 typów klocków lekcji, 6 typów zadań, tryb płynny i canvas, ustawienia wyglądu, postępu i nawigacji;
 - `quizzes/quiz-wszystkie-mozliwosci/quiz.json` — wszystkie 4 typy pytań quizu;
 - `exams/egzamin-wszystkie-mozliwosci/exam.json` — wszystkie 8 typów pytań egzaminu oraz komplet ustawień egzaminu;
 - `assets/shared/example-diagram.svg` — przykładowe współdzielone medium użyte w materiałach;
@@ -33,7 +33,8 @@ Lekcja prezentuje wszystkie typy klocków:
 ```text
 heading, text, list, table, image, quote, callout, code, style,
 accordion, youtube, slides, presentation, quiz, pdf, atonom,
-formula, link, ai, board, contact, exam, flashcards
+formula, link, ai, board, contact, exam, flashcards,
+student-answer, answer-review
 ```
 
 oraz wszystkie typy zadań:
@@ -58,6 +59,8 @@ Niektóre ustawienia są wzajemnie wykluczające, więc jeden materiał nie moż
 | Dekoracja slajdu | `none`, `molecules`, `bubbles`, `glow` |
 | Ton tekstu | `auto`, `dark`, `light` |
 | Luki tekstowe | sprawdzanie `each` albo `all`; wielkość liter włączona albo wyłączona |
+| Pytanie otwarte | wielowierszowe albo jednowierszowe; wymagane albo opcjonalne; zapis w postępie albo tylko w sesji; edycja włączona albo blokowana po zapisie |
+| Omówienie odpowiedzi | odpowiedź ucznia albo klucz jako pierwszy; odpowiedź widoczna albo ukryta; AI włączone albo wyłączone; analiza wyłącznie po kliknięciu ucznia |
 | Google Slides | link standardowy lub opublikowany; kontrolki włączone albo wyłączone |
 | Status quizu/egzaminu | `draft`, `published` |
 | Tryb wyświetlania egzaminu | `one`, `page`, `all` |

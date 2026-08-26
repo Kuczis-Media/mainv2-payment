@@ -15,6 +15,9 @@ const NON_AGGREGATED_LEAF_TYPES = new Set(['lesson_step', 'section', 'subsection
 const MAX_RECORDS = 5_000;
 const MAX_VISITED = 1_000;
 const MAX_INVALIDATIONS = 10_000;
+const MAX_LESSON_ANSWERS = 100;
+const MAX_LESSON_ANSWER_CHARS = 6_000;
+const MAX_LESSON_AI_RESPONSE_CHARS = 8_000;
 
 function plainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -261,6 +264,10 @@ function normalizeRecord(input, userId, id) {
   const status = completed ? 'completed'
     : progressPercent > 0 ? 'in_progress'
       : opened ? 'opened' : 'not_started';
+  const details = plainObject(source.details) ? safeObject(source.details) : {};
+  if (plainObject(source.details?.lessonAnswers)) {
+    details.lessonAnswers = normalizeLessonAnswers(source.details.lessonAnswers);
+  }
   return {
     userId,
     materialId: id,
@@ -274,7 +281,7 @@ function normalizeRecord(input, userId, id) {
     lastPosition: plainObject(source.lastPosition) ? safeObject(source.lastPosition) : null,
     completedAt: completed ? isoDate(source.completedAt) : null,
     lastActivityAt: isoDate(source.lastActivityAt),
-    details: plainObject(source.details) ? safeObject(source.details) : {}
+    details
   };
 }
 
@@ -322,6 +329,88 @@ function safeObject(input, depth = 0) {
     } else if (plainObject(rawValue)) result[key] = safeObject(rawValue, depth + 1);
   });
   return result;
+}
+
+function multiline(value, maximum) {
+  return String(value == null ? '' : value)
+    .replace(/\0/g, '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[\u0001-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '')
+    .trim()
+    .slice(0, maximum);
+}
+
+function normalizeLessonAnswer(input, previousInput = {}, now = null) {
+  const source = plainObject(input) ? input : {};
+  const previous = plainObject(previousInput) ? previousInput : {};
+  const has = (key) => Object.prototype.hasOwnProperty.call(source, key);
+  const answer = multiline(has('answer') ? source.answer : previous.answer, MAX_LESSON_ANSWER_CHARS);
+  const answeredAt = isoDate(
+    has('answeredAt') ? source.answeredAt : previous.answeredAt,
+    answer ? isoDate(now || Date.now()) : null
+  );
+  const updatedAt = isoDate(
+    has('updatedAt') ? source.updatedAt : null,
+    isoDate(now || Date.now(), answeredAt)
+  );
+  const aiUsed = has('aiUsed') ? source.aiUsed === true : previous.aiUsed === true;
+  const aiResponse = multiline(
+    has('aiResponse') ? source.aiResponse : previous.aiResponse,
+    MAX_LESSON_AI_RESPONSE_CHARS
+  );
+  const numericVersion = (value) => {
+    const number = Number(value);
+    return Number.isSafeInteger(number) && number > 0 ? Math.min(number, 1_000_000_000) : 0;
+  };
+  return {
+    answer,
+    answeredAt,
+    updatedAt,
+    version: numericVersion(has('version') ? source.version : previous.version),
+    aiUsed,
+    aiCheckedAnswerVersion: numericVersion(
+      has('aiCheckedAnswerVersion') ? source.aiCheckedAnswerVersion : previous.aiCheckedAnswerVersion
+    ),
+    aiResponse,
+    aiCheckedAt: isoDate(
+      has('aiCheckedAt') ? source.aiCheckedAt : previous.aiCheckedAt,
+      null
+    )
+  };
+}
+
+function normalizeLessonAnswers(input, previousInput = {}, now = null) {
+  const source = plainObject(input) ? input : {};
+  const previous = plainObject(previousInput) ? previousInput : {};
+  const result = {};
+  Object.entries(source).slice(0, MAX_LESSON_ANSWERS).forEach(([questionId, answer]) => {
+    if (!validMaterialId(questionId) || !plainObject(answer)) return;
+    result[questionId] = normalizeLessonAnswer(answer, previous[questionId], now);
+  });
+  return result;
+}
+
+function mergeLessonAnswers(existingInput, incomingInput, now) {
+  const result = normalizeLessonAnswers(existingInput);
+  if (!plainObject(incomingInput)) return result;
+  Object.entries(incomingInput).slice(0, MAX_LESSON_ANSWERS).forEach(([questionId, incoming]) => {
+    if (!validMaterialId(questionId) || !plainObject(incoming)) return;
+    const previous = result[questionId] || {};
+    const incomingUpdatedAt = isoDate(incoming.updatedAt);
+    const previousUpdatedAt = isoDate(previous.updatedAt);
+    const incomingVersion = Number(incoming.version) || 0;
+    const previousVersion = Number(previous.version) || 0;
+    if (
+      incomingVersion < previousVersion
+      || (
+        incomingUpdatedAt
+        && previousUpdatedAt
+        && Date.parse(incomingUpdatedAt) < Date.parse(previousUpdatedAt)
+      )
+    ) return;
+    result[questionId] = normalizeLessonAnswer(incoming, previous, now);
+  });
+  return Object.fromEntries(Object.entries(result).slice(-MAX_LESSON_ANSWERS));
 }
 
 function uniqueIds(values) {
@@ -503,6 +592,13 @@ function applyTypedProgress(record, event, node, now) {
     record.details.currentStepIndex = Math.max(0, currentIndex);
     record.details.lastOpenedStepId = currentId;
     record.details.totalTrackedSteps = tracked.length || Math.max(0, Number(details.totalTrackedSteps) || 0);
+    if (plainObject(details.lessonAnswers)) {
+      record.details.lessonAnswers = mergeLessonAnswers(
+        record.details.lessonAnswers,
+        details.lessonAnswers,
+        now
+      );
+    }
     const previousHighest = Math.max(-1, Number(record.details.highestReachedStepIndex) || -1);
     if (currentIndex >= previousHighest) {
       record.details.highestReachedStepIndex = currentIndex;
@@ -829,6 +925,7 @@ function globalReport(users, catalog) {
 module.exports = {
   MATERIAL_TYPES,
   MAX_RECORDS,
+  MAX_LESSON_ANSWERS,
   STATUS_VALUES,
   TRACKING_STATES,
   aggregateUser,
@@ -841,6 +938,7 @@ module.exports = {
   emptyUserDocument,
   globalReport,
   mergeProgressEvent,
+  normalizeLessonAnswers,
   normalizeCatalog,
   normalizePreferences,
   normalizeRanges,

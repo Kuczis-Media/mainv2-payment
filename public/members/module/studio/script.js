@@ -163,6 +163,7 @@
       selectedId: '',
       previewSlideId: '',
       previewTransitionKey: '',
+      previewOpenAnswers: new Map(),
       formulaField: 'left',
       remoteFilename: '',
       remoteSha: '',
@@ -459,6 +460,7 @@
     finishEdit();
     const model = defaultLesson();
     state.lesson.model = model;
+    state.lesson.previewOpenAnswers.clear();
     state.lesson.selectedId = model.slides[0] ? model.slides[0].id : '';
     state.lesson.previewSlideId = model.slides[0] ? model.slides[0].id : '';
     state.lesson.remoteFilename = '';
@@ -1624,13 +1626,32 @@
 
   function cloneLessonNode(value) {
     const clone = JSON.parse(JSON.stringify(value));
+    const questionIds = new Map();
+    const reservedQuestionIds = new Set();
     const visit = (node) => {
       if (!node || typeof node !== 'object') return;
       delete node.id;
+      if (node.type === 'student-answer' && node.questionId) {
+        const nextQuestionId = nextLessonQuestionId(node.question, reservedQuestionIds);
+        reservedQuestionIds.add(nextQuestionId);
+        questionIds.set(node.questionId, nextQuestionId);
+        node.questionId = nextQuestionId;
+      }
       if (Array.isArray(node.blocks)) node.blocks.forEach(visit);
+      if (Array.isArray(node.answerKeyBlocks)) node.answerKeyBlocks.forEach(visit);
       if (node.task) visit(node.task);
     };
     visit(clone);
+    const relink = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (node.type === 'answer-review' && questionIds.has(node.questionId)) {
+        node.questionId = questionIds.get(node.questionId);
+      }
+      if (Array.isArray(node.blocks)) node.blocks.forEach(relink);
+      if (Array.isArray(node.answerKeyBlocks)) node.answerKeyBlocks.forEach(relink);
+      if (node.task) relink(node.task);
+    };
+    relink(clone);
     return clone;
   }
 
@@ -1942,8 +1963,9 @@
         if (block.id === id) {
           return { kind: 'block', node: block, array: blocks, index, slide, parent };
         }
-        if (Array.isArray(block.blocks)) {
-          const nested = visitBlocks(block.blocks, slide, block);
+        const nestedBlocks = lessonNestedBlocks(block);
+        if (nestedBlocks) {
+          const nested = visitBlocks(nestedBlocks, slide, block);
           if (nested) return nested;
         }
       }
@@ -1976,6 +1998,120 @@
     return state.lesson.model.slides.find((slide) => slide.id === state.lesson.previewSlideId)
       || state.lesson.model.slides[0]
       || null;
+  }
+
+  function lessonNestedBlocks(block) {
+    if (!block || typeof block !== 'object') return null;
+    if (block.type === 'answer-review') {
+      return Array.isArray(block.answerKeyBlocks) ? block.answerKeyBlocks : [];
+    }
+    return Array.isArray(block.blocks) ? block.blocks : null;
+  }
+
+  function visitLessonBlocks(visitor) {
+    if (!state.lesson.model) return;
+    let stopped = false;
+    const visit = (blocks, slide, slideIndex, parent, inheritedRootIndex) => {
+      for (let index = 0; index < blocks.length && !stopped; index += 1) {
+        const block = blocks[index];
+        const rootIndex = parent === slide ? index : inheritedRootIndex;
+        if (visitor(block, { slide, slideIndex, parent, index, rootIndex }) === false) {
+          stopped = true;
+          return;
+        }
+        const nested = lessonNestedBlocks(block);
+        if (nested) visit(nested, slide, slideIndex, block, rootIndex);
+      }
+    };
+    state.lesson.model.slides.forEach((slide, slideIndex) => {
+      if (!stopped) visit(slide.blocks || [], slide, slideIndex, slide, -1);
+    });
+  }
+
+  function lessonStudentAnswers(options = {}) {
+    const answers = [];
+    let questionNumber = 0;
+    visitLessonBlocks((block, position) => {
+      if (options.beforeBlockId && block.id === options.beforeBlockId) return false;
+      if (block.type !== 'student-answer') return true;
+      questionNumber += 1;
+      const question = String(block.question || '').replace(/\s+/g, ' ').trim();
+      answers.push({
+        block,
+        ...position,
+        label: `Pytanie ${questionNumber} — ${question || block.questionId || 'bez treści'}`.slice(0, 150)
+      });
+      return true;
+    });
+    return answers;
+  }
+
+  function lessonStudentAnswerByQuestionId(questionId) {
+    let match = null;
+    visitLessonBlocks((block, position) => {
+      if (block.type === 'student-answer' && block.questionId === questionId) {
+        match = { block, ...position };
+        return false;
+      }
+      return true;
+    });
+    return match;
+  }
+
+  function lessonAnswerReviews(questionId) {
+    const matches = [];
+    visitLessonBlocks((block, position) => {
+      if (block.type === 'answer-review' && block.questionId === questionId) {
+        matches.push({ block, ...position });
+      }
+      return true;
+    });
+    return matches;
+  }
+
+  function lessonStudentAnswersBeforePosition(slide) {
+    const targetSlideIndex = state.lesson.model.slides.indexOf(slide);
+    return lessonStudentAnswers().filter((item) => item.slideIndex < targetSlideIndex);
+  }
+
+  function questionIdSlug(value) {
+    return String(value || '')
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 42);
+  }
+
+  function nextLessonQuestionId(question, reserved) {
+    const used = new Set(reserved || []);
+    visitLessonBlocks((block) => {
+      if (block.type === 'student-answer' && block.questionId) used.add(block.questionId);
+      return true;
+    });
+    const stem = `q_${questionIdSlug(question) || 'pytanie'}`;
+    let candidate = stem;
+    let suffix = 2;
+    while (used.has(candidate)) {
+      candidate = `${stem}_${suffix}`;
+      suffix += 1;
+    }
+    return candidate;
+  }
+
+  function defaultAnswerReview(questionId, question) {
+    return lessonModelApi.createBlock('answer-review', {
+      questionId: questionId || '',
+      question: question || '',
+      showStudentAnswer: true,
+      aiEnabled: true,
+      aiInstruction: 'Oceń sens merytoryczny odpowiedzi. Nie wymagaj identycznego słownictwa jak w kluczu.',
+      order: 'student-first',
+      answerKeyBlocks: [lessonModelApi.createBlock('text', {
+        text: 'Wpisz przygotowany przez autora klucz odpowiedzi.'
+      })]
+    });
   }
 
   function lessonBlockDefaults(type) {
@@ -2159,6 +2295,26 @@
         ]
       });
     }
+    if (type === 'student-answer') {
+      const question = 'Dlaczego ten przykład spełnia warunki opisane na slajdzie?';
+      return lessonModelApi.createBlock('student-answer', {
+        questionId: nextLessonQuestionId(question),
+        question,
+        label: 'Twoja odpowiedź',
+        placeholder: 'Napisz własnymi słowami…',
+        minHeight: 160,
+        multiline: true,
+        maxLength: 2000,
+        required: true,
+        saveToProgress: true,
+        allowEdit: true,
+        button: 'Zapisz odpowiedź'
+      });
+    }
+    if (type === 'answer-review') {
+      const previous = lessonStudentAnswers().at(-1);
+      return defaultAnswerReview(previous?.block.questionId || '', previous?.block.question || '');
+    }
     if (type === 'accordion') {
       return lessonModelApi.createBlock('accordion', {
         title: 'Dodatkowe wyjaśnienie',
@@ -2238,13 +2394,14 @@
     let target = slide.blocks;
     if (parentBlockId) {
       const parent = findLessonNode(parentBlockId);
+      const nested = parent?.kind === 'block' ? lessonNestedBlocks(parent.node) : null;
       if (
         !parent
         || parent.kind !== 'block'
-        || !['style', 'accordion'].includes(parent.node.type)
-        || ['style', 'accordion'].includes(block.type)
+        || !nested
+        || ['style', 'accordion', 'student-answer', 'answer-review'].includes(block.type)
       ) return null;
-      target = parent.node.blocks;
+      target = nested;
     }
     const position = Number.isInteger(index)
       ? Math.max(0, Math.min(index, target.length))
@@ -2258,9 +2415,12 @@
     if (selected) {
       if (
         selected.kind === 'block'
-        && ['style', 'accordion'].includes(selected.node.type)
+        && ['style', 'accordion', 'answer-review'].includes(selected.node.type)
       ) {
         return { slideId: selected.slide.id, parentBlockId: selected.node.id };
+      }
+      if (selected.kind === 'block' && selected.parent?.type === 'answer-review') {
+        return { slideId: selected.slide.id, parentBlockId: selected.parent.id };
       }
       return { slideId: selected.slide.id, parentBlockId: '' };
     }
@@ -2272,7 +2432,9 @@
     const labels = {
       formula: 'Kreator równań',
       ai: 'Ustawienia pomocy AI',
-      board: 'Ustawienia tablicy'
+      board: 'Ustawienia tablicy',
+      'student-answer': 'Pytanie otwarte',
+      'answer-review': 'Omówienie odpowiedzi'
     };
     if (!labels[type]) return;
 
@@ -2327,6 +2489,11 @@
 
     commitMutation('lesson', () => {
       const block = lessonBlockDefaults(type);
+      if (type === 'answer-review') {
+        const previous = lessonStudentAnswersBeforePosition(slide).at(-1);
+        block.questionId = previous?.block.questionId || '';
+        block.question = previous?.block.question || '';
+      }
       const inserted = insertLessonBlock(
         slide.id,
         insertion.parentBlockId || '',
@@ -2334,7 +2501,11 @@
         insertion.index
       );
       if (!inserted) {
-        toast('Nie można zagnieździć klocka', 'Harmonijka ani stylowany kontener nie mogą zawierać kolejnego kontenera.', 'error');
+        toast(
+          'Nie można zagnieździć klocka',
+          'Kontenery oraz klocki pytania i omówienia muszą pozostać na poziomie slajdu.',
+          'error'
+        );
         return;
       }
       if (slide.layout === 'canvas' && !insertion.parentBlockId) {
@@ -2344,6 +2515,69 @@
       state.lesson.previewSlideId = slide.id;
     });
     revealFeaturedLessonTool(type);
+  }
+
+  function createLinkedAnswerReview(studentAnswerId) {
+    const found = findLessonNode(studentAnswerId);
+    if (!found || found.kind !== 'block' || found.node.type !== 'student-answer') return;
+    const existing = lessonAnswerReviews(found.node.questionId)[0];
+    if (existing) {
+      state.lesson.selectedId = existing.block.id;
+      state.lesson.previewSlideId = existing.slide.id;
+      renderLesson();
+      toast('Omówienie już istnieje', 'Otworzyłem powiązany klocek z kluczem odpowiedzi.');
+      return;
+    }
+    commitMutation('lesson', () => {
+      const review = defaultAnswerReview(found.node.questionId, found.node.question);
+      const slide = lessonModelApi.createSlide({
+        blocks: [
+          lessonModelApi.createBlock('heading', { level: 2, text: 'Omówienie odpowiedzi' }),
+          review
+        ]
+      });
+      const slideIndex = state.lesson.model.slides.indexOf(found.slide);
+      state.lesson.model.slides.splice(slideIndex + 1, 0, slide);
+      state.lesson.selectedId = review.id;
+      state.lesson.previewSlideId = slide.id;
+    });
+    applyStudioLayoutPart(elements.lessonWorkspace, 'inspector', false);
+    activateInspectorPanel('lesson', 'inspector');
+    saveStudioLayout();
+    toast('Slajd z omówieniem utworzony', 'Wpisz klucz odpowiedzi w zagnieżdżonych klockach. AI pozostaje opcjonalne.');
+  }
+
+  function regenerateLessonQuestionId(studentAnswerId) {
+    const found = findLessonNode(studentAnswerId);
+    if (!found || found.kind !== 'block' || found.node.type !== 'student-answer') return;
+    commitMutation('lesson', () => {
+      const previous = found.node.questionId;
+      const next = nextLessonQuestionId(found.node.question);
+      found.node.questionId = next;
+      lessonAnswerReviews(previous).forEach(({ block }) => {
+        block.questionId = next;
+        block.question = found.node.question;
+      });
+      const previousPreviewKey = studioPreviewAnswerKey(previous);
+      const nextPreviewKey = studioPreviewAnswerKey(next);
+      if (state.lesson.previewOpenAnswers.has(previousPreviewKey)) {
+        state.lesson.previewOpenAnswers.set(nextPreviewKey, state.lesson.previewOpenAnswers.get(previousPreviewKey));
+        state.lesson.previewOpenAnswers.delete(previousPreviewKey);
+      }
+    });
+    toast('Wygenerowano nowe questionId', 'Wszystkie powiązane omówienia zostały zaktualizowane.');
+  }
+
+  function addAnswerKeyBlock(type) {
+    const found = findLessonNode(state.lesson.selectedId);
+    if (!found || found.kind !== 'block' || found.node.type !== 'answer-review') return;
+    if (['style', 'accordion', 'student-answer', 'answer-review'].includes(type)) return;
+    commitMutation('lesson', () => {
+      const block = lessonBlockDefaults(type);
+      found.node.answerKeyBlocks.push(block);
+      state.lesson.selectedId = block.id;
+      state.lesson.previewSlideId = found.slide.id;
+    });
   }
 
   function lessonBlockSymbol(block) {
@@ -2370,7 +2604,9 @@
       board: '✎',
       contact: '✉',
       link: '↗',
-      flashcards: '↻'
+      flashcards: '↻',
+      'student-answer': 'Aa',
+      'answer-review': '≋'
     };
     return symbols[block.type] || 'T';
   }
@@ -2399,6 +2635,8 @@
     if (block.type === 'contact') return block.title || 'Formularz kontaktowy';
     if (block.type === 'link') return block.title || 'Kafelek z linkiem';
     if (block.type === 'flashcards') return block.title || 'Fiszki';
+    if (block.type === 'student-answer') return block.question || 'Pytanie otwarte';
+    if (block.type === 'answer-review') return 'Omówienie odpowiedzi';
     return 'Klocek';
   }
 
@@ -2446,6 +2684,13 @@
     }
     if (block.type === 'link') return block.url || 'Uzupełnij adres linku';
     if (block.type === 'flashcards') return `${block.cards.length} fiszki · ${block.color}`;
+    if (block.type === 'student-answer') {
+      return `${block.questionId || 'brak ID'} · ${block.required ? 'wymagane' : 'opcjonalne'} · ${block.saveToProgress ? 'zapis do postępu' : 'tylko lokalnie'}`;
+    }
+    if (block.type === 'answer-review') {
+      const keyCount = Array.isArray(block.answerKeyBlocks) ? block.answerKeyBlocks.length : 0;
+      return `${block.questionId || 'wybierz pytanie'} · ${keyCount} ${keyCount === 1 ? 'klocek klucza' : 'klocków klucza'} · ${block.aiEnabled ? 'AI na żądanie' : 'bez AI'}`;
+    }
     const labels = {
       heading: `Nagłówek H${block.level}`,
       text: 'Akapit',
@@ -2475,8 +2720,11 @@
   }
 
   function renderLessonBlock(block, slide, parentBlock, index) {
-    if (block.type === 'style' || block.type === 'accordion') {
-      const container = create('article', 'builder-node group-node lesson-container');
+    if (block.type === 'style' || block.type === 'accordion' || block.type === 'answer-review') {
+      const container = create(
+        'article',
+        `builder-node group-node lesson-container${block.type === 'answer-review' ? ' answer-review-builder-node' : ''}`
+      );
       container.dataset.lessonBlockId = block.id;
       container.dataset.lessonSlideId = slide.id;
       container.dataset.lessonParentBlockId = parentBlock ? parentBlock.id : '';
@@ -2502,11 +2750,25 @@
       );
       header.append(drag, symbol, copy, actions);
       const body = create('div', 'group-body');
-      block.blocks.forEach((child, childIndex) => {
+      const nested = lessonNestedBlocks(block) || [];
+      if (block.type === 'answer-review') {
+        const keyHeader = create('div', 'answer-review-key-header');
+        keyHeader.append(
+          create('strong', '', 'Klucz odpowiedzi'),
+          create('small', '', 'Zbuduj klucz z tych samych klocków co zwykły slajd. AI nie uruchamia się w kreatorze.')
+        );
+        body.append(keyHeader);
+      }
+      nested.forEach((child, childIndex) => {
         body.append(lessonDropZone(slide.id, block.id, childIndex));
         body.append(renderLessonBlock(child, slide, block, childIndex));
       });
-      body.append(lessonDropZone(slide.id, block.id, block.blocks.length, 'Dodaj do środka'));
+      body.append(lessonDropZone(
+        slide.id,
+        block.id,
+        nested.length,
+        block.type === 'answer-review' ? 'Dodaj klocek do klucza odpowiedzi' : 'Dodaj do środka'
+      ));
       container.append(header, body);
       return container;
     }
@@ -2529,6 +2791,13 @@
       create('small', '', lessonBlockSubtitle(block))
     );
     const actions = create('span', 'node-actions');
+    if (block.type === 'student-answer') {
+      actions.append(lessonActionButton(
+        'create-review',
+        'Utwórz powiązany slajd z omówieniem',
+        '↳'
+      ));
+    }
     actions.append(
       lessonActionButton('up', 'Przesuń wyżej', '↑'),
       lessonActionButton('down', 'Przesuń niżej', '↓'),
@@ -2610,7 +2879,8 @@
       ['task-choice', 'Wybór'],
       ['task-gaps', 'Luki z listy'],
       ['task-gaps-text', 'Luki tekstowe'],
-      ['task-text', 'Krótka odpowiedź']
+      ['task-text', 'Krótka odpowiedź'],
+      ['student-answer', 'Pytanie otwarte']
     ].forEach(([type, title]) => {
       const button = create('button', 'mini-button', title);
       button.type = 'button';
@@ -2743,6 +3013,95 @@
     remove.dataset.lessonInspectorAction = 'delete';
     footer.append(duplicate, remove);
     return footer;
+  }
+
+  function studentAnswerWorkflowActions(block) {
+    const section = create('section', 'open-answer-workflow-actions');
+    const copy = create('div');
+    const source = lessonStudentAnswerByQuestionId(block.questionId);
+    const linked = lessonAnswerReviews(block.questionId);
+    const linkedAfterQuestion = source
+      ? linked.find((review) => review.slideIndex > source.slideIndex)
+      : null;
+    const hasInvalidReview = linked.length > 0 && !linkedAfterQuestion;
+    copy.append(
+      create(
+        'strong',
+        '',
+        linkedAfterQuestion
+          ? 'Powiązane omówienie jest gotowe'
+          : hasInvalidReview ? 'Omówienie wymaga poprawienia kolejności' : 'Kolejny krok: omówienie'
+      ),
+      create(
+        'small',
+        '',
+        linkedAfterQuestion
+          ? 'Otwórz slajd z kluczem i uzupełnij jego treść.'
+          : hasInvalidReview
+            ? 'Otwórz omówienie i przenieś jego slajd za slajd z pytaniem.'
+          : 'Studio utworzy następny slajd, zachowa questionId i doda edytowalny klucz odpowiedzi.'
+      )
+    );
+    const button = create(
+      'button',
+      'button button-primary',
+      linked.length ? 'Otwórz omówienie' : 'Utwórz slajd z omówieniem'
+    );
+    button.type = 'button';
+    button.dataset.lessonInspectorAction = 'create-review';
+    section.append(copy, button);
+    return section;
+  }
+
+  function answerReviewQuestionOptions(block) {
+    const review = findLessonNode(block.id);
+    const reviewSlideIndex = review ? state.lesson.model.slides.indexOf(review.slide) : Number.MAX_SAFE_INTEGER;
+    const previous = lessonStudentAnswers({ beforeBlockId: block.id })
+      .filter((item) => item.slideIndex < reviewSlideIndex);
+    const options = previous.map((item) => ({
+      value: item.block.questionId,
+      label: item.label
+    }));
+    if (!block.questionId && options.length) {
+      options.unshift({ value: '', label: 'Wybierz wcześniejsze pytanie…' });
+    }
+    if (block.questionId && !options.some((option) => option.value === block.questionId)) {
+      const linked = lessonStudentAnswerByQuestionId(block.questionId);
+      options.push({
+        value: block.questionId,
+        label: linked
+          ? `Powiązane pytanie jest później — ${String(linked.block.question || block.questionId).replace(/\s+/g, ' ').slice(0, 90)}`
+          : `Brak pytania w lekcji — ${block.questionId}`
+      });
+    }
+    if (!options.length) options.push({ value: '', label: 'Najpierw dodaj wcześniejsze pytanie otwarte' });
+    return options;
+  }
+
+  function answerKeyQuickInsert() {
+    const section = create('section', 'answer-key-builder-tools');
+    const heading = create('div');
+    heading.append(
+      create('strong', '', 'Treść klucza odpowiedzi'),
+      create('small', '', 'Każdy element pozostaje osobnym, edytowalnym klockiem. Możesz też przeciągać klocki z biblioteki po lewej.')
+    );
+    const actions = create('div', 'answer-key-builder-actions');
+    [
+      ['text', 'T', 'Tekst'],
+      ['formula', '∑', 'Wzór'],
+      ['image', '▧', 'Obraz'],
+      ['table', '▦', 'Tabela'],
+      ['list', '☷', 'Lista'],
+      ['callout', '!', 'Wskazówka']
+    ].forEach(([type, symbol, label]) => {
+      const button = create('button', 'mini-button');
+      button.type = 'button';
+      button.dataset.answerKeyAdd = type;
+      button.append(create('b', '', symbol), document.createTextNode(label));
+      actions.append(button);
+    });
+    section.append(heading, actions);
+    return section;
   }
 
   function taskCorrectOptionIndex(task) {
@@ -4004,6 +4363,157 @@
         ),
         field('Kolor fiszek', lessonInput(block.color, 'flashcardColor', { type: 'color' }))
       );
+    } else if (block.type === 'student-answer') {
+      const questionIdRow = create('div', 'stable-question-id-row');
+      const questionId = lessonInput(block.questionId, 'questionId', { maxLength: 96 });
+      questionId.readOnly = true;
+      questionId.setAttribute('aria-label', 'Stabilny identyfikator pytania');
+      const regenerate = create('button', 'button button-soft', 'Wygeneruj nowe ID');
+      regenerate.type = 'button';
+      regenerate.dataset.lessonInspectorAction = 'regenerate-question-id';
+      questionIdRow.append(questionId, regenerate);
+      const multiline = create('label', 'check-field');
+      multiline.append(
+        lessonInput('', 'multiline', { type: 'checkbox', checked: block.multiline !== false }),
+        create('span', '', 'Odpowiedź wieloliniowa (textarea)')
+      );
+      const required = create('label', 'check-field');
+      required.append(
+        lessonInput('', 'required', { type: 'checkbox', checked: block.required !== false }),
+        create('span', '', 'Wymagaj odpowiedzi przed przejściem dalej')
+      );
+      const saveToProgress = create('label', 'check-field');
+      saveToProgress.append(
+        lessonInput('', 'saveToProgress', { type: 'checkbox', checked: block.saveToProgress !== false }),
+        create('span', '', 'Zapisuj odpowiedź w postępie ucznia')
+      );
+      const allowEdit = create('label', 'check-field');
+      allowEdit.append(
+        lessonInput('', 'allowEdit', { type: 'checkbox', checked: block.allowEdit !== false }),
+        create('span', '', 'Pozwól wrócić i poprawić zapisaną odpowiedź')
+      );
+      const dimensions = create('div', 'field-row');
+      dimensions.append(
+        field(
+          'Minimalna wysokość pola (px)',
+          lessonInput(String(block.minHeight || 160), 'minHeight', { type: 'number', min: 80, max: 800 })
+        ),
+        field(
+          'Limit znaków',
+          lessonInput(block.maxLength ? String(block.maxLength) : '', 'maxLength', {
+            type: 'number',
+            min: 0,
+            max: 6000,
+            placeholder: '0 = bez limitu'
+          }),
+          'Wartość 0 lub puste pole wyłącza limit.'
+        )
+      );
+      form.append(
+        field(
+          'Stabilny questionId',
+          questionIdRow,
+          'Omówienie używa tego ID, więc przesuwanie slajdów nie rozłącza pary. Nowe ID automatycznie aktualizuje powiązane omówienia.'
+        ),
+        field('Treść pytania', lessonTextarea(block.question, 'question', { rows: 5, maxLength: 8000 })),
+        scientificNotationToolbar(),
+        field('Nagłówek pola', lessonInput(block.label, 'label', { maxLength: 160 })),
+        field('Placeholder', lessonInput(block.placeholder, 'placeholder', { maxLength: 240 })),
+        field('Tekst przycisku zapisu', lessonInput(block.button, 'button', { maxLength: 100 })),
+        dimensions,
+        multiline,
+        required,
+        saveToProgress,
+        allowEdit,
+        create(
+          'p',
+          'formula-builder-tip',
+          'Zapisanie odpowiedzi nie uruchamia AI. AI może pojawić się dopiero w powiązanym klocku „Omówienie odpowiedzi” i tylko po świadomym kliknięciu ucznia.'
+        ),
+        studentAnswerWorkflowActions(block)
+      );
+    } else if (block.type === 'answer-review') {
+      const questionOptions = answerReviewQuestionOptions(block);
+      const questionSelect = lessonSelect(block.questionId, 'questionId', questionOptions);
+      questionSelect.disabled = questionOptions.length === 1 && !questionOptions[0].value;
+      const linkedQuestion = lessonStudentAnswerByQuestionId(block.questionId);
+      const reviewSlideIndex = state.lesson.model.slides.indexOf(found.slide);
+      const linkedEarlier = Boolean(linkedQuestion && linkedQuestion.slideIndex < reviewSlideIndex);
+      const linkedSummary = create('div', `answer-review-link-summary${linkedEarlier ? '' : ' is-missing'}`);
+      linkedSummary.append(
+        create('span', '', linkedEarlier ? '✓' : '!'),
+        create('div')
+      );
+      linkedSummary.lastElementChild.append(
+        create(
+          'strong',
+          '',
+          linkedEarlier
+            ? 'Pytanie powiązane przez questionId'
+            : linkedQuestion ? 'Pytanie musi być na wcześniejszym slajdzie' : 'Brakuje powiązanego pytania'
+        ),
+        create(
+          'small',
+          '',
+          linkedEarlier
+            ? String(linkedQuestion.block.question || block.question || block.questionId).replace(/\s+/g, ' ').slice(0, 260)
+            : linkedQuestion
+              ? 'Przenieś omówienie na slajd znajdujący się po pytaniu. Samo położenie klocka na tym samym slajdzie nie wystarcza.'
+              : 'Wybierz wcześniejsze pytanie otwarte. Samo położenie slajdu nie jest używane do powiązania.'
+        )
+      );
+      const questionSnapshot = lessonTextarea(block.question, 'questionSnapshot', { rows: 4, maxLength: 8000 });
+      questionSnapshot.readOnly = true;
+      const aiInstruction = lessonTextarea(block.aiInstruction, 'aiInstruction', {
+        rows: 7,
+        maxLength: 2000,
+        placeholder: 'Np. oceń poprawność merytoryczną i nie wymagaj identycznego słownictwa.'
+      });
+      aiInstruction.disabled = block.aiEnabled === false;
+      const showStudentAnswer = create('label', 'check-field');
+      showStudentAnswer.append(
+        lessonInput('', 'showStudentAnswer', { type: 'checkbox', checked: block.showStudentAnswer !== false }),
+        create('span', '', 'Pokaż dokładną odpowiedź zapisaną przez ucznia')
+      );
+      const aiEnabled = create('label', 'check-field answer-review-ai-toggle');
+      aiEnabled.append(
+        lessonInput('', 'aiEnabled', { type: 'checkbox', checked: block.aiEnabled !== false }),
+        create('span', '', 'Zezwól uczniowi na opcjonalne „Zapytaj AI”')
+      );
+      form.append(
+        field(
+          'Powiązane wcześniejsze pytanie',
+          questionSelect,
+          'Lista pokazuje wcześniejsze klocki „Pytanie otwarte”. Powiązanie pozostaje stabilne po zmianie kolejności slajdów.'
+        ),
+        linkedSummary,
+        field(
+          'Treść pytania przekazywana do omówienia',
+          questionSnapshot,
+          'Snapshot jest aktualizowany automatycznie, gdy autor zmienia treść powiązanego pytania.'
+        ),
+        field('Kolejność porównania', lessonSelect(block.order || 'student-first', 'order', [
+          { value: 'student-first', label: 'Najpierw odpowiedź ucznia, potem klucz' },
+          { value: 'key-first', label: 'Najpierw klucz, potem odpowiedź ucznia' }
+        ])),
+        showStudentAnswer,
+        aiEnabled,
+        field(
+          'Instrukcja dla AI — opcjonalnie',
+          aiInstruction,
+          block.aiEnabled === false
+            ? 'Włącz opcjonalne AI, aby edytować instrukcję. Zapisana treść nie jest usuwana.'
+            : 'AI otrzyma pytanie, aktualną odpowiedź ucznia, klucz autora i tę instrukcję dopiero po kliknięciu „Zapytaj AI”. Maksymalnie 2000 znaków.'
+        )
+      );
+      form.append(
+        answerKeyQuickInsert(),
+        create(
+          'p',
+          'formula-builder-tip answer-review-ai-note',
+          'Podgląd Studio nigdy nie wykonuje zapytania AI. W lekcji samo otwarcie omówienia również nie zużywa tokenów ani limitu.'
+        )
+      );
     } else if (block.type === 'style') {
       const primaryText = block.blocks.find((child) => child.type === 'text');
       form.append(field(
@@ -4123,6 +4633,119 @@
         frameHost.hidden = false;
         button.setAttribute('aria-expanded', 'true');
         button.textContent = 'Ukryj model';
+      });
+    });
+  }
+
+  function studioPreviewAnswerKey(questionId) {
+    return `${state.lesson.model?.filename || 'draft'}::${questionId || ''}`;
+  }
+
+  function bindPreviewOpenAnswers(root) {
+    const refreshReviews = (questionId, answer) => {
+      all('.lesson-answer-review[data-question-id]', root).forEach((review) => {
+        if (review.dataset.questionId !== questionId) return;
+        const display = review.querySelector('[data-student-answer-display]');
+        if (display) {
+          display.textContent = answer || 'Nie zapisano jeszcze odpowiedzi w tym podglądzie.';
+          display.dataset.state = answer ? 'value' : 'empty';
+          display.classList.toggle('is-empty', !answer);
+        }
+        const button = review.querySelector('[data-answer-review-ai]');
+        const status = review.querySelector('[data-answer-review-status]');
+        if (button) button.disabled = !answer.trim();
+        if (status && !answer.trim()) {
+          status.dataset.state = 'empty';
+          status.textContent = 'Najpierw zapisz odpowiedź na powiązanym slajdzie.';
+        } else if (status && status.dataset.state === 'empty') {
+          status.dataset.state = '';
+          status.textContent = '';
+        }
+      });
+    };
+
+    all('.lesson-student-answer[data-question-id]', root).forEach((card) => {
+      const questionId = card.dataset.questionId || '';
+      const field = card.querySelector('[data-student-answer-input]');
+      const save = card.querySelector('[data-student-answer-save]');
+      const status = card.querySelector('[data-student-answer-status]');
+      const counter = card.querySelector('[data-student-answer-count]');
+      if (!field || !questionId) return;
+      const key = studioPreviewAnswerKey(questionId);
+      const authorLimit = Math.max(0, Math.min(6000, Number(card.dataset.maxLength) || 0));
+      const effectiveLimit = authorLimit || 6000;
+      const required = card.dataset.required === 'true';
+      const allowEdit = card.dataset.allowEdit !== 'false';
+      let savedAnswer = (state.lesson.previewOpenAnswers.get(key) || '').slice(0, effectiveLimit);
+      if (state.lesson.previewOpenAnswers.has(key)) {
+        state.lesson.previewOpenAnswers.set(key, savedAnswer);
+      }
+      field.maxLength = effectiveLimit;
+      if (!field.value && savedAnswer) field.value = savedAnswer;
+      const updateCounter = () => {
+        if (!counter) return;
+        counter.textContent = authorLimit
+          ? `${field.value.length} / ${authorLimit}`
+          : `${field.value.length} znaków`;
+      };
+      const markDraft = () => {
+        updateCounter();
+        if (status) {
+          const changed = field.value !== savedAnswer;
+          status.dataset.state = changed ? 'dirty' : savedAnswer ? 'saved' : '';
+          status.textContent = changed
+            ? 'Niezapisana wersja robocza w podglądzie Studio — AI nie zostało użyte.'
+            : savedAnswer ? 'Odpowiedź jest zapisana w podglądzie Studio.' : '';
+        }
+      };
+      field.addEventListener('input', markDraft);
+      save?.addEventListener('click', (event) => {
+        event.preventDefault();
+        const answer = field.value.slice(0, effectiveLimit);
+        if (field.value !== answer) field.value = answer;
+        if (required && !answer.trim()) {
+          field.setAttribute('aria-invalid', 'true');
+          if (status) {
+            status.dataset.state = 'error';
+            status.textContent = 'To pytanie wymaga odpowiedzi.';
+          }
+          field.focus();
+          return;
+        }
+        field.removeAttribute('aria-invalid');
+        savedAnswer = answer;
+        state.lesson.previewOpenAnswers.set(key, answer);
+        refreshReviews(questionId, answer);
+        updateCounter();
+        if (status) {
+          status.dataset.state = 'saved';
+          status.textContent = 'Zapisano tylko w podglądzie Studio. Nie wysłano żadnego zapytania AI.';
+        }
+        if (!allowEdit && answer.trim()) {
+          field.readOnly = true;
+          if (save) save.disabled = true;
+        }
+      });
+      if (savedAnswer && !allowEdit) {
+        field.readOnly = true;
+        if (save) save.disabled = true;
+      }
+      updateCounter();
+      refreshReviews(questionId, savedAnswer);
+    });
+
+    all('.lesson-answer-review[data-question-id]', root).forEach((review) => {
+      const questionId = review.dataset.questionId || '';
+      const answer = state.lesson.previewOpenAnswers.get(studioPreviewAnswerKey(questionId)) || '';
+      refreshReviews(questionId, answer);
+      const button = review.querySelector('[data-answer-review-ai]');
+      const status = review.querySelector('[data-answer-review-status]');
+      button?.addEventListener('click', (event) => {
+        event.preventDefault();
+        if (status) {
+          status.dataset.state = 'preview';
+          status.textContent = 'Podgląd Studio nie uruchamia AI. W opublikowanej lekcji request nastąpi dopiero po świadomym kliknięciu ucznia.';
+        }
       });
     });
   }
@@ -4570,6 +5193,7 @@
     preparePreviewYouTube(elements.lessonPreview);
     bindPreviewFlashcards(elements.lessonPreview);
     bindPreviewAtonom(elements.lessonPreview);
+    bindPreviewOpenAnswers(elements.lessonPreview);
     bindPreviewAiHelp(elements.lessonPreview);
     bindPreviewTasks(elements.lessonPreview);
     void hydrateStudioLessonMedia(elements.lessonPreview).then(() => {
@@ -4900,6 +5524,7 @@
       preparePreviewYouTube(main);
       bindPreviewFlashcards(main);
       bindPreviewAtonom(main);
+      bindPreviewOpenAnswers(main);
       bindPreviewAiHelp(main);
       bindPreviewTasks(main);
       typesetMath(main, popup);
@@ -5020,16 +5645,33 @@
   function lessonNodeAction(action, id) {
     const found = findLessonNode(id);
     if (!found) return;
+    if (action === 'create-review' && found.kind === 'block' && found.node.type === 'student-answer') {
+      createLinkedAnswerReview(id);
+      return;
+    }
+    if (action === 'regenerate-question-id' && found.kind === 'block' && found.node.type === 'student-answer') {
+      regenerateLessonQuestionId(id);
+      return;
+    }
     if (action === 'delete') {
+      const linkedReviewCount = found.kind === 'block' && found.node.type === 'student-answer'
+        ? lessonAnswerReviews(found.node.questionId).length
+        : 0;
       const hasChildren = found.kind === 'slide'
         ? found.node.blocks.length || found.node.task
-        : found.kind === 'block' && Array.isArray(found.node.blocks) && found.node.blocks.length;
-      if (hasChildren && !window.confirm('Usunąć ten element razem z jego zawartością?')) return;
+        : found.kind === 'block' && Boolean(lessonNestedBlocks(found.node)?.length);
+      if (
+        linkedReviewCount
+        && !window.confirm(`To pytanie ma ${linkedReviewCount} powiązane omówienie. Usunięcie pytania pozostawi je bez źródła. Kontynuować?`)
+      ) return;
+      if (!linkedReviewCount && hasChildren && !window.confirm('Usunąć ten element razem z jego zawartością?')) return;
       commitMutation('lesson', () => {
         lessonRemoveNode(found);
         state.lesson.selectedId = '';
-        const slide = state.lesson.model.slides[Math.min(found.index, state.lesson.model.slides.length - 1)]
-          || state.lesson.model.slides[0];
+        const slide = found.kind === 'slide'
+          ? state.lesson.model.slides[Math.min(found.index, state.lesson.model.slides.length - 1)]
+            || state.lesson.model.slides[0]
+          : found.slide;
         state.lesson.previewSlideId = slide ? slide.id : '';
       });
       return;
@@ -5075,8 +5717,8 @@
   function moveLessonBlock(blockId, slideId, parentBlockId, index) {
     const found = findLessonNode(blockId);
     if (!found || found.kind !== 'block' || !found.array) return false;
-    const movingContainer = ['style', 'accordion'].includes(found.node.type);
-    if (parentBlockId && movingContainer) return false;
+    const movingContainer = ['style', 'accordion', 'answer-review'].includes(found.node.type);
+    if (parentBlockId && (movingContainer || found.node.type === 'student-answer')) return false;
     if (parentBlockId === blockId) return false;
     const originalArray = found.array;
     const originalIndex = found.index;
@@ -5085,8 +5727,8 @@
     let target = targetSlide ? targetSlide.blocks : null;
     if (parentBlockId) {
       const parent = findLessonNode(parentBlockId);
-      target = parent && parent.kind === 'block' && Array.isArray(parent.node.blocks)
-        ? parent.node.blocks
+      target = parent && parent.kind === 'block'
+        ? lessonNestedBlocks(parent.node)
         : null;
     }
     if (!target) {
@@ -5139,7 +5781,11 @@
           index
         );
         if (!moved) {
-          toast('Nie można przenieść klocka', 'Kontenerów stylu i harmonijek nie można zagnieżdżać.', 'error');
+          toast(
+            'Nie można przenieść klocka',
+            'Kontenerów oraz klocków pytania i omówienia nie można zagnieżdżać. Klucz przyjmuje zwykłe klocki treści.',
+            'error'
+          );
           return;
         }
         state.lesson.selectedId = payload.id;
@@ -5357,7 +6003,7 @@
 
   function handleLessonInspectorInput(event) {
     const target = event.target.closest('[data-lesson-field]');
-    if (!target) return;
+    if (!target || target.readOnly || target.disabled) return;
     const found = findLessonNode(state.lesson.selectedId);
     if (!found) return;
     beginEdit('lesson');
@@ -5516,6 +6162,23 @@
         primaryText.text = raw;
       } else if (fieldName === 'level') {
         block.level = Math.max(1, Math.min(3, Number(raw) || 2));
+      } else if (block.type === 'student-answer' && fieldName === 'question') {
+        block.question = String(raw).slice(0, 8000);
+        lessonAnswerReviews(block.questionId).forEach(({ block: review }) => {
+          review.question = block.question;
+        });
+      } else if (block.type === 'student-answer' && fieldName === 'minHeight') {
+        block.minHeight = Math.max(80, Math.min(800, Number(raw) || 160));
+      } else if (block.type === 'student-answer' && fieldName === 'maxLength') {
+        block.maxLength = Math.max(0, Math.min(6000, Number(raw) || 0));
+      } else if (block.type === 'answer-review' && fieldName === 'questionId') {
+        const linked = lessonStudentAnswerByQuestionId(raw);
+        block.questionId = String(raw || '');
+        block.question = linked?.block.question || '';
+      } else if (block.type === 'answer-review' && fieldName === 'order') {
+        block.order = raw === 'key-first' ? 'key-first' : 'student-first';
+      } else if (block.type === 'answer-review' && fieldName === 'aiInstruction') {
+        block.aiInstruction = String(raw).slice(0, 2000);
       } else if (fieldName === 'width' && block.type === 'image') {
         block.width = Math.max(20, Math.min(100, Number(raw) || 100));
       } else if (fieldName === 'useColor') {
@@ -5636,6 +6299,7 @@
         const model = lessonModelFromSource(source, state.lesson.model.filename);
         commitMutation('lesson', () => {
           state.lesson.model = model;
+          state.lesson.previewOpenAnswers.clear();
           state.lesson.selectedId = '';
           state.lesson.previewSlideId = model.slides[0] ? model.slides[0].id : '';
         });
@@ -5715,6 +6379,7 @@
         const model = lessonModelFromSource(source, filename);
         commitMutation('lesson', () => {
           state.lesson.model = model;
+          state.lesson.previewOpenAnswers.clear();
           state.lesson.selectedId = '';
           state.lesson.previewSlideId = model.slides[0] ? model.slides[0].id : '';
         });
@@ -6711,6 +7376,7 @@
       const model = lessonModelFromSource(result.content, asset.filename);
       finishEdit();
       state.lesson.model = model;
+      state.lesson.previewOpenAnswers.clear();
       state.lesson.selectedId = sourceWasEmpty && model.slides[0] ? model.slides[0].id : '';
       state.lesson.previewSlideId = model.slides[0] ? model.slides[0].id : '';
       history.lesson.undo = [];
@@ -7070,7 +7736,47 @@
     if (open) void openContentExplorerAsset(open);
   }
 
+  function ensureOpenAnswerPalette() {
+    const groups = all('.lesson-palette-scroll .palette-group');
+    const interactions = groups.find((group) => group.querySelector('h2')?.textContent.trim() === 'Interakcje');
+    const grid = interactions?.querySelector('.palette-grid');
+    if (!grid || grid.querySelector('[data-lesson-add="student-answer"]')) return;
+    [
+      {
+        type: 'student-answer',
+        symbol: 'Aa',
+        tone: 'is-teal',
+        title: 'Pytanie otwarte',
+        description: 'Uczeń zapisuje własną odpowiedź',
+        search: 'pytanie otwarte odpowiedź ucznia textarea zapisz samodzielna'
+      },
+      {
+        type: 'answer-review',
+        symbol: '≋',
+        tone: 'is-violet',
+        title: 'Omówienie odpowiedzi',
+        description: 'Odpowiedź ucznia, klucz i opcjonalne AI',
+        search: 'omówienie odpowiedzi klucz porównanie zapytaj ai questionid'
+      }
+    ].forEach((definition) => {
+      const button = create('button', 'palette-item palette-item-wide open-answer-palette-item');
+      button.type = 'button';
+      button.draggable = true;
+      button.dataset.lessonAdd = definition.type;
+      button.dataset.search = definition.search;
+      const symbol = create('span', `palette-symbol ${definition.tone}`, definition.symbol);
+      const copy = create('span');
+      copy.append(
+        create('strong', '', definition.title),
+        create('small', '', definition.description)
+      );
+      button.append(symbol, copy);
+      grid.append(button);
+    });
+  }
+
   function bindPalette() {
+    ensureOpenAnswerPalette();
     all('[data-dashboard-add]').forEach((button) => {
       button.addEventListener('click', () => addDashboardNode(button.dataset.dashboardAdd));
       if (button.draggable) {
@@ -7252,7 +7958,7 @@
 
     elements.lessonInspector.addEventListener('focusin', (event) => {
       const target = event.target.closest('[data-lesson-field]');
-      if (!target) return;
+      if (!target || target.readOnly || target.disabled) return;
       beginEdit('lesson');
       if (['left', 'right'].includes(target.dataset.lessonField)) {
         state.lesson.formulaField = target.dataset.lessonField;
@@ -7263,7 +7969,7 @@
       handleLessonInspectorInput(event);
       finishEdit();
       if (
-        ['type', 'mode', 'arrow', 'variant', 'repositoryId', 'promptFile', 'examId', 'presentationId', 'quizId', 'protection', 'requirement', 'options', 'optionItem', 'gapLabel', 'gapSegment', 'useColor', 'conditionType', 'slideLayout', 'slideBackground']
+        ['type', 'mode', 'arrow', 'variant', 'repositoryId', 'promptFile', 'examId', 'presentationId', 'quizId', 'protection', 'requirement', 'options', 'optionItem', 'gapLabel', 'gapSegment', 'useColor', 'conditionType', 'slideLayout', 'slideBackground', 'questionId', 'aiEnabled', 'multiline']
           .includes(event.target.dataset.lessonField)
       ) {
         renderLessonInspector();
@@ -7306,6 +8012,11 @@
       const taskEditorAction = event.target.closest('[data-lesson-task-editor-action]');
       if (taskEditorAction) {
         lessonTaskEditorAction(taskEditorAction);
+        return;
+      }
+      const answerKeyAdd = event.target.closest('[data-answer-key-add]');
+      if (answerKeyAdd) {
+        addAnswerKeyBlock(answerKeyAdd.dataset.answerKeyAdd);
         return;
       }
       const action = event.target.closest('[data-lesson-inspector-action]');

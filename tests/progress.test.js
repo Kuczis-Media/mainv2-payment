@@ -393,6 +393,112 @@ test('free lesson navigation counts completed stable steps in any order', () => 
   assert.deepEqual(secondJump.record.details.completedStepIds, ['a', 'c']);
 });
 
+test('lesson open answers persist multiline text and merge by stable question id', () => {
+  const node = progressCommon.normalizeCatalog({ nodes: [{
+    id: 'lesson-open-answer', type: 'lesson', progress: progress({ tracking: 'ON' }),
+    settings: { navigation: 'free', steps: [{ id: 'question' }, { id: 'review' }] }
+  }] }).nodes[0];
+  const first = merge(null, {
+    materialId: 'lesson-open-answer', action: 'lesson_step',
+    details: {
+      currentStepId: 'question',
+      lessonAnswers: {
+        q_chem_001: {
+          answer: 'Pierwszy wiersz.\nDrugi wiersz odpowiedzi ucznia.',
+          answeredAt: '2026-08-15T09:59:00.000Z',
+          updatedAt: '2026-08-15T10:00:00.000Z',
+          version: 1,
+          aiUsed: false
+        }
+      }
+    }
+  }, { node });
+  assert.equal(first.ok, true);
+  assert.equal(
+    first.record.details.lessonAnswers.q_chem_001.answer,
+    'Pierwszy wiersz.\nDrugi wiersz odpowiedzi ucznia.'
+  );
+  assert.equal(first.record.details.lessonAnswers.q_chem_001.version, 1);
+
+  const withAi = merge(first.record, {
+    materialId: 'lesson-open-answer', action: 'lesson_step',
+    details: {
+      currentStepId: 'review',
+      lessonAnswers: {
+        q_chem_001: {
+          answer: 'Pierwszy wiersz.\nDrugi wiersz odpowiedzi ucznia.',
+          updatedAt: '2026-08-15T10:01:00.000Z',
+          version: 1,
+          aiUsed: true,
+          aiCheckedAnswerVersion: 1,
+          aiResponse: 'Odpowiedź jest poprawna.\nZawiera oba wymagane elementy.',
+          aiCheckedAt: '2026-08-15T10:01:30.000Z'
+        },
+        q_chem_002: {
+          answer: 'Druga niezależna odpowiedź.',
+          updatedAt: '2026-08-15T10:01:00.000Z',
+          version: 1,
+          aiUsed: false
+        }
+      }
+    }
+  }, { node, now: '2026-08-15T10:02:00.000Z' });
+  assert.equal(withAi.record.details.lessonAnswers.q_chem_001.aiUsed, true);
+  assert.match(withAi.record.details.lessonAnswers.q_chem_001.aiResponse, /\n/);
+  assert.equal(withAi.record.details.lessonAnswers.q_chem_002.answer, 'Druga niezależna odpowiedź.');
+
+  const edited = merge(withAi.record, {
+    materialId: 'lesson-open-answer', action: 'lesson_step',
+    details: {
+      currentStepId: 'question',
+      lessonAnswers: {
+        q_chem_001: {
+          answer: 'Najnowsza poprawiona odpowiedź.',
+          answeredAt: '2026-08-15T09:59:00.000Z',
+          updatedAt: '2026-08-15T10:03:00.000Z',
+          version: 2,
+          aiUsed: false,
+          aiCheckedAnswerVersion: '',
+          aiResponse: '',
+          aiCheckedAt: null
+        }
+      }
+    }
+  }, { node, now: '2026-08-15T10:03:00.000Z' });
+  assert.equal(edited.record.details.lessonAnswers.q_chem_001.answer, 'Najnowsza poprawiona odpowiedź.');
+  assert.equal(edited.record.details.lessonAnswers.q_chem_001.aiUsed, false);
+  assert.equal(edited.record.details.lessonAnswers.q_chem_001.aiResponse, '');
+  assert.equal(edited.record.details.lessonAnswers.q_chem_002.answer, 'Druga niezależna odpowiedź.');
+});
+
+test('lesson open answer normalization rejects unsafe ids and stale overwrites', () => {
+  const node = progressCommon.normalizeCatalog({ nodes: [{
+    id: 'lesson-answer-order', type: 'lesson', progress: progress({ tracking: 'ON' }),
+    settings: { navigation: 'free', steps: [{ id: 'question' }] }
+  }] }).nodes[0];
+  const existing = merge(null, {
+    materialId: 'lesson-answer-order', action: 'lesson_step',
+    details: { currentStepId: 'question', lessonAnswers: {
+      stable_question: {
+        answer: 'Nowsza odpowiedź', updatedAt: '2026-08-15T10:05:00.000Z', version: 2
+      },
+      'niebezpieczne id!': { answer: 'Nie zapisuj mnie' }
+    } }
+  }, { node, now: '2026-08-15T10:05:00.000Z' });
+  assert.equal(existing.record.details.lessonAnswers['niebezpieczne id!'], undefined);
+
+  const stale = merge(existing.record, {
+    materialId: 'lesson-answer-order', action: 'lesson_step',
+    details: { currentStepId: 'question', lessonAnswers: {
+      stable_question: {
+        answer: 'Stara odpowiedź', updatedAt: '2026-08-15T10:04:00.000Z', version: 1
+      }
+    } }
+  }, { node, now: '2026-08-15T10:06:00.000Z' });
+  assert.equal(stale.record.details.lessonAnswers.stable_question.answer, 'Nowsza odpowiedź');
+  assert.equal(stale.record.details.lessonAnswers.stable_question.version, 2);
+});
+
 test('lesson exam conditions stay locked after a failed attempt and unlock after pass or minimum score', () => {
   const examMaterialId = 'exam:default:egzamin-testowy';
   const node = progressCommon.normalizeCatalog({ nodes: [{

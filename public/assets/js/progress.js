@@ -108,6 +108,12 @@
     const output = { ...(previous || {}), ...(next || {}) };
     if (previous?.details || next?.details) {
       output.details = { ...(previous?.details || {}), ...(next?.details || {}) };
+      if (previous?.details?.lessonAnswers || next?.details?.lessonAnswers) {
+        output.details.lessonAnswers = {
+          ...(previous?.details?.lessonAnswers || {}),
+          ...(next?.details?.lessonAnswers || {})
+        };
+      }
       ['visitedSlides', 'completedStepIds', 'watchedRanges'].forEach((key) => {
         if (previous?.details?.[key] || next?.details?.[key]) {
           output.details[key] = [

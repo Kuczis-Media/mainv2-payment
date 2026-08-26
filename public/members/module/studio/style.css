@@ -5986,3 +5986,244 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Open-answer question → self-review workflow in Lesson Studio. */
+.open-answer-palette-item {
+  border-color: color-mix(in srgb, var(--studio-violet) 24%, var(--chem-line));
+  background: linear-gradient(120deg, color-mix(in srgb, var(--studio-violet-soft) 34%, var(--chem-surface)), var(--chem-surface));
+}
+
+.lesson-block[data-block-type="student-answer"] {
+  background: color-mix(in srgb, var(--chem-primary-soft) 58%, var(--chem-surface));
+  border-color: color-mix(in srgb, var(--chem-primary) 32%, var(--chem-line));
+}
+
+.lesson-block[data-block-type="student-answer"] .node-symbol,
+.answer-review-builder-node > .node-header .node-symbol {
+  color: var(--studio-violet);
+  background: var(--studio-violet-soft);
+}
+
+.answer-review-builder-node {
+  border-color: color-mix(in srgb, var(--studio-violet) 34%, var(--chem-line));
+  background: color-mix(in srgb, var(--studio-violet-soft) 28%, var(--chem-surface));
+}
+
+.answer-review-builder-node > .node-header {
+  background: color-mix(in srgb, var(--studio-violet-soft) 38%, transparent);
+}
+
+.answer-review-key-header {
+  display: grid;
+  padding: 8px 10px 10px;
+  gap: 3px;
+  color: var(--chem-text);
+  border-bottom: 1px dashed color-mix(in srgb, var(--studio-violet) 26%, var(--chem-line));
+}
+
+.answer-review-key-header strong { font-size: .67rem; }
+.answer-review-key-header small { color: var(--chem-muted); font-size: .54rem; line-height: 1.45; }
+
+.stable-question-id-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+}
+
+.stable-question-id-row input[readonly] {
+  color: var(--chem-primary);
+  background: color-mix(in srgb, var(--chem-primary-soft) 55%, var(--chem-surface));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .62rem;
+}
+
+.stable-question-id-row .button {
+  min-height: 42px;
+  padding-inline: 10px;
+  white-space: nowrap;
+}
+
+.open-answer-workflow-actions,
+.answer-key-builder-tools {
+  display: grid;
+  padding: 12px;
+  gap: 10px;
+  background: color-mix(in srgb, var(--studio-violet-soft) 35%, var(--chem-surface));
+  border: 1px solid color-mix(in srgb, var(--studio-violet) 26%, var(--chem-line));
+  border-radius: 13px;
+}
+
+.open-answer-workflow-actions > div,
+.answer-key-builder-tools > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.open-answer-workflow-actions strong,
+.answer-key-builder-tools strong { font-size: .69rem; }
+.open-answer-workflow-actions small,
+.answer-key-builder-tools small { color: var(--chem-muted); font-size: .56rem; line-height: 1.45; }
+.open-answer-workflow-actions .button { width: 100%; }
+
+.answer-key-builder-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.answer-key-builder-actions .mini-button {
+  min-width: 0;
+  padding-inline: 7px;
+  justify-content: center;
+  gap: 5px;
+  font-size: .56rem;
+}
+
+.answer-key-builder-actions b { color: var(--studio-violet); }
+
+.answer-review-link-summary {
+  display: grid;
+  padding: 11px;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  color: #0b6657;
+  background: color-mix(in srgb, #19a98c 10%, var(--chem-surface));
+  border: 1px solid color-mix(in srgb, #19a98c 24%, var(--chem-line));
+  border-radius: 11px;
+}
+
+.answer-review-link-summary > span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  color: #fff;
+  background: #148773;
+  border-radius: 9px;
+  font-size: .68rem;
+  font-weight: 900;
+}
+
+.answer-review-link-summary > div { display: grid; min-width: 0; gap: 3px; }
+.answer-review-link-summary strong { color: var(--chem-text); font-size: .65rem; }
+.answer-review-link-summary small { color: var(--chem-muted); font-size: .55rem; line-height: 1.45; }
+
+.answer-review-link-summary.is-missing {
+  color: var(--chem-danger);
+  background: color-mix(in srgb, var(--chem-danger) 7%, var(--chem-surface));
+  border-color: color-mix(in srgb, var(--chem-danger) 22%, var(--chem-line));
+}
+
+.answer-review-link-summary.is-missing > span { background: var(--chem-danger); }
+.answer-review-ai-toggle { border-color: color-mix(in srgb, var(--studio-violet) 28%, var(--chem-line)); }
+.answer-review-ai-note { border-left-color: var(--studio-violet); }
+
+.lesson-preview-body .lesson-student-answer,
+.lesson-preview-body .lesson-answer-review {
+  display: grid;
+  margin: 18px 0;
+  padding: clamp(16px, 2vw, 24px);
+  gap: 13px;
+  color: var(--chem-text);
+  background: color-mix(in srgb, var(--chem-surface) 96%, transparent);
+  border: 1px solid color-mix(in srgb, var(--chem-primary) 28%, var(--chem-line));
+  border-radius: 18px;
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--chem-navy) 7%, transparent);
+}
+
+.lesson-preview-body .lesson-answer-review {
+  border-color: color-mix(in srgb, var(--studio-violet) 28%, var(--chem-line));
+  background: linear-gradient(145deg, color-mix(in srgb, var(--studio-violet-soft) 20%, var(--chem-surface)), var(--chem-surface));
+}
+
+.lesson-preview-body .lesson-student-answer h3,
+.lesson-preview-body .lesson-answer-review h3,
+.lesson-preview-body .lesson-answer-review h4 { margin: 0; }
+
+.lesson-preview-body [data-student-answer-input] {
+  width: 100%;
+  min-height: 44px;
+  padding: 13px 14px;
+  color: var(--chem-text);
+  background: var(--chem-surface);
+  border: 1px solid var(--chem-line);
+  border-radius: 12px;
+  font: inherit;
+  font-size: .8rem;
+  line-height: 1.6;
+}
+
+.lesson-preview-body textarea[data-student-answer-input] {
+  min-height: var(--student-answer-min-height, 120px);
+  resize: vertical;
+}
+
+.lesson-preview-body [data-student-answer-input]:focus {
+  border-color: var(--chem-primary);
+  outline: 3px solid var(--studio-focus);
+}
+
+.lesson-preview-body [data-student-answer-save],
+.lesson-preview-body [data-answer-review-ai] {
+  min-height: 42px;
+  padding: 0 16px;
+  justify-self: start;
+  color: #fff;
+  background: var(--chem-primary);
+  border: 0;
+  border-radius: 11px;
+  font: inherit;
+  font-size: .7rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.lesson-preview-body [data-answer-review-ai] { background: var(--studio-violet); }
+
+.lesson-preview-body [data-student-answer-save]:disabled,
+.lesson-preview-body [data-answer-review-ai]:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.lesson-preview-body [data-student-answer-status],
+.lesson-preview-body [data-answer-review-status],
+.lesson-preview-body [data-student-answer-count] {
+  margin: 0;
+  color: var(--chem-muted);
+  font-size: .61rem;
+  line-height: 1.45;
+}
+
+.lesson-preview-body [data-student-answer-display] {
+  margin: 0;
+  padding: 13px 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: color-mix(in srgb, var(--chem-primary-soft) 52%, var(--chem-surface));
+  border-left: 4px solid var(--chem-primary);
+  border-radius: 10px;
+  font-size: .78rem;
+  line-height: 1.6;
+}
+
+.lesson-preview-body [data-student-answer-display].is-empty {
+  color: var(--chem-muted);
+  font-style: italic;
+}
+
+.lesson-preview-body .lesson-answer-key {
+  display: grid;
+  padding: 14px;
+  gap: 10px;
+  background: var(--chem-surface);
+  border: 1px solid var(--chem-line);
+  border-radius: 12px;
+}
+
+@media (max-width: 520px) {
+  .stable-question-id-row,
+  .answer-key-builder-actions { grid-template-columns: 1fr; }
+  .stable-question-id-row .button { width: 100%; }
+}

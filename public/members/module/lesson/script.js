@@ -56,6 +56,9 @@
     completed: false,
     sequential: true,
     attempts: new Map(),
+    studentAnswers: new Map(),
+    answerPersistence: new Map(),
+    answerQuestions: new Map(),
     libraryAssets: [],
     repositories: [],
     mediaObjectUrls: [],
@@ -153,6 +156,116 @@
     return state.materialId;
   }
 
+  const LESSON_ANSWER_LIMIT = 6_000;
+  const LESSON_AI_RESPONSE_LIMIT = 8_000;
+  const QUESTION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
+
+  function booleanData(element, names, fallback = false) {
+    for (const name of names) {
+      const value = element?.dataset?.[name];
+      if (value === 'true') return true;
+      if (value === 'false') return false;
+    }
+    return fallback;
+  }
+
+  function validQuestionId(value) {
+    const questionId = String(value || '').trim();
+    return QUESTION_ID_PATTERN.test(questionId) ? questionId : '';
+  }
+
+  function validIsoTimestamp(value) {
+    const timestamp = String(value || '');
+    return timestamp && Number.isFinite(Date.parse(timestamp)) ? timestamp : '';
+  }
+
+  function normalizeStudentAnswerRecord(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const answer = String(value.answer || '').slice(0, LESSON_ANSWER_LIMIT);
+    const version = Math.max(1, Math.floor(Number(value.version) || 1));
+    const aiCheckedAnswerVersion = Math.max(0, Math.floor(Number(value.aiCheckedAnswerVersion) || 0));
+    return {
+      answer,
+      answeredAt: validIsoTimestamp(value.answeredAt),
+      updatedAt: validIsoTimestamp(value.updatedAt),
+      version,
+      aiUsed: value.aiUsed === true,
+      aiCheckedAnswerVersion,
+      aiResponse: String(value.aiResponse || '').slice(0, LESSON_AI_RESPONSE_LIMIT),
+      aiCheckedAt: validIsoTimestamp(value.aiCheckedAt)
+    };
+  }
+
+  function answerRecordRecency(record) {
+    return Math.max(
+      Date.parse(record?.updatedAt || '') || 0,
+      Date.parse(record?.aiCheckedAt || '') || 0
+    );
+  }
+
+  function mergeStudentAnswers(source, options = {}) {
+    if (!source || typeof source !== 'object' || Array.isArray(source)) return;
+    Object.entries(source).slice(0, 500).forEach(([rawId, rawRecord]) => {
+      const questionId = validQuestionId(rawId);
+      const record = normalizeStudentAnswerRecord(rawRecord);
+      if (!questionId || !record) return;
+      if (options.respectPersistence && state.answerPersistence.get(questionId) !== true) return;
+      const current = state.studentAnswers.get(questionId);
+      if (
+        !current
+        || record.version > current.version
+        || (record.version === current.version && answerRecordRecency(record) >= answerRecordRecency(current))
+      ) {
+        state.studentAnswers.set(questionId, record);
+      }
+    });
+  }
+
+  function collectOpenAnswerMetadata() {
+    state.answerPersistence = new Map();
+    state.answerQuestions = new Map();
+    state.lesson?.slides?.forEach((slide) => {
+      if (!slide?.html?.includes('data-question-id')) return;
+      const template = document.createElement('template');
+      template.innerHTML = slide.html;
+      template.content.querySelectorAll('.lesson-student-answer[data-question-id]').forEach((card) => {
+        const questionId = validQuestionId(card.dataset.questionId);
+        if (!questionId) return;
+        state.answerPersistence.set(
+          questionId,
+          booleanData(card, ['persist', 'saveToProgress'], true)
+        );
+        const question = String(card.dataset.question || '').trim();
+        if (question) state.answerQuestions.set(questionId, question);
+      });
+      template.content.querySelectorAll('.lesson-answer-review[data-question-id]').forEach((card) => {
+        const questionId = validQuestionId(card.dataset.questionId);
+        const question = String(card.dataset.question || '').trim();
+        if (questionId && question && !state.answerQuestions.has(questionId)) {
+          state.answerQuestions.set(questionId, question);
+        }
+      });
+    });
+  }
+
+  function serializedStudentAnswers(persistentOnly = false) {
+    const output = {};
+    state.studentAnswers.forEach((record, questionId) => {
+      if (persistentOnly && state.answerPersistence.get(questionId) === false) return;
+      output[questionId] = {
+        answer: record.answer,
+        answeredAt: record.answeredAt,
+        updatedAt: record.updatedAt,
+        version: record.version,
+        aiUsed: record.aiUsed,
+        aiCheckedAnswerVersion: record.aiCheckedAnswerVersion,
+        aiResponse: record.aiResponse,
+        aiCheckedAt: record.aiCheckedAt
+      };
+    });
+    return output;
+  }
+
   async function loadProgress() {
     try {
       const saved = JSON.parse(sessionStorage.getItem(progressKey()) || 'null');
@@ -168,6 +281,7 @@
         state.completedStepIds = new Set(Array.isArray(saved.completedStepIds) ? saved.completedStepIds : []);
         state.completed = Boolean(saved.completed);
         state.sequential = saved.sequential !== false;
+        mergeStudentAnswers(saved.lessonAnswers);
       }
     } catch {}
     state.sequential = state.lesson?.navigation !== 'free';
@@ -176,6 +290,7 @@
       await progressApi.load();
       const record = progressApi.record(lessonMaterialId());
       const details = record?.details || {};
+      mergeStudentAnswers(details.lessonAnswers, { respectPersistence: true });
       const currentIndex = state.lesson.slides.findIndex((slide) => slide.id === details.currentStepId);
       const highestIndex = state.lesson.slides.findIndex((slide) => slide.id === details.highestReachedStepId);
       if (currentIndex >= 0) state.index = currentIndex;
@@ -207,6 +322,7 @@
         completedStepIds: [...state.completedStepIds],
         completed: state.completed,
         sequential: state.sequential,
+        lessonAnswers: serializedStudentAnswers(),
         signature: state.lesson.signature
       }));
     } catch {}
@@ -224,7 +340,8 @@
           currentStepIndex: state.index,
           completedStepIds: [...state.completedStepIds],
           completedTrackedSteps,
-          totalTrackedSteps: tracked.length
+          totalTrackedSteps: tracked.length,
+          lessonAnswers: serializedStudentAnswers(true)
         }
       }, { immediate, debounceMs: 1200, throwOnError });
     }
@@ -285,6 +402,7 @@
 
     state.filename = readFilename();
     state.repositoryId = readRepositoryId();
+    state.materialId = '';
     if (!state.filename) {
       if (state.isAdmin) {
         showError(
@@ -309,9 +427,12 @@
       state.index = 0;
       state.maxReached = 0;
       state.solved = new Set();
+      state.completedStepIds = new Set();
       state.completed = false;
       state.sequential = true;
       state.attempts = new Map();
+      state.studentAnswers = new Map();
+      collectOpenAnswerMetadata();
       await loadProgress();
       updateSequenceControl();
 
@@ -485,7 +606,13 @@
       button.addEventListener('click', () => {
         if ((state.sequential && index > state.maxReached) || state.completed) return;
         if (index === state.index) return;
-        completeCurrentStepForNavigation();
+        const answerCommit = commitCurrentStudentAnswers({ focusInvalid: index > state.index });
+        if (index > state.index && !answerCommit.valid) {
+          const current = state.lesson.slides[state.index];
+          updateNavigationAccess(current, state.solved.has(state.index));
+          return;
+        }
+        if (!completeCurrentStepForNavigation() && index > state.index) return;
         state.index = index;
         state.maxReached = Math.max(state.maxReached, index);
         renderSlide();
@@ -524,16 +651,26 @@
 
   function updateNavigationAccess(slide, isSolved) {
     const examGate = currentExamGate();
+    const answerGate = studentAnswerGate();
     const taskBlocked = Boolean(slide.task && !isSolved);
-    const blocked = state.sequential && (taskBlocked || !examGate.satisfied);
+    const blocked = !answerGate.satisfied || (state.sequential && (taskBlocked || !examGate.satisfied));
     elements.next.disabled = blocked;
     elements.navigationHint.textContent = blocked
-      ? (!examGate.satisfied
-        ? examGate.message
-        : 'Najpierw podaj poprawną odpowiedź albo wyłącz tryb „Nauka po kolei”.')
+      ? (!answerGate.satisfied
+        ? answerGate.message
+        : (!examGate.satisfied
+          ? examGate.message
+          : 'Najpierw podaj poprawną odpowiedź albo wyłącz tryb „Nauka po kolei”.'))
       : slide.task && !isSolved
         ? 'Możesz pominąć to zadanie i wrócić do niego później.'
         : '';
+    if (!slide.task && elements.slideContent.querySelector('.lesson-student-answer')) {
+      elements.slideStatus.textContent = answerGate.satisfied ? 'Odpowiedź gotowa' : 'Odpowiedź wymagana';
+      elements.slideStatus.dataset.state = answerGate.satisfied ? 'complete' : 'task';
+    } else if (!slide.task && elements.slideContent.querySelector('.lesson-answer-review')) {
+      elements.slideStatus.textContent = 'Omówienie odpowiedzi';
+      elements.slideStatus.dataset.state = 'content';
+    }
     updateOutline();
   }
 
@@ -549,6 +686,7 @@
   function completeCurrentStepForNavigation() {
     const slide = state.lesson?.slides?.[state.index];
     if (!slide) return false;
+    if (!studentAnswerGate().satisfied) return false;
     if (!currentExamGate().satisfied) return false;
     if (state.sequential && slide.task && !state.solved.has(state.index)) return false;
     state.completedStepIds.add(slide.id);
@@ -820,8 +958,470 @@
     window.open(url.toString(), '_blank', 'noopener');
   }
 
+  function answerField(card) {
+    return card?.querySelector('[data-student-answer-input], textarea, input[type="text"]') || null;
+  }
+
+  function setStudentAnswerStatus(card, status, message) {
+    const element = card?.querySelector('[data-student-answer-status]');
+    if (!element) return;
+    element.dataset.state = status || '';
+    element.textContent = message || '';
+    element.hidden = !message;
+  }
+
+  function updateStudentAnswerCount(card) {
+    const field = answerField(card);
+    const counter = card?.querySelector('[data-student-answer-count]');
+    if (!field || !counter) return;
+    const maximum = Math.max(0, Math.floor(Number(card.dataset.maxLength) || 0));
+    counter.textContent = maximum
+      ? `${field.value.length} / ${maximum}`
+      : `${field.value.length} znaków`;
+  }
+
+  function studentAnswerGate(root = elements.slideContent) {
+    const cards = Array.from(root?.querySelectorAll?.('.lesson-student-answer[data-question-id]') || []);
+    for (const card of cards) {
+      if (!booleanData(card, ['required'], false)) continue;
+      const questionId = validQuestionId(card.dataset.questionId);
+      const field = answerField(card);
+      const answer = field ? field.value : (state.studentAnswers.get(questionId)?.answer || '');
+      if (!String(answer).trim()) {
+        return {
+          satisfied: false,
+          card,
+          field,
+          message: 'Wpisz i zapisz odpowiedź, aby przejść dalej.'
+        };
+      }
+    }
+    return { satisfied: true, card: null, field: null, message: '' };
+  }
+
+  function reviewResultPanel(card) {
+    let panel = card.querySelector('[data-answer-review-result]');
+    if (panel) return panel;
+    panel = document.createElement('section');
+    panel.className = 'lesson-answer-ai-result';
+    panel.dataset.answerReviewResult = '';
+    panel.setAttribute('role', 'status');
+    panel.setAttribute('aria-live', 'polite');
+    panel.hidden = true;
+    const status = card.querySelector('[data-answer-review-status]');
+    if (status) status.insertAdjacentElement('afterend', panel);
+    else card.appendChild(panel);
+    return panel;
+  }
+
+  function setReviewStatus(card, status, message) {
+    const element = card.querySelector('[data-answer-review-status]');
+    if (!element) return;
+    element.dataset.state = status || '';
+    element.textContent = message || '';
+    element.hidden = !message;
+  }
+
+  function renderReviewAiResult(card, response) {
+    const panel = reviewResultPanel(card);
+    const heading = document.createElement('h4');
+    const copy = document.createElement('div');
+    heading.textContent = 'Analiza AI';
+    copy.className = 'lesson-answer-ai-copy';
+    copy.textContent = response;
+    panel.replaceChildren(heading, copy);
+    panel.hidden = false;
+  }
+
+  function clearReviewAiResult(card) {
+    const panel = card.querySelector('[data-answer-review-result]');
+    if (!panel) return;
+    panel.replaceChildren();
+    panel.hidden = true;
+  }
+
+  function updateAnswerReviewBlock(card) {
+    const questionId = validQuestionId(card.dataset.questionId);
+    if (!questionId) return;
+    const record = state.studentAnswers.get(questionId) || null;
+    const answer = record?.answer || '';
+    const hasAnswer = Boolean(answer.trim());
+    const display = card.querySelector('[data-student-answer-display]');
+    const showAnswer = booleanData(card, ['showStudentAnswer'], true);
+    if (display) {
+      display.textContent = hasAnswer ? answer : 'Nie zapisano jeszcze odpowiedzi.';
+      display.dataset.state = hasAnswer ? 'answered' : 'empty';
+      const section = display.closest('[data-student-answer-section], .lesson-answer-review-student');
+      if (section) section.hidden = !showAnswer;
+      else display.hidden = !showAnswer;
+    }
+
+    const aiEnabled = booleanData(card, ['aiEnabled'], false);
+    const button = card.querySelector('[data-answer-review-ai]');
+    if (button) {
+      button.hidden = !aiEnabled;
+      button.disabled = !hasAnswer || card.dataset.aiState === 'loading';
+      button.textContent = record?.aiUsed && record.aiCheckedAnswerVersion === record.version
+        ? '✨ Zapytaj AI ponownie'
+        : '✨ Zapytaj AI';
+    }
+    if (!aiEnabled || card.dataset.aiState === 'loading') return;
+
+    const currentAnalysis = Boolean(
+      hasAnswer
+      && record?.aiUsed
+      && record.aiCheckedAnswerVersion === record.version
+      && record.aiResponse
+    );
+    if (currentAnalysis) {
+      renderReviewAiResult(card, record.aiResponse);
+      setReviewStatus(card, 'success', 'Analiza dotyczy najnowszej zapisanej odpowiedzi.');
+      return;
+    }
+    clearReviewAiResult(card);
+    if (!hasAnswer) {
+      setReviewStatus(card, 'empty', 'Najpierw zapisz odpowiedź na powiązanym slajdzie.');
+    } else if (record?.aiUsed || record?.aiResponse) {
+      setReviewStatus(card, 'stale', 'Poprzednia analiza jest nieaktualna. Jeśli chcesz, uruchom AI ponownie.');
+    } else {
+      setReviewStatus(card, '', '');
+    }
+  }
+
+  function updateAnswerReviewBlocks(root = elements.slideContent, questionId = '') {
+    root?.querySelectorAll?.('.lesson-answer-review[data-question-id]').forEach((card) => {
+      if (questionId && card.dataset.questionId !== questionId) return;
+      updateAnswerReviewBlock(card);
+    });
+  }
+
+  function markAnswerReviewDraftStale(questionId, hasDraft) {
+    elements.slideContent.querySelectorAll('.lesson-answer-review[data-question-id]').forEach((card) => {
+      if (card.dataset.questionId !== questionId || card.dataset.aiState === 'loading') return;
+      clearReviewAiResult(card);
+      if (hasDraft) {
+        setReviewStatus(card, 'stale', 'Zapisz zmienioną odpowiedź, aby porównać jej najnowszą wersję.');
+      } else {
+        updateAnswerReviewBlock(card);
+      }
+    });
+  }
+
+  function commitStudentAnswerCard(card, options = {}) {
+    const questionId = validQuestionId(card?.dataset.questionId);
+    const field = answerField(card);
+    if (!questionId || !field) return { valid: true, changed: false, persistent: false, record: null };
+    const maximum = Math.max(0, Math.min(
+      LESSON_ANSWER_LIMIT,
+      Math.floor(Number(card.dataset.maxLength) || 0) || LESSON_ANSWER_LIMIT
+    ));
+    const answer = String(field.value || '').slice(0, maximum);
+    if (field.value !== answer) field.value = answer;
+    const required = booleanData(card, ['required'], false);
+    if (required && !answer.trim()) {
+      field.setAttribute('aria-invalid', 'true');
+      setStudentAnswerStatus(card, 'error', 'To pytanie wymaga odpowiedzi przed przejściem dalej.');
+      if (options.focusInvalid) field.focus();
+      return { valid: false, changed: false, persistent: false, record: null };
+    }
+
+    const previous = state.studentAnswers.get(questionId) || null;
+    const persistent = state.answerPersistence.get(questionId) !== false;
+    if (!previous && !answer) {
+      setStudentAnswerStatus(card, '', '');
+      return { valid: true, changed: false, persistent, record: null };
+    }
+    if (previous?.answer === answer) {
+      field.removeAttribute('aria-invalid');
+      setStudentAnswerStatus(
+        card,
+        'saved',
+        persistent ? 'Odpowiedź jest zapisana.' : 'Odpowiedź jest zachowana w tej karcie przeglądarki.'
+      );
+      return { valid: true, changed: false, persistent, record: previous };
+    }
+
+    const now = new Date().toISOString();
+    const record = {
+      answer,
+      answeredAt: previous?.answeredAt || (answer.trim() ? now : ''),
+      updatedAt: now,
+      version: Math.max(0, Number(previous?.version) || 0) + 1,
+      aiUsed: false,
+      aiCheckedAnswerVersion: 0,
+      aiResponse: '',
+      aiCheckedAt: ''
+    };
+    state.studentAnswers.set(questionId, record);
+    field.removeAttribute('aria-invalid');
+    card.dataset.answerState = answer.trim() ? 'saved' : 'empty';
+    setStudentAnswerStatus(
+      card,
+      'saved',
+      persistent ? 'Odpowiedź zapisana.' : 'Odpowiedź zachowana w tej karcie przeglądarki.'
+    );
+    if (!booleanData(card, ['allowEdit'], true) && answer.trim()) {
+      field.readOnly = true;
+      const saveButton = card.querySelector('[data-student-answer-save]');
+      if (saveButton) saveButton.disabled = true;
+    }
+    updateStudentAnswerCount(card);
+    updateAnswerReviewBlocks(elements.slideContent, questionId);
+    return { valid: true, changed: true, persistent, record };
+  }
+
+  function commitCurrentStudentAnswers(options = {}) {
+    const cards = Array.from(elements.slideContent.querySelectorAll('.lesson-student-answer[data-question-id]'));
+    let valid = true;
+    let changed = false;
+    let persistentChange = false;
+    for (const card of cards) {
+      const result = commitStudentAnswerCard(card, { focusInvalid: options.focusInvalid && valid });
+      if (!result.valid) valid = false;
+      changed = changed || result.changed;
+      persistentChange = persistentChange || (result.changed && result.persistent);
+    }
+    return { valid, changed, persistentChange };
+  }
+
+  function initializeStudentAnswerBlocks(root) {
+    root.querySelectorAll('.lesson-student-answer[data-question-id]').forEach((card) => {
+      const questionId = validQuestionId(card.dataset.questionId);
+      const field = answerField(card);
+      if (!questionId || !field) return;
+      state.answerPersistence.set(questionId, booleanData(card, ['persist', 'saveToProgress'], true));
+      const question = String(card.dataset.question || '').trim();
+      if (question) state.answerQuestions.set(questionId, question);
+
+      const maximum = Math.max(0, Math.min(LESSON_ANSWER_LIMIT, Math.floor(Number(card.dataset.maxLength) || 0)));
+      if (maximum) field.maxLength = maximum;
+      else field.maxLength = LESSON_ANSWER_LIMIT;
+      if (field.tagName === 'TEXTAREA') {
+        const minimumHeight = Math.max(80, Math.min(800, Math.floor(Number(card.dataset.minHeight) || 180)));
+        field.style.minHeight = `${minimumHeight}px`;
+      }
+
+      const record = state.studentAnswers.get(questionId) || null;
+      field.value = record?.answer || '';
+      const editable = booleanData(card, ['allowEdit'], true);
+      const saveButton = card.querySelector('[data-student-answer-save]');
+      if (record?.answer?.trim() && !editable) {
+        field.readOnly = true;
+        if (saveButton) saveButton.disabled = true;
+      }
+      card.dataset.answerState = record?.answer?.trim() ? 'saved' : 'empty';
+      if (record?.answer?.trim()) {
+        setStudentAnswerStatus(
+          card,
+          'saved',
+          state.answerPersistence.get(questionId) === false
+            ? 'Przywrócono odpowiedź z tej sesji.'
+            : 'Przywrócono zapisaną odpowiedź.'
+        );
+      } else {
+        setStudentAnswerStatus(card, '', '');
+      }
+      updateStudentAnswerCount(card);
+
+      field.addEventListener('input', () => {
+        const stored = state.studentAnswers.get(questionId)?.answer || '';
+        const changed = field.value !== stored;
+        field.removeAttribute('aria-invalid');
+        card.dataset.answerState = changed ? 'dirty' : (stored ? 'saved' : 'empty');
+        setStudentAnswerStatus(card, changed ? 'dirty' : 'saved', changed ? 'Niezapisane zmiany.' : 'Odpowiedź jest zapisana.');
+        updateStudentAnswerCount(card);
+        markAnswerReviewDraftStale(questionId, changed);
+        const slide = state.lesson?.slides?.[state.index];
+        if (slide) updateNavigationAccess(slide, state.solved.has(state.index));
+      });
+
+      if (!booleanData(card, ['multiline'], true)) {
+        field.addEventListener('keydown', (event) => {
+          if (event.key !== 'Enter' || event.shiftKey) return;
+          event.preventDefault();
+          saveButton?.click();
+        });
+      }
+
+      saveButton?.addEventListener('click', async () => {
+        const result = commitStudentAnswerCard(card, { focusInvalid: true });
+        const slide = state.lesson?.slides?.[state.index];
+        if (slide) updateNavigationAccess(slide, state.solved.has(state.index));
+        if (!result.valid || !result.changed) return;
+        if (!result.persistent) {
+          saveProgress();
+          return;
+        }
+        saveButton.disabled = true;
+        setStudentAnswerStatus(card, 'saving', 'Zapisywanie odpowiedzi…');
+        try {
+          await saveProgress(true, true);
+          setStudentAnswerStatus(card, 'saved', 'Odpowiedź zapisana w postępie lekcji.');
+        } catch (_) {
+          setStudentAnswerStatus(card, 'error', 'Odpowiedź jest zapisana na tym urządzeniu. Synchronizacja zostanie ponowiona.');
+        } finally {
+          if (booleanData(card, ['allowEdit'], true)) saveButton.disabled = false;
+        }
+      });
+    });
+  }
+
+  function answerKeyAiText(card) {
+    const key = card.querySelector('.lesson-answer-key');
+    if (!key) return '';
+    if (typeof window.ChemLesson?.buildLessonAiContext === 'function') {
+      const context = window.ChemLesson.buildLessonAiContext({
+        root: key,
+        task: null,
+        currentResponse: '',
+        authorContext: '',
+        includeSlide: true,
+        includeTask: false
+      });
+      if (context) return String(context).slice(0, 10_000);
+    }
+    return String(key.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 10_000);
+  }
+
+  function friendlyAnswerReviewAiError(status, code) {
+    if (status === 401) return 'Sesja wygasła. Zaloguj się ponownie i spróbuj jeszcze raz.';
+    if (status === 403 && code === 'AI_DISABLED_FOR_USER') return 'Administrator wyłączył dostęp do AI dla tego konta.';
+    if (status === 403) return 'To konto nie ma dostępu do AI.';
+    if (status === 429) {
+      if (code === 'AI_RATE_LIMITED') return 'Dostawca AI chwilowo ogranicza ruch. Spróbuj ponownie później.';
+      if (code === 'AI_CONCURRENT_REQUEST_LIMIT_REACHED') return 'Trwa zbyt wiele równoległych analiz. Spróbuj ponownie za chwilę.';
+      if (/_LIMIT_REACHED$/.test(code)) return 'Wykorzystano dostępny limit AI w ChemDisk.';
+      return 'Przekroczono chwilowy limit AI. Spróbuj ponownie później.';
+    }
+    const messages = {
+      AI_NOT_CONFIGURED: 'AI nie zostało jeszcze skonfigurowane przez administratora.',
+      SERVICE_UNAVAILABLE: 'AI nie zostało jeszcze skonfigurowane przez administratora.',
+      AI_INVALID_KEY: 'Klucz dostawcy AI wymaga poprawienia przez administratora.',
+      AI_MODEL_UNAVAILABLE: 'Wybrany model AI jest obecnie niedostępny.',
+      AI_PROVIDER_ERROR: 'Dostawca AI jest chwilowo niedostępny.',
+      AI_LIMIT_STORAGE_UNAVAILABLE: 'Nie można teraz bezpiecznie sprawdzić limitu AI.',
+      AI_USAGE_RECORD_FAILED: 'Nie udało się bezpiecznie zapisać użycia AI.',
+      INVALID_LESSON_ANSWER_REVIEW: 'Nie udało się przygotować danych odpowiedzi do analizy.',
+      LESSON_ANSWER_REVIEW_INVALID: 'Nie udało się przygotować danych odpowiedzi do analizy.',
+      EMPTY_MODEL_RESPONSE: 'AI nie zwróciło odpowiedzi. Spróbuj ponownie.'
+    };
+    return messages[code] || `Nie udało się przeprowadzić analizy AI${status ? ` (błąd ${status})` : ''}.`;
+  }
+
+  async function requestAnswerReviewAi(card, record) {
+    const auth = window.ChemAuth;
+    if (!auth || typeof auth.getAccessToken !== 'function') {
+      throw new Error('Sesja wygasła. Zaloguj się ponownie.');
+    }
+    let token = '';
+    try {
+      token = await auth.getAccessToken({ forceRefresh: true });
+    } catch (_) {
+      throw new Error('Nie udało się odświeżyć sesji. Zaloguj się ponownie.');
+    }
+    const questionId = validQuestionId(card.dataset.questionId);
+    const payload = {
+      messages: [{ role: 'user', content: 'Oceń moją odpowiedź względem klucza odpowiedzi.' }],
+      promptConfig: null,
+      attachmentInline: null,
+      options: { temperature: 0.1 },
+      lessonAnswerReview: {
+        questionId,
+        question: String(card.dataset.question || state.answerQuestions.get(questionId) || '').slice(0, 8_000),
+        studentAnswer: record.answer.slice(0, LESSON_ANSWER_LIMIT),
+        answerKey: answerKeyAiText(card),
+        aiInstruction: String(card.dataset.aiInstruction || '').slice(0, 2_000)
+      }
+    };
+    const response = await fetch('/.netlify/functions/chat', {
+      method: 'POST',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(payload)
+    });
+    let body = null;
+    try { body = await response.json(); } catch (_) {}
+    if (!response.ok) {
+      const code = typeof body?.error === 'string' ? body.error : '';
+      const error = new Error(friendlyAnswerReviewAiError(response.status, code));
+      error.code = code;
+      error.status = response.status;
+      throw error;
+    }
+    const text = String(body?.text || '').trim();
+    if (!text) throw new Error('AI nie zwróciło odpowiedzi. Spróbuj ponownie.');
+    return text.slice(0, LESSON_AI_RESPONSE_LIMIT);
+  }
+
+  async function analyzeAnswerReview(card) {
+    if (card.dataset.aiState === 'loading' || !booleanData(card, ['aiEnabled'], false)) return;
+    commitCurrentStudentAnswers();
+    const questionId = validQuestionId(card.dataset.questionId);
+    const record = state.studentAnswers.get(questionId);
+    if (!questionId || !record?.answer.trim()) {
+      updateAnswerReviewBlock(card);
+      return;
+    }
+    const button = card.querySelector('[data-answer-review-ai]');
+    const version = record.version;
+    card.dataset.aiState = 'loading';
+    if (button) button.disabled = true;
+    clearReviewAiResult(card);
+    setReviewStatus(card, 'loading', 'AI analizuje Twoją odpowiedź…');
+    try {
+      const response = await requestAnswerReviewAi(card, record);
+      const latest = state.studentAnswers.get(questionId);
+      if (!latest || latest.version !== version || latest.answer !== record.answer) {
+        setReviewStatus(card, 'stale', 'Odpowiedź zmieniła się podczas analizy. Wynik nie został zapisany.');
+        return;
+      }
+      const updated = {
+        ...latest,
+        aiUsed: true,
+        aiCheckedAnswerVersion: latest.version,
+        aiResponse: response,
+        aiCheckedAt: new Date().toISOString()
+      };
+      state.studentAnswers.set(questionId, updated);
+      renderReviewAiResult(card, response);
+      setReviewStatus(card, 'success', 'Analiza dotyczy najnowszej zapisanej odpowiedzi.');
+      try {
+        await saveProgress(true, true);
+      } catch (_) {
+        setReviewStatus(card, 'error', 'Analiza jest widoczna, ale nie udało się zsynchronizować jej z postępem.');
+      }
+    } catch (error) {
+      clearReviewAiResult(card);
+      setReviewStatus(card, 'error', error?.message || 'Nie udało się przeprowadzić analizy AI.');
+    } finally {
+      card.dataset.aiState = '';
+      if (button) {
+        const latest = state.studentAnswers.get(questionId);
+        button.disabled = !(latest?.answer || '').trim();
+        button.textContent = latest?.aiUsed && latest.aiCheckedAnswerVersion === latest.version
+          ? '✨ Zapytaj AI ponownie'
+          : '✨ Zapytaj AI';
+      }
+    }
+  }
+
+  function initializeAnswerReviewBlocks(root) {
+    root.querySelectorAll('.lesson-answer-review[data-question-id]').forEach((card) => {
+      updateAnswerReviewBlock(card);
+      const button = card.querySelector('[data-answer-review-ai]');
+      button?.addEventListener('click', () => { void analyzeAnswerReview(card); });
+    });
+  }
+
   function initializeInteractiveBlocks(root) {
     initializeExamBlocks(root);
+    initializeStudentAnswerBlocks(root);
+    initializeAnswerReviewBlocks(root);
     root.querySelectorAll('.lesson-flashcard').forEach((card) => {
       card.addEventListener('click', () => {
         const flipped = card.getAttribute('aria-pressed') !== 'true';
@@ -1205,6 +1805,11 @@
 
   async function goNext() {
     const slide = state.lesson.slides[state.index];
+    const answerCommit = commitCurrentStudentAnswers({ focusInvalid: true });
+    if (!answerCommit.valid) {
+      updateNavigationAccess(slide, state.solved.has(state.index));
+      return;
+    }
     if (state.sequential) {
       await refreshExamProgress(true);
       if ((slide.task && !state.solved.has(state.index)) || !currentExamGate().satisfied) return;
@@ -1268,6 +1873,7 @@
 
   function goPrevious() {
     if (state.index === 0) return;
+    commitCurrentStudentAnswers();
     completeCurrentStepForNavigation();
     state.index -= 1;
     renderSlide();
@@ -1292,7 +1898,7 @@
     elements.restart.focus();
   }
 
-  function restartLesson() {
+  async function restartLesson() {
     try { sessionStorage.removeItem(progressKey()); } catch {}
     state.index = 0;
     state.maxReached = 0;
@@ -1301,18 +1907,30 @@
     state.completed = false;
     state.sequential = true;
     state.attempts = new Map();
-    if (progressApi && lessonMaterialId()) progressApi.reset(lessonMaterialId()).catch(() => {});
+    state.studentAnswers = new Map();
+    elements.restart.disabled = true;
+    elements.resetProgress.disabled = true;
+    let resetFailed = false;
+    if (progressApi && lessonMaterialId()) {
+      try { await progressApi.reset(lessonMaterialId()); }
+      catch (_) { resetFailed = true; }
+    }
     updateSequenceControl();
     renderSlide();
+    elements.restart.disabled = false;
+    elements.resetProgress.disabled = false;
+    if (resetFailed) {
+      elements.navigationHint.textContent = 'Postęp wyzerowano lokalnie, ale nie udało się jeszcze usunąć jego kopii z serwera.';
+    }
   }
 
   function confirmResetProgress() {
     if (!state.lesson) return;
     const confirmed = window.confirm(
-      'Zresetować postęp tej lekcji? Rozwiązane zadania i zapamiętany krok zostaną usunięte.'
+      'Zresetować postęp tej lekcji? Zapisane odpowiedzi, analizy AI, rozwiązane zadania i zapamiętany krok zostaną usunięte.'
     );
     if (!confirmed) return;
-    restartLesson();
+    void restartLesson();
   }
 
   elements.themeToggle.addEventListener('click', toggleTheme);
@@ -1336,7 +1954,7 @@
   elements.next.addEventListener('click', goNext);
   elements.sequenceToggle.addEventListener('change', toggleSequentialLearning);
   elements.resetProgress.addEventListener('click', confirmResetProgress);
-  elements.restart.addEventListener('click', restartLesson);
+  elements.restart.addEventListener('click', () => { void restartLesson(); });
   document.addEventListener('chemdisk-mathjax-ready', () => typesetMath(elements.slideContent));
   document.addEventListener('keydown', (event) => {
     if (elements.navigation.hidden || event.altKey || event.ctrlKey || event.metaKey) return;

@@ -8,8 +8,13 @@
   const SAFE_REPOSITORY_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
   const SAFE_BOARD_PATH = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.json$/i;
   const SAFE_MEDIA_REF = /^(?:photos\/|assets\/shared\/)(?!.*\.\.)[a-z0-9][a-z0-9_.-]{0,99}\.(?:png|jpe?g|webp|gif|svg)$/i;
+  const SAFE_QUESTION_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$/;
   const MAX_AI_AUTHOR_CONTEXT_CHARS = 6000;
   const MAX_AI_CONTEXT_CHARS = 12000;
+  const MAX_OPEN_QUESTION_CHARS = 8000;
+  const MAX_STUDENT_ANSWER_CHARS = 6000;
+  const MAX_ANSWER_KEY_CHARS = 10000;
+  const MAX_AI_REVIEW_INSTRUCTION_CHARS = 2000;
   const TASK_START = /^\s*:::(?:task|zadanie)\s*$/i;
   const TASK_END = /^\s*:::\s*$/;
   const QUESTION_START = /^\s*:::question\s*$/i;
@@ -17,7 +22,7 @@
   const STYLE_START = /^\s*:::style(?:\s+(.+?))?\s*$/i;
   const ACCORDION_START = /^\s*:::accordion(?:\s+(.+?))?\s*$/i;
   const LAYOUT_START = /^\s*:::layout(?:\s+(.+?))?\s*$/i;
-  const STRUCTURAL_CONTAINER_START = /^\s*:::(?:task|zadanie|question|slide|style|accordion|layout|youtube|googleslides|presentation|quiz|pdf|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)(?:\s+.*?)?\s*$/i;
+  const STRUCTURAL_CONTAINER_START = /^\s*:::(?:task|zadanie|question|slide|style|accordion|layout|youtube|googleslides|presentation|quiz|pdf|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image|studentanswer|answerreview)(?:\s+.*?)?\s*$/i;
   const RICH_CONTAINER_END = /^\s*:::\s*$/;
   const SAFE_STYLE_COLOR = /^#[0-9a-f]{6}$/i;
   const LINK_ICONS = new Set(['link', 'book', 'video', 'chemistry', 'math', 'file', 'external']);
@@ -48,7 +53,7 @@
     'sin', 'cos', 'tan', 'log', 'ln', 'partial', 'nabla', 'rightarrow', 'leftarrow',
     'leftrightarrow', 'text', 'mathrm', 'mathbf', 'overline', 'vec', 'left', 'right'
   ]);
-  const INTERACTIVE_START = /^\s*:::(youtube|googleslides|presentation|quiz|pdf|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)\s*$/i;
+  const INTERACTIVE_START = /^\s*:::(youtube|googleslides|presentation|quiz|pdf|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image|studentanswer|answerreview)\s*$/i;
 
   class LessonFormatError extends Error {
     constructor(code, message) {
@@ -854,6 +859,26 @@
     return normalized.length <= maxChars ? normalized : null;
   }
 
+  function directiveRawJsonText(values, jsonKey, fallbackKey, maxChars) {
+    let value = values[fallbackKey] || '';
+    if (Object.prototype.hasOwnProperty.call(values, jsonKey)) {
+      try { value = JSON.parse(values[jsonKey]); }
+      catch (_) { return null; }
+      if (typeof value !== 'string') return null;
+    }
+    const normalized = String(value ?? '')
+      .replace(/^\uFEFF/, '')
+      .replace(/\r\n?/g, '\n')
+      .replace(/\0/g, '');
+    return normalized.length <= maxChars ? normalized.trim() : null;
+  }
+
+  function directiveBoolean(value, fallback) {
+    if (/^(?:1|true|yes|tak|on)$/i.test(String(value ?? '').trim())) return true;
+    if (/^(?:0|false|no|nie|off)$/i.test(String(value ?? '').trim())) return false;
+    return fallback;
+  }
+
   function safeChemistryText(value, condition) {
     const text = String(value || '').trim().replace(/\s+/g, ' ');
     if (!text || text.length > (condition ? 120 : 300)) return '';
@@ -957,8 +982,90 @@
     return `<figure class="lesson-table lesson-table-align-${align}"><div class="lesson-table-scroll"><table${label}>${caption ? `<caption>${renderInline(caption)}</caption>` : ''}<thead><tr>${headingHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div></figure>`;
   }
 
+  function renderOpenQuestionMarkdown(value) {
+    const safeSource = String(value || '')
+      .split('\n')
+      .map((line) => (
+        STRUCTURAL_CONTAINER_START.test(line) || RICH_CONTAINER_END.test(line)
+          ? `\`${line.trim()}\``
+          : line
+      ))
+      .join('\n');
+    return renderMarkdown(safeSource);
+  }
+
   function interactiveBlockHtml(type, body) {
     const values = directiveFields(body);
+    if (type === 'studentanswer') {
+      const questionId = String(values.question_id || '').trim();
+      const question = directiveRawJsonText(
+        values,
+        'question_json',
+        'question',
+        MAX_OPEN_QUESTION_CHARS
+      );
+      const placeholder = directiveRawJsonText(values, 'placeholder_json', 'placeholder', 500);
+      const label = String(values.label || 'Twoja odpowiedź').trim().slice(0, 180);
+      const button = String(values.button || 'Zapisz odpowiedź').trim().slice(0, 180);
+      const minHeight = Math.round(Math.max(80, Math.min(800, Number(values.min_height) || 180)));
+      const rawMaxLength = Number(values.max_length);
+      const maxLength = Math.round(Math.max(0, Math.min(
+        MAX_STUDENT_ANSWER_CHARS,
+        Number.isFinite(rawMaxLength) ? rawMaxLength : 0
+      )));
+      const multiline = directiveBoolean(values.multiline, true);
+      const required = directiveBoolean(values.required, true);
+      const persist = directiveBoolean(values.save_progress ?? values.persist, true);
+      const allowEdit = directiveBoolean(values.allow_edit, true);
+      if (!SAFE_QUESTION_ID.test(questionId) || !question || placeholder === null || !label || !button) {
+        return '<p class="lesson-interactive-error">Nieprawidłowe pytanie otwarte.</p>';
+      }
+      const controlId = `lesson-answer-${questionId}`;
+      const maximum = maxLength ? ` maxlength="${maxLength}"` : '';
+      const requiredAttribute = required ? ' required' : '';
+      const answerControl = multiline
+        ? `<textarea id="${escapeHtml(controlId)}" data-student-answer-input rows="5" style="min-height:${minHeight}px" placeholder="${escapeHtml(placeholder || '')}"${maximum}${requiredAttribute}></textarea>`
+        : `<input id="${escapeHtml(controlId)}" data-student-answer-input type="text" placeholder="${escapeHtml(placeholder || '')}"${maximum}${requiredAttribute}>`;
+      const initialCount = maxLength ? `0 / ${maxLength}` : '0 znaków';
+      return `<section class="lesson-student-answer" data-question-id="${escapeHtml(questionId)}" data-required="${required ? 'true' : 'false'}" data-persist="${persist ? 'true' : 'false'}" data-max-length="${maxLength}" data-min-height="${minHeight}" data-multiline="${multiline ? 'true' : 'false'}" data-allow-edit="${allowEdit ? 'true' : 'false'}" data-question="${escapeHtml(question)}"><div class="lesson-student-answer-question"><small>Pytanie otwarte</small>${renderOpenQuestionMarkdown(question)}</div><label for="${escapeHtml(controlId)}">${escapeHtml(label)}</label>${answerControl}<div class="lesson-student-answer-actions"><button type="button" data-student-answer-save>${escapeHtml(button)}</button><span data-student-answer-count aria-live="off">${initialCount}</span><p data-student-answer-status aria-live="polite"></p></div></section>`;
+    }
+    if (type === 'answerreview') {
+      const questionId = String(values.question_id || '').trim();
+      const question = directiveRawJsonText(
+        values,
+        'question_json',
+        'question',
+        MAX_OPEN_QUESTION_CHARS
+      );
+      const answerKey = directiveRawJsonText(values, 'key_json', 'key', MAX_ANSWER_KEY_CHARS);
+      const aiInstruction = directiveRawJsonText(
+        values,
+        'ai_instruction_json',
+        'ai_instruction',
+        MAX_AI_REVIEW_INSTRUCTION_CHARS
+      );
+      const showStudentAnswer = directiveBoolean(values.show_student_answer ?? values.show_answer, true);
+      const aiEnabled = directiveBoolean(values.ai_enabled, true);
+      const order = values.order === 'key-first' ? 'key-first' : 'student-first';
+      if (
+        !SAFE_QUESTION_ID.test(questionId)
+        || !question
+        || !answerKey
+        || aiInstruction === null
+        || /^\s*:::(?:studentanswer|answerreview|style|accordion)\b/im.test(answerKey)
+      ) {
+        return '<p class="lesson-interactive-error">Nieprawidłowe omówienie odpowiedzi.</p>';
+      }
+      const studentPanel = `<section class="lesson-answer-review-student"${showStudentAnswer ? '' : ' hidden'}><h3>Twoja odpowiedź</h3><blockquote data-student-answer-display>Nie zapisano jeszcze odpowiedzi.</blockquote></section>`;
+      const keyPanel = `<section class="lesson-answer-key"><h3>Klucz odpowiedzi</h3><div class="lesson-answer-key-content">${renderMarkdown(answerKey)}</div></section>`;
+      const comparison = order === 'key-first'
+        ? `${keyPanel}${studentPanel}`
+        : `${studentPanel}${keyPanel}`;
+      const aiButton = aiEnabled
+        ? '<button type="button" data-answer-review-ai>✨ Zapytaj AI</button>'
+        : '';
+      return `<section class="lesson-answer-review" data-question-id="${escapeHtml(questionId)}" data-show-student-answer="${showStudentAnswer ? 'true' : 'false'}" data-ai-enabled="${aiEnabled ? 'true' : 'false'}" data-ai-instruction="${escapeHtml(aiInstruction || '')}" data-review-order="${order}" data-question="${escapeHtml(question || '')}">${comparison}<div class="lesson-answer-review-actions">${aiButton}<p data-answer-review-status aria-live="polite"></p></div><section class="lesson-answer-ai-result" data-answer-review-result hidden aria-live="polite"></section></section>`;
+    }
     if (type === 'table') return tableBlockHtml(body);
     if (type === 'image') {
       const ref = String(values.ref || '').trim().toLowerCase();
@@ -1379,6 +1486,10 @@
   const api = {
     MAX_AI_AUTHOR_CONTEXT_CHARS,
     MAX_AI_CONTEXT_CHARS,
+    MAX_AI_REVIEW_INSTRUCTION_CHARS,
+    MAX_ANSWER_KEY_CHARS,
+    MAX_OPEN_QUESTION_CHARS,
+    MAX_STUDENT_ANSWER_CHARS,
     LessonFormatError,
     buildLessonAiContext,
     checkGapAnswer,

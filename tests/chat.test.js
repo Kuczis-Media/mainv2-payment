@@ -90,6 +90,58 @@ test('chat reads the authenticated Identity user from the Netlify handler contex
   assert.equal(JSON.parse(response.body).text, 'Działa');
 });
 
+test('lesson answer review uses the central AI route with a trusted comparison instruction', async (t) => {
+  const originalKey = process.env.GEMINI_API_KEY;
+  const originalUrl = process.env.URL;
+  const originalDeployUrl = process.env.DEPLOY_PRIME_URL;
+  const originalFetch = global.fetch;
+  let upstreamBody = null;
+
+  t.after(() => {
+    global.fetch = originalFetch;
+    if (originalKey === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = originalKey;
+    if (originalUrl === undefined) delete process.env.URL;
+    else process.env.URL = originalUrl;
+    if (originalDeployUrl === undefined) delete process.env.DEPLOY_PRIME_URL;
+    else process.env.DEPLOY_PRIME_URL = originalDeployUrl;
+  });
+
+  process.env.GEMINI_API_KEY = 'test-key';
+  delete process.env.URL;
+  delete process.env.DEPLOY_PRIME_URL;
+  global.fetch = async (_url, options = {}) => {
+    upstreamBody = JSON.parse(options.body);
+    return {
+      ok: true,
+      json: async () => ({
+        candidates: [{ content: { parts: [{ text: 'Ocena: Poprawna\nOdpowiedź zawiera oba elementy.' }] } }]
+      })
+    };
+  };
+
+  const request = JSON.parse(eventFor().body);
+  request.messages = [{ role: 'user', content: 'Oceń moją odpowiedź względem klucza.' }];
+  request.lessonAnswerReview = {
+    questionId: 'q_chem_001',
+    question: 'Dlaczego węgiel-14 jest izotopem?',
+    studentAnswer: 'Ma tyle samo protonów i inną liczbę neutronów.',
+    answerKey: 'Izotopy mają tę samą liczbę protonów, lecz różnią się liczbą neutronów.',
+    aiInstruction: 'Nie wymagaj identycznego słownictwa.'
+  };
+  const response = await chat.handler(eventFor({ body: JSON.stringify(request) }));
+
+  assert.equal(response.statusCode, 200);
+  assert.match(JSON.parse(response.body).text, /Ocena: Poprawna/);
+  assert.match(upstreamBody.systemInstruction.parts[0].text, /Oceniaj sens merytoryczny/);
+  assert.match(upstreamBody.systemInstruction.parts[0].text, /Instrukcję autora stosuj wyłącznie jako dodatkowe kryterium oceny/);
+  const modelPrompt = upstreamBody.contents[0].parts[0].text;
+  assert.match(modelPrompt, /PYTANIE:[\s\S]*węgiel-14/);
+  assert.match(modelPrompt, /ODPOWIEDŹ UCZNIA:[\s\S]*inną liczbę neutronów/);
+  assert.match(modelPrompt, /KLUCZ ODPOWIEDZI:[\s\S]*różnią się liczbą neutronów/);
+  assert.match(modelPrompt, /DODATKOWA INSTRUKCJA AUTORA:[\s\S]*identycznego słownictwa/);
+});
+
 test('chat rejects a legacy token without SID after a newer login created a session', async (t) => {
   const originalFetch = global.fetch;
   const originalUrl = process.env.URL;
@@ -268,6 +320,55 @@ test('chat rejects arbitrary client system prompts and validates prompt referenc
     }),
     { ok: false, code: 'INVALID_PROMPT_CONFIG' }
   );
+});
+
+test('lesson answer review payload is structured and bounded on the server', () => {
+  const messages = [{ role: 'user', content: 'Oceń moją odpowiedź względem klucza.' }];
+  const review = {
+    questionId: 'q_chem_001',
+    question: 'Dlaczego węgiel-14 jest izotopem węgla?',
+    studentAnswer: 'Ma tyle samo protonów, ale inną liczbę neutronów.',
+    answerKey: 'Izotopy mają tę samą liczbę protonów i różną liczbę neutronów.',
+    aiInstruction: 'Oceniaj sens, nie identyczne słownictwo.'
+  };
+  const result = chat._test.validatePayload({ messages, lessonAnswerReview: review });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.value.lessonAnswerReview, review);
+
+  assert.deepEqual(
+    chat._test.validatePayload({
+      messages,
+      lessonAnswerReview: { ...review, questionId: 'id ze spacją' }
+    }),
+    { ok: false, code: 'INVALID_LESSON_ANSWER_REVIEW' }
+  );
+  assert.deepEqual(
+    chat._test.validatePayload({
+      messages,
+      lessonAnswerReview: { ...review, aiInstruction: 'x'.repeat(2_001) }
+    }),
+    { ok: false, code: 'INVALID_LESSON_ANSWER_REVIEW' }
+  );
+  assert.deepEqual(
+    chat._test.validatePayload({
+      messages,
+      lessonAnswerReview: { ...review, unexpected: true }
+    }),
+    { ok: false, code: 'INVALID_LESSON_ANSWER_REVIEW' }
+  );
+});
+
+test('lesson answer review prompt contains question, student answer, key and author instruction as quoted data', () => {
+  const prompt = chat._test.buildLessonAnswerReviewPrompt({
+    question: 'Dlaczego C-14 jest izotopem?',
+    studentAnswer: 'Bo ma 6 protonów.',
+    answerKey: 'Ma 6 protonów i inną liczbę neutronów.',
+    aiInstruction: 'Nie wymagaj identycznych słów.'
+  });
+  assert.match(prompt, /PYTANIE:[\s\S]*Dlaczego C-14/);
+  assert.match(prompt, /ODPOWIEDŹ UCZNIA:[\s\S]*Bo ma 6 protonów/);
+  assert.match(prompt, /KLUCZ ODPOWIEDZI:[\s\S]*inną liczbę neutronów/);
+  assert.match(prompt, /DODATKOWA INSTRUKCJA AUTORA:[\s\S]*identycznych słów/);
 });
 
 test('server TXT parser selects exactly one multiline point', () => {

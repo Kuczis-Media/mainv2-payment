@@ -38,6 +38,14 @@ test('student progress labels never round a positive value down to zero', () => 
   assert.equal(api.percentLabel(68.4), '68%');
 });
 
+test('debounced progress updates merge lesson answers by question id', () => {
+  const progressSource = fs.readFileSync(path.join(root, 'public', 'assets', 'js', 'progress.js'), 'utf8');
+  assert.match(
+    progressSource,
+    /output\.details\.lessonAnswers\s*=\s*\{[\s\S]*previous\?\.details\?\.lessonAnswers[\s\S]*next\?\.details\?\.lessonAnswers/
+  );
+});
+
 test('course progress remains legible and refreshes after a cached back navigation', () => {
   const css = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.css'), 'utf8');
   const dashboard = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.js'), 'utf8');

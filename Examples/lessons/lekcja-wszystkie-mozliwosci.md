@@ -848,6 +848,114 @@ success: Zapis jest poprawny.
 
 ---
 
+<!-- chemdisk-step:{"id":"example-open-answer","includeInLesson":"ON","requiredToAdvance":true,"condition":{"type":"next_click","materialId":"","minimumScore":0}} -->
+
+:::slide
+transition: fade
+background: mint
+decoration: molecules
+text_tone: dark
+:::
+
+## Pytanie otwarte — odpowiedź zapisywana w postępie
+
+Ten przykład pokazuje odpowiedź wielowierszową, wymagany wpis, limit znaków, możliwość późniejszej edycji i zapis w istniejącym postępie lekcji.
+
+:::studentanswer
+question_id: q_example_carbon_14
+question_json: "Dlaczego atom węgla-14 jest izotopem węgla? Odwołaj się do liczby protonów i neutronów."
+label: Twoja odpowiedź
+placeholder_json: "Napisz własne wyjaśnienie w kilku zdaniach…"
+min_height: 220
+multiline: true
+max_length: 1400
+required: true
+save_progress: true
+allow_edit: true
+button: Zapisz odpowiedź
+:::
+
+---
+
+<!-- chemdisk-step:{"id":"example-answer-review","includeInLesson":"ON","requiredToAdvance":true,"condition":{"type":"previous_completed","materialId":"","minimumScore":0}} -->
+
+:::slide
+transition: rise
+background: paper
+decoration: glow
+text_tone: dark
+:::
+
+## Omówienie odpowiedzi — samodzielne porównanie i opcjonalne AI
+
+Najpierw pojawia się dokładnie zapisana odpowiedź ucznia, potem bogaty klucz autora. Żaden request do AI nie jest wykonywany przy otwarciu slajdu — analiza rusza wyłącznie po kliknięciu przycisku.
+
+:::answerreview
+question_id: q_example_carbon_14
+question_json: "Dlaczego atom węgla-14 jest izotopem węgla? Odwołaj się do liczby protonów i neutronów."
+show_student_answer: true
+ai_enabled: true
+ai_instruction_json: "Oceniaj poprawność merytoryczną, a nie identyczność słów. Wskaż krótko, czy uczeń uwzględnił tę samą liczbę protonów oraz inną liczbę neutronów."
+order: student-first
+key_json: "### Poprawna odpowiedź / klucz\n\nIzotopy jednego pierwiastka mają tę samą liczbę protonów, ale różną liczbę neutronów. Węgiel-14 ma **6 protonów** i 8 neutronów, dlatego nadal jest węglem.\n\n- liczba atomowa: **6** — tyle samo protonów,\n- liczba masowa: **14** — protony i neutrony łącznie,\n- liczba neutronów: **14 − 6 = 8**.\n\nW zapisie ^14^C indeks górny oznacza liczbę masową; zapis H~2~O pokazuje również obsługę indeksu dolnego.\n\n:::formula\nmode: math\ntitle: Obliczenie liczby neutronów\nexpression: 14 - 6 = 8\n:::\n\n:::table\ncaption: Budowa węgla-14\nalign: center\nheaders: Wielkość | Wartość\nrow: Protony | 6\nrow: Neutrony | 8\nrow: Nukleony | 14\n:::\n\n:::image\nref: assets/shared/example-diagram.svg\nrepository: default\nalt: Przykładowy schemat ilustrujący, że klucz odpowiedzi może zawierać obraz\nwidth: 42\nalign: center\n:::"
+:::
+
+---
+
+<!-- chemdisk-step:{"id":"example-open-answer-optional","includeInLesson":"INHERIT","requiredToAdvance":false,"condition":{"type":"next_click","materialId":"","minimumScore":0}} -->
+
+:::slide
+transition: slide
+background: sky
+decoration: none
+text_tone: dark
+:::
+
+## Pytanie otwarte — wariant jednowierszowy i sesyjny
+
+Ten wariant jest opcjonalny, ma jedno pole tekstowe bez limitu ustawionego przez autora i nie zapisuje treści do profilu ucznia. Po zapisaniu blokuje ponowną edycję.
+
+:::studentanswer
+question_id: q_example_symbol_oxygen
+question_json: "Podaj symbol chemiczny tlenu."
+label: Krótka odpowiedź
+placeholder_json: "Np. O"
+min_height: 80
+multiline: false
+max_length: 0
+required: false
+save_progress: false
+allow_edit: false
+button: Zachowaj w tej sesji
+:::
+
+---
+
+<!-- chemdisk-step:{"id":"example-answer-review-without-ai","includeInLesson":"INHERIT","requiredToAdvance":false,"condition":{"type":"previous_completed","materialId":"","minimumScore":0}} -->
+
+:::slide
+transition: zoom
+background: lavender
+decoration: bubbles
+text_tone: dark
+:::
+
+## Omówienie odpowiedzi — klucz pierwszy, bez AI
+
+Alternatywny układ może pokazywać najpierw klucz, ukryć odpowiedź ucznia i całkowicie wyłączyć przycisk AI.
+
+:::answerreview
+question_id: q_example_symbol_oxygen
+question_json: "Podaj symbol chemiczny tlenu."
+show_student_answer: false
+ai_enabled: false
+ai_instruction_json: ""
+order: key-first
+key_json: "### Klucz odpowiedzi\n\nPoprawny symbol chemiczny tlenu to **O**."
+:::
+
+---
+
 <!-- chemdisk-step:{"id":"example-summary","includeInLesson":"ON","requiredToAdvance":true,"condition":{"type":"exam_completed","materialId":"exam:default:egzamin-wszystkie-mozliwosci","minimumScore":0}} -->
 
 :::slide

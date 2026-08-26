@@ -624,3 +624,123 @@ test('lesson parser reports authoring errors instead of silently skipping tasks'
     /jest pusty/i
   );
 });
+
+test('lesson parser renders linked open-answer controls without invoking AI automatically', () => {
+  const question = 'Dlaczego **węgiel-14** jest izotopem?\n\nPorównaj protony i neutrony.';
+  const answerKey = [
+    '### Klucz autora',
+    '',
+    'Węgiel-14 ma **6 protonów** i 8 neutronów.',
+    '',
+    ':::formula',
+    'mode: math',
+    'title: Liczba neutronów',
+    'expression: 14 - 6 = 8',
+    ':::'
+  ].join('\n');
+  const markdown = [
+    '# Odpowiedź własna',
+    '',
+    ':::studentanswer',
+    'question_id: q_chem_001',
+    `question_json: ${JSON.stringify(question)}`,
+    'label: Twoja odpowiedź',
+    `placeholder_json: ${JSON.stringify('Napisz kilka zdań…')}`,
+    'min_height: 210',
+    'multiline: true',
+    'max_length: 1200',
+    'required: true',
+    'save_progress: true',
+    'allow_edit: true',
+    'button: Zapisz odpowiedź',
+    ':::',
+    '',
+    '---',
+    '',
+    '# Omówienie',
+    '',
+    ':::answerreview',
+    'question_id: q_chem_001',
+    `question_json: ${JSON.stringify(question)}`,
+    'show_student_answer: true',
+    'ai_enabled: true',
+    `ai_instruction_json: ${JSON.stringify('Oceniaj sens, nie identyczność słów.\nOdpowiadaj krótko.')}`,
+    'order: student-first',
+    `key_json: ${JSON.stringify(answerKey)}`,
+    ':::'
+  ].join('\n');
+
+  const lesson = parser.parseLesson(markdown, 'odpowiedz-wlasna.md');
+  assert.equal(lesson.slides.length, 2);
+  assert.match(lesson.slides[0].html, /class="lesson-student-answer"/);
+  assert.match(lesson.slides[0].html, /data-question-id="q_chem_001"/);
+  assert.match(lesson.slides[0].html, /data-required="true"/);
+  assert.match(lesson.slides[0].html, /data-persist="true"/);
+  assert.match(lesson.slides[0].html, /data-max-length="1200"/);
+  assert.match(lesson.slides[0].html, /data-min-height="210"/);
+  assert.match(lesson.slides[0].html, /<textarea[^>]*data-student-answer-input[^>]*maxlength="1200"[^>]*required/);
+  assert.match(lesson.slides[0].html, /data-student-answer-save/);
+  assert.match(lesson.slides[0].html, /data-student-answer-status/);
+  assert.match(lesson.slides[0].html, /data-student-answer-count[^>]*>0 \/ 1200</);
+
+  const reviewHtml = lesson.slides[1].html;
+  assert.match(reviewHtml, /class="lesson-answer-review"/);
+  assert.match(reviewHtml, /data-show-student-answer="true"/);
+  assert.match(reviewHtml, /data-ai-enabled="true"/);
+  assert.match(reviewHtml, /data-review-order="student-first"/);
+  assert.match(reviewHtml, /data-student-answer-display/);
+  assert.match(reviewHtml, /class="lesson-answer-key"/);
+  assert.match(reviewHtml, /Klucz autora/);
+  assert.match(reviewHtml, /class="lesson-formula lesson-formula-math"/);
+  assert.match(reviewHtml, /data-answer-review-ai/);
+  assert.match(reviewHtml, /data-answer-review-status/);
+  assert.match(reviewHtml, /data-answer-review-result hidden/);
+  assert.doesNotMatch(reviewHtml, /fetch\s*\(|XMLHttpRequest|sendBeacon/);
+
+  const structuralQuestion = parser.renderMarkdown([
+    ':::studentanswer',
+    'question_id: q_safe_question',
+    `question_json: ${JSON.stringify(':::studentanswer\nquestion_id: q_nested\n:::')}`,
+    ':::'
+  ].join('\n'));
+  assert.equal((structuralQuestion.match(/class="lesson-student-answer"/g) || []).length, 1);
+  assert.match(structuralQuestion, /<code>:::studentanswer<\/code>/);
+});
+
+test('answer review respects key-first, hidden student answer and disabled AI settings', () => {
+  const singleLine = parser.renderMarkdown([
+    ':::studentanswer',
+    'question_id: q_single_line',
+    `question_json: ${JSON.stringify('Odpowiedz jednym zdaniem.')}`,
+    'multiline: false',
+    ':::'
+  ].join('\n'));
+  assert.match(singleLine, /<input[^>]*data-student-answer-input[^>]*type="text"/);
+  assert.doesNotMatch(singleLine, /<textarea/);
+
+  const html = parser.renderMarkdown([
+    ':::answerreview',
+    'question_id: q_optional_1',
+    `question_json: ${JSON.stringify('Opcjonalne pytanie?')}`,
+    'show_student_answer: false',
+    'ai_enabled: false',
+    'order: key-first',
+    `key_json: ${JSON.stringify('**Klucz bez AI.**')}`,
+    ':::'
+  ].join('\n'));
+
+  assert.match(html, /data-review-order="key-first"/);
+  assert.match(html, /class="lesson-answer-review-student" hidden/);
+  assert.ok(html.indexOf('lesson-answer-key') < html.indexOf('lesson-answer-review-student'));
+  assert.doesNotMatch(html, /data-answer-review-ai/);
+  assert.match(html, /data-ai-enabled="false"/);
+
+  const missingQuestion = parser.renderMarkdown([
+    ':::answerreview',
+    'question_id: q_without_snapshot',
+    `key_json: ${JSON.stringify('Klucz bez treści pytania.')}`,
+    ':::'
+  ].join('\n'));
+  assert.match(missingQuestion, /Nieprawidłowe omówienie odpowiedzi/);
+  assert.doesNotMatch(missingQuestion, /class="lesson-answer-review"/);
+});

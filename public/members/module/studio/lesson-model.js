@@ -9,11 +9,16 @@
   const SAFE_REPOSITORY_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
   const SAFE_BOARD_PATH = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.json$/i;
   const SAFE_MEDIA_REF = /^(?:photos\/|assets\/shared\/)(?!.*\.\.)[a-z0-9][a-z0-9_.-]{0,99}\.(?:png|jpe?g|webp|gif|svg)$/i;
+  const SAFE_QUESTION_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}$/;
   const MAX_AI_AUTHOR_CONTEXT_CHARS = 6000;
+  const MAX_OPEN_QUESTION_CHARS = 8000;
+  const MAX_STUDENT_ANSWER_CHARS = 6000;
+  const MAX_ANSWER_KEY_CHARS = 10000;
+  const MAX_AI_REVIEW_INSTRUCTION_CHARS = 2000;
   const TASK_START = /^\s*:::(?:task|zadanie)\s*$/i;
   const QUESTION_START = /^\s*:::question\s*$/i;
   const SLIDE_SETTINGS_START = /^\s*:::slide\s*$/i;
-  const CONTAINER_START = /^\s*:::(style|accordion|layout|youtube|googleslides|presentation|quiz|pdf|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)(?:\s+(.*?))?\s*$/i;
+  const CONTAINER_START = /^\s*:::(style|accordion|layout|youtube|googleslides|presentation|quiz|pdf|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image|studentanswer|answerreview)(?:\s+(.*?))?\s*$/i;
   const CONTAINER_END = /^\s*:::\s*$/;
   const STYLE_FONTS = Object.freeze([
     'sans',
@@ -68,7 +73,9 @@
     'board',
     'contact',
     'exam',
-    'flashcards'
+    'flashcards',
+    'student-answer',
+    'answer-review'
   ]);
   const TASK_TYPES = Object.freeze(['text', 'number', 'choice', 'abcd', 'gaps', 'gaps-text']);
 
@@ -94,6 +101,12 @@
 
   function oneLine(value) {
     return normalizeNewlines(value).replace(/\s*\n\s*/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  function booleanSetting(value, fallback) {
+    if (value === true || /^(?:1|true|yes|tak|on)$/i.test(oneLine(value))) return true;
+    if (value === false || /^(?:0|false|no|nie|off)$/i.test(oneLine(value))) return false;
+    return fallback;
   }
 
   function normalizeKey(value) {
@@ -238,7 +251,7 @@
       .split('\n')
       .map((line) => {
         if (/^\s*---\s*$/.test(line)) return '`---`';
-        if (/^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|googleslides|presentation|quiz|pdf|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image)?(?:\s+.*?)?\s*$/i.test(line)) {
+        if (/^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|googleslides|presentation|quiz|pdf|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image|studentanswer|answerreview)?(?:\s+.*?)?\s*$/i.test(line)) {
           return `\`${line.trim()}\``;
         }
         return line.replace(/\s+$/g, '');
@@ -544,6 +557,43 @@
         minimumScore: Math.max(0, Math.min(100, Number(source.minimumScore) || 0))
       };
     }
+    if (type === 'student-answer') {
+      const requestedHeight = Number(source.minHeight ?? source.min_height);
+      const requestedLimit = Number(source.maxLength ?? source.max_length);
+      return {
+        ...base,
+        questionId: oneLine(source.questionId || source.question_id) || nextId('question'),
+        question: normalizeNewlines(source.question).trim().slice(0, MAX_OPEN_QUESTION_CHARS),
+        label: oneLine(source.label) || 'Twoja odpowiedź',
+        placeholder: oneLine(source.placeholder) || 'Wpisz swoją odpowiedź…',
+        minHeight: Math.round(Math.max(80, Math.min(800, Number.isFinite(requestedHeight) ? requestedHeight : 180))),
+        multiline: booleanSetting(source.multiline, true),
+        maxLength: Math.round(Math.max(0, Math.min(
+          MAX_STUDENT_ANSWER_CHARS,
+          Number.isFinite(requestedLimit) ? requestedLimit : 0
+        ))),
+        required: booleanSetting(source.required, true),
+        saveToProgress: booleanSetting(source.saveToProgress ?? source.save_progress ?? source.persist, true),
+        allowEdit: booleanSetting(source.allowEdit ?? source.allow_edit, true),
+        button: oneLine(source.button) || 'Zapisz odpowiedź'
+      };
+    }
+    if (type === 'answer-review') {
+      const order = oneLine(source.order).toLowerCase() === 'key-first' ? 'key-first' : 'student-first';
+      return {
+        ...base,
+        questionId: oneLine(source.questionId || source.question_id),
+        question: normalizeNewlines(source.question).trim().slice(0, MAX_OPEN_QUESTION_CHARS),
+        showStudentAnswer: booleanSetting(
+          source.showStudentAnswer ?? source.show_student_answer ?? source.show_answer,
+          true
+        ),
+        aiEnabled: booleanSetting(source.aiEnabled ?? source.ai_enabled, true),
+        aiInstruction: normalizeNewlines(source.aiInstruction ?? source.ai_instruction).trim(),
+        order,
+        answerKeyBlocks: normalizeAnswerKeyBlocks(source.answerKeyBlocks ?? source.blocks)
+      };
+    }
     if (type === 'link') {
       const icon = oneLine(source.icon).toLowerCase();
       return {
@@ -588,11 +638,28 @@
 
   function normalizeNestedBlocks(blocks) {
     const normalized = (Array.isArray(blocks) ? blocks : []).map((block) => createBlock(block));
-    if (normalized.some((block) => ['style', 'accordion'].includes(block.type))) {
+    if (normalized.some((block) => (
+      ['style', 'accordion', 'student-answer', 'answer-review'].includes(block.type)
+    ))) {
       throw new StudioLessonError(
         'NESTED_CONTAINER',
-        'Harmonijki i stylowane sekcje nie mogą być zagnieżdżane.',
+        'Harmonijki, stylowane sekcje i pytania otwarte nie mogą być zagnieżdżane.',
         'block.blocks'
+      );
+    }
+    return normalized;
+  }
+
+  function normalizeAnswerKeyBlocks(blocks) {
+    const normalized = (Array.isArray(blocks) ? blocks : []).map((block) => createBlock(block));
+    const unsupported = normalized.find((block) => (
+      ['style', 'accordion', 'student-answer', 'answer-review'].includes(block.type)
+    ));
+    if (unsupported) {
+      throw new StudioLessonError(
+        'NESTED_ANSWER_KEY_CONTAINER',
+        'Klucz odpowiedzi nie może zawierać kontenerów ani kolejnego pytania otwartego.',
+        'block.answerKeyBlocks'
       );
     }
     return normalized;
@@ -714,6 +781,21 @@
     const title = oneLine(source.title) || 'Nowa lekcja';
     const slides = (Array.isArray(source.slides) && source.slides.length ? source.slides : [{}])
       .map((slide) => createSlide(slide));
+    const questions = new Map();
+    slides.forEach((slide) => {
+      slide.blocks.forEach((block) => {
+        if (block.type === 'student-answer' && !questions.has(block.questionId)) {
+          questions.set(block.questionId, block.question);
+        }
+      });
+    });
+    slides.forEach((slide) => {
+      slide.blocks.forEach((block) => {
+        if (block.type === 'answer-review' && questions.has(block.questionId)) {
+          block.question = questions.get(block.questionId);
+        }
+      });
+    });
     return {
       version: SCHEMA_VERSION,
       id: oneLine(source.id) || nextId('lesson'),
@@ -893,6 +975,68 @@
         errors.push({ code: 'INVALID_EXAM_REFERENCE', path, message: 'Wybierz prawidłowe repozytorium i egzamin z biblioteki.' });
       }
     }
+    if (block.type === 'student-answer') {
+      if (!SAFE_QUESTION_ID.test(block.questionId)) {
+        errors.push({
+          code: 'INVALID_OPEN_QUESTION_ID',
+          path: `${path}.questionId`,
+          message: 'Identyfikator pytania może zawierać litery, cyfry oraz znaki . _ : - (maksymalnie 96 znaków).'
+        });
+      }
+      if (!block.question || block.question.length > MAX_OPEN_QUESTION_CHARS) {
+        errors.push({ code: 'EMPTY_OPEN_QUESTION', path: `${path}.question`, message: 'Pytanie otwarte wymaga treści.' });
+      }
+      if (
+        !Number.isInteger(block.minHeight)
+        || block.minHeight < 80
+        || block.minHeight > 800
+        || !Number.isInteger(block.maxLength)
+        || block.maxLength < 0
+        || block.maxLength > MAX_STUDENT_ANSWER_CHARS
+      ) {
+        errors.push({ code: 'INVALID_OPEN_QUESTION_LIMIT', path, message: 'Wysokość lub limit odpowiedzi jest nieprawidłowy.' });
+      }
+    }
+    if (block.type === 'answer-review') {
+      if (!SAFE_QUESTION_ID.test(block.questionId)) {
+        errors.push({
+          code: 'INVALID_ANSWER_REVIEW_ID',
+          path: `${path}.questionId`,
+          message: 'Omówienie musi wskazywać prawidłowy identyfikator pytania.'
+        });
+      }
+      if (!block.question || block.question.length > MAX_OPEN_QUESTION_CHARS) {
+        errors.push({
+          code: 'MISSING_ANSWER_REVIEW_QUESTION',
+          path: `${path}.question`,
+          message: 'Omówienie musi zawierać kopię treści powiązanego pytania.'
+        });
+      }
+      if (!['student-first', 'key-first'].includes(block.order)) {
+        errors.push({ code: 'INVALID_ANSWER_REVIEW_ORDER', path: `${path}.order`, message: 'Wybierz kolejność odpowiedzi i klucza.' });
+      }
+      if (!block.answerKeyBlocks.length) {
+        errors.push({ code: 'EMPTY_ANSWER_KEY', path: `${path}.answerKeyBlocks`, message: 'Dodaj treść klucza odpowiedzi.' });
+      }
+      if (block.aiInstruction.length > MAX_AI_REVIEW_INSTRUCTION_CHARS) {
+        errors.push({
+          code: 'AI_REVIEW_INSTRUCTION_TOO_LONG',
+          path: `${path}.aiInstruction`,
+          message: `Instrukcja AI może mieć maksymalnie ${MAX_AI_REVIEW_INSTRUCTION_CHARS} znaków.`
+        });
+      }
+      const serializedAnswerKey = block.answerKeyBlocks.map(serializeBlock).join('\n\n');
+      if (serializedAnswerKey.length > MAX_ANSWER_KEY_CHARS) {
+        errors.push({
+          code: 'ANSWER_KEY_TOO_LONG',
+          path: `${path}.answerKeyBlocks`,
+          message: `Klucz odpowiedzi może mieć maksymalnie ${MAX_ANSWER_KEY_CHARS} znaków po zapisaniu.`
+        });
+      }
+      block.answerKeyBlocks.forEach((child, index) => (
+        validateBlock(child, `${path}.answerKeyBlocks[${index}]`, errors)
+      ));
+    }
     if (block.type === 'formula') {
       if (block.mode === 'math') {
         if (!safeMathExpression(block.expression)) {
@@ -999,13 +1143,46 @@
     if (!lesson.slides.length || lesson.slides.length > MAX_SLIDES) {
       errors.push({ code: 'INVALID_SLIDE_COUNT', path: 'slides', message: `Lekcja może mieć od 1 do ${MAX_SLIDES} slajdów.` });
     }
+    const openQuestions = new Map();
+    const reviews = [];
     lesson.slides.forEach((slide, slideIndex) => {
       const slidePath = `slides[${slideIndex}]`;
       if (!slide.blocks.length && !slide.task && !(slideIndex === 0 && lesson.title)) {
         errors.push({ code: 'EMPTY_SLIDE', path: slidePath, message: 'Slajd nie może być pusty.' });
       }
-      slide.blocks.forEach((block, blockIndex) => validateBlock(block, `${slidePath}.blocks[${blockIndex}]`, errors));
+      slide.blocks.forEach((block, blockIndex) => {
+        validateBlock(block, `${slidePath}.blocks[${blockIndex}]`, errors);
+        if (block.type === 'student-answer') {
+          if (openQuestions.has(block.questionId)) {
+            errors.push({
+              code: 'DUPLICATE_OPEN_QUESTION_ID',
+              path: `${slidePath}.blocks[${blockIndex}].questionId`,
+              message: 'Każde pytanie otwarte musi mieć unikalny questionId.'
+            });
+          } else {
+            openQuestions.set(block.questionId, slideIndex);
+          }
+        }
+        if (block.type === 'answer-review') {
+          reviews.push({ block, slideIndex, path: `${slidePath}.blocks[${blockIndex}].questionId` });
+        }
+      });
       validateTask(slide.task, `${slidePath}.task`, errors);
+    });
+    reviews.forEach(({ block, slideIndex, path }) => {
+      if (!openQuestions.has(block.questionId)) {
+        errors.push({
+          code: 'MISSING_OPEN_QUESTION',
+          path,
+          message: 'Powiązane pytanie otwarte nie istnieje w tej lekcji.'
+        });
+      } else if (openQuestions.get(block.questionId) >= slideIndex) {
+        errors.push({
+          code: 'ANSWER_REVIEW_BEFORE_QUESTION',
+          path,
+          message: 'Omówienie odpowiedzi musi znajdować się po powiązanym pytaniu.'
+        });
+      }
     });
     return { valid: errors.length === 0, errors, lesson };
   }
@@ -1181,6 +1358,37 @@
         `button: ${cleanDirectiveValue(block.button)}`,
         `requirement: ${block.requirement}`,
         `minimum_score: ${block.minimumScore}`,
+        ':::'
+      ].join('\n');
+    }
+    if (block.type === 'student-answer') {
+      return [
+        ':::studentanswer',
+        `question_id: ${cleanDirectiveValue(block.questionId)}`,
+        `question_json: ${JSON.stringify(block.question)}`,
+        `label: ${cleanDirectiveValue(block.label)}`,
+        `placeholder_json: ${JSON.stringify(block.placeholder)}`,
+        `min_height: ${block.minHeight}`,
+        `multiline: ${block.multiline ? 'true' : 'false'}`,
+        `max_length: ${block.maxLength}`,
+        `required: ${block.required ? 'true' : 'false'}`,
+        `save_progress: ${block.saveToProgress ? 'true' : 'false'}`,
+        `allow_edit: ${block.allowEdit ? 'true' : 'false'}`,
+        `button: ${cleanDirectiveValue(block.button)}`,
+        ':::'
+      ].join('\n');
+    }
+    if (block.type === 'answer-review') {
+      const keyMarkdown = block.answerKeyBlocks.map(serializeBlock).join('\n\n');
+      return [
+        ':::answerreview',
+        `question_id: ${cleanDirectiveValue(block.questionId)}`,
+        `question_json: ${JSON.stringify(block.question || '')}`,
+        `show_student_answer: ${block.showStudentAnswer ? 'true' : 'false'}`,
+        `ai_enabled: ${block.aiEnabled ? 'true' : 'false'}`,
+        `ai_instruction_json: ${JSON.stringify(block.aiInstruction || '')}`,
+        `order: ${block.order}`,
+        `key_json: ${JSON.stringify(keyMarkdown)}`,
         ':::'
       ].join('\n');
     }
@@ -1449,6 +1657,24 @@
     return values;
   }
 
+  function parseJsonDirectiveText(values, key, fallbackKey, maxChars, path) {
+    let value = values[fallbackKey] || '';
+    if (Object.prototype.hasOwnProperty.call(values, key)) {
+      try { value = JSON.parse(values[key]); }
+      catch (_) {
+        throw new StudioLessonError('INVALID_JSON_TEXT', `Pole ${key} zawiera uszkodzony tekst.`, path);
+      }
+      if (typeof value !== 'string') {
+        throw new StudioLessonError('INVALID_JSON_TEXT', `Pole ${key} musi zawierać tekst.`, path);
+      }
+    }
+    const normalized = normalizeNewlines(value).replace(/\0/g, '');
+    if (normalized.length > maxChars) {
+      throw new StudioLessonError('TEXT_TOO_LONG', `Pole ${key} jest zbyt długie.`, path);
+    }
+    return normalized.trim();
+  }
+
   function findContainerEnd(lines, startIndex) {
     let depth = 1;
     let inCode = false;
@@ -1649,6 +1875,65 @@
               button: values.button,
               requirement: values.requirement,
               minimumScore: values.minimum_score
+            }));
+          } else if (type === 'studentanswer') {
+            const values = parseDirectiveFields(bodyLines);
+            blocks.push(createBlock({
+              type: 'student-answer',
+              questionId: values.question_id,
+              question: parseJsonDirectiveText(
+                values,
+                'question_json',
+                'question',
+                MAX_OPEN_QUESTION_CHARS,
+                'block.question'
+              ),
+              label: values.label,
+              placeholder: parseJsonDirectiveText(
+                values,
+                'placeholder_json',
+                'placeholder',
+                500,
+                'block.placeholder'
+              ),
+              minHeight: values.min_height,
+              multiline: values.multiline,
+              maxLength: values.max_length,
+              required: values.required,
+              saveToProgress: values.save_progress,
+              allowEdit: values.allow_edit,
+              button: values.button
+            }));
+          } else if (type === 'answerreview') {
+            const values = parseDirectiveFields(bodyLines);
+            const keyMarkdown = parseJsonDirectiveText(
+              values,
+              'key_json',
+              'key',
+              MAX_ANSWER_KEY_CHARS,
+              'block.answerKeyBlocks'
+            );
+            blocks.push(createBlock({
+              type: 'answer-review',
+              questionId: values.question_id,
+              question: parseJsonDirectiveText(
+                values,
+                'question_json',
+                'question',
+                MAX_OPEN_QUESTION_CHARS,
+                'block.question'
+              ),
+              showStudentAnswer: values.show_student_answer,
+              aiEnabled: values.ai_enabled,
+              aiInstruction: parseJsonDirectiveText(
+                values,
+                'ai_instruction_json',
+                'ai_instruction',
+                MAX_AI_REVIEW_INSTRUCTION_CHARS,
+                'block.aiInstruction'
+              ),
+              order: values.order,
+              answerKeyBlocks: keyMarkdown ? parseBlocks(keyMarkdown, true) : []
             }));
           } else if (type === 'linkcard') {
             const values = parseDirectiveFields(bodyLines);
@@ -2031,6 +2316,9 @@
     flashcards: true,
     tables: true,
     exams: true,
+    studentAnswers: true,
+    answerReviews: true,
+    answerReviewOrders: Object.freeze(['student-first', 'key-first']),
     canvasLayout: true,
     accordions: true,
     nestedContainers: false,
@@ -2047,6 +2335,10 @@
 
   const api = {
     BLOCK_TYPES,
+    MAX_AI_REVIEW_INSTRUCTION_CHARS,
+    MAX_ANSWER_KEY_CHARS,
+    MAX_OPEN_QUESTION_CHARS,
+    MAX_STUDENT_ANSWER_CHARS,
     SCHEMA_VERSION,
     STYLE_ALIGNS,
     STYLE_FONTS,
