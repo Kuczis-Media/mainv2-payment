@@ -274,6 +274,16 @@ test('dashboard admin editor exposes the complete deployment file after load and
   assert.match(script, /renderDashboard\(parseMarkdown\(content\)\)/);
 });
 
+test('sequential dashboard path is compact, readable and responsive', () => {
+  const styles = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.css'), 'utf8');
+
+  assert.match(styles, /\.resource-accordion\.is-sequential \.resource-card\s*\{[^}]*display:\s*grid[^}]*min-height:\s*116px[^}]*grid-template-areas:/s);
+  assert.match(styles, /\.resource-accordion\.is-sequential \.card-icon\s*\{[^}]*grid-area:\s*icon/s);
+  assert.match(styles, /\.resource-accordion\.is-sequential \.card-open\s*\{[^}]*grid-area:\s*action[^}]*border-radius:/s);
+  assert.match(styles, /\.resource-card\.is-sequence-locked\s*\{[^}]*filter:\s*none[^}]*opacity:\s*1/s);
+  assert.match(styles, /@media \(max-width:\s*700px\)[\s\S]*\.resource-accordion\.is-sequential \.resource-card\s*\{[^}]*min-height:\s*0[^}]*grid-template-columns:\s*36px/s);
+});
+
 test('dashboard exposes user management only through the guarded admin workflow', () => {
   const html = fs.readFileSync(path.join(root, 'public', 'members', 'index.html'), 'utf8');
   const script = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.js'), 'utf8');

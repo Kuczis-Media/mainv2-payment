@@ -1412,6 +1412,8 @@ html[data-theme="dark"] .admin-timed-status.is-expired {
 }
 
 .resource-accordion.is-sequential > summary {
+  min-height: 82px;
+  padding: 17px 20px;
   background: linear-gradient(135deg, #f4fbf9, #eef5fb);
 }
 
@@ -1445,6 +1447,12 @@ html[data-theme="dark"] .admin-timed-status.is-expired {
   position: relative;
   grid-template-columns: minmax(0, 1fr);
   gap: 12px;
+  margin-top: 0;
+}
+
+.resource-accordion.is-sequential > .accordion-body {
+  padding: 16px 18px 18px;
+  background: color-mix(in srgb, var(--surface-soft) 48%, var(--surface));
 }
 
 .accordion-children {
@@ -1499,35 +1507,70 @@ html[data-theme="dark"] .accordion-children .accordion-children .accordion-child
 }
 
 .resource-accordion.is-sequential .resource-card {
-  min-height: 142px;
-  padding-left: 82px;
+  display: grid;
+  min-height: 116px;
+  padding: 18px 20px 18px 74px;
+  grid-template-columns: 44px minmax(0, 1fr);
+  grid-template-areas:
+    "icon title"
+    "icon description"
+    "icon progress"
+    "icon action";
+  column-gap: 16px;
+  align-content: center;
 }
 
 .resource-accordion.is-sequential .resource-card:not(:last-child)::after {
   position: absolute;
-  top: 42px;
-  bottom: -14px;
-  left: 38px;
+  z-index: 0;
+  top: 34px;
+  bottom: -47px;
+  left: 36px;
   width: 2px;
   content: "";
   background: color-mix(in srgb, var(--primary) 34%, var(--line));
+  pointer-events: none;
 }
 
 .resource-accordion.is-sequential .card-icon {
-  position: absolute;
-  top: 49px;
-  left: 20px;
+  position: relative;
+  z-index: 1;
+  grid-area: icon;
   margin: 0;
+  align-self: start;
+}
+
+.resource-accordion.is-sequential .resource-card h3 {
+  grid-area: title;
+}
+
+.resource-accordion.is-sequential .resource-card p {
+  grid-area: description;
+  margin-bottom: 0;
+}
+
+.resource-accordion.is-sequential .card-progress-host {
+  grid-area: progress;
+}
+
+.resource-accordion.is-sequential .card-open {
+  width: fit-content;
+  margin-top: 10px;
+  padding: 6px 10px;
+  grid-area: action;
+  background: var(--primary-soft);
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--line));
+  border-radius: 9px;
 }
 
 .sequence-step {
   position: absolute;
-  z-index: 1;
-  top: 13px;
-  left: 24px;
+  z-index: 2;
+  top: 18px;
+  left: 21px;
   display: grid;
-  width: 29px;
-  height: 29px;
+  width: 32px;
+  height: 32px;
   place-items: center;
   color: #fff;
   background: var(--primary);
@@ -1538,8 +1581,10 @@ html[data-theme="dark"] .accordion-children .accordion-children .accordion-child
 }
 
 .resource-card.is-sequence-locked {
-  filter: saturate(.35);
-  opacity: .68;
+  filter: none;
+  opacity: 1;
+  background: color-mix(in srgb, var(--surface) 88%, var(--surface-soft));
+  border-color: color-mix(in srgb, var(--line) 76%, var(--muted));
 }
 
 .resource-card.is-sequence-locked:hover,
@@ -1558,6 +1603,17 @@ html[data-theme="dark"] .accordion-children .accordion-children .accordion-child
 
 .resource-card.is-sequence-locked .card-open {
   color: var(--muted);
+  background: var(--surface-soft);
+  border-color: var(--line);
+}
+
+.resource-card.is-sequence-locked h3 {
+  color: color-mix(in srgb, var(--ink) 62%, var(--muted));
+}
+
+.resource-card.is-sequence-locked p,
+.resource-card.is-sequence-locked .card-icon {
+  opacity: .76;
 }
 
 .resource-card::before {
@@ -4340,6 +4396,49 @@ html[data-theme="dark"] .admin-content-config-grid input {
 
   .resource-card {
     min-height: 160px;
+  }
+
+  .resource-accordion.is-sequential > summary {
+    min-height: 76px;
+    padding: 14px;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .resource-accordion.is-sequential > .accordion-body {
+    padding: 12px;
+  }
+
+  .resource-accordion.is-sequential .resource-card {
+    min-height: 0;
+    padding: 16px 14px 16px 58px;
+    grid-template-columns: 36px minmax(0, 1fr);
+    column-gap: 11px;
+  }
+
+  .resource-accordion.is-sequential .resource-card:not(:last-child)::after {
+    top: 30px;
+    bottom: -43px;
+    left: 26px;
+  }
+
+  .resource-accordion.is-sequential .card-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 11px;
+    font-size: 16px;
+  }
+
+  .resource-accordion.is-sequential .card-open {
+    margin-top: 9px;
+    padding: 6px 9px;
+  }
+
+  .resource-accordion.is-sequential .sequence-step {
+    top: 16px;
+    left: 12px;
+    width: 28px;
+    height: 28px;
   }
 
   .resource-accordion > summary {
