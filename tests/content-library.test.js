@@ -85,6 +85,32 @@ test('content repository selects one of several allowlisted repositories without
   );
 });
 
+test('default repository alias resolves to the entry explicitly marked as default', () => {
+  const env = {
+    GITHUB_CONTENT_TOKEN: 'github_pat_shared',
+    GITHUB_CONTENT_REPOSITORIES: JSON.stringify([
+      {
+        id: 'inne',
+        label: 'Inne materiały',
+        repository: 'Kuczis-Media/inne-materialy',
+        ref: 'main'
+      },
+      {
+        id: 'glowne',
+        label: 'Materiały główne',
+        repository: 'Kuczis-Media/chemdisk-content',
+        ref: 'main',
+        default: true
+      }
+    ])
+  };
+
+  const selected = repository.repositoryConfig(env, 'default');
+  assert.equal(selected.id, 'glowne');
+  assert.equal(selected.default, true);
+  assert.equal(selected.repository, 'Kuczis-Media/chemdisk-content');
+});
+
 test('multi-repository configuration fails closed on duplicate ids or arbitrary token variables', () => {
   const base = {
     GITHUB_CONTENT_TOKEN: 'github_pat_shared'

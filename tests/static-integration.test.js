@@ -298,13 +298,18 @@ test('administrator UI covers users, Forms, dashboard and private content status
     assert.match(html, new RegExp(`data-admin-panel=["']${tab}["']`));
   }
   assert.match(html, /Contents:\s*Read and write/);
-  assert.match(html, /GITHUB_CONTENT_TOKEN=github_pat_/);
+  assert.match(html, /GITHUB_CONTENT_TOKEN=/);
+  assert.doesNotMatch(html, /GITHUB_CONTENT_TOKEN=github_pat_[A-Za-z0-9]/);
   assert.match(html, /GITHUB_CONTENT_REPOSITORIES=/);
   assert.match(html, /id=["']admin-content-repository-select["']/);
-  assert.match(html, /Token GitHub nigdy nie trafia do tej strony/);
+  assert.match(html, /Token GitHub jest przesyłany tylko podczas zapisu lub testu/);
+  assert.match(html, /id=["']admin-content-config-list["']/);
+  assert.match(html, /id=["']admin-content-config-save-deploy["']/);
   assert.match(script, /\/\.netlify\/functions\/admin-users/);
   assert.match(script, /\/\.netlify\/functions\/admin-forms/);
   assert.match(script, /\/\.netlify\/functions\/admin-dashboard/);
+  assert.match(script, /\/\.netlify\/functions\/admin-content-repositories/);
+  assert.match(script, /action:\s*deploy \? 'save-and-deploy' : 'save'/);
   assert.match(script, /const library = window\.ChemContentLibrary/);
   assert.match(script, /library\.repositories\(\)/);
   assert.match(script, /library\.status\(\{\s*refresh:/);

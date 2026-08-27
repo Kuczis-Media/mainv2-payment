@@ -99,6 +99,7 @@ function repositoryConfigs(env = process.env) {
       default: isDefault,
       configured: Boolean(token),
       token,
+      tokenEnv,
       repository,
       ref,
       root
@@ -128,6 +129,7 @@ function legacyRepositoryConfig(env) {
       (!root || SAFE_ROOT.test(root))
     ),
     token,
+    tokenEnv: 'GITHUB_CONTENT_TOKEN',
     repository,
     ref,
     root
@@ -142,6 +144,7 @@ function repositoryConfig(env = process.env, rawRepositoryId = '') {
   }
   const selected = repositoryId
     ? configs.find((config) => config.id === repositoryId)
+      || (repositoryId === 'default' ? configs.find((config) => config.default) : null)
     : configs.find((config) => config.default) || configs[0];
   if (!selected) throw new ContentRepositoryError('INVALID_CONTENT_REPOSITORY', 400);
   return selected;

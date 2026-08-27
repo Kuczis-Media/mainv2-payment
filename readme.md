@@ -121,8 +121,8 @@ Nie umieszczaj kluczy w `public`, plikach JavaScript przeglądarki, `dashboard.m
 
 1. Utwórz witrynę z tego repozytorium. Ustawienia publikacji i funkcji są już zapisane w `netlify.toml` (`public` oraz `netlify/functions`).
 2. Włącz Netlify Identity. W ustawieniach rejestracji wybierz rejestrację otwartą albo tylko na zaproszenie, zależnie od sposobu sprzedaży kursu. Jeśli wymagane jest potwierdzenie e-maila, pozostaw włączone wiadomości potwierdzające.
-3. Dodaj `NETLIFY_API_TOKEN` w zmiennych środowiskowych witryny i ustaw zakres **Functions**. Token umożliwia panelowi administracyjnemu obsługę Forms oraz silnie spójny dostęp do Netlify Blobs, w tym metadanych i sekretów konfiguracji AI; traktuj go jak sekret. Musi należeć do konta mającego dostęp do witryny wskazanej przez automatyczne `SITE_ID`. Opcjonalnie dodaj `GEMINI_API_KEY` lub `OPENAI_API_KEY` jako awaryjny fallback dla chatu.
-4. Utwórz i podłącz prywatne repozytorium lub repozytoria materiałów według instrukcji poniżej. Zmienne `GITHUB_CONTENT_*` również ustaw z zakresem **Functions**.
+3. Dodaj `NETLIFY_API_TOKEN` w zmiennych środowiskowych witryny. Na Pro/Enterprise ustaw zakres **Functions**; na Free/Personal pozostaje domyślny zakres wszystkich usług. Token umożliwia panelowi administracyjnemu obsługę Forms oraz silnie spójny dostęp do Netlify Blobs, w tym metadanych i sekretów konfiguracji AI; traktuj go jak sekret. Musi należeć do konta mającego dostęp do witryny wskazanej przez automatyczne `SITE_ID`. Opcjonalnie dodaj `GEMINI_API_KEY` lub `OPENAI_API_KEY` jako awaryjny fallback dla chatu.
+4. Utwórz i podłącz prywatne repozytorium lub repozytoria materiałów według instrukcji poniżej. Dla `GITHUB_CONTENT_*` również wybierz zakres **Functions** tylko wtedy, gdy plan Pro/Enterprise udostępnia granularne zakresy.
 5. Skonfiguruj Stripe według osobnej instrukcji poniżej i dodaj `STRIPE_SECRET_KEY` oraz `STRIPE_WEBHOOK_SECRET` z zakresem **Functions**. Klucze live ogranicz do kontekstu Production; Preview/Branch powinny otrzymywać wyłącznie dane Stripe test mode i poświadczenia osobnej witryny testowej.
 6. Pierwszemu administratorowi przypisz ręcznie rolę `admin` w `app_metadata` w panelu Netlify Identity. Kolejnymi kontami można już zarządzać z panelu administratora w dashboardzie.
 7. Nowe konto bez roli może się uwierzytelnić i zobaczy cennik, ale nie otworzy `/members/`. Po udanej płatności rola i dokładny termin są nadawane automatycznie. Administrator nadal może przyznać dostęp ręcznie.
@@ -204,7 +204,7 @@ Konfiguracja krok po kroku:
    - pozostałych uprawnień nie rozszerzaj i nie wybieraj dostępu do wszystkich repozytoriów.
 
    Jeden fine-grained token może obejmować kilka jawnie wybranych repozytoriów tego samego właściciela zasobów. Uprawnienie zapisu jest potrzebne tylko funkcji serwerowej obsługującej Lesson Builder, Prompt Builder i Exam Builder. Token nadal nie daje dostępu do pozostałych repozytoriów konta.
-3. W Netlify otwórz ustawienia witryny i dodaj poniższe zmienne środowiskowe z zakresem **Functions**:
+3. W Netlify otwórz ustawienia witryny i dodaj poniższe site-level zmienne środowiskowe. Zakres **Functions** można wybrać na planie Pro/Enterprise; na Free/Personal Netlify udostępnia zmienną wszystkim zakresom:
 
    ```dotenv
    GITHUB_CONTENT_TOKEN=github_pat_...
@@ -213,7 +213,7 @@ Konfiguracja krok po kroku:
    GITHUB_CONTENT_ROOT=
    ```
 
-   `GITHUB_CONTENT_ROOT` pozostaw pusty, jeśli `lessons`, `prompts` i `catalog.json` leżą w katalogu głównym. Dla monorepo można ustawić np. `materials`.
+   `GITHUB_CONTENT_ROOT` pozostaw pusty, jeśli `lessons`, `prompts` i `catalog.json` leżą w katalogu głównym. Dla monorepo można ustawić np. `materials`. Na Free token PAT dodaj ręcznie właśnie jako site-level ENV. Na Personal/Pro/Enterprise możesz dodatkowo oznaczyć go jako **Contains secret values** w Secrets Controller.
 4. Dla kilku repozytoriów pozostaw `GITHUB_CONTENT_TOKEN` i zamiast trzech zmiennych opisujących pojedyncze repo ustaw jedną listę JSON:
 
    ```dotenv
@@ -225,6 +225,33 @@ Konfiguracja krok po kroku:
 
    Jeśli repozytoria należą do różnych właścicieli zasobów, utwórz osobne, równie wąskie tokeny. Drugi zapisz np. jako `GITHUB_CONTENT_TOKEN_SZKOLA`, a w odpowiedniej pozycji listy dodaj `"tokenEnv":"GITHUB_CONTENT_TOKEN_SZKOLA"`. Nazwa wskazanej zmiennej musi zaczynać się od `GITHUB_CONTENT_TOKEN`.
 5. Wykonaj jeden deploy Functions po dodaniu lub zmianie zmiennych środowiskowych. Następnie w dashboardzie administratora otwórz zakładkę **Materiały**, wybierz każde repozytorium i sprawdź liczbę znalezionych plików.
+
+### Konfigurator repozytoriów w panelu administratora
+
+Po pierwszym wdrożeniu nie trzeba już ręcznie układać JSON-u. Jednorazowo dodaj w Netlify `NETLIFY_API_TOKEN` należący do konta z dostępem do tej witryny (automatyczny `SITE_ID` wskazuje właściwy projekt), wykonaj deploy, a następnie otwórz **Panel administratora → Materiały → Konfigurator repozytoriów**. Mutacje są dozwolone wyłącznie z produkcyjnego wdrożenia, nie z Deploy Preview ani branch deployu.
+
+W konfiguratorze można:
+
+- dodać do 20 prywatnych repozytoriów i wskazać jedno domyślne;
+- na Personal/Pro/Enterprise wkleić osobny fine-grained token dla każdego repozytorium i zapisać go przez Secrets Controller albo pozostawić pole puste, aby zachować już istniejący sekret;
+- na Free korzystać z tokenu utworzonego wcześniej ręcznie jako site-level ENV, bez przesyłania PAT do zapisu przez konfigurator;
+- sprawdzić token, gałąź i katalog bez zapisywania zmian;
+- zapisać `GITHUB_CONTENT_REPOSITORIES`, a na Personal/Pro/Enterprise także tajne `GITHUB_CONTENT_TOKEN_*`, przez serwerowe API Netlify;
+- uruchomić deploy osobno albo jednym przyciskiem **Zapisz i uruchom deploy**.
+
+Token wpisany w formularzu jest wysyłany wyłącznie do chronionej funkcji administratora i nie jest zapisywany w `localStorage`, zwracany w odpowiedzi ani pokazywany po ponownym otwarciu panelu. Funkcja najpierw sprawdza wszystkie repozytoria w GitHubie, potem zapisuje sekrety, a listę aktywnych repozytoriów zapisuje na końcu. Zapis sekretu działa fail-closed: jeśli Netlify nie przyjmie `is_secret: true`, funkcja kończy operację błędem i **nigdy nie zapisuje PAT ponownie jako zwykłej zmiennej**. Usunięcie pozycji z listy przestaje jej używać, ale celowo nie kasuje automatycznie dawnej zmiennej sekretnej z Netlify; nieużywany sekret można później usunąć ręcznie po upewnieniu się, że nie korzysta z niego inne repozytorium.
+
+Po zapisaniu ENV formularz blokuje dalszą edycję do czasu deployu, ponieważ aktualnie działające Functions nadal mają poprzednie wartości. Jeśli zapis ENV się uda, ale Netlify nie wystartuje z buildem (np. buildy są zatrzymane), panel zachowuje stan „wymaga deployu”, pokazuje dokładną przyczynę i pozostawia aktywny przycisk **Uruchom tylko deploy**. Po zakończonym deployu odśwież stronę przed kolejną zmianą.
+
+Aktualne zasady planów Netlify:
+
+| Plan | Zapis PAT | Zakres ENV |
+| --- | --- | --- |
+| Free | utwórz token ręcznie jako site-level `GITHUB_CONTENT_TOKEN` lub `GITHUB_CONTENT_TOKEN_<ID>`; w panelu pozostaw pole tokenu puste | wszystkie zakresy |
+| Personal | konfigurator może zapisać PAT jako sekret przez Secrets Controller | wszystkie zakresy |
+| Pro / Enterprise | konfigurator może zapisać PAT jako sekret przez Secrets Controller | tylko Functions |
+
+Na Free dla kolejnego repo najpierw wybierz jego ID, utwórz np. `GITHUB_CONTENT_TOKEN_CHEMIA_ORGANICZNA` (myślniki z ID zamień na podkreślenia), wykonaj deploy, a dopiero potem dodaj repo w konfiguratorze z pustym polem tokenu. Panel pokazuje oczekiwaną nazwę ENV nad każdym formularzem. Zasady te wynikają z dostępności [zakresów ENV na Pro/Enterprise](https://docs.netlify.com/build/environment-variables/overview/#scopes) oraz [Secrets Controller](https://docs.netlify.com/build/environment-variables/secrets-controller/).
 
 Późniejsze dodanie, poprawienie lub usunięcie pliku w repo materiałów — przez GitHub albo Studio — nie wymaga deployu ani ponownego commitu aplikacji. Lista jest pobierana na żywo przez GitHub Contents API i trzymana w pamięci funkcji najwyżej przez 20 sekund; administrator może wymusić odświeżenie w zakładce **Materiały**. Odtwarzacz lekcji pobiera wskazany plik przy otwarciu.
 

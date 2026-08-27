@@ -478,7 +478,7 @@
       <section class="admin-tab-panel" id="admin-panel-content" role="tabpanel" aria-labelledby="admin-tab-content" data-admin-panel="content" hidden>
         <div class="admin-guidance admin-guidance-warning">
           <span aria-hidden="true">!</span>
-          <p><strong>Token GitHub nigdy nie trafia do tej strony.</strong> Ustaw go jako tajną zmienną środowiskową Netlify z zakresem Functions. Ogranicz token tylko do wybranych repozytoriów materiałów; przeglądarka wysyła wyłącznie JWT administratora.</p>
+          <p><strong>Token GitHub jest przesyłany tylko podczas zapisu lub testu.</strong> Nie jest trwale zapisywany w aplikacji, nie wraca w odpowiedzi API ani nie trafia do kursantów. Automatyczny zapis PAT jako sekretu wymaga Netlify Personal lub wyższego; na Free utwórz token ENV ręcznie w Netlify i pozostaw pole tokenu puste. Konfigurator nigdy nie zapisze PAT jako zwykłej, jawnej zmiennej.</p>
         </div>
 
         <div class="admin-content-status-card">
@@ -494,15 +494,16 @@
           </div>
         </div>
 
-        <details class="admin-content-setup" open>
-          <summary>Jak bezpiecznie podłączyć prywatne repozytoria</summary>
+        <details class="admin-content-setup">
+          <summary>Ręczna konfiguracja awaryjna i zasady tokenu</summary>
           <ol>
             <li>Utwórz jedno lub kilka prywatnych repozytoriów z folderami <code>lessons</code> i <code>prompts</code>.</li>
             <li>W GitHub utwórz fine-grained token ograniczony wyłącznie do wybranych repozytoriów. Nadaj mu tylko <strong>Contents: Read and write</strong>, aby Studio mogło dodawać, poprawiać i usuwać pliki.</li>
-            <li>W Netlify przejdź do <strong>Project configuration → Environment variables</strong> i dodaj poniższe zmienne. Token oznacz jako sekret i ogranicz do Functions.</li>
+            <li>Na Free dodaj token ręcznie jako site-level ENV w <strong>Project configuration → Environment variables</strong>. Secrets Controller i automatyczne oznaczenie tokenu jako sekretu są dostępne od planu Personal.</li>
+            <li>Osobny zakres <strong>Functions</strong> jest dostępny na Pro/Enterprise. Na Free/Personal zmienne mają domyślny zakres wszystkich usług.</li>
             <li>Dla kilku repozytoriów ustaw dodatkowo <code>GITHUB_CONTENT_REPOSITORIES</code> zgodnie z instrukcją w README. Uruchom nowy deploy Functions, a potem wybieraj repozytorium z listy.</li>
           </ol>
-          <pre id="admin-content-env-template">GITHUB_CONTENT_TOKEN=github_pat_…
+          <pre id="admin-content-env-template">GITHUB_CONTENT_TOKEN=
 GITHUB_CONTENT_REPOSITORIES=
 GITHUB_CONTENT_REPOSITORY=Kuczis-Media/chemdisk-content
 GITHUB_CONTENT_REF=main
@@ -513,6 +514,26 @@ GITHUB_CONTENT_ROOT=</pre>
             <button class="button button-secondary" id="admin-content-copy-env" type="button">Kopiuj nazwy zmiennych</button>
           </div>
         </details>
+
+        <section class="admin-content-configurator" aria-labelledby="admin-content-configurator-title">
+          <div class="admin-content-configurator-heading">
+            <div>
+              <span class="field-label">Konfigurator repozytoriów</span>
+              <h3 id="admin-content-configurator-title">Prywatne repozytoria GitHub</h3>
+              <p>Dodaj maksymalnie 20 repozytoriów. Pusty token zachowuje istniejący sekret lub korzysta ze zmiennej utworzonej ręcznie.</p>
+            </div>
+            <button class="button button-secondary" id="admin-content-config-add" type="button">+ Dodaj repozytorium</button>
+          </div>
+          <p class="admin-content-plan-note"><strong>Netlify:</strong> automatyczne sekrety PAT — Personal/Pro/Enterprise; osobny zakres Functions — Pro/Enterprise. Na Free najpierw utwórz wskazaną zmienną <code>GITHUB_CONTENT_TOKEN_*</code> ręcznie, wykonaj deploy, a następnie zapisz tutaj konfigurację z pustym polem tokenu.</p>
+          <div class="admin-content-config-list" id="admin-content-config-list" aria-busy="false"></div>
+          <div class="admin-status" id="admin-content-config-status" role="status" aria-live="polite"></div>
+          <div class="admin-content-config-actions">
+            <button class="button button-secondary" id="admin-content-config-deploy" type="button">Uruchom tylko deploy</button>
+            <button class="button button-secondary" id="admin-content-config-save" type="button">Zapisz w ENV</button>
+            <button class="button button-primary" id="admin-content-config-save-deploy" type="button">Zapisz i uruchom deploy</button>
+          </div>
+          <p class="field-hint">Wymagane jednorazowo: <code>NETLIFY_API_TOKEN</code> i automatyczne <code>SITE_ID</code>. Zapis sekretu jest zawsze fail-closed: jeśli Netlify nie może użyć Secrets Controller, PAT nie zostanie zapisany jako zwykła zmienna. Po zmianie ENV wykonaj deploy i poczekaj na jego zakończenie przed kolejną edycją.</p>
+        </section>
 
         <div class="admin-editor-actions">
           <p class="admin-status" id="admin-content-status" role="status" aria-live="polite"></p>

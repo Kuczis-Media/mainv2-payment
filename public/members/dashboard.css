@@ -924,19 +924,24 @@ html[data-theme="dark"] .admin-toggle,
 html[data-theme="dark"] .admin-submission-field,
 html[data-theme="dark"] .admin-preview-section,
 html[data-theme="dark"] .admin-content-status-card,
-html[data-theme="dark"] .admin-content-setup {
+html[data-theme="dark"] .admin-content-setup,
+html[data-theme="dark"] .admin-content-configurator,
+html[data-theme="dark"] .admin-content-config-row {
   background: #111923;
   border-color: var(--line);
 }
 
 html[data-theme="dark"] .admin-content-status-card strong,
-html[data-theme="dark"] .admin-content-setup summary {
+html[data-theme="dark"] .admin-content-setup summary,
+html[data-theme="dark"] .admin-content-configurator h3,
+html[data-theme="dark"] .admin-content-config-row legend {
   color: var(--ink);
 }
 
 html[data-theme="dark"] .admin-content-status-card > div:first-child small,
 html[data-theme="dark"] .admin-content-counts small,
-html[data-theme="dark"] .admin-content-setup li {
+html[data-theme="dark"] .admin-content-setup li,
+html[data-theme="dark"] .admin-content-plan-note {
   color: var(--muted);
 }
 
@@ -3706,6 +3711,170 @@ html[data-theme="dark"] .admin-payment-switch.admin-payment-master-switch strong
   gap: 8px;
 }
 
+.admin-content-configurator {
+  margin-bottom: 14px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.admin-content-configurator-heading,
+.admin-content-config-actions,
+.admin-content-config-row-heading,
+.admin-content-config-row-actions,
+.admin-content-config-button-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-content-configurator-heading {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.admin-content-configurator h3 {
+  margin: 4px 0 3px;
+  color: #263448;
+  font-size: 15px;
+}
+
+.admin-content-configurator-heading p,
+.admin-content-config-row small {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.admin-content-plan-note {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  color: #526174;
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface-soft));
+  border-left: 3px solid var(--primary);
+  border-radius: 0 10px 10px 0;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.admin-content-plan-note code {
+  color: var(--primary);
+}
+
+.admin-content-config-list {
+  display: grid;
+  margin: 14px 0;
+  gap: 10px;
+}
+
+.admin-content-config-row {
+  min-width: 0;
+  margin: 0;
+  padding: 13px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.admin-content-config-row legend {
+  max-width: calc(100% - 16px);
+  padding: 0 6px;
+  color: #263448;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-content-config-row-heading {
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.admin-content-token-state {
+  padding: 4px 7px;
+  color: #6d5d2b;
+  background: #fff5cf;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.admin-content-token-state.is-ready {
+  color: #13695d;
+  background: #ddf3ed;
+}
+
+.admin-content-token-state.is-pending {
+  color: #315b88;
+  background: #e4effb;
+}
+
+.admin-content-config-grid {
+  display: grid;
+  grid-template-columns: minmax(110px, .7fr) minmax(160px, 1.35fr) minmax(100px, .7fr);
+  gap: 9px;
+}
+
+.admin-content-config-grid label {
+  min-width: 0;
+}
+
+.admin-content-config-grid .is-wide {
+  grid-column: span 2;
+}
+
+.admin-content-config-grid input {
+  width: 100%;
+  min-height: 38px;
+  margin-top: 5px;
+  padding: 0 10px;
+  color: var(--text);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  font: inherit;
+  font-size: 12px;
+}
+
+html[data-theme="dark"] .admin-content-config-grid input {
+  color: var(--ink);
+  background: #0b121a;
+}
+
+.admin-content-config-row-actions {
+  justify-content: space-between;
+  margin-top: 11px;
+}
+
+.admin-content-config-button-group {
+  justify-content: flex-end;
+}
+
+.admin-content-default {
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  gap: 6px;
+}
+
+.admin-content-config-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.admin-content-config-deploy-link {
+  color: var(--primary);
+  font-weight: 800;
+}
+
+.admin-content-configurator > .field-hint {
+  font-size: 11px;
+}
+
 .admin-dashboard-preview {
   padding: 17px;
   background: #fff;
@@ -4238,6 +4407,33 @@ html[data-theme="dark"] .admin-payment-switch.admin-payment-master-switch strong
   .admin-content-links {
     display: grid;
     grid-template-columns: 1fr;
+  }
+
+  .admin-content-configurator-heading,
+  .admin-content-config-row-heading,
+  .admin-content-config-row-actions,
+  .admin-content-config-button-group {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-content-config-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-content-config-grid .is-wide {
+    grid-column: auto;
+  }
+
+  .admin-content-config-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .admin-content-config-grid input,
+  .admin-content-status-card > div:first-child select {
+    min-height: 44px;
+    font-size: 16px;
   }
 }
 

@@ -7,6 +7,7 @@
   const ADMIN_FORMS_URL = '/.netlify/functions/admin-forms';
   const ADMIN_DASHBOARD_URL = '/.netlify/functions/admin-dashboard';
   const ADMIN_EXAMS_URL = '/.netlify/functions/admin-exams';
+  const ADMIN_CONTENT_REPOSITORIES_URL = '/.netlify/functions/admin-content-repositories';
   const PAYMENT_ADMIN_URL = '/.netlify/functions/payment-admin';
   const PAYMENT_CONFIG_URL = '/.netlify/functions/payment-config';
   const ADMIN_PROGRESS_URL = '/.netlify/functions/admin-progress';
@@ -92,9 +93,21 @@
     CANNOT_REMOVE_OWN_ADMIN: 'Nie możesz odebrać roli administratora własnemu kontu.',
     CONTENT_CATALOG_INVALID: 'Plik catalog.json w repozytorium materiałów jest nieprawidłowy.',
     CONTENT_DIRECTORY_NOT_FOUND: 'W prywatnym repozytorium brakuje folderu lessons lub prompts.',
+    CONTENT_REPOSITORIES_ENV_TOO_LARGE: 'Lista repozytoriów przekracza limit wartości ENV Netlify. Skróć nazwy lub katalogi albo zmniejsz liczbę pozycji.',
     CONTENT_REPOSITORY_NOT_CONFIGURED: 'Dodaj zmienne GITHUB_CONTENT_* w Netlify.',
+    CONTENT_REPOSITORY_INVALID_RESPONSE: 'GitHub zwrócił nieprawidłową odpowiedź dla wskazanego repozytorium lub katalogu.',
     CONTENT_REPOSITORY_NOT_FOUND: 'Nie znaleziono repozytorium, katalogu lub wybranej gałęzi.',
     CONTENT_REPOSITORY_UNAVAILABLE: 'GitHub jest chwilowo niedostępny.',
+    CONTENT_REPOSITORY_ADMIN_UNAVAILABLE: 'Konfigurator repozytoriów jest chwilowo niedostępny.',
+    CONTENT_REPOSITORY_DEFAULT_REQUIRED: 'Wybierz dokładnie jedno repozytorium domyślne.',
+    CONTENT_REPOSITORY_PRODUCTION_REQUIRED: 'Repozytoria można zmieniać tylko z produkcyjnego wdrożenia ChemDisk. Otwórz główny adres witryny Netlify.',
+    CONTENT_REPOSITORY_ROOT_NOT_DIRECTORY: 'Wskazany katalog główny jest plikiem, a nie folderem. Popraw pole „Katalog główny”.',
+    CONTENT_REPOSITORY_SHARED_TOKEN_CONFLICT: 'Repozytoria korzystające z tej samej zmiennej ENV otrzymały różne tokeny. Wklej ten sam token tylko raz albo użyj osobnych zmiennych GITHUB_CONTENT_TOKEN_*.',
+    GITHUB_CONTENT_RATE_LIMITED: 'GitHub wyczerpał limit zapytań dla tego tokenu. Poczekaj na odnowienie limitu i spróbuj ponownie.',
+    INVALID_CONTENT_REPOSITORIES: 'Uzupełnij poprawnie ID, nazwę, owner/repo, gałąź i opcjonalny katalog każdego repozytorium.',
+    INVALID_CONTENT_REPOSITORY_ACTION: 'Wybrano nieprawidłową operację repozytorium.',
+    INVALID_GITHUB_CONTENT_TOKEN: 'Token GitHub ma nieprawidłowy format.',
+    GITHUB_CONTENT_TOKEN_REQUIRED: 'Wklej token GitHub albo utwórz wskazaną zmienną GITHUB_CONTENT_TOKEN_* ręcznie w Netlify i wykonaj deploy.',
     CONTENT_WRITE_CONFLICT: 'Plik został w międzyczasie zmieniony. Wczytaj najnowszą wersję i spróbuj ponownie.',
     DASHBOARD_CONFLICT: 'Dashboard został w międzyczasie zmieniony. Wczytaj najnowszą wersję i ponów edycję.',
     DASHBOARD_INVALID: 'Treść dashboardu jest nieprawidłowa.',
@@ -138,6 +151,16 @@
     NETLIFY_FORMS_RESPONSE_INVALID: 'Netlify Forms zwrócił nieprawidłowe dane.',
     NETLIFY_FORMS_TOKEN_REJECTED: 'NETLIFY_API_TOKEN jest nieprawidłowy albo nie ma dostępu do tej witryny.',
     NETLIFY_FORMS_UNAVAILABLE: 'Nie udało się połączyć z Netlify Forms.',
+    NETLIFY_BUILDS_STOPPED: 'Buildy tego projektu są zatrzymane w Netlify. Włącz je i spróbuj ponownie.',
+    NETLIFY_CONTENT_CONFIG_NOT_CONFIGURED: 'Dodaj jednorazowo NETLIFY_API_TOKEN w Netlify. SITE_ID jest ustawiane automatycznie.',
+    NETLIFY_CONTENT_CONFIG_RESPONSE_INVALID: 'Netlify zwrócił nieprawidłową odpowiedź konfiguracji.',
+    NETLIFY_CONTENT_CONFIG_SITE_NOT_FOUND: 'NETLIFY_API_TOKEN nie ma dostępu do tego projektu Netlify.',
+    NETLIFY_CONTENT_CONFIG_TOKEN_REJECTED: 'NETLIFY_API_TOKEN jest nieprawidłowy albo nie może edytować tego projektu.',
+    NETLIFY_CONTENT_CONFIG_UNAVAILABLE: 'API Netlify jest chwilowo niedostępne.',
+    NETLIFY_CONTENT_CONFIG_WRITE_FAILED: 'Netlify nie zapisał zmiennych środowiskowych.',
+    NETLIFY_CONTENT_SECRET_WRITE_FAILED: 'Netlify nie zapisał tokenu jako sekretu. Żadna jawna wersja PAT nie została utworzona; sprawdź ustawienia ENV i spróbuj ponownie.',
+    NETLIFY_DEPLOY_START_FAILED: 'Zmienne zapisano, ale Netlify nie uruchomił deployu. Użyj przycisku „Uruchom tylko deploy”.',
+    NETLIFY_SECRETS_CONTROLLER_REQUIRED: 'Automatyczny zapis PAT wymaga Netlify Secrets Controller (plan Personal lub wyższy). Na Free utwórz wskazaną zmienną GITHUB_CONTENT_TOKEN_* ręcznie, wykonaj deploy i pozostaw pole tokenu puste.',
     NO_CHANGES: 'Nie wskazano żadnych zmian do zapisania.',
     INVALID_PAYMENT_ACTION: 'Wybrano nieprawidłową operację płatności.',
     INVALID_PAYMENT_ENABLED_SETTING: 'Ustawienie dostępności płatności jest nieprawidłowe.',
@@ -237,6 +260,12 @@
     adminContentRefresh: document.getElementById('admin-content-refresh'),
     adminContentCopyEnv: document.getElementById('admin-content-copy-env'),
     adminContentEnvTemplate: document.getElementById('admin-content-env-template'),
+    adminContentConfigList: document.getElementById('admin-content-config-list'),
+    adminContentConfigStatus: document.getElementById('admin-content-config-status'),
+    adminContentConfigAdd: document.getElementById('admin-content-config-add'),
+    adminContentConfigSave: document.getElementById('admin-content-config-save'),
+    adminContentConfigSaveDeploy: document.getElementById('admin-content-config-save-deploy'),
+    adminContentConfigDeploy: document.getElementById('admin-content-config-deploy'),
     adminProgressGlobalTracking: document.getElementById('admin-progress-global-tracking'),
     adminProgressGlobalShow: document.getElementById('admin-progress-global-show'),
     adminProgressRecordOpens: document.getElementById('admin-progress-record-opens'),
@@ -359,6 +388,14 @@
   let adminContentLoaded = false;
   let adminContentRepositories = [];
   let adminContentRepositoryId = '';
+  let adminContentStatusRequestId = 0;
+  let adminContentConfigLoaded = false;
+  let adminContentConfigBusy = false;
+  let adminContentConfigPendingDeploy = false;
+  let adminContentConfigDeployQueued = false;
+  let adminContentConfigBaseTokenReserved = false;
+  let adminContentConfigBaseline = '';
+  let adminContentConfigDrafts = [];
   let adminPricesLoaded = false;
   let adminPricesEtag = null;
   let adminProgressLoaded = false;
@@ -3032,6 +3069,7 @@
   }
 
   async function loadAdminContentStatus(force) {
+    const requestId = ++adminContentStatusRequestId;
     const library = window.ChemContentLibrary;
     if (!library || typeof library.status !== 'function') {
       setPanelStatus(elements.adminContentStatus, 'Brakuje klienta biblioteki materiałów.', 'error');
@@ -3043,6 +3081,7 @@
       if (!adminContentRepositories.length) {
         adminContentRepositories = await library.repositories();
       }
+      if (requestId !== adminContentStatusRequestId) return;
       if (!adminContentRepositories.length) throw new Error('Nie skonfigurowano żadnego repozytorium.');
       if (!adminContentRepositories.some((repository) => repository.id === adminContentRepositoryId)) {
         const fallback = adminContentRepositories.find((repository) => repository.default)
@@ -3063,6 +3102,7 @@
         refresh: Boolean(force),
         repositoryId: adminContentRepositoryId
       });
+      if (requestId !== adminContentStatusRequestId) return;
       const configuration = payload && payload.configuration ? payload.configuration : {};
       const counts = payload && payload.counts ? payload.counts : {};
       elements.adminContentLessons.textContent = String(Number(counts.lessons) || 0);
@@ -3103,6 +3143,7 @@
       }
       adminContentLoaded = true;
     } catch (error) {
+      if (requestId !== adminContentStatusRequestId) return;
       adminContentLoaded = false;
       elements.adminContentConnection.textContent = 'Błąd połączenia';
       elements.adminContentConnection.dataset.state = 'error';
@@ -3112,7 +3153,7 @@
         'error'
       );
     } finally {
-      elements.adminContentRefresh.disabled = false;
+      if (requestId === adminContentStatusRequestId) elements.adminContentRefresh.disabled = false;
     }
   }
 
@@ -3123,6 +3164,420 @@
       setPanelStatus(elements.adminContentStatus, 'Skopiowano szablon zmiennych. Wstaw właściwy token wyłącznie w Netlify.', 'info');
     } catch (_) {
       setPanelStatus(elements.adminContentStatus, 'Nie udało się skopiować. Zaznacz szablon i skopiuj go ręcznie.', 'error');
+    }
+  }
+
+  function contentRepositoryDraft(value) {
+    return {
+      id: typeof value?.id === 'string' ? value.id : '',
+      label: typeof value?.label === 'string' ? value.label : '',
+      repository: typeof value?.repository === 'string' ? value.repository : '',
+      ref: typeof value?.ref === 'string' && value.ref ? value.ref : 'main',
+      root: typeof value?.root === 'string' ? value.root : '',
+      default: Boolean(value?.default),
+      tokenConfigured: Boolean(value?.tokenConfigured),
+      tokenEnv: typeof value?.tokenEnv === 'string' ? value.tokenEnv : '',
+      secret: typeof value?.secret === 'string' ? value.secret : ''
+    };
+  }
+
+  function contentTokenEnvironmentName(draft) {
+    if (draft?.tokenEnv) return draft.tokenEnv;
+    const id = String(draft?.id || '').trim().toUpperCase().replace(/-/g, '_');
+    if (draft?.default && !adminContentConfigBaseTokenReserved) return 'GITHUB_CONTENT_TOKEN';
+    return /^[A-Z0-9][A-Z0-9_]{0,39}$/.test(id)
+      ? `GITHUB_CONTENT_TOKEN_${id}`
+      : 'GITHUB_CONTENT_TOKEN_<ID>';
+  }
+
+  function createContentConfigField(label, field, value, options = {}) {
+    const wrapper = document.createElement('label');
+    if (options.wide) wrapper.className = 'is-wide';
+    const title = document.createElement('span');
+    title.className = 'field-label';
+    title.textContent = label;
+    const input = document.createElement('input');
+    input.type = options.type || 'text';
+    input.value = value || '';
+    input.placeholder = options.placeholder || '';
+    input.maxLength = options.maxLength || 200;
+    input.autocomplete = options.type === 'password' ? 'new-password' : 'off';
+    input.spellcheck = false;
+    input.autocapitalize = 'none';
+    if (options.required) input.required = true;
+    if (options.pattern) input.pattern = options.pattern;
+    input.dataset.contentField = field;
+    if (options.description) input.setAttribute('aria-description', options.description);
+    wrapper.append(title, input);
+    return wrapper;
+  }
+
+  function renderAdminContentConfigurator() {
+    const fragment = document.createDocumentFragment();
+    adminContentConfigDrafts.forEach((draft, index) => {
+      const row = document.createElement('fieldset');
+      row.className = 'admin-content-config-row';
+      row.dataset.contentRepositoryIndex = String(index);
+      const legend = document.createElement('legend');
+      legend.textContent = draft.label || draft.repository || `Repozytorium ${index + 1}`;
+
+      const heading = document.createElement('div');
+      heading.className = 'admin-content-config-row-heading';
+      const explanation = document.createElement('small');
+      explanation.textContent = `Zmienna Netlify: ${contentTokenEnvironmentName(draft)}`;
+      const tokenState = document.createElement('span');
+      const tokenReady = draft.tokenConfigured || Boolean(draft.secret);
+      tokenState.className = `admin-content-token-state${tokenReady ? ' is-ready' : ''}${adminContentConfigPendingDeploy ? ' is-pending' : ''}`;
+      tokenState.textContent = adminContentConfigPendingDeploy
+        ? (adminContentConfigDeployQueued ? 'Deploy w toku' : 'Wymaga deployu')
+        : draft.tokenConfigured
+          ? 'Token zapisany'
+          : draft.secret
+            ? 'Token wpisany'
+            : 'Token lub ENV wymagany';
+      heading.append(explanation, tokenState);
+
+      const grid = document.createElement('div');
+      grid.className = 'admin-content-config-grid';
+      grid.append(
+        createContentConfigField('ID (małe litery)', 'id', draft.id, { placeholder: 'default', maxLength: 40, required: true, pattern: '[a-z0-9][a-z0-9-]{0,39}' }),
+        createContentConfigField('Nazwa widoczna w panelu', 'label', draft.label, { placeholder: 'Chemia organiczna', maxLength: 80, required: true }),
+        createContentConfigField('Gałąź', 'ref', draft.ref, { placeholder: 'main', maxLength: 200, required: true }),
+        createContentConfigField('Repozytorium owner/nazwa', 'repository', draft.repository, { placeholder: 'Kuczis-Media/chemia-organiczna', maxLength: 140, wide: true, required: true, pattern: '[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+' }),
+        createContentConfigField('Katalog główny (opcjonalnie)', 'root', draft.root, { placeholder: 'kurs', maxLength: 300 }),
+        createContentConfigField('Fine-grained token (Personal+)', 'secret', draft.secret || '', {
+          type: 'password',
+          placeholder: draft.tokenConfigured ? 'Pozostaw puste, aby zachować' : 'Personal+: github_pat_… · Free: ustaw ENV ręcznie',
+          maxLength: 500,
+          wide: true
+        })
+      );
+
+      const actions = document.createElement('div');
+      actions.className = 'admin-content-config-row-actions';
+      const defaultLabel = document.createElement('label');
+      defaultLabel.className = 'admin-content-default';
+      const defaultInput = document.createElement('input');
+      defaultInput.type = 'radio';
+      defaultInput.name = 'admin-content-default-repository';
+      defaultInput.checked = draft.default;
+      defaultInput.dataset.contentField = 'default';
+      defaultLabel.append(defaultInput, document.createTextNode(' Repozytorium domyślne'));
+      const buttonGroup = document.createElement('div');
+      buttonGroup.className = 'admin-content-config-button-group';
+      const testButton = document.createElement('button');
+      testButton.className = 'button button-secondary';
+      testButton.type = 'button';
+      testButton.dataset.contentAction = 'test';
+      testButton.textContent = 'Sprawdź połączenie';
+      const removeButton = document.createElement('button');
+      removeButton.className = 'button button-secondary button-danger-soft';
+      removeButton.type = 'button';
+      removeButton.dataset.contentAction = 'remove';
+      removeButton.disabled = adminContentConfigDrafts.length === 1;
+      removeButton.textContent = 'Usuń z konfiguracji';
+      buttonGroup.append(testButton, removeButton);
+      actions.append(defaultLabel, buttonGroup);
+      row.append(legend, heading, grid, actions);
+      fragment.append(row);
+    });
+    elements.adminContentConfigList.replaceChildren(fragment);
+    setAdminContentConfigBusy(adminContentConfigBusy);
+  }
+
+  function collectAdminContentDrafts() {
+    const rows = Array.from(elements.adminContentConfigList.querySelectorAll('[data-content-repository-index]'));
+    return rows.map((row, index) => {
+      const previous = adminContentConfigDrafts[index] || {};
+      const rawValue = (field) => row.querySelector(`[data-content-field="${field}"]`)?.value || '';
+      const value = (field) => rawValue(field).trim();
+      const id = value('id').toLowerCase();
+      const sameIdentity = id === String(previous.id || '').toLowerCase();
+      return {
+        id,
+        label: value('label'),
+        repository: value('repository'),
+        ref: value('ref') || 'main',
+        root: value('root').replace(/^\/+|\/+$/g, ''),
+        default: Boolean(row.querySelector('[data-content-field="default"]')?.checked),
+        tokenConfigured: sameIdentity && Boolean(previous.tokenConfigured),
+        tokenEnv: sameIdentity ? previous.tokenEnv || '' : '',
+        secret: rawValue('secret')
+      };
+    });
+  }
+
+  function contentConfigSignature(entries) {
+    return JSON.stringify((entries || []).map((entry) => ({
+      id: String(entry.id || '').trim().toLowerCase(),
+      label: String(entry.label || '').trim(),
+      repository: String(entry.repository || '').trim(),
+      ref: String(entry.ref || 'main').trim() || 'main',
+      root: String(entry.root || '').trim().replace(/^\/+|\/+$/g, ''),
+      default: Boolean(entry.default)
+    })));
+  }
+
+  function contentConfigHasUnsavedChanges() {
+    const drafts = collectAdminContentDrafts();
+    return drafts.some((entry) => entry.secret) || contentConfigSignature(drafts) !== adminContentConfigBaseline;
+  }
+
+  function validateAdminContentDrafts(drafts, onlyIndex) {
+    const rows = Array.from(elements.adminContentConfigList.querySelectorAll('[data-content-repository-index]'));
+    rows.forEach((row) => row.querySelectorAll('[data-content-field]').forEach((input) => input.removeAttribute('aria-invalid')));
+    const indexes = Number.isInteger(onlyIndex) ? [onlyIndex] : drafts.map((_, index) => index);
+    const seenIds = new Set();
+    let firstInvalid = null;
+    let message = '';
+    const invalidate = (index, field, text) => {
+      if (firstInvalid) return;
+      firstInvalid = rows[index]?.querySelector(`[data-content-field="${field}"]`) || null;
+      firstInvalid?.setAttribute('aria-invalid', 'true');
+      message = `Repozytorium ${index + 1}: ${text}`;
+    };
+    for (const index of indexes) {
+      const draft = drafts[index];
+      if (!draft) continue;
+      if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(draft.id)) invalidate(index, 'id', 'ID może zawierać tylko małe litery, cyfry i myślniki.');
+      else if (!Number.isInteger(onlyIndex) && seenIds.has(draft.id)) invalidate(index, 'id', 'ID musi być unikalne.');
+      seenIds.add(draft.id);
+      if (!draft.label || draft.label.length > 80 || /[\u0000-\u001f\u007f]/.test(draft.label)) invalidate(index, 'label', 'uzupełnij poprawną nazwę.');
+      const parts = draft.repository.split('/');
+      if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(draft.repository)
+        || draft.repository.length > 140 || parts[0]?.length > 39 || parts[1]?.length > 100
+        || ['.', '..'].includes(parts[0]) || ['.', '..'].includes(parts[1])) {
+        invalidate(index, 'repository', 'wpisz repozytorium w formacie owner/nazwa.');
+      }
+      if (!/^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/.test(draft.ref)) invalidate(index, 'ref', 'gałąź jest nieprawidłowa.');
+      if (draft.root && (draft.root.length > 300 || !/^(?:[A-Za-z0-9][A-Za-z0-9_.-]*\/)*[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(draft.root))) {
+        invalidate(index, 'root', 'katalog może zawierać tylko bezpieczne segmenty ścieżki.');
+      }
+      if (draft.secret && (draft.secret.length < 20 || draft.secret.length > 500 || /[\s\u0000-\u001f\u007f]/.test(draft.secret))) {
+        invalidate(index, 'secret', 'token musi mieć od 20 do 500 znaków i nie może zawierać odstępów.');
+      }
+    }
+    if (!Number.isInteger(onlyIndex) && drafts.filter((entry) => entry.default).length !== 1) {
+      message = 'Wybierz dokładnie jedno repozytorium domyślne.';
+      firstInvalid = rows[0]?.querySelector('[data-content-field="default"]') || null;
+      firstInvalid?.setAttribute('aria-invalid', 'true');
+    }
+    if (!firstInvalid && !message) return true;
+    setPanelStatus(elements.adminContentConfigStatus, message || 'Popraw konfigurację repozytoriów.', 'error');
+    firstInvalid?.focus();
+    return false;
+  }
+
+  function markAdminContentDraftDirty() {
+    if (adminContentConfigBusy || adminContentConfigPendingDeploy) return;
+    setPanelStatus(
+      elements.adminContentConfigStatus,
+      contentConfigHasUnsavedChanges() ? 'Masz niezapisane zmiany.' : 'Brak niezapisanych zmian.',
+      'info'
+    );
+  }
+
+  function setAdminContentConfigBusy(busy) {
+    adminContentConfigBusy = Boolean(busy);
+    const locked = adminContentConfigBusy || adminContentConfigPendingDeploy;
+    [elements.adminContentConfigAdd, elements.adminContentConfigSave, elements.adminContentConfigSaveDeploy]
+      .filter(Boolean)
+      .forEach((button) => { button.disabled = locked; });
+    if (elements.adminContentConfigDeploy) elements.adminContentConfigDeploy.disabled = adminContentConfigBusy || adminContentConfigDeployQueued;
+    if (elements.adminContentConfigList) {
+      elements.adminContentConfigList.setAttribute('aria-busy', adminContentConfigBusy ? 'true' : 'false');
+      elements.adminContentConfigList.querySelectorAll('button, input').forEach((control) => {
+        if (control.dataset.contentAction === 'remove' && adminContentConfigDrafts.length === 1) control.disabled = true;
+        else control.disabled = locked;
+      });
+    }
+  }
+
+  async function contentConfiguratorRequest(body) {
+    const token = await getAdminToken();
+    const response = await fetch(ADMIN_CONTENT_REPOSITORIES_URL, {
+      method: body ? 'POST' : 'GET',
+      cache: 'no-store',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...(body ? { 'Content-Type': 'application/json' } : {})
+      },
+      ...(body ? { body: JSON.stringify(body) } : {})
+    });
+    return readAdminResponse(response);
+  }
+
+  async function loadAdminContentConfigurator(force) {
+    if (adminContentConfigLoaded && !force) return;
+    setAdminContentConfigBusy(true);
+    setPanelStatus(elements.adminContentConfigStatus, 'Wczytywanie konfiguracji repozytoriów…', 'loading');
+    try {
+      const payload = await contentConfiguratorRequest(null);
+      const repositories = Array.isArray(payload?.repositories) ? payload.repositories : [];
+      adminContentConfigBaseTokenReserved = repositories.some((repository) => (
+        repository?.tokenEnv === 'GITHUB_CONTENT_TOKEN' && (repository.tokenConfigured || repository.repository)
+      ));
+      adminContentConfigDrafts = repositories.map(contentRepositoryDraft);
+      if (!adminContentConfigDrafts.length) {
+        adminContentConfigDrafts = [contentRepositoryDraft({ id: 'default', label: 'Materiały główne', ref: 'main', default: true })];
+      }
+      if (!adminContentConfigDrafts.some((entry) => entry.default)) adminContentConfigDrafts[0].default = true;
+      adminContentConfigPendingDeploy = false;
+      adminContentConfigDeployQueued = false;
+      renderAdminContentConfigurator();
+      adminContentConfigBaseline = contentConfigSignature(adminContentConfigDrafts);
+      adminContentConfigLoaded = true;
+      const message = payload?.configurationInvalid
+        ? 'Dotychczasowa zmienna GITHUB_CONTENT_REPOSITORIES jest nieprawidłowa. Popraw listę i zapisz ją ponownie.'
+        : payload?.netlifyConfigured
+          ? 'Konfigurator jest gotowy. Sekrety zapisane wcześniej nie są odczytywane do przeglądarki.'
+          : 'Dodaj jednorazowo NETLIFY_API_TOKEN w ustawieniach Netlify, aby zapis i deploy działały z panelu.';
+      setPanelStatus(elements.adminContentConfigStatus, message, payload?.configurationInvalid ? 'error' : 'info');
+    } catch (error) {
+      adminContentConfigLoaded = false;
+      setPanelStatus(elements.adminContentConfigStatus, error?.message || 'Nie udało się wczytać konfiguratora.', 'error');
+    } finally {
+      setAdminContentConfigBusy(false);
+    }
+  }
+
+  function addAdminContentRepository() {
+    adminContentConfigDrafts = collectAdminContentDrafts();
+    if (adminContentConfigDrafts.length >= 20) {
+      setPanelStatus(elements.adminContentConfigStatus, 'Możesz dodać maksymalnie 20 repozytoriów.', 'error');
+      return;
+    }
+    const used = new Set(adminContentConfigDrafts.map((entry) => entry.id));
+    let number = adminContentConfigDrafts.length + 1;
+    while (used.has(`repo-${number}`)) number += 1;
+    adminContentConfigDrafts.push(contentRepositoryDraft({ id: `repo-${number}`, label: `Repozytorium ${number}`, ref: 'main' }));
+    renderAdminContentConfigurator();
+    setPanelStatus(elements.adminContentConfigStatus, 'Masz niezapisane zmiany.', 'info');
+    elements.adminContentConfigList.querySelector(`[data-content-repository-index="${adminContentConfigDrafts.length - 1}"] input`)?.focus();
+  }
+
+  async function testAdminContentRepository(index, button) {
+    adminContentConfigDrafts = collectAdminContentDrafts();
+    const repository = adminContentConfigDrafts[index];
+    if (!repository) return;
+    if (!validateAdminContentDrafts(adminContentConfigDrafts, index)) return;
+    setAdminContentConfigBusy(true);
+    if (button) button.textContent = 'Sprawdzanie…';
+    setPanelStatus(elements.adminContentConfigStatus, `Sprawdzanie ${repository.repository || repository.label || 'repozytorium'}…`, 'loading');
+    try {
+      await contentConfiguratorRequest({ action: 'test', repository: {
+        id: repository.id,
+        label: repository.label,
+        repository: repository.repository,
+        ref: repository.ref,
+        root: repository.root,
+        default: repository.default,
+        secret: repository.secret
+      } });
+      setPanelStatus(elements.adminContentConfigStatus, `Połączenie z ${repository.repository} działa.`, 'info');
+    } catch (error) {
+      setPanelStatus(elements.adminContentConfigStatus, error?.message || 'Test połączenia nie powiódł się.', 'error');
+    } finally {
+      if (button) button.textContent = 'Sprawdź połączenie';
+      setAdminContentConfigBusy(false);
+    }
+  }
+
+  function showContentDeploymentStatus(deployment, prefix) {
+    const status = elements.adminContentConfigStatus;
+    status.className = 'admin-status is-info';
+    status.replaceChildren(document.createTextNode(`${prefix ? `${prefix} ` : ''}Deploy został dodany do kolejki Netlify. Po jego zakończeniu odśwież stronę przed kolejną zmianą. `));
+    if (deployment?.adminUrl) {
+      const link = document.createElement('a');
+      link.className = 'admin-content-config-deploy-link';
+      link.href = deployment.adminUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = 'Zobacz status deployu';
+      status.append(link);
+    }
+  }
+
+  async function saveAdminContentRepositories(deploy) {
+    adminContentConfigDrafts = collectAdminContentDrafts();
+    if (!validateAdminContentDrafts(adminContentConfigDrafts)) return;
+    if (deploy && !window.confirm('Zapisać repozytoria w ENV i uruchomić nowy deploy Netlify?')) return;
+    setAdminContentConfigBusy(true);
+    setPanelStatus(elements.adminContentConfigStatus, deploy ? 'Sprawdzanie repozytoriów, zapis ENV i uruchamianie deployu…' : 'Sprawdzanie repozytoriów i zapisywanie ENV…', 'loading');
+    try {
+      const payload = await contentConfiguratorRequest({
+        action: deploy ? 'save-and-deploy' : 'save',
+        repositories: adminContentConfigDrafts.map(({ id, label, repository, ref, root, default: isDefault, secret }) => ({
+          id, label, repository, ref, root, default: isDefault, secret
+        }))
+      });
+      adminContentConfigDrafts = (payload.repositories || []).map(contentRepositoryDraft);
+      adminContentConfigBaseTokenReserved = adminContentConfigDrafts.some((repository) => repository.tokenEnv === 'GITHUB_CONTENT_TOKEN');
+      adminContentConfigPendingDeploy = true;
+      adminContentConfigDeployQueued = Boolean(payload.deployment);
+      adminContentConfigBaseline = contentConfigSignature(adminContentConfigDrafts);
+      renderAdminContentConfigurator();
+      adminContentRepositories = [];
+      adminContentLoaded = false;
+      const scopeWarning = Array.isArray(payload.scopes) && payload.scopes.includes('all')
+        ? ' Granularny zakres Functions jest dostępny dopiero na Pro/Enterprise, dlatego na tym planie ENV używa domyślnego zakresu wszystkich usług.'
+        : '';
+      if (payload.deployment) {
+        showContentDeploymentStatus(payload.deployment, `Konfiguracja została zapisana.${scopeWarning}`);
+      } else if (typeof payload.deploymentError === 'string' && payload.deploymentError) {
+        const deploymentMessage = ADMIN_ERROR_MESSAGES[payload.deploymentError] || 'Netlify nie uruchomił deployu.';
+        setPanelStatus(elements.adminContentConfigStatus, `ENV zostało zapisane, ale deploy nie wystartował: ${deploymentMessage} Popraw przyczynę i kliknij „Uruchom tylko deploy”.${scopeWarning}`, 'error');
+      } else {
+        setPanelStatus(elements.adminContentConfigStatus, `Konfiguracja została zapisana w ENV. Formularz pozostanie zablokowany do deployu, ponieważ działające Functions nadal mają poprzednie ENV. Kliknij „Uruchom tylko deploy”.${scopeWarning}`, 'info');
+      }
+    } catch (error) {
+      setPanelStatus(elements.adminContentConfigStatus, error?.message || 'Nie udało się zapisać repozytoriów.', 'error');
+    } finally {
+      setAdminContentConfigBusy(false);
+    }
+  }
+
+  async function deployAdminContentConfiguration() {
+    if (contentConfigHasUnsavedChanges()) {
+      setPanelStatus(elements.adminContentConfigStatus, 'Masz niezapisane zmiany. Najpierw zapisz ENV, aby deploy ich nie pominął.', 'error');
+      return;
+    }
+    if (!window.confirm('Uruchomić nowy deploy Netlify z aktualnie zapisanymi zmiennymi ENV?')) return;
+    setAdminContentConfigBusy(true);
+    setPanelStatus(elements.adminContentConfigStatus, 'Uruchamianie deployu Netlify…', 'loading');
+    try {
+      const payload = await contentConfiguratorRequest({ action: 'deploy' });
+      adminContentConfigDeployQueued = true;
+      if (adminContentConfigPendingDeploy) renderAdminContentConfigurator();
+      showContentDeploymentStatus(payload.deployment, '');
+    } catch (error) {
+      setPanelStatus(elements.adminContentConfigStatus, error?.message || 'Nie udało się uruchomić deployu.', 'error');
+    } finally {
+      setAdminContentConfigBusy(false);
+    }
+  }
+
+  function handleAdminContentConfigClick(event) {
+    const button = event.target.closest('[data-content-action]');
+    if (!button || adminContentConfigBusy || adminContentConfigPendingDeploy) return;
+    const row = button.closest('[data-content-repository-index]');
+    const index = Number(row?.dataset.contentRepositoryIndex);
+    if (!Number.isInteger(index)) return;
+    if (button.dataset.contentAction === 'test') {
+      testAdminContentRepository(index, button);
+      return;
+    }
+    if (button.dataset.contentAction === 'remove') {
+      adminContentConfigDrafts = collectAdminContentDrafts();
+      const removedDefault = Boolean(adminContentConfigDrafts[index]?.default);
+      adminContentConfigDrafts.splice(index, 1);
+      if (removedDefault && adminContentConfigDrafts.length) adminContentConfigDrafts[0].default = true;
+      renderAdminContentConfigurator();
+      setPanelStatus(elements.adminContentConfigStatus, 'Usunięto pozycję tylko z wersji roboczej. Zapisz ENV, aby opublikować zmianę.', 'info');
+      const nextIndex = Math.min(index, adminContentConfigDrafts.length - 1);
+      elements.adminContentConfigList.querySelector(`[data-content-repository-index="${nextIndex}"] input`)?.focus();
     }
   }
 
@@ -4888,7 +5343,10 @@
     elements.adminPanels.forEach((panel) => { panel.hidden = panel.dataset.adminPanel !== activeName; });
     if (activeName === 'forms' && !adminFormsLoaded) loadAdminForms();
     if (activeName === 'dashboard' && !adminDashboardLoaded) loadAdminDashboardEditor();
-    if (activeName === 'content' && !adminContentLoaded) loadAdminContentStatus(false);
+    if (activeName === 'content') {
+      if (!adminContentLoaded) loadAdminContentStatus(false);
+      if (!adminContentConfigLoaded) loadAdminContentConfigurator(false);
+    }
     if (activeName === 'progress' && !adminProgressLoaded) loadAdminProgress(false);
     if (activeName === 'ai' && !adminAiLoaded) loadAdminAi(false);
     if (activeName === 'ai-usage' && !adminAiUsageLoaded) loadAdminAiUsage(false);
@@ -5050,6 +5508,18 @@
     elements.adminDashboardPreviewButton.addEventListener('click', previewAdminDashboard);
     elements.adminDashboardSave.addEventListener('click', saveAdminDashboard);
     elements.adminContentRefresh.addEventListener('click', () => loadAdminContentStatus(true));
+    elements.adminContentConfigAdd.addEventListener('click', addAdminContentRepository);
+    elements.adminContentConfigSave.addEventListener('click', () => saveAdminContentRepositories(false));
+    elements.adminContentConfigSaveDeploy.addEventListener('click', () => saveAdminContentRepositories(true));
+    elements.adminContentConfigDeploy.addEventListener('click', deployAdminContentConfiguration);
+    elements.adminContentConfigList.addEventListener('click', handleAdminContentConfigClick);
+    elements.adminContentConfigList.addEventListener('input', markAdminContentDraftDirty);
+    elements.adminContentConfigList.addEventListener('change', markAdminContentDraftDirty);
+    window.addEventListener('beforeunload', (event) => {
+      if (!adminContentConfigLoaded || adminContentConfigBusy || adminContentConfigPendingDeploy || !contentConfigHasUnsavedChanges()) return;
+      event.preventDefault();
+      event.returnValue = '';
+    });
     elements.adminProgressRefresh.addEventListener('click', () => loadAdminProgress(true));
     elements.adminProgressSaveSettings.addEventListener('click', saveAdminProgressSettings);
     elements.adminProgressMore.addEventListener('click', loadMoreAdminProgressUsers);
