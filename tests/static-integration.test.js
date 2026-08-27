@@ -260,12 +260,14 @@ test('members dashboard has a persistent accessible collapsible sidebar', () => 
   assert.match(styles, /\.nav-item\.is-active\s*\{[^}]*background:\s*#e6f8f4/s);
 });
 
-test('dashboard admin editor starts clean without hiding untouched static resources', () => {
+test('dashboard admin editor exposes the complete deployment file after load and restore', () => {
   const script = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.js'), 'utf8');
 
-  assert.match(script, /const DASHBOARD_OVERRIDE_STARTER\s*=\s*\[/);
-  assert.match(script, /adminDashboardSourceKind === 'static'\s*\?\s*DASHBOARD_OVERRIDE_STARTER\s*:\s*content/);
-  assert.match(script, /domyślne materiały znikną dopiero po opublikowaniu zmian/);
+  assert.doesNotMatch(script, /DASHBOARD_OVERRIDE_STARTER/);
+  assert.match(script, /const editorContent = ensureRequiredHelpSection\(content\)/);
+  assert.match(script, /elements\.adminDashboardSource\.value = editorContent/);
+  assert.match(script, /renderAdminDashboardPreview\(editorContent\)/);
+  assert.match(script, /pełny dashboard\.md z wdrożenia wraz ze wszystkimi przykładowymi klockami/);
   assert.match(script, /function ensureRequiredHelpSection\(content\)/);
   assert.match(script, /model = ensureRequiredDashboardModel\(model\)/);
   assert.match(script, /fetchStaticDashboard\(true\)/);

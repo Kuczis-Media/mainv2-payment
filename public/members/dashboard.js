@@ -28,17 +28,6 @@
     '- [Napisz do nas](/members/module/contact/?internal=Wiadomo%C5%9B%C4%87%20z%20panelu%20kursanta) — Wyślij wiadomość bez opuszczania platformy.'
   ]);
   const REQUIRED_HELP_SECTION = REQUIRED_HELP_SECTION_LINES.join('\n');
-  const DASHBOARD_OVERRIDE_STARTER = [
-    '# Twoja przestrzeń do nauki',
-    '',
-    'Materiały dodane przez prowadzącego pojawią się tutaj w osobnych działach.',
-    '',
-    '> Wybierz materiał z dashboardu albo skorzystaj z sekcji pomocy i ustawień konta.',
-    '',
-    '<!-- Dodaj własne działy ## i karty materiałów nad sekcją „Pomoc i konto”. -->',
-    '',
-    ...REQUIRED_HELP_SECTION_LINES
-  ].join('\n');
   const ACCESS_ROLE_OPTIONS = Object.freeze([
     { value: '', label: 'Brak dostępu' },
     { value: 'active', label: 'Stały dostęp' },
@@ -2893,9 +2882,7 @@
           adminDashboardSourceKind = 'blob';
         }
       }
-      const editorContent = ensureRequiredHelpSection(adminDashboardSourceKind === 'static'
-        ? DASHBOARD_OVERRIDE_STARTER
-        : content);
+      const editorContent = ensureRequiredHelpSection(content);
       elements.adminDashboardSource.value = editorContent;
       adminDashboardBaseline = editorContent;
       adminDashboardLoaded = true;
@@ -2904,7 +2891,7 @@
         elements.adminDashboardStatus,
         adminDashboardSourceKind === 'blob'
           ? 'Wczytano aktywną wersję zapisaną w Netlify.'
-          : 'Aktywna jest pełna wersja z dashboard.md. Edytor przygotował czysty układ; domyślne materiały znikną dopiero po opublikowaniu zmian.',
+          : 'Wczytano pełny dashboard.md z wdrożenia wraz ze wszystkimi przykładowymi klockami.',
         'info'
       );
     } catch (error) {
@@ -2992,9 +2979,10 @@
       const content = await fetchStaticDashboard(true);
       adminDashboardEtag = null;
       adminDashboardSourceKind = 'static';
-      adminDashboardBaseline = DASHBOARD_OVERRIDE_STARTER;
-      elements.adminDashboardSource.value = DASHBOARD_OVERRIDE_STARTER;
-      renderAdminDashboardPreview(DASHBOARD_OVERRIDE_STARTER);
+      const editorContent = ensureRequiredHelpSection(content);
+      adminDashboardBaseline = editorContent;
+      elements.adminDashboardSource.value = editorContent;
+      renderAdminDashboardPreview(editorContent);
       renderDashboard(parseMarkdown(content));
       setPanelStatus(
         elements.adminDashboardStatus,
