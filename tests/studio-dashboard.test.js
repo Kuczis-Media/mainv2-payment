@@ -60,7 +60,7 @@ test('sequential organizer round-trips and publishes ordered progress settings',
   assert.equal(runtime.sections[0].groups[0].items[1].href, '/members/module/pdf/?id=1PdfDriveId12345&type=1');
   const catalog = studio.toProgressCatalog(imported);
   assert.equal(catalog.nodes.find((node) => node.id === 'sequence-start').settings.navigation, 'sequential');
-  assert.equal(catalog.nodes.find((node) => node.title === 'Slajdy').settings.manualCompletion, true);
+  assert.equal(catalog.nodes.find((node) => node.title === 'Slajdy').settings.manualCompletion, false);
   assert.equal(catalog.nodes.find((node) => node.title === 'PDF').type, 'pdf');
   assert.equal(catalog.nodes.find((node) => node.title === 'Lekcja').settings.manualCompletion, false);
 });

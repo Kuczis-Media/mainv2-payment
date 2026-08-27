@@ -78,10 +78,21 @@
     return;
   }
 
+  async function markPresentationOpened() {
+    if (!progressApi || !progressMaterialId) return;
+    await progressApi.open({
+      materialId: progressMaterialId,
+      materialType: 'presentation'
+    }).catch(() => {});
+  }
+
   if (state.type === '5') {
+    await markPresentationOpened();
     window.location.replace(state.url);
     return;
   }
+
+  void markPresentationOpened();
 
   const directEmbedMode = state.type === '4';
   const protectedMode = state.type === '2';

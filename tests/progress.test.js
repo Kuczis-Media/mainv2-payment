@@ -138,6 +138,16 @@ test('opening a non-lesson leaf completes it while lessons and containers keep e
   assert.equal(openedPresentation.record.status, 'completed');
   assert.equal(openedPresentation.record.openCount, 1);
 
+  const legacyManualPresentation = progressCommon.normalizeCatalog({ nodes: [{
+    id: 'legacy-slides', type: 'presentation', progress: progress({ tracking: 'ON' }),
+    settings: { manualCompletion: true }
+  }] }).nodes[0];
+  const openedLegacyPresentation = merge(null, {
+    materialId: 'legacy-slides', materialType: 'presentation', action: 'open', opened: true
+  }, { node: legacyManualPresentation });
+  assert.equal(openedLegacyPresentation.record.progressPercent, 100);
+  assert.equal(openedLegacyPresentation.record.status, 'completed');
+
   const lessonNode = progressCommon.normalizeCatalog({ nodes: [{
     id: 'lesson', type: 'lesson', progress: progress({ tracking: 'ON' })
   }] }).nodes[0];
@@ -882,19 +892,8 @@ test('progress endpoint rejects opening a locked organizer step and unlocks it a
     materialId: 'slides-step', materialType: 'presentation', action: 'open', opened: true
   }), userContext);
   assert.equal(completedFirst.statusCode, 200);
-  assert.equal(JSON.parse(completedFirst.body).record.status, 'opened');
-  assert.equal(JSON.parse(completedFirst.body).completion.manualRequired, true);
-
-  const stillLocked = await progressFunction.handler(eventFor('POST', {
-    materialId: 'lesson-step', materialType: 'lesson', action: 'open', opened: true
-  }), userContext);
-  assert.equal(stillLocked.statusCode, 409);
-
-  const markedComplete = await progressFunction.handler(eventFor('POST', {
-    materialId: 'slides-step', materialType: 'presentation', action: 'complete'
-  }), userContext);
-  assert.equal(markedComplete.statusCode, 200);
-  assert.equal(JSON.parse(markedComplete.body).record.status, 'completed');
+  assert.equal(JSON.parse(completedFirst.body).record.status, 'completed');
+  assert.equal(JSON.parse(completedFirst.body).completion.manualRequired, false);
 
   const openedPdf = await progressFunction.handler(eventFor('POST', {
     materialId: 'pdf-step', materialType: 'pdf', action: 'open', opened: true

@@ -1445,8 +1445,9 @@ html[data-theme="dark"] .admin-timed-status.is-expired {
 
 .resource-accordion.is-sequential > .accordion-body > .card-grid {
   position: relative;
+  padding-left: 52px;
   grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
+  gap: 14px;
   margin-top: 0;
 }
 
@@ -1509,7 +1510,7 @@ html[data-theme="dark"] .accordion-children .accordion-children .accordion-child
 .resource-accordion.is-sequential .resource-card {
   display: grid;
   min-height: 116px;
-  padding: 18px 20px 18px 74px;
+  padding: 18px 20px;
   grid-template-columns: 44px minmax(0, 1fr);
   grid-template-areas:
     "icon title"
@@ -1524,8 +1525,8 @@ html[data-theme="dark"] .accordion-children .accordion-children .accordion-child
   position: absolute;
   z-index: 0;
   top: 34px;
-  bottom: -47px;
-  left: 36px;
+  bottom: -49px;
+  left: -33px;
   width: 2px;
   content: "";
   background: color-mix(in srgb, var(--primary) 34%, var(--line));
@@ -1567,7 +1568,7 @@ html[data-theme="dark"] .accordion-children .accordion-children .accordion-child
   position: absolute;
   z-index: 2;
   top: 18px;
-  left: 21px;
+  left: -49px;
   display: grid;
   width: 32px;
   height: 32px;
@@ -1614,6 +1615,10 @@ html[data-theme="dark"] .accordion-children .accordion-children .accordion-child
 .resource-card.is-sequence-locked p,
 .resource-card.is-sequence-locked .card-icon {
   opacity: .76;
+}
+
+.resource-accordion.is-sequential .resource-card::before {
+  display: none;
 }
 
 .resource-card::before {
@@ -4409,17 +4414,22 @@ html[data-theme="dark"] .admin-content-config-grid input {
     padding: 12px;
   }
 
+  .resource-accordion.is-sequential > .accordion-body > .card-grid {
+    padding-left: 38px;
+    gap: 12px;
+  }
+
   .resource-accordion.is-sequential .resource-card {
     min-height: 0;
-    padding: 16px 14px 16px 58px;
+    padding: 16px 14px;
     grid-template-columns: 36px minmax(0, 1fr);
     column-gap: 11px;
   }
 
   .resource-accordion.is-sequential .resource-card:not(:last-child)::after {
     top: 30px;
-    bottom: -43px;
-    left: 26px;
+    bottom: -42px;
+    left: -23px;
   }
 
   .resource-accordion.is-sequential .card-icon {
@@ -4436,7 +4446,7 @@ html[data-theme="dark"] .admin-content-config-grid input {
 
   .resource-accordion.is-sequential .sequence-step {
     top: 16px;
-    left: 12px;
+    left: -37px;
     width: 28px;
     height: 28px;
   }

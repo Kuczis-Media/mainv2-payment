@@ -151,6 +151,15 @@ test('protected PDF and Slides suppress every direct Google fallback link', () =
   }
 });
 
+test('Google Slides marks a presentation complete when its viewer is opened', () => {
+  const script = fs.readFileSync(path.join(moduleRoot, 'slides', 'script.js'), 'utf8');
+
+  assert.match(script, /async function markPresentationOpened\(\)/);
+  assert.match(script, /progressApi\.open\(\{[\s\S]*materialId:\s*progressMaterialId,[\s\S]*materialType:\s*'presentation'/);
+  assert.match(script, /if \(state\.type === '5'\)\s*\{[\s\S]*await markPresentationOpened\(\);[\s\S]*window\.location\.replace\(state\.url\)/);
+  assert.match(script, /void markPresentationOpened\(\)/);
+});
+
 test('PDF and Slides expose direct HTTPS modes 4 and 5 after hiding the source query', () => {
   for (const name of ['pdf', 'slides']) {
     const script = fs.readFileSync(path.join(moduleRoot, name, 'script.js'), 'utf8');

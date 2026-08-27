@@ -278,6 +278,8 @@ test('sequential dashboard path is compact, readable and responsive', () => {
   const styles = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.css'), 'utf8');
 
   assert.match(styles, /\.resource-accordion\.is-sequential \.resource-card\s*\{[^}]*display:\s*grid[^}]*min-height:\s*116px[^}]*grid-template-areas:/s);
+  assert.match(styles, /\.resource-accordion\.is-sequential > \.accordion-body > \.card-grid\s*\{[^}]*padding-left:\s*52px/s);
+  assert.match(styles, /\.resource-accordion\.is-sequential \.resource-card:not\(:last-child\)::after\s*\{[^}]*left:\s*-33px/s);
   assert.match(styles, /\.resource-accordion\.is-sequential \.card-icon\s*\{[^}]*grid-area:\s*icon/s);
   assert.match(styles, /\.resource-accordion\.is-sequential \.card-open\s*\{[^}]*grid-area:\s*action[^}]*border-radius:/s);
   assert.match(styles, /\.resource-card\.is-sequence-locked\s*\{[^}]*filter:\s*none[^}]*opacity:\s*1/s);

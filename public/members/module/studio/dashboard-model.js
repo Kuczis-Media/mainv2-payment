@@ -966,18 +966,17 @@
       });
     };
     append(normalized, null, 'course', normalized.title);
-    const visitBlocks = (blocks, parentId, parentNavigation = 'free') => {
+    const visitBlocks = (blocks, parentId) => {
       blocks.forEach((block) => {
         if (block.kind === 'group') {
           const type = block.level === 3 ? 'section' : block.level === 4 ? 'subsection' : 'other';
           append(block, parentId, type, block.title, {
             navigation: block.navigation === 'sequential' ? 'sequential' : 'free'
           });
-          visitBlocks(block.blocks, block.uid, block.navigation);
+          visitBlocks(block.blocks, block.uid);
         } else if (block.kind === 'module') {
           append(block, parentId, runtimeMaterialType(block), block.title, {
-            manualCompletion: block.module === 'quiz'
-              || (parentNavigation === 'sequential' && block.module === 'slides'),
+            manualCompletion: block.module === 'quiz',
             presentationMode: block.presentationMode,
             videoCompletionThreshold: block.videoCompletionThreshold,
             contentFile: block.module === 'lesson' ? block.file : '',
@@ -991,7 +990,7 @@
     };
     normalized.sections.forEach((section) => {
       append(section, normalized.uid, 'department', section.title);
-      visitBlocks(section.blocks, section.uid, 'free');
+      visitBlocks(section.blocks, section.uid);
     });
     return {
       version: 1,

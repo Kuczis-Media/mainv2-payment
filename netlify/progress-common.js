@@ -532,7 +532,7 @@ function mergeProgressEvent(existingInput, eventInput, context) {
   const completesOnOpen = event.action === 'open'
     && canTrack
     && context.isLeaf !== false
-    && node?.settings?.manualCompletion !== true
+    && (openedType === 'presentation' || node?.settings?.manualCompletion !== true)
     && !DOES_NOT_COMPLETE_ON_OPEN.has(openedType);
   if (event.action === 'open' && !canOpen && !completesOnOpen) {
     return { ok: true, record: existingInput || null, changed: false };

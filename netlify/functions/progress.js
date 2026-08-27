@@ -148,7 +148,7 @@ async function handleEvent(event, store, auth) {
       recordOpens: catalog.global.recordOpens
     },
     completion: {
-      manualRequired: node?.settings?.manualCompletion === true,
+      manualRequired: node?.settings?.manualCompletion === true && record?.materialType !== 'presentation',
       completed: record?.status === 'completed'
     }
   });
