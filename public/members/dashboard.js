@@ -719,9 +719,10 @@
       sequenceLabel.textContent = 'Po kolei';
       copy.append(sequenceLabel);
       cards.forEach((card, index) => {
+        const item = group.items[index];
         card.dataset.sequenceParent = group.id || '';
         card.dataset.sequenceIndex = String(index);
-        card.dataset.sequenceTitle = group.items[index]?.title || '';
+        card.dataset.sequenceTitle = item?.title || '';
         const step = document.createElement('span');
         step.className = 'sequence-step';
         step.textContent = String(index + 1);
@@ -736,6 +737,33 @@
           elements.message.className = 'dashboard-message';
           elements.message.textContent = card.title || 'Najpierw ukończ poprzedni krok organizera.';
         }, true);
+        link?.addEventListener('click', async (event) => {
+          if (card.dataset.sequenceLocked === 'true'
+            || item?.type !== 'presentation'
+            || event.button !== 0
+            || event.metaKey
+            || event.ctrlKey
+            || event.shiftKey
+            || event.altKey) return;
+          const destination = link.getAttribute('href');
+          if (!destination) return;
+          event.preventDefault();
+          const label = card.querySelector('.card-open');
+          if (label) label.textContent = 'Otwieram i zaliczam…';
+          const save = window.ChemProgress?.send({
+            materialId: item.id,
+            materialType: 'presentation',
+            action: 'complete',
+            opened: true
+          }, { keepalive: true }).catch(() => null);
+          if (save) {
+            await Promise.race([
+              save,
+              new Promise((resolve) => window.setTimeout(resolve, 1800))
+            ]);
+          }
+          window.location.assign(destination);
+        });
         setSequenceCardState(card, index > 0, null, group.items[index - 1]?.title || '');
       });
     }
@@ -965,7 +993,9 @@
     try {
       const state = await api.load({ force: Boolean(force) });
       const nodes = state?.aggregate?.nodes || {};
+      const records = state?.records || {};
       const access = state?.access || {};
+      const materialProgress = (id) => nodes[id] || records[id] || null;
       document.querySelectorAll('[data-sequence-parent]').forEach((card) => {
         const id = card.dataset.progressId;
         const index = Number(card.dataset.sequenceIndex) || 0;
@@ -973,17 +1003,23 @@
           .filter((item) => item.dataset.sequenceParent === card.dataset.sequenceParent)
           .sort((left, right) => Number(left.dataset.sequenceIndex) - Number(right.dataset.sequenceIndex));
         const previous = siblings.slice(0, index);
-        const fallbackLocked = previous.some((item) => nodes[item.dataset.progressId]?.status !== 'completed');
+        const fallbackLocked = previous.some((item) => materialProgress(item.dataset.progressId)?.status !== 'completed');
         const sequenceAccess = access[id];
-        const locked = sequenceAccess ? sequenceAccess.allowed === false : fallbackLocked;
-        const prerequisite = sequenceAccess?.prerequisiteTitle
-          || previous.find((item) => nodes[item.dataset.progressId]?.status !== 'completed')?.dataset.sequenceTitle
+        const currentCatalogSequence = siblings.every((item, siblingIndex) => {
+          const itemAccess = access[item.dataset.progressId];
+          return itemAccess?.sequenceId === card.dataset.sequenceParent
+            && itemAccess.step === siblingIndex + 1
+            && itemAccess.totalSteps === siblings.length;
+        });
+        const locked = currentCatalogSequence ? sequenceAccess?.allowed === false : fallbackLocked;
+        const prerequisite = (currentCatalogSequence ? sequenceAccess?.prerequisiteTitle : '')
+          || previous.find((item) => materialProgress(item.dataset.progressId)?.status !== 'completed')?.dataset.sequenceTitle
           || '';
-        setSequenceCardState(card, locked, nodes[id], prerequisite);
+        setSequenceCardState(card, locked, materialProgress(id), prerequisite);
       });
       document.querySelectorAll('[data-progress-host]').forEach((host) => {
         const id = host.dataset.progressHost;
-        const aggregate = nodes[id];
+        const aggregate = materialProgress(id);
         host.replaceChildren();
         if (!aggregate || aggregate.tracked === false || aggregate.showProgress === false || aggregate.trackedCount <= 0) {
           host.hidden = true;
@@ -5372,8 +5408,8 @@
     window.addEventListener('resize', requestNavigationSync, { passive: true });
     window.addEventListener('hashchange', handleLocationNavigation);
     window.addEventListener('popstate', handleLocationNavigation);
-    window.addEventListener('pageshow', (event) => {
-      if (event.persisted && dashboardLoadId > 0) hydrateDashboardProgress(null, true);
+    window.addEventListener('pageshow', () => {
+      if (dashboardLoadId > 0) hydrateDashboardProgress(null, true);
     });
     window.addEventListener('wheel', cancelNavigationIntent, { passive: true });
     window.addEventListener('touchstart', cancelNavigationIntent, { passive: true });
