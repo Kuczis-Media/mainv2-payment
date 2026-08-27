@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('node:crypto');
 const {
   json,
   mutationGuard,
@@ -11,12 +12,15 @@ const contentRepository = require('../content-repository.js');
 
 const NETLIFY_API_BASE = 'https://api.netlify.com/api/v1';
 const GITHUB_API_BASE = 'https://api.github.com';
-const API_TIMEOUT_MS = 12_000;
+// A save can make several sequential Netlify calls. Keep every individual
+// request bounded so the whole synchronous Function still has time to return
+// a useful JSON error instead of being terminated at the platform limit.
+const API_TIMEOUT_MS = 8_000;
 const MAX_BODY_BYTES = 32_768;
 const MAX_CONFIGURATION_BYTES = 5_000;
 const MAX_REPOSITORIES = 20;
-const GITHUB_TEST_CONCURRENCY = 5;
-const ENV_WRITE_CONCURRENCY = 5;
+const GITHUB_TEST_CONCURRENCY = 20;
+const ENV_WRITE_CONCURRENCY = 20;
 const SAFE_SITE_ID = /^[A-Za-z0-9_-]{1,128}$/;
 const SAFE_REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const SAFE_REPOSITORY_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
@@ -75,7 +79,10 @@ async function handleAction(body, actorId) {
   if (action === 'test') {
     assertOnlyFields(body, ['action', 'repository']);
     const current = currentConfiguration().repositories;
-    const repository = normalizeRepository(body.repository, 0, current, { single: true });
+    // Use the same tokenEnv selection rule as save. This matters during
+    // recovery from an invalid/empty configuration on Free, where the UI may
+    // point the first default repository at GITHUB_CONTENT_TOKEN.
+    const repository = normalizeRepository(body.repository, 0, current);
     const token = resolveToken(repository, body.repository, current);
     await testGitHubRepository(repository, token);
     return { test: { status: 'ok' }, repository: publicAdminRepository({ ...repository, token }) };
@@ -98,10 +105,11 @@ async function handleAction(body, actorId) {
   validateRepositorySet(repositories);
   resolveRepositoryTokens(repositories, input, current);
   const serializedConfiguration = serializeRepositoryConfiguration(repositories);
-  await testGitHubRepositories(repositories);
-
   const config = requiredNetlifyConfig();
-  const site = await readNetlifySite(config);
+  const [, site] = await Promise.all([
+    testGitHubRepositories(repositories),
+    readNetlifySite(config)
+  ]);
   if (action === 'save-and-deploy' && site.buildsStopped) throw apiError('NETLIFY_BUILDS_STOPPED', 409);
   const environment = await persistEnvironment(config, site, repositories, serializedConfiguration);
   let deployment = null;
@@ -141,7 +149,7 @@ function currentConfiguration() {
   }
 }
 
-function normalizeRepository(value, index, current, options = {}) {
+function normalizeRepository(value, index, current) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw apiError('INVALID_CONTENT_REPOSITORIES', 400);
   const allowed = new Set(['id', 'label', 'repository', 'ref', 'root', 'default', 'secret']);
   if (Object.keys(value).some((key) => !allowed.has(key))) throw apiError('UNEXPECTED_FIELDS', 400);
@@ -153,7 +161,7 @@ function normalizeRepository(value, index, current, options = {}) {
   const existing = current.find((entry) => entry.id === id);
   const tokenEnv = existing && SAFE_TOKEN_ENV.test(existing.tokenEnv || '')
     ? existing.tokenEnv
-    : (!options.single && value.default === true && !current.some((entry) => (
+    : (value.default === true && !current.some((entry) => (
       entry.tokenEnv === 'GITHUB_CONTENT_TOKEN' && (entry.token || entry.repository)
     ))
       ? 'GITHUB_CONTENT_TOKEN'
@@ -181,6 +189,9 @@ function validateRepositorySet(repositories) {
   let defaults = 0;
   for (const repository of repositories) {
     if (ids.has(repository.id)) throw apiError('INVALID_CONTENT_REPOSITORIES', 400);
+    if (repository.id === 'default' && !repository.default) {
+      throw apiError('CONTENT_REPOSITORY_DEFAULT_ID_RESERVED', 400);
+    }
     ids.add(repository.id);
     if (repository.default) defaults += 1;
   }
@@ -214,11 +225,26 @@ function resolveRepositoryTokens(repositories, rawEntries, current) {
       token = clean(existing && existing.token) || clean(process.env[tokenEnv]);
     }
     if (!token) throw apiError('GITHUB_CONTENT_TOKEN_REQUIRED', 400);
+    // Every PAT supplied through the panel is staged under a fresh key. This
+    // keeps first-time concurrent saves as safe as rotations: whichever
+    // repository list wins can only reference the token created by that same
+    // request. Blank/manual Free flows retain their deterministic key.
+    const resolvedTokenEnv = distinct[0]
+      ? rotatedTokenEnvironment(tokenEnv)
+      : tokenEnv;
     indexes.forEach((index) => {
       repositories[index].token = token;
       repositories[index].tokenSupplied = Boolean(distinct[0]);
+      repositories[index].tokenEnv = resolvedTokenEnv;
     });
   }
+}
+
+function rotatedTokenEnvironment(tokenEnv) {
+  const base = String(tokenEnv || '').replace(/_R_[A-F0-9]{12}$/, '');
+  const value = `${base}_R_${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
+  if (!SAFE_TOKEN_ENV.test(value)) throw apiError('INVALID_CONTENT_REPOSITORIES', 400);
+  return value;
 }
 
 function normalizedSecret(value) {
@@ -241,22 +267,22 @@ async function testGitHubRepository(repository, token) {
   const path = repository.root
     ? `/contents/${repository.root.split('/').map(encodeURIComponent).join('/')}`
     : '/contents';
-  const url = new URL(`${GITHUB_API_BASE}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}${path}`);
-  url.searchParams.set('ref', repository.ref);
-  const response = await request(url, {
-    headers: {
-      Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${token}`,
-      'User-Agent': 'ChemDisk-content-configurator',
-      'X-GitHub-Api-Version': contentRepository.GITHUB_API_VERSION
-    }
-  });
-  if (response.status === 429 || (response.status === 403 && response.headers && response.headers.get('x-ratelimit-remaining') === '0')) {
-    throw apiError('GITHUB_CONTENT_RATE_LIMITED', 429);
-  }
-  if (response.status === 401 || response.status === 403) throw apiError('GITHUB_CONTENT_TOKEN_REJECTED', 400);
-  if (response.status === 404) throw apiError('CONTENT_REPOSITORY_NOT_FOUND', 404);
-  if (!response.ok) throw apiError('CONTENT_REPOSITORY_UNAVAILABLE', 502);
+  const repositoryPath = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
+  const contentsUrl = new URL(`${GITHUB_API_BASE}${repositoryPath}${path}`);
+  contentsUrl.searchParams.set('ref', repository.ref);
+  const branchUrl = new URL(`${GITHUB_API_BASE}${repositoryPath}/branches/${encodeURIComponent(repository.ref)}`);
+  const headers = {
+    Accept: 'application/vnd.github+json',
+    Authorization: `Bearer ${token}`,
+    'User-Agent': 'ChemDisk-content-configurator',
+    'X-GitHub-Api-Version': contentRepository.GITHUB_API_VERSION
+  };
+  const [branchResponse, response] = await Promise.all([
+    request(branchUrl, { headers }),
+    request(contentsUrl, { headers })
+  ]);
+  assertGitHubAccessResponse(branchResponse, 'CONTENT_REPOSITORY_BRANCH_NOT_FOUND');
+  assertGitHubAccessResponse(response, 'CONTENT_REPOSITORY_NOT_FOUND');
   let contents;
   try {
     contents = await response.json();
@@ -264,6 +290,15 @@ async function testGitHubRepository(repository, token) {
     throw apiError('CONTENT_REPOSITORY_INVALID_RESPONSE', 502);
   }
   if (!Array.isArray(contents)) throw apiError('CONTENT_REPOSITORY_ROOT_NOT_DIRECTORY', 400);
+}
+
+function assertGitHubAccessResponse(response, notFoundCode) {
+  if (response.status === 429 || (response.status === 403 && response.headers && response.headers.get('x-ratelimit-remaining') === '0')) {
+    throw apiError('GITHUB_CONTENT_RATE_LIMITED', 429);
+  }
+  if (response.status === 401 || response.status === 403) throw apiError('GITHUB_CONTENT_TOKEN_REJECTED', 400);
+  if (response.status === 404) throw apiError(notFoundCode, 404);
+  if (!response.ok) throw apiError('CONTENT_REPOSITORY_UNAVAILABLE', 502);
 }
 
 async function testGitHubRepositories(repositories) {
@@ -316,6 +351,7 @@ async function persistEnvironment(config, site, repositories, serializedConfigur
   if (!listResponse.ok) throw apiError('NETLIFY_CONTENT_CONFIG_UNAVAILABLE', 502);
   const variables = await readJson(listResponse);
   if (!Array.isArray(variables)) throw apiError('NETLIFY_CONTENT_CONFIG_RESPONSE_INVALID', 502);
+  assertNoPendingRepositoryConfiguration(variables);
   const existingKeys = new Set(variables.map((entry) => clean(entry && entry.key)).filter(Boolean));
 
   // Write secrets first. If the final repository list fails, unused secret
@@ -413,6 +449,29 @@ function environmentVariableBody(site, key, value, secret) {
     is_secret: Boolean(secret),
     ...(site.granularScopes ? { scopes: ['functions'] } : {})
   };
+}
+
+function assertNoPendingRepositoryConfiguration(variables) {
+  const entry = variables.find((variable) => clean(variable && variable.key) === 'GITHUB_CONTENT_REPOSITORIES');
+  const deployed = clean(process.env.GITHUB_CONTENT_REPOSITORIES);
+  if (!entry) {
+    if (deployed) throw apiError('CONTENT_REPOSITORY_CONFIG_PENDING_DEPLOY', 409);
+    return;
+  }
+  const values = Array.isArray(entry.values) ? entry.values : [];
+  const selected = values.find((value) => clean(value && value.context) === 'production')
+    || values.find((value) => clean(value && value.context) === 'all');
+  if (!selected || typeof selected.value !== 'string') return;
+  if (canonicalConfigurationValue(selected.value) !== canonicalConfigurationValue(deployed)) {
+    throw apiError('CONTENT_REPOSITORY_CONFIG_PENDING_DEPLOY', 409);
+  }
+}
+
+function canonicalConfigurationValue(value) {
+  const source = clean(value);
+  if (!source) return '';
+  try { return JSON.stringify(JSON.parse(source)); }
+  catch { return source; }
 }
 
 function assertEnvironmentWriteResponse(response, secret) {
@@ -548,11 +607,13 @@ function enqueueMutation(operation) {
 
 exports._test = {
   allowsConfigurationMutation,
+  assertNoPendingRepositoryConfiguration,
   currentConfiguration,
   isSafeRepository,
   normalizeRepository,
   publicAdminRepository,
   resolveRepositoryTokens,
+  rotatedTokenEnvironment,
   serializeRepositoryConfiguration,
   supportsGranularScopes,
   tokenEnvironmentForId,

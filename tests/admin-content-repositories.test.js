@@ -125,18 +125,20 @@ test('save-and-deploy tests GitHub, writes scoped Netlify variables and queues a
   assert.doesNotMatch(response.body, /github_pat_/);
 
   const githubRequests = requests.filter((request) => request.url.startsWith('https://api.github.com/'));
-  assert.equal(githubRequests.length, 2);
-  assert.match(githubRequests[1].url, /owner\/organic\/contents\/kurs\?ref=publikacja/);
-  assert.equal(githubRequests[1].headers.Authorization, 'Bearer github_pat_organic_secret_123456');
+  assert.equal(githubRequests.length, 4);
+  const organicBranchRequest = githubRequests.find((request) => /owner\/organic\/branches\/publikacja/.test(request.url));
+  const organicContentsRequest = githubRequests.find((request) => /owner\/organic\/contents\/kurs\?ref=publikacja/.test(request.url));
+  assert.ok(organicBranchRequest);
+  assert.ok(organicContentsRequest);
+  assert.equal(organicBranchRequest.headers.Authorization, 'Bearer github_pat_organic_secret_123456');
+  assert.equal(organicContentsRequest.headers.Authorization, 'Bearer github_pat_organic_secret_123456');
 
   const environmentWrites = requests.filter((request) => request.url.includes('/accounts/account-id/env?') && request.method === 'POST');
   assert.equal(environmentWrites.length, 2);
   const batches = environmentWrites.map((request) => JSON.parse(request.body));
   assert.ok(batches.every((body) => Array.isArray(body) && body.length >= 1));
-  assert.deepEqual(batches[0].map((body) => body.key), [
-    'GITHUB_CONTENT_TOKEN',
-    'GITHUB_CONTENT_TOKEN_ORGANICZNA'
-  ]);
+  assert.match(batches[0][0].key, /^GITHUB_CONTENT_TOKEN_R_[A-F0-9]{12}$/);
+  assert.match(batches[0][1].key, /^GITHUB_CONTENT_TOKEN_ORGANICZNA_R_[A-F0-9]{12}$/);
   assert.ok(batches[0].every((body) => body.is_secret === true));
   assert.equal(batches[1].length, 1);
   assert.equal(batches[1][0].key, 'GITHUB_CONTENT_REPOSITORIES');
@@ -144,7 +146,7 @@ test('save-and-deploy tests GitHub, writes scoped Netlify variables and queues a
   assert.ok(batches.flat().every((body) => body.scopes.length === 1 && body.scopes[0] === 'functions'));
   assert.ok(batches.flat().every((body) => body.values[0].context === 'production'));
   const savedRepositories = JSON.parse(batches[1][0].values[0].value);
-  assert.equal(savedRepositories[1].tokenEnv, 'GITHUB_CONTENT_TOKEN_ORGANICZNA');
+  assert.deepEqual(savedRepositories.map((repository) => repository.tokenEnv), batches[0].map((body) => body.key));
 });
 
 test('save rejects missing default and performs no external mutation', async (t) => {
@@ -172,6 +174,10 @@ test('token names are deterministic and validation rejects duplicate IDs', () =>
     { id: 'chemia', tokenEnv: 'GITHUB_CONTENT_TOKEN', default: true },
     { id: 'chemia', tokenEnv: 'GITHUB_CONTENT_TOKEN_INNE', default: false }
   ]), (error) => error.code === 'INVALID_CONTENT_REPOSITORIES');
+  assert.throws(() => adminRepositories._test.validateRepositorySet([
+    { id: 'default', tokenEnv: 'GITHUB_CONTENT_TOKEN', default: false },
+    { id: 'nowe', tokenEnv: 'GITHUB_CONTENT_TOKEN_NOWE', default: true }
+  ]), (error) => error.code === 'CONTENT_REPOSITORY_DEFAULT_ID_RESERVED');
   assert.equal(adminRepositories._test.supportsGranularScopes({ plan: 'free' }), false);
   assert.equal(adminRepositories._test.supportsGranularScopes({ plan: 'starter' }), false);
   assert.equal(adminRepositories._test.supportsGranularScopes({ plan: 'personal' }), false);
@@ -218,7 +224,7 @@ test('existing shared token is preserved without rewriting its secret and Netlif
     if (request.method === 'GET' && request.url.includes('/accounts/account-id/env?')) {
       return responseJson([
         { key: 'GITHUB_CONTENT_TOKEN', is_secret: true, values: [{ value: '***', context: 'all' }] },
-        { key: 'GITHUB_CONTENT_REPOSITORIES', is_secret: false, values: [{ value: 'existing', context: 'all' }] }
+        { key: 'GITHUB_CONTENT_REPOSITORIES', is_secret: false }
       ]);
     }
     if (request.method === 'PUT' && request.url.includes('/accounts/account-id/env/GITHUB_CONTENT_REPOSITORIES?')) {
@@ -259,6 +265,62 @@ test('existing shared token is preserved without rewriting its secret and Netlif
     'GITHUB_CONTENT_TOKEN',
     'GITHUB_CONTENT_TOKEN'
   ]);
+});
+
+test('rotating an existing PAT stages a versioned secret before switching the repository list', async (t) => {
+  const oldToken = 'github_pat_existing_rotation_secret_123456789';
+  const newToken = 'github_pat_replacement_rotation_secret_987654321';
+  installEnvironment(t, {
+    github: {
+      GITHUB_CONTENT_TOKEN: oldToken,
+      GITHUB_CONTENT_REPOSITORIES: JSON.stringify([{
+        id: 'default', label: 'Główne', repository: 'owner/materials', ref: 'main', root: '',
+        tokenEnv: 'GITHUB_CONTENT_TOKEN', default: true
+      }])
+    }
+  });
+  const requests = [];
+  installFetch(t, async (url, options = {}) => {
+    const request = {
+      url: String(url), method: options.method || 'GET', body: options.body || '', headers: options.headers || {}
+    };
+    requests.push(request);
+    if (request.url.endsWith('/user')) return responseJson(canonicalAdmin);
+    if (request.url.startsWith('https://api.github.com/')) {
+      assert.equal(request.headers.Authorization, `Bearer ${newToken}`);
+      return responseJson([]);
+    }
+    if (request.url === `https://api.netlify.com/api/v1/sites/${SITE_ID}`) {
+      return responseJson({ id: SITE_ID, account_id: 'account-id', name: 'chemdisk', plan: 'pro', build_settings: {} });
+    }
+    if (request.method === 'GET' && request.url.includes('/accounts/account-id/env?')) {
+      return responseJson([{ key: 'GITHUB_CONTENT_TOKEN' }, { key: 'GITHUB_CONTENT_REPOSITORIES' }]);
+    }
+    if (request.method === 'POST' && request.url.includes('/accounts/account-id/env?')) return responseJson([], 201);
+    if (request.method === 'PUT' && request.url.includes('/env/GITHUB_CONTENT_REPOSITORIES?')) {
+      return responseJson({ message: 'write failed' }, 500);
+    }
+    throw new Error(`Unexpected request ${request.method} ${request.url}`);
+  });
+
+  const response = await adminRepositories.handler(eventFor({
+    httpMethod: 'POST', headers: mutationHeaders(),
+    body: JSON.stringify({ action: 'save', repositories: [{
+      id: 'default', label: 'Główne', repository: 'owner/materials', ref: 'main', root: '',
+      default: true, secret: newToken
+    }] })
+  }), contextFor());
+
+  assert.equal(response.statusCode, 502);
+  assert.deepEqual(JSON.parse(response.body), { error: 'NETLIFY_CONTENT_CONFIG_WRITE_FAILED' });
+  assert.equal(requests.some((request) => request.method === 'PUT' && /\/env\/GITHUB_CONTENT_TOKEN\?/.test(request.url)), false);
+  const secretCreate = requests.find((request) => request.method === 'POST' && request.url.includes('/accounts/account-id/env?'));
+  const [secretVariable] = JSON.parse(secretCreate.body);
+  assert.match(secretVariable.key, /^GITHUB_CONTENT_TOKEN_R_[A-F0-9]{12}$/);
+  assert.equal(secretVariable.values[0].value, newToken);
+  const configWrite = requests.find((request) => request.method === 'PUT' && request.url.includes('/env/GITHUB_CONTENT_REPOSITORIES?'));
+  const [savedRepository] = JSON.parse(JSON.parse(configWrite.body).values[0].value);
+  assert.equal(savedRepository.tokenEnv, secretVariable.key);
 });
 
 test('deploy previews cannot test, save or deploy production repository settings', async (t) => {
@@ -317,6 +379,57 @@ test('GitHub repository test rejects a file as root and malformed successful res
   }), contextFor());
   assert.equal(malformedResponse.statusCode, 502);
   assert.deepEqual(JSON.parse(malformedResponse.body), { error: 'CONTENT_REPOSITORY_INVALID_RESPONSE' });
+});
+
+test('GitHub repository test rejects a missing branch before accepting its root', async (t) => {
+  installEnvironment(t);
+  installFetch(t, async (url) => {
+    const requestUrl = String(url);
+    if (requestUrl.endsWith('/user')) return responseJson(canonicalAdmin);
+    if (requestUrl.includes('/branches/brak-galezi')) return responseJson({ message: 'Not Found' }, 404);
+    if (requestUrl.startsWith('https://api.github.com/')) return responseJson([]);
+    throw new Error(`Unexpected request ${url}`);
+  });
+
+  const response = await adminRepositories.handler(eventFor({
+    httpMethod: 'POST', headers: mutationHeaders(),
+    body: JSON.stringify({ action: 'test', repository: {
+      id: 'glowne', label: 'Główne', repository: 'owner/materials', ref: 'brak-galezi', root: '',
+      default: true, secret: 'github_pat_missing_branch_secret_123456'
+    } })
+  }), contextFor());
+
+  assert.equal(response.statusCode, 404);
+  assert.deepEqual(JSON.parse(response.body), { error: 'CONTENT_REPOSITORY_BRANCH_NOT_FOUND' });
+});
+
+test('test and save choose the same base token for the first default repository', async (t) => {
+  const token = 'github_pat_invalid_config_recovery_123456789';
+  installEnvironment(t, {
+    github: {
+      GITHUB_CONTENT_TOKEN: token,
+      GITHUB_CONTENT_REPOSITORIES: '{invalid-json'
+    }
+  });
+  installFetch(t, async (url, options = {}) => {
+    if (String(url).endsWith('/user')) return responseJson(canonicalAdmin);
+    if (String(url).startsWith('https://api.github.com/')) {
+      assert.equal(options.headers.Authorization, `Bearer ${token}`);
+      return responseJson([]);
+    }
+    throw new Error(`Unexpected request ${options.method || 'GET'} ${url}`);
+  });
+
+  const response = await adminRepositories.handler(eventFor({
+    httpMethod: 'POST', headers: mutationHeaders(),
+    body: JSON.stringify({ action: 'test', repository: {
+      id: 'default', label: 'Główne', repository: 'owner/materials', ref: 'main', root: '',
+      default: true, secret: ''
+    } })
+  }), contextFor());
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(JSON.parse(response.body).repository.tokenEnv, 'GITHUB_CONTENT_TOKEN');
 });
 
 test('repository configuration exceeding the Netlify ENV limit is rejected before external repository or Netlify calls', async (t) => {
@@ -427,17 +540,65 @@ test('save-and-deploy reports saved ENV when Netlify cannot queue the build', as
   }), contextFor());
 
   assert.equal(response.statusCode, 200, response.body);
-  assert.deepEqual(JSON.parse(response.body), {
-    saved: true,
-    requiresDeploy: true,
-    scopes: ['functions'],
-    repositories: [{
-      id: 'default', label: 'Główne', repository: 'owner/materials', ref: 'main', root: '', default: true,
-      tokenConfigured: true, tokenEnv: 'GITHUB_CONTENT_TOKEN'
-    }],
-    deploymentError: 'NETLIFY_DEPLOY_START_FAILED'
+  const payload = JSON.parse(response.body);
+  assert.equal(payload.saved, true);
+  assert.equal(payload.requiresDeploy, true);
+  assert.deepEqual(payload.scopes, ['functions']);
+  assert.equal(payload.deploymentError, 'NETLIFY_DEPLOY_START_FAILED');
+  const { tokenEnv, ...visibleRepository } = payload.repositories[0];
+  assert.deepEqual(visibleRepository, {
+    id: 'default', label: 'Główne', repository: 'owner/materials', ref: 'main', root: '', default: true,
+    tokenConfigured: true
   });
+  assert.match(tokenEnv, /^GITHUB_CONTENT_TOKEN_R_[A-F0-9]{12}$/);
   assert.equal(requests.filter((request) => request.url.includes('/accounts/account-id/env?') && request.method === 'POST').length, 2);
+});
+
+test('a newer ENV configuration waiting for deploy blocks a stale Function instance', async (t) => {
+  const token = 'github_pat_pending_deploy_secret_123456789';
+  const deployedConfiguration = JSON.stringify([{
+    id: 'default', label: 'Wersja wdrożona', repository: 'owner/materials', ref: 'main', root: '',
+    tokenEnv: 'GITHUB_CONTENT_TOKEN', default: true
+  }]);
+  const pendingConfiguration = JSON.stringify([{
+    id: 'default', label: 'Wersja oczekująca', repository: 'owner/materials', ref: 'main', root: '',
+    tokenEnv: 'GITHUB_CONTENT_TOKEN', default: true
+  }]);
+  installEnvironment(t, {
+    github: {
+      GITHUB_CONTENT_TOKEN: token,
+      GITHUB_CONTENT_REPOSITORIES: deployedConfiguration
+    }
+  });
+  const requests = [];
+  installFetch(t, async (url, options = {}) => {
+    const request = { url: String(url), method: options.method || 'GET', body: options.body || '' };
+    requests.push(request);
+    if (request.url.endsWith('/user')) return responseJson(canonicalAdmin);
+    if (request.url.startsWith('https://api.github.com/')) return responseJson([]);
+    if (request.url === `https://api.netlify.com/api/v1/sites/${SITE_ID}`) {
+      return responseJson({ id: SITE_ID, account_id: 'account-id', name: 'chemdisk', plan: 'pro', build_settings: {} });
+    }
+    if (request.method === 'GET' && request.url.includes('/accounts/account-id/env?')) {
+      return responseJson([
+        { key: 'GITHUB_CONTENT_TOKEN' },
+        { key: 'GITHUB_CONTENT_REPOSITORIES', values: [{ context: 'production', value: pendingConfiguration }] }
+      ]);
+    }
+    throw new Error(`Unexpected mutation ${request.method} ${request.url}`);
+  });
+
+  const response = await adminRepositories.handler(eventFor({
+    httpMethod: 'POST', headers: mutationHeaders(),
+    body: JSON.stringify({ action: 'save', repositories: [{
+      id: 'default', label: 'Jeszcze nowsza', repository: 'owner/materials', ref: 'main', root: '',
+      default: true, secret: ''
+    }] })
+  }), contextFor());
+
+  assert.equal(response.statusCode, 409);
+  assert.deepEqual(JSON.parse(response.body), { error: 'CONTENT_REPOSITORY_CONFIG_PENDING_DEPLOY' });
+  assert.equal(requests.some((request) => ['POST', 'PUT'].includes(request.method) && request.url.includes('/env')), false);
 });
 
 test('personal plan omits granular scopes from Netlify create requests', async (t) => {

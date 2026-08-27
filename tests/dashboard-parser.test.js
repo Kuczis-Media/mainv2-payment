@@ -57,21 +57,30 @@ Tekst wewnętrzny.
   assert.deepEqual(model.sections[0].groups[0].groups[0].notices, ['Ważny komunikat.']);
 });
 
-test('default dashboard keeps the original resources until an administrator publishes an override', () => {
+test('default dashboard restores only the curated organic chemistry examples', () => {
   const source = fs.readFileSync(
     path.join(__dirname, '..', 'public', 'members', 'dashboard.md'),
     'utf8'
   );
   const model = parse(source);
 
-  assert.equal(model.title, 'Twoja przestrzeń do nauki');
+  assert.equal(model.title, 'Przykładowy kurs chemii organicznej');
   assert.deepEqual(model.sections.map((section) => section.title), [
-    'Materiały kursowe',
-    'Ćwiczenia i powtórki',
-    'Tablice i kalkulatory',
-    'Laboratorium modułów',
+    'Kurs przykładowy',
+    'Materiały Google i filmy',
+    'Narzędzia Studio',
     'Pomoc i konto'
   ]);
+  assert.equal(model.sections[0].groups[0].navigation, 'sequential');
+  assert.deepEqual(
+    model.sections[0].groups[0].items.map((item) => item.title),
+    [
+      '1. Aldehydy — Google Slides',
+      '2. Chemia organiczna — kompletna lekcja',
+      '3. Chemia organiczna — quiz',
+      '4. Chemia organiczna — egzamin'
+    ]
+  );
   assert.deepEqual(
     model.sections.at(-1).items.map((item) => item.title),
     ['Status dostępu', 'Napisz do nas']

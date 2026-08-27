@@ -99,7 +99,10 @@
     CONTENT_REPOSITORY_NOT_FOUND: 'Nie znaleziono repozytorium, katalogu lub wybranej gałęzi.',
     CONTENT_REPOSITORY_UNAVAILABLE: 'GitHub jest chwilowo niedostępny.',
     CONTENT_REPOSITORY_ADMIN_UNAVAILABLE: 'Konfigurator repozytoriów jest chwilowo niedostępny.',
+    CONTENT_REPOSITORY_BRANCH_NOT_FOUND: 'Nie znaleziono wskazanej gałęzi w tym repozytorium. Sprawdź pole „Gałąź” (np. main).',
+    CONTENT_REPOSITORY_CONFIG_PENDING_DEPLOY: 'W Netlify jest już nowsza konfiguracja oczekująca na deploy. Uruchom deploy, poczekaj na jego zakończenie i odśwież stronę.',
     CONTENT_REPOSITORY_DEFAULT_REQUIRED: 'Wybierz dokładnie jedno repozytorium domyślne.',
+    CONTENT_REPOSITORY_DEFAULT_ID_RESERVED: 'ID „default” jest zarezerwowane dla repozytorium domyślnego. Zaznacz ten wpis jako domyślny albo nadaj mu inne ID.',
     CONTENT_REPOSITORY_PRODUCTION_REQUIRED: 'Repozytoria można zmieniać tylko z produkcyjnego wdrożenia ChemDisk. Otwórz główny adres witryny Netlify.',
     CONTENT_REPOSITORY_ROOT_NOT_DIRECTORY: 'Wskazany katalog główny jest plikiem, a nie folderem. Popraw pole „Katalog główny”.',
     CONTENT_REPOSITORY_SHARED_TOKEN_CONFLICT: 'Repozytoria korzystające z tej samej zmiennej ENV otrzymały różne tokeny. Wklej ten sam token tylko raz albo użyj osobnych zmiennych GITHUB_CONTENT_TOKEN_*.',
@@ -121,7 +124,7 @@
     EXPECTED_ETAG_REQUIRED: 'Wczytaj dashboard ponownie przed zapisaniem zmian.',
     FIRST_AND_LAST_NAME_REQUIRED: 'Uzupełnij poprawne imię i nazwisko użytkownika.',
     FORM_NOT_FOUND: 'Nie znaleziono tego formularza.',
-    GITHUB_CONTENT_TOKEN_REJECTED: 'Token GitHub jest nieprawidłowy albo nie ma uprawnienia Contents: Read and write.',
+    GITHUB_CONTENT_TOKEN_REJECTED: 'Token GitHub jest nieprawidłowy albo nie ma dostępu Contents do wskazanego repozytorium.',
     GITHUB_CONTENT_WRITE_REJECTED: 'Token GitHub nie ma uprawnienia Contents: Read and write do wybranego repozytorium.',
     IDENTITY_ADMIN_UNAVAILABLE: 'Administracja kontami jest chwilowo niedostępna.',
     IDENTITY_DELETE_FAILED: 'Nie udało się usunąć konta z Identity.',
@@ -159,7 +162,7 @@
     NETLIFY_CONTENT_CONFIG_UNAVAILABLE: 'API Netlify jest chwilowo niedostępne.',
     NETLIFY_CONTENT_CONFIG_WRITE_FAILED: 'Netlify nie zapisał zmiennych środowiskowych.',
     NETLIFY_CONTENT_SECRET_WRITE_FAILED: 'Netlify nie zapisał tokenu jako sekretu. Żadna jawna wersja PAT nie została utworzona; sprawdź ustawienia ENV i spróbuj ponownie.',
-    NETLIFY_DEPLOY_START_FAILED: 'Zmienne zapisano, ale Netlify nie uruchomił deployu. Użyj przycisku „Uruchom tylko deploy”.',
+    NETLIFY_DEPLOY_START_FAILED: 'Netlify nie uruchomił deployu. Sprawdź stan projektu i spróbuj ponownie przyciskiem „Uruchom tylko deploy”.',
     NETLIFY_SECRETS_CONTROLLER_REQUIRED: 'Automatyczny zapis PAT wymaga Netlify Secrets Controller (plan Personal lub wyższy). Na Free utwórz wskazaną zmienną GITHUB_CONTENT_TOKEN_* ręcznie, wykonaj deploy i pozostaw pole tokenu puste.',
     NO_CHANGES: 'Nie wskazano żadnych zmian do zapisania.',
     INVALID_PAYMENT_ACTION: 'Wybrano nieprawidłową operację płatności.',
@@ -1107,79 +1110,16 @@
   async function loadDashboard() {
     const loadId = ++dashboardLoadId;
     elements.content.setAttribute('aria-busy', 'true');
-    const libraryLessonsPromise = fetchLibraryLessons();
     try {
       const markdown = await fetchActiveDashboard();
       const model = parseMarkdown(markdown);
       if (!model.sections.length) throw new Error('Plik materiałów nie zawiera jeszcze żadnego działu.');
+      if (loadId !== dashboardLoadId) return;
       renderDashboard(model);
-      libraryLessonsPromise.then((libraryLessons) => {
-        if (loadId !== dashboardLoadId || !libraryLessons.length) return;
-        appendLibraryLessons(model, libraryLessons);
-        renderDashboard(model);
-      });
     } catch (error) {
       if (loadId !== dashboardLoadId) return;
       showContentError(error);
     }
-  }
-
-  async function fetchLibraryLessons() {
-    const library = window.ChemContentLibrary;
-    if (!library || typeof library.list !== 'function') return [];
-    try {
-      return await library.list('lesson');
-    } catch (error) {
-      if (!['CONTENT_REPOSITORY_NOT_CONFIGURED', 'CONTENT_DIRECTORY_NOT_FOUND'].includes(error && error.code)) {
-        console.warn('Nie udało się dołączyć biblioteki lekcji', error && error.code);
-      }
-      return [];
-    }
-  }
-
-  function appendLibraryLessons(model, assets) {
-    if (!Array.isArray(assets) || !assets.length) return model;
-    const existingFiles = new Set();
-    const collectItems = (items) => {
-      (items || []).forEach((item) => {
-        try {
-          const url = new URL(item.href, window.location.origin);
-          if (!/\/members\/module\/lesson\/?$/.test(url.pathname)) return;
-          const filename = url.searchParams.get('file');
-          if (filename) existingFiles.add(filename.toLocaleLowerCase('pl'));
-        } catch (_) {}
-      });
-    };
-    const collectGroups = (groups) => {
-      (groups || []).forEach((group) => {
-        collectItems(group.items);
-        collectGroups(group.groups);
-      });
-    };
-    model.sections.forEach((section) => {
-      collectItems(section.items);
-      collectGroups(section.groups);
-    });
-    const items = assets
-      .filter((asset) => !existingFiles.has(String(asset.filename || '').toLocaleLowerCase('pl')))
-      .map((asset) => ({
-        title: asset.title || asset.filename,
-        description: asset.description || 'Interaktywna lekcja z prywatnej biblioteki kursu.',
-        href: window.ChemContentLibrary.lessonUrl(asset.filename, asset.repositoryId),
-        searchText: Array.isArray(asset.tags) ? asset.tags.join(' ') : ''
-      }));
-    if (!items.length) return model;
-    const helpIndex = model.sections.findIndex((section) => normalizeText(section.title) === 'pomoc i konto');
-    const section = {
-      title: 'Biblioteka lekcji',
-      description: ['Materiały pobierane na bieżąco z prywatnego repozytorium kursu.'],
-      notices: [],
-      items,
-      groups: []
-    };
-    if (helpIndex >= 0) model.sections.splice(helpIndex, 0, section);
-    else model.sections.push(section);
-    return model;
   }
 
   function updateResourceCount(visible, total, filtering) {
@@ -3269,7 +3209,7 @@
       testButton.className = 'button button-secondary';
       testButton.type = 'button';
       testButton.dataset.contentAction = 'test';
-      testButton.textContent = 'Sprawdź połączenie';
+      testButton.textContent = 'Sprawdź dostęp';
       const removeButton = document.createElement('button');
       removeButton.className = 'button button-secondary button-danger-soft';
       removeButton.type = 'button';
@@ -3340,6 +3280,7 @@
       const draft = drafts[index];
       if (!draft) continue;
       if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(draft.id)) invalidate(index, 'id', 'ID może zawierać tylko małe litery, cyfry i myślniki.');
+      else if (draft.id === 'default' && !draft.default) invalidate(index, 'default', 'ID „default” jest zarezerwowane dla repozytorium domyślnego. Zmień ID albo zaznacz ten wpis jako domyślny.');
       else if (!Number.isInteger(onlyIndex) && seenIds.has(draft.id)) invalidate(index, 'id', 'ID musi być unikalne.');
       seenIds.add(draft.id);
       if (!draft.label || draft.label.length > 80 || /[\u0000-\u001f\u007f]/.test(draft.label)) invalidate(index, 'label', 'uzupełnij poprawną nazwę.');
@@ -3476,11 +3417,11 @@
         default: repository.default,
         secret: repository.secret
       } });
-      setPanelStatus(elements.adminContentConfigStatus, `Połączenie z ${repository.repository} działa.`, 'info');
+      setPanelStatus(elements.adminContentConfigStatus, `Odczyt repozytorium, gałęzi i katalogu ${repository.repository} działa.`, 'info');
     } catch (error) {
       setPanelStatus(elements.adminContentConfigStatus, error?.message || 'Test połączenia nie powiódł się.', 'error');
     } finally {
-      if (button) button.textContent = 'Sprawdź połączenie';
+      if (button) button.textContent = 'Sprawdź dostęp';
       setAdminContentConfigBusy(false);
     }
   }

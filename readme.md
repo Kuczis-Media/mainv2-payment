@@ -221,7 +221,7 @@ Konfiguracja krok po kroku:
    GITHUB_CONTENT_REPOSITORIES=[{"id":"glowne","label":"Materiały główne","repository":"Kuczis-Media/chemdisk-content","ref":"main","root":"","default":true},{"id":"organiczna","label":"Chemia organiczna","repository":"Kuczis-Media/chemia-organiczna","ref":"main","root":""}]
    ```
 
-   `id` jest trwałym identyfikatorem zapisywanym w linkach jako `repo=...`; używaj małych liter, cyfr i myślników. `label` to nazwa widoczna w selektorze. Jedna pozycja może mieć `default: true`; bez tego domyślna jest pierwsza. Lista obsługuje najwyżej 20 repozytoriów.
+   `id` jest trwałym identyfikatorem zapisywanym w linkach jako `repo=...`; używaj małych liter, cyfr i myślników. Wartość `default` jest zarezerwowana jako alias repozytorium domyślnego — wpis o takim ID musi mieć `default: true`. `label` to nazwa widoczna w selektorze. Jedna pozycja może mieć `default: true`; bez tego domyślna jest pierwsza. Lista obsługuje najwyżej 20 repozytoriów.
 
    Jeśli repozytoria należą do różnych właścicieli zasobów, utwórz osobne, równie wąskie tokeny. Drugi zapisz np. jako `GITHUB_CONTENT_TOKEN_SZKOLA`, a w odpowiedniej pozycji listy dodaj `"tokenEnv":"GITHUB_CONTENT_TOKEN_SZKOLA"`. Nazwa wskazanej zmiennej musi zaczynać się od `GITHUB_CONTENT_TOKEN`.
 5. Wykonaj jeden deploy Functions po dodaniu lub zmianie zmiennych środowiskowych. Następnie w dashboardzie administratora otwórz zakładkę **Materiały**, wybierz każde repozytorium i sprawdź liczbę znalezionych plików.
@@ -235,11 +235,15 @@ W konfiguratorze można:
 - dodać do 20 prywatnych repozytoriów i wskazać jedno domyślne;
 - na Personal/Pro/Enterprise wkleić osobny fine-grained token dla każdego repozytorium i zapisać go przez Secrets Controller albo pozostawić pole puste, aby zachować już istniejący sekret;
 - na Free korzystać z tokenu utworzonego wcześniej ręcznie jako site-level ENV, bez przesyłania PAT do zapisu przez konfigurator;
-- sprawdzić token, gałąź i katalog bez zapisywania zmian;
+- sprawdzić odczyt repozytorium, istnienie gałęzi i poprawność katalogu bez zapisywania zmian;
 - zapisać `GITHUB_CONTENT_REPOSITORIES`, a na Personal/Pro/Enterprise także tajne `GITHUB_CONTENT_TOKEN_*`, przez serwerowe API Netlify;
 - uruchomić deploy osobno albo jednym przyciskiem **Zapisz i uruchom deploy**.
 
 Token wpisany w formularzu jest wysyłany wyłącznie do chronionej funkcji administratora i nie jest zapisywany w `localStorage`, zwracany w odpowiedzi ani pokazywany po ponownym otwarciu panelu. Funkcja najpierw sprawdza wszystkie repozytoria w GitHubie, potem zapisuje sekrety, a listę aktywnych repozytoriów zapisuje na końcu. Zapis sekretu działa fail-closed: jeśli Netlify nie przyjmie `is_secret: true`, funkcja kończy operację błędem i **nigdy nie zapisuje PAT ponownie jako zwykłej zmiennej**. Usunięcie pozycji z listy przestaje jej używać, ale celowo nie kasuje automatycznie dawnej zmiennej sekretnej z Netlify; nieużywany sekret można później usunąć ręcznie po upewnieniu się, że nie korzysta z niego inne repozytorium.
+
+Test w konfiguratorze jest celowo niezmieniający: potwierdza dostęp odczytu, istnienie wskazanej gałęzi oraz to, że `root` jest katalogiem. Nie tworzy próbnego commita, dlatego ostatecznym potwierdzeniem uprawnienia **Contents: Read and write** jest pierwszy rzeczywisty zapis wykonany w Studio. GitHub Contents API zwraca najwyżej 1000 elementów pojedynczego katalogu; bardzo duże biblioteki dziel na podkatalogi lub osobne repozytoria.
+
+Każdy PAT wpisany w konfiguratorze trafia do nowej, wersjonowanej zmiennej `GITHUB_CONTENT_TOKEN_*_R_*`; funkcja sprawdza nią repozytoria i dopiero na końcu przełącza listę. Dzięki temu dwa równoczesne zapisy nie mogą pomieszać konfiguracji z tokenem innej operacji, a jeśli zapis listy się nie powiedzie, działająca konfiguracja nadal wskazuje poprzedni sekret. Puste pole nadal zachowuje deterministyczną zmienną utworzoną ręcznie. Wartości tworzone przez konfigurator mają wyłącznie kontekst **Production**, więc Deploy Preview i branch deploy nie dziedziczą dostępu do prywatnych repozytoriów.
 
 Po zapisaniu ENV formularz blokuje dalszą edycję do czasu deployu, ponieważ aktualnie działające Functions nadal mają poprzednie wartości. Jeśli zapis ENV się uda, ale Netlify nie wystartuje z buildem (np. buildy są zatrzymane), panel zachowuje stan „wymaga deployu”, pokazuje dokładną przyczynę i pozostawia aktywny przycisk **Uruchom tylko deploy**. Po zakończonym deployu odśwież stronę przed kolejną zmianą.
 
@@ -257,7 +261,7 @@ Późniejsze dodanie, poprawienie lub usunięcie pliku w repo materiałów — p
 
 Przeglądarka nigdy nie otrzymuje tokenu GitHub. Kursant po sprawdzeniu aktywnego dostępu może pobrać treść lekcji, ponieważ musi ją wyświetlić, ale nie może zapisywać ani usuwać plików. Lista i treść promptów są dostępne w bibliotece tylko administratorowi, aby Prompt Builder mógł je edytować; zwykły moduł czatu nadal pobiera wybrany prompt po stronie funkcji `chat` i nie wysyła go kursantowi.
 
-Dozwolone są lekcje `.md` do 512 KiB, prompty `.txt` i `.json` do 256 KiB, definicje egzaminu, prezentacji i quizu do 2 MiB oraz wspólny `question-bank.json` do 5 MiB. Media Manager przyjmuje PNG, JPG/JPEG, WebP, GIF i konserwatywnie oczyszczony SVG do 4 MiB; chroniony odczyt ma limit 10 MiB. Nazwa pliku nie może zawierać ścieżki, `..` ani niedozwolonych znaków. `catalog.json` ma limit 256 KiB. Po rotacji tokenu zaktualizuj `GITHUB_CONTENT_TOKEN` w Netlify i ponownie wdróż Functions.
+Dozwolone są lekcje `.md` do 512 KiB, prompty `.txt` i `.json` do 256 KiB, definicje egzaminu, prezentacji i quizu do 2 MiB oraz wspólny `question-bank.json` do 5 MiB. Media Manager przyjmuje PNG, JPG/JPEG, WebP, GIF i konserwatywnie oczyszczony SVG do 4 MiB; chroniony odczyt ma limit 10 MiB. Nazwa pliku nie może zawierać ścieżki, `..` ani niedozwolonych znaków. `catalog.json` ma limit 256 KiB. Przy ręcznej rotacji tokenu zaktualizuj odpowiednią zmienną `GITHUB_CONTENT_TOKEN*` w Netlify i ponownie wdróż Functions. W konfiguratorze wklej nowy PAT przy właściwym repozytorium i użyj **Zapisz i uruchom deploy**.
 
 Te same repozytoria materiałów mogą zasilać inne wdrożenie ChemDisk: skopiuj do niego moduł `netlify/content-repository.js`, funkcję `content-library`, klienta `public/assets/js/content-library.js` i ustaw tę samą konfigurację `GITHUB_CONTENT_*`. Klient domyślnie używa chronionej funkcji w tej samej domenie. Jeśli aplikacja ma własny zgodny endpoint, można wskazać go w `<head>` przez:
 

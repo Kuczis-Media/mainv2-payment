@@ -81,6 +81,7 @@ function repositoryConfigs(env = process.env) {
     if (
       !SAFE_REPOSITORY_ID.test(id) ||
       seen.has(id) ||
+      (id === 'default' && !isDefault) ||
       !label ||
       !SAFE_REPOSITORY.test(repository) ||
       !SAFE_REF.test(ref) ||
@@ -143,8 +144,9 @@ function repositoryConfig(env = process.env, rawRepositoryId = '') {
     throw new ContentRepositoryError('INVALID_CONTENT_REPOSITORY', 400);
   }
   const selected = repositoryId
-    ? configs.find((config) => config.id === repositoryId)
-      || (repositoryId === 'default' ? configs.find((config) => config.default) : null)
+    ? repositoryId === 'default'
+      ? configs.find((config) => config.default)
+      : configs.find((config) => config.id === repositoryId)
     : configs.find((config) => config.default) || configs[0];
   if (!selected) throw new ContentRepositoryError('INVALID_CONTENT_REPOSITORY', 400);
   return selected;

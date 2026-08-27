@@ -90,7 +90,7 @@ test('Atonom is published locally with protected assets and the shared theme', (
   assert.match(styles, /--paper:\s*#edf2f7/);
   assert.match(styles, /--lime:\s*#0e665a/);
   assert.match(styles, /html\[data-theme=["']dark["']\]/);
-  assert.match(markdown, /\[ATONOM\]\(\/members\/module\/atonom\/\)/);
+  assert.match(markdown, /\[ATONOM[^\]]*\]\(\/members\/module\/atonom\/(?:\?[^)]*)?\)/);
   assert.doesNotMatch(markdown, /\[ATONOM\]\(https?:\/\//);
 });
 
@@ -194,13 +194,18 @@ test('dashboard lesson links are resolved through the private content library', 
   const lessonRoot = path.join(root, 'public', 'members', 'module', 'lesson');
   const lessonScript = fs.readFileSync(path.join(lessonRoot, 'script.js'), 'utf8');
   const dashboardScript = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.js'), 'utf8');
-  const filenames = [...markdown.matchAll(/\/members\/module\/lesson\/\?file=([A-Za-z0-9._-]+\.md)/g)]
-    .map((match) => match[1])
-    .filter((filename) => filename !== 'nazwa-lekcji.md');
+  const lessonLinks = [...markdown.matchAll(/\]\((\/members\/module\/lesson\/\?[^)\s]+)\)/g)]
+    .map((match) => new URL(match[1], 'https://course.example'));
+  const filenames = lessonLinks.map((url) => url.searchParams.get('file')).filter(Boolean);
 
   assert.ok(filenames.length > 0, 'dashboard should link to at least one repository lesson');
+  assert.ok(lessonLinks.some((url) => (
+    url.searchParams.get('repo') === 'repo-testowe' &&
+    url.searchParams.get('file') === 'lekcja-chemia-organiczna.md'
+  )));
   assert.match(lessonScript, /library\.readLesson\(filename,\s*\{\s*repositoryId\s*\}\)/);
   assert.match(dashboardScript, /ChemContentLibrary/);
+  assert.doesNotMatch(dashboardScript, /fetchLibraryLessons|appendLibraryLessons/);
   assert.equal(fs.readdirSync(lessonRoot).some((filename) => filename.endsWith('.md')), false);
 });
 

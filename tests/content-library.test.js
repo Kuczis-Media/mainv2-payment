@@ -111,6 +111,21 @@ test('default repository alias resolves to the entry explicitly marked as defaul
   assert.equal(selected.repository, 'Kuczis-Media/chemdisk-content');
 });
 
+test('repository id default is reserved for the entry marked as default', () => {
+  const env = {
+    GITHUB_CONTENT_TOKEN: 'github_pat_shared',
+    GITHUB_CONTENT_REPOSITORIES: JSON.stringify([
+      { id: 'default', label: 'Stare', repository: 'owner/old', default: false },
+      { id: 'nowe', label: 'Nowe', repository: 'owner/new', default: true }
+    ])
+  };
+
+  assert.throws(
+    () => repository.repositoryConfigs(env),
+    (error) => error.code === 'CONTENT_REPOSITORIES_INVALID'
+  );
+});
+
 test('multi-repository configuration fails closed on duplicate ids or arbitrary token variables', () => {
   const base = {
     GITHUB_CONTENT_TOKEN: 'github_pat_shared'

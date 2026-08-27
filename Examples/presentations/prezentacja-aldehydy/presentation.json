@@ -45,7 +45,7 @@
       "elements": [
         { "elementId": "group-heading", "type": "heading", "x": 6, "y": 6, "width": 88, "height": 14, "z": 3, "content": "Grupa aldehydowa –CHO", "fontFamily": "playfair", "fontSize": 38, "fontWeight": 800, "color": "#17233a" },
         { "elementId": "group-copy", "type": "text", "x": 7, "y": 26, "width": 40, "height": 54, "z": 2, "content": "• końcowa grupa karbonylowa\n• wodór przy węglu C=O\n• końcówka nazwy: -al\n• przykłady: metanal, etanal", "fontSize": 25, "color": "#38465c", "lineHeight": 1.45 },
-        { "elementId": "group-image", "type": "image", "x": 51, "y": 24, "width": 43, "height": 62, "z": 2, "ref": "assets/shared/example-diagram.svg", "repositoryId": "default", "alt": "Porównanie grup funkcyjnych ze wskazaną grupą aldehydową –CHO", "fit": "contain", "borderRadius": 18 }
+        { "elementId": "group-image", "type": "image", "x": 51, "y": 24, "width": 43, "height": 62, "z": 2, "ref": "assets/shared/example-diagram.svg", "repositoryId": "repo-testowe", "alt": "Porównanie grup funkcyjnych ze wskazaną grupą aldehydową –CHO", "fit": "contain", "borderRadius": 18 }
       ]
     },
     {

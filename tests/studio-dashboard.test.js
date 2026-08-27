@@ -236,11 +236,14 @@ test('studio parses the current dashboard without losing cards unsupported by th
   });
   builderModel.sections.forEach((section) => collect(section.blocks));
   for (const expected of [
+    'presentation',
     'slides',
     'pdf',
     'film',
     'yt',
     'forms',
+    'quiz',
+    'exam',
     'chat',
     'lesson',
     'calculator',
@@ -251,6 +254,12 @@ test('studio parses the current dashboard without losing cards unsupported by th
   ]) {
     assert.ok(knownModules.has(expected), `missing parsed module: ${expected}`);
   }
+  assert.deepEqual(
+    new Set([...knownModules].filter((module) => module !== 'link')),
+    new Set(studio.MODULE_ORDER),
+    'the deployment dashboard should demonstrate every module from the Studio palette'
+  );
+  assert.equal(builderModel.sections[0].blocks[1].navigation, 'sequential');
 });
 
 test('serialized text, notices, cards and four nested accordions match dashboard-parser.js', () => {

@@ -140,7 +140,7 @@ text_tone: auto
 
 :::image
 ref: assets/shared/example-diagram.svg
-repository: default
+repository: repo-testowe
 alt: Cztery pola przedstawiają grupy funkcyjne alkoholu –OH, aldehydu –CHO, ketonu >C=O i kwasu karboksylowego –COOH
 width: 70
 align: center
@@ -148,7 +148,7 @@ align: center
 
 :::image
 ref: photos/example-photo.svg
-repository: default
+repository: repo-testowe
 owner: lekcja-chemia-organiczna.md
 alt: Lokalny schemat próby Tollensa; kolba z warstwą srebra symbolizującą dodatni wynik dla aldehydu
 width: 35
@@ -157,7 +157,7 @@ align: left
 
 :::image
 ref: photos/example-photo.svg
-repository: default
+repository: repo-testowe
 owner: lekcja-chemia-organiczna.md
 alt: Ten sam schemat próby Tollensa wyrównany do prawej
 width: 35
@@ -359,7 +359,7 @@ Google Slides działa w zewnętrznym iframe. AI nie może odczytać jego zawarto
 
 ---
 
-<!-- chemdisk-step:{"id":"example-native-materials","includeInLesson":"INHERIT","requiredToAdvance":true,"condition":{"type":"quiz_completed","materialId":"quiz:default:quiz-chemia-organiczna","minimumScore":0}} -->
+<!-- chemdisk-step:{"id":"example-native-materials","includeInLesson":"INHERIT","requiredToAdvance":true,"condition":{"type":"quiz_completed","materialId":"quiz:repo-testowe:quiz-chemia-organiczna","minimumScore":0}} -->
 
 :::slide
 transition: zoom
@@ -371,7 +371,7 @@ text_tone: dark
 ## Materiały ChemDisk wewnątrz lekcji
 
 :::presentation
-repository: default
+repository: repo-testowe
 presentation: prezentacja-aldehydy
 title: Aldehydy — prezentacja ChemDisk
 description: Otwiera dołączoną prezentację `prezentacja-aldehydy/presentation.json` i zapisuje jej postęp.
@@ -379,7 +379,7 @@ button: Otwórz prezentację
 :::
 
 :::quiz
-repository: default
+repository: repo-testowe
 quiz: quiz-chemia-organiczna
 title: Chemia organiczna — quiz przekrojowy
 description: Otwiera `quiz-chemia-organiczna/quiz.json`, zawierający wszystkie cztery typy pytań.
@@ -457,7 +457,7 @@ text_tone: dark
 title: Zapytaj AI o treść, obraz i zadanie
 description: AI otrzyma tekst slajdu, opisy ALT mediów, bieżące zadanie oraz dodatkowy opis autora.
 button: Zapytaj AI
-repository: default
+repository: repo-testowe
 prompt: example-prompt.txt
 point: 1
 include_slide: true
@@ -615,7 +615,7 @@ new_tab: true
 
 ---
 
-<!-- chemdisk-step:{"id":"example-exams","includeInLesson":"INHERIT","requiredToAdvance":true,"condition":{"type":"exam_passed","materialId":"exam:default:egzamin-chemia-organiczna","minimumScore":0}} -->
+<!-- chemdisk-step:{"id":"example-exams","includeInLesson":"INHERIT","requiredToAdvance":true,"condition":{"type":"exam_passed","materialId":"exam:repo-testowe:egzamin-chemia-organiczna","minimumScore":0}} -->
 
 :::slide
 transition: zoom
@@ -627,7 +627,7 @@ text_tone: dark
 ## Egzamin w lekcji — wszystkie wymagania
 
 :::exam
-repository: default
+repository: repo-testowe
 exam: egzamin-chemia-organiczna
 title: Egzamin opcjonalny
 description: Karta nie blokuje przejścia dalej.
@@ -637,7 +637,7 @@ minimum_score: 0
 :::
 
 :::exam
-repository: default
+repository: repo-testowe
 exam: egzamin-chemia-organiczna
 title: Wymagane ukończenie egzaminu
 description: Uczeń musi zakończyć próbę.
@@ -647,7 +647,7 @@ minimum_score: 0
 :::
 
 :::exam
-repository: default
+repository: repo-testowe
 exam: egzamin-chemia-organiczna
 title: Wymagane zaliczenie egzaminu
 description: Uczeń musi osiągnąć próg zapisany w exam.json.
@@ -657,7 +657,7 @@ minimum_score: 0
 :::
 
 :::exam
-repository: default
+repository: repo-testowe
 exam: egzamin-chemia-organiczna
 title: Wymagany własny próg
 description: Uczeń musi zdobyć co najmniej 80 procent.
@@ -668,7 +668,7 @@ minimum_score: 80
 
 ---
 
-<!-- chemdisk-step:{"id":"example-canvas","includeInLesson":"ON","requiredToAdvance":true,"condition":{"type":"minimum_score","materialId":"exam:default:egzamin-chemia-organiczna","minimumScore":80}} -->
+<!-- chemdisk-step:{"id":"example-canvas","includeInLesson":"ON","requiredToAdvance":true,"condition":{"type":"minimum_score","materialId":"exam:repo-testowe:egzamin-chemia-organiczna","minimumScore":80}} -->
 
 :::slide
 transition: none
@@ -691,7 +691,7 @@ Klocek można ustawić przez współrzędne X i Y oraz szerokość i wysokość.
 :::layout id=canvas-right x=53 y=23 width=42 height=52
 :::image
 ref: assets/shared/example-diagram.svg
-repository: default
+repository: repo-testowe
 alt: Schemat grup funkcyjnych umieszczony po prawej stronie slajdu canvas
 width: 100
 align: center
@@ -907,7 +907,7 @@ show_student_answer: true
 ai_enabled: true
 ai_instruction_json: "Oceniaj poprawność merytoryczną, a nie identyczność słów. Sprawdź, czy uczeń wskazał atom wodoru przy węglu karbonylowym aldehydu, możliwość utworzenia grupy –COOH oraz brak takiego wodoru w typowym ketonie."
 order: student-first
-key_json: "### Poprawna odpowiedź / klucz\n\nW aldehydzie atom węgla grupy karbonylowej jest związany z **atomem wodoru**. Utlenienie może zastąpić ten wodór grupą –OH, tworząc kwas karboksylowy. W ketonie węgiel karbonylowy jest połączony z dwiema grupami węglowymi, więc analogiczne utlenienie wymagałoby rozerwania wiązania C–C.\n\n- aldehyd: **R–CHO** — łatwo przechodzi w R–COOH,\n- keton: **R–CO–R′** — zwykle nie daje próby Tollensa,\n- dodatnia próba Tollensa może prowadzić do powstania lustra srebrnego.\n\nZapis CH~3~CHO pokazuje obsługę indeksu dolnego, a Ag^+^ — indeksu górnego.\n\n:::formula\nmode: chemistry\ntitle: Utlenianie aldehydu\nleft: RCHO + [O]\narrow: ->\nabove: utlenianie\nbelow: \nright: RCOOH\n:::\n\n:::table\ncaption: Porównanie związków karbonylowych\nalign: center\nheaders: Cecha | Aldehyd | Keton\nrow: Wzór ogólny | R–CHO | R–CO–R′\nrow: Wodór przy C=O | tak | nie\nrow: Próba Tollensa | zwykle dodatnia | zwykle ujemna\n:::\n\n:::image\nref: assets/shared/example-diagram.svg\nrepository: default\nalt: Diagram grup funkcyjnych użyty również w kluczu odpowiedzi\nwidth: 42\nalign: center\n:::"
+key_json: "### Poprawna odpowiedź / klucz\n\nW aldehydzie atom węgla grupy karbonylowej jest związany z **atomem wodoru**. Utlenienie może zastąpić ten wodór grupą –OH, tworząc kwas karboksylowy. W ketonie węgiel karbonylowy jest połączony z dwiema grupami węglowymi, więc analogiczne utlenienie wymagałoby rozerwania wiązania C–C.\n\n- aldehyd: **R–CHO** — łatwo przechodzi w R–COOH,\n- keton: **R–CO–R′** — zwykle nie daje próby Tollensa,\n- dodatnia próba Tollensa może prowadzić do powstania lustra srebrnego.\n\nZapis CH~3~CHO pokazuje obsługę indeksu dolnego, a Ag^+^ — indeksu górnego.\n\n:::formula\nmode: chemistry\ntitle: Utlenianie aldehydu\nleft: RCHO + [O]\narrow: ->\nabove: utlenianie\nbelow: \nright: RCOOH\n:::\n\n:::table\ncaption: Porównanie związków karbonylowych\nalign: center\nheaders: Cecha | Aldehyd | Keton\nrow: Wzór ogólny | R–CHO | R–CO–R′\nrow: Wodór przy C=O | tak | nie\nrow: Próba Tollensa | zwykle dodatnia | zwykle ujemna\n:::\n\n:::image\nref: assets/shared/example-diagram.svg\nrepository: repo-testowe\nalt: Diagram grup funkcyjnych użyty również w kluczu odpowiedzi\nwidth: 42\nalign: center\n:::"
 :::
 
 ---
@@ -966,7 +966,7 @@ key_json: "### Klucz odpowiedzi\n\nSystematyczne polskie nazwy aldehydów kończ
 
 ---
 
-<!-- chemdisk-step:{"id":"example-summary","includeInLesson":"ON","requiredToAdvance":true,"condition":{"type":"exam_completed","materialId":"exam:default:egzamin-chemia-organiczna","minimumScore":0}} -->
+<!-- chemdisk-step:{"id":"example-summary","includeInLesson":"ON","requiredToAdvance":true,"condition":{"type":"exam_completed","materialId":"exam:repo-testowe:egzamin-chemia-organiczna","minimumScore":0}} -->
 
 :::slide
 transition: rise

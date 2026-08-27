@@ -33,12 +33,12 @@ assets/shared/example-diagram.svg
 prompts/example-prompt.txt
 ```
 
-W lekcji odwołania mają `repository: default`. Jeżeli repozytorium treści ma inne ID, zmień `repository` w klockach `image`, `presentation`, `quiz`, `aihelp` i `exam`.
+Zestaw jest przygotowany dla repozytorium skonfigurowanego w ChemDisk pod ID `repo-testowe` (`Kuczis-Media/test`). Lekcja, prezentacja, quiz, egzamin, prompt i media współdzielone używają tego samego stabilnego ID, dlatego nie wymagają ręcznej poprawy po wgraniu do tego repozytorium. Jeżeli świadomie wybierzesz inne ID, zmień wszystkie wystąpienia `repo-testowe` w lekcji, prezentacji i linkach dashboardu.
 
 Do dashboardu dodaj dokładnie:
 
 ```markdown
-- [Chemia organiczna — lekcja](/members/module/lesson/?file=lekcja-chemia-organiczna.md) — Kompletna lekcja o grupach funkcyjnych, aldehydach i ketonach.
+- [Chemia organiczna — lekcja](/members/module/lesson/?repo=repo-testowe&file=lekcja-chemia-organiczna.md) — Kompletna lekcja o grupach funkcyjnych, aldehydach i ketonach.
 ```
 
 ## Rzeczywiste materiały Google i YouTube

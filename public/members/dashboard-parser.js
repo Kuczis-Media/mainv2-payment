@@ -172,7 +172,7 @@
     try {
       const path = new URL(href, 'https://chemdisk.invalid').pathname;
       const moduleName = (path.match(/^\/members\/module\/([^/]+)/i) || [])[1]?.toLowerCase();
-      return ({ lesson: 'lesson', presentation: 'presentation', slides: 'presentation', film: 'video', yt: 'video', pdf: 'pdf', forms: 'quiz', exam: 'exam', chat: 'script' })[moduleName] || (moduleName ? 'other' : 'embed');
+      return ({ lesson: 'lesson', presentation: 'presentation', slides: 'presentation', film: 'video', yt: 'video', pdf: 'pdf', forms: 'quiz', quiz: 'quiz', exam: 'exam', chat: 'script' })[moduleName] || (moduleName ? 'other' : 'embed');
     } catch (_) { return 'other'; }
   }
 

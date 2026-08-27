@@ -1,136 +1,79 @@
 <!--
-  EDYCJA DASHBOARDU
-  - Nagłówek z jednym # ustawia tytuł strony Start.
-  - Zwykły tekst pod tytułem jest opisem powitalnym.
-  - Każdy nagłówek ## tworzy dział oraz pozycję w menu.
-  - Nagłówki ###, ####, ##### i ###### tworzą zagnieżdżone harmonijki.
-  - Zwykła linia opisuje bieżący dział albo harmonijkę.
-  - Wiersz zaczynający się od > tworzy komunikat.
-  - Każdy link zapisany jak poniżej tworzy kartę:
-    - [Nazwa materiału](/members/module/nazwa/?parametr=wartosc) — Krótki opis.
+  DOMYŚLNY DASHBOARD Z WDROŻENIA
+  Ten plik jest przywracany po resecie dashboardu w panelu administratora.
+  Zawiera wyłącznie kontrolowany zestaw przykładów z repozytorium o ID
+  `repo-testowe`; pozostałe pliki z GitHuba nie są dopisywane automatycznie.
 
-  PARAMETRY MODUŁÓW
-  - chat:       ?prompt=nazwa.json albo ?plik=nazwa.txt&punkt=1
-  - forms:      ?id=ID_FORMULARZA_GOOGLE
-  - contact:    ?internal=Stała%20treść%20wiadomości
-  - slides:     ?id=ID_Z_GOOGLE_DRIVE&type=1 (bez ochrony) lub type=2 (ochrona)
-  - pdf:        ?id=ID_Z_GOOGLE_DRIVE&type=1 (ochrona pobierania),
-                type=2 (wymuszone pobranie), type=3 (zwykły podgląd)
-  - film:       ?id=ID&type=1 (YouTube chroniony), type=2 (Google Drive),
-                type=3 (YouTube bez ochrony)
-  - yt:         ?id=ID_LUB_ZAKODOWANY_LINK_YOUTUBE (własne kontrolki)
-  - lesson:     ?file=nazwa-lekcji.md
-
-  SZABLONY KART DO SKOPIOWANIA
-  ## Nazwa działu
-
-  Krótki opis działu.
-
-  ### Nazwa lekcji
-
-  - [Lekcja interaktywna](/members/module/lesson/?file=nazwa-lekcji.md) — Lekcja lub quiz ABCD.
-  - [Prezentacja](/members/module/slides/?id=ID_PLIKU&type=2) — Slajdy do działu.
-  - [Zestaw PDF](/members/module/pdf/?id=ID_PLIKU&type=1) — Zadania do samodzielnej pracy.
-  - [Test](/members/module/forms/?id=ID_FORMULARZA) — Sprawdź swoją wiedzę.
-  - [Film](/members/module/yt/?id=ID_FILMU) — Nagranie lekcji.
-  - [Asystent](/members/module/chat/?prompt=nazwa.json) — Pomoc do tego działu.
-
-  Pełny link Google albo YouTube zakoduj jako wartość parametru URL.
-  Nie wstawiaj tutaj kodu HTML — dashboard celowo go nie interpretuje.
+  Pliki wymagane w repozytorium Kuczis-Media/test:
+  - lessons/lekcja-chemia-organiczna.md
+  - quizzes/quiz-chemia-organiczna/quiz.json
+  - exams/egzamin-chemia-organiczna/exam.json
+  - presentations/prezentacja-aldehydy/presentation.json
+  - prompts/example-prompt.txt
 -->
 
-# Twoja przestrzeń do nauki
+# Przykładowy kurs chemii organicznej
 
-Wszystkie materiały, ćwiczenia i narzędzia do kursu maturalnego masz teraz w jednym miejscu.
+Kompletny zestaw demonstracyjny ChemDisk: lekcja, prezentacje, quiz, egzamin, prompt AI, materiały Google oraz wszystkie klocki dostępne w Studio Dashboardu.
 
-> Zacznij od materiału wskazanego przez prowadzącego. Twoje konto działa tylko w jednej aktywnej sesji naraz.
+> Zacznij od uporządkowanej ścieżki. Kolejny materiał odblokuje się po ukończeniu poprzedniego.
 
-## Materiały kursowe
+## Kurs przykładowy
 
-Prezentacje, dokumenty i nagrania przypisane do kursu.
+Materiały w tej sekcji pochodzą wyłącznie z repozytorium `repo-testowe` oraz z przekazanych linków Google i YouTube.
 
-### Dokumenty i prezentacje
+<!-- chemdisk-progress:{"id":"organizer-chemia-organiczna","type":"section","progress":{"tracking":"INHERIT","showProgress":"INHERIT","includeInSection":true,"includeInDepartment":true,"includeInCourse":true,"weight":1},"settings":{"navigation":"sequential"}} -->
+### Ścieżka po kolei — chemia organiczna
 
-Rozwiń listę, aby zobaczyć materiały do czytania.
+Wykonaj kolejno prezentację, lekcję, quiz i egzamin.
 
-- [Dokument PDF](/members/module/pdf/?id=1qKkDarVM8qn1GHkNalt9f8n7IXNUawZF&type=1) — Materiał do wygodnego czytania w przeglądarce.
+- [1. Aldehydy — Google Slides](/members/module/slides/?id=1rxPm5CJl2LDzrzq89fogz-_PWwO_BbqF&type=2) — Obejrzyj prawdziwą prezentację z ograniczonym interfejsem.
+- [2. Chemia organiczna — kompletna lekcja](/members/module/lesson/?repo=repo-testowe&file=lekcja-chemia-organiczna.md) — Lekcja pokazująca wszystkie klocki i wszystkie rodzaje pytań Lesson Studio.
+- [3. Chemia organiczna — quiz](/members/module/quiz/?repo=repo-testowe&quiz=quiz-chemia-organiczna) — Cztery typy pytań przygotowane w Quiz Builderze.
+- [4. Chemia organiczna — egzamin](/members/module/exam/?repo=repo-testowe&exam=egzamin-chemia-organiczna) — Pełny egzamin obejmujący wszystkie typy zadań Exam Studio.
 
-### Nagrania
+### Materiały natywne ChemDisk
 
-Filmy z lekcji i omówienia zadań.
+Te karty sprawdzają materiały przechowywane w prywatnym repozytorium testowym.
 
-- [Ciekawostka chemiczna](/members/module/film/?id=sU6epNBjvzo&type=1) — Przekazany film YouTube w odtwarzaczu kursowym.
+- [Prezentacja ChemDisk — aldehydy](/members/module/presentation/?repo=repo-testowe&presentation=prezentacja-aldehydy) — Natywna prezentacja z Presentation Studio.
+- [Lekcja — chemia organiczna](/members/module/lesson/?repo=repo-testowe&file=lekcja-chemia-organiczna.md) — Bezpośrednie otwarcie kompletnej lekcji przykładowej.
+- [Quiz — chemia organiczna](/members/module/quiz/?repo=repo-testowe&quiz=quiz-chemia-organiczna) — Bezpośrednie otwarcie quizu przykładowego.
+- [Egzamin — chemia organiczna](/members/module/exam/?repo=repo-testowe&exam=egzamin-chemia-organiczna) — Bezpośrednie otwarcie egzaminu przykładowego.
+- [Asystent AI — chemia organiczna](/members/module/chat/?repo=repo-testowe&plik=example-prompt.txt&punkt=1) — Prompt TXT z repozytorium testowego.
 
-## Ćwiczenia i powtórki
+## Materiały Google i filmy
 
-Sprawdź wiedzę i przećwicz zadania przed maturą.
+Prawdziwe identyfikatory przekazane do zestawu demonstracyjnego.
 
-- [Chemia organiczna — lekcja interaktywna](/members/module/lesson/?file=lekcja-chemia-organiczna.md) — Przejdź przez kompletną lekcję o grupach funkcyjnych, aldehydach i ketonach.
-- [Asystent Gemini](/members/module/chat/?prompt=test.json) — Zapytaj asystenta korzystającego z przygotowanego promptu.
-- [Asystent naprowadzający — przykład](/members/module/chat/?plik=prompty-przyklad.txt&punkt=1) — Instrukcja wybrana z wielopunktowego pliku TXT.
+### Dokumenty i formularze
 
-## Tablice i kalkulatory
+- [Cykloaddycja — PDF](/members/module/pdf/?id=1qKkDarVM8qn1GHkNalt9f8n7IXNUawZF&type=1) — Dokument Google Drive otwierany w chronionym podglądzie.
+- [Szybkość reakcji chemicznych — Google Forms](/members/module/forms/?id=1FAIpQLSeKEXX7ooRB7ZaPJ8UwnqNlPsucgjwnQFzmSlZ3OvrdFlURsA) — Przykładowy test Google Forms.
+- [Aldehydy — Google Slides](/members/module/slides/?id=1rxPm5CJl2LDzrzq89fogz-_PWwO_BbqF&type=1) — Zwykły podgląd prezentacji Google.
 
-Narzędzia pomocne podczas lekcji oraz samodzielnej nauki.
+### Filmy i odtwarzacze
 
-- [Tablica BitPaper](/members/module/bitpaper/) — Prosta przestrzeń do wspólnego rozwiązywania zadań.
-- [Biała tablica](/members/module/whiteboard/) — Szkicuj wzory, reakcje i notatki.
-- [Kalkulator naukowy](/members/module/kalkulator/) — Wykonuj obliczenia potrzebne w zadaniach.
-- [Kalkulator klasyczny](/members/module/classic/) — Szybkie podstawowe obliczenia.
+- [Ciekawostka chemiczna 1 — Film](/members/module/film/?id=sU6epNBjvzo&type=1) — YouTube w chronionym odtwarzaczu Film.
+- [Ciekawostka chemiczna 2 — Odtwarzacz YT](/members/module/yt/?id=PG6fB57aAoA) — YouTube z własnymi kontrolkami ChemDisk.
+- [Ciekawostka chemiczna 3 — pełny YouTube](/members/module/film/?id=kOoRildWO0s&type=3) — Film z pełniejszym interfejsem YouTube.
 
-## Laboratorium modułów
+## Narzędzia Studio
 
-Zestaw kontrolny wszystkich modułów i dostępnych trybów. Użyj go po wdrożeniu, aby szybko sprawdzić działanie materiałów na docelowej domenie.
+Ta sekcja pokazuje pozostałe klocki dostępne w kreatorze dashboardu.
 
-> Tryby Google Drive korzystają z podanego pliku testowego. Odtwarzacze filmów pokażą film tylko wtedy, gdy wskazany plik Drive jest materiałem wideo i ma odpowiednie uprawnienia udostępniania.
+### Obliczenia i tablice
 
-### Lekcja interaktywna
+- [Kalkulator naukowy](/members/module/kalkulator/) — Obliczenia naukowe i chemiczne.
+- [Kalkulator klasyczny](/members/module/classic/) — Proste działania i pełna obsługa klawiatury.
+- [Biała tablica](/members/module/whiteboard/) — Lokalne szkice, wzory i notatki.
+- [Tablica BitPaper](/members/module/bitpaper/) — Wspólna przestrzeń do rozwiązywania zadań.
 
-- [Chemia organiczna — kompletny przykład Markdown](/members/module/lesson/?file=lekcja-chemia-organiczna.md) — Wszystkie klocki Lesson Buildera, pytania zamknięte i otwarte oraz powiązane materiały.
+#### Chemia i kontakt
 
-### Formularze
-
-- [Ćwiczenie 3 — szybkość reakcji chemicznych i równowaga chemiczna](/members/module/forms/?id=1FAIpQLSeKEXX7ooRB7ZaPJ8UwnqNlPsucgjwnQFzmSlZ3OvrdFlURsA) — Ćwiczenie w Google Forms.
-
-### Film — odtwarzacz podstawowy
-
-- [Ciekawostka 1 — tryb chroniony](/members/module/film/?id=sU6epNBjvzo&type=1) — YouTube z ograniczonym interfejsem.
-- [Ciekawostka 2 — tryb chroniony](/members/module/film/?id=PG6fB57aAoA&type=1) — YouTube z ograniczonym interfejsem.
-- [Ciekawostka 3 — tryb chroniony](/members/module/film/?id=kOoRildWO0s&type=1) — YouTube z ograniczonym interfejsem.
-- [Ciekawostka 1 — tryb pełniejszy](/members/module/film/?id=sU6epNBjvzo&type=3) — Ten sam przekazany film z pełniejszym interfejsem YouTube.
-
-### Odtwarzacz YT
-
-- [Film w odtwarzaczu YT](/members/module/yt/?id=kOoRildWO0s) — Przekazany film YouTube z własnymi kontrolkami ChemDisk.
-
-### Prezentacje
-
-- [Aldehydy — prezentacja bez ograniczenia pobierania](/members/module/slides/?id=1rxPm5CJl2LDzrzq89fogz-_PWwO_BbqF&type=1) — Zwykły podgląd przekazanej prezentacji Google.
-- [Aldehydy — prezentacja z ograniczonym interfejsem](/members/module/slides/?id=1rxPm5CJl2LDzrzq89fogz-_PWwO_BbqF&type=2) — Ta sama prezentacja z maskami i bez bezpośredniego przejścia do Google.
-
-### Dokumenty PDF
-
-- [PDF — type=1, podgląd ograniczony](/members/module/pdf/?id=1qKkDarVM8qn1GHkNalt9f8n7IXNUawZF&type=1) — Podgląd z maskami ograniczającymi typowe pobieranie.
-- [PDF — type=2, pobieranie](/members/module/pdf/?id=1qKkDarVM8qn1GHkNalt9f8n7IXNUawZF&type=2) — Test bezpośredniego rozpoczęcia pobierania.
-- [PDF — type=3, zwykły podgląd](/members/module/pdf/?id=1qKkDarVM8qn1GHkNalt9f8n7IXNUawZF&type=3) — Podgląd bez ograniczonego interfejsu.
-
-### Asystent AI
-
-- [Asystent — prompt JSON](/members/module/chat/?prompt=test.json) — Test instrukcji zapisanej w pliku JSON.
-- [Asystent naprowadzający — punkt 1](/members/module/chat/?plik=prompty-przyklad.txt&punkt=1) — Test pierwszej instrukcji z pliku TXT.
-- [Asystent sprawdzający — punkt 2](/members/module/chat/?plik=prompty-przyklad.txt&punkt=2) — Test drugiej instrukcji z pliku TXT.
-
-### Tablice i kalkulatory
-
-- [Tablica BitPaper](/members/module/bitpaper/) — Test prostej tablicy.
-- [Biała tablica](/members/module/whiteboard/) — Test narzędzia do szkicowania.
-- [Kalkulator naukowy](/members/module/kalkulator/) — Kalkulator naukowy.
-- [Kalkulator prosty](/members/module/classic/) — Kalkulator do podstawowych obliczeń.
-
-### Kontakt i materiały zewnętrzne
-
-- [Formularz kontaktowy](/members/module/contact/?internal=wiadomosc) — Test formularza z przekazaną informacją wewnętrzną.
-- [ATONOM](/members/module/atonom/) — Buduj interaktywne modele cząsteczek z polskich nazw związków.
+- [ATONOM — model etanalu](/members/module/atonom/?formula=etanal) — Interaktywny model związku chemicznego.
+- [Formularz kontaktowy](/members/module/contact/?internal=Pytanie%20do%20przyk%C5%82adowego%20kursu%20chemii%20organicznej) — Wiadomość do prowadzącego zapisywana przez Netlify Forms.
+- [Otwórz źródłową prezentację Google](https://docs.google.com/presentation/d/1rxPm5CJl2LDzrzq89fogz-_PWwO_BbqF/edit?usp=drive_link) — Przykład klocka „Link zewnętrzny”.
 
 ## Pomoc i konto
 
