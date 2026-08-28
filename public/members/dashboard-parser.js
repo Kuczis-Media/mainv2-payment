@@ -116,6 +116,7 @@
           id: pendingProgress?.id || '',
           type: pendingProgress?.type || materialType(linkMatch[2]),
           progress: pendingProgress?.progress || defaultProgress(),
+          ...(pendingProgress ? { settings: pendingProgress.settings || {} } : {}),
           title: linkMatch[1].trim(),
           href: linkMatch[2].trim(),
           description: (linkMatch[3] || '').trim()
@@ -155,7 +156,12 @@
       type: String(source.type || '').toLowerCase(),
       settings: {
         recordOpens: source.settings?.recordOpens !== false,
-        navigation: source.settings?.navigation === 'sequential' ? 'sequential' : 'free'
+        navigation: source.settings?.navigation === 'sequential' ? 'sequential' : 'free',
+        manualCompletion: source.settings?.manualCompletion === true,
+        presentationMode: ['highest', 'visited', 'required'].includes(source.settings?.presentationMode)
+          ? source.settings.presentationMode
+          : 'highest',
+        videoCompletionThreshold: Math.max(1, Math.min(100, Number(source.settings?.videoCompletionThreshold) || 90))
       },
       progress: {
         tracking: state(progress.tracking),
@@ -211,5 +217,64 @@
     });
   }
 
-  return Object.freeze({ parse });
+  function itemProgressSettings(item) {
+    let moduleName = '';
+    let params = new URLSearchParams();
+    try {
+      const url = new URL(item.href, 'https://chemdisk.invalid');
+      moduleName = (url.pathname.match(/^\/members\/module\/([^/]+)/i) || [])[1]?.toLowerCase() || '';
+      params = url.searchParams;
+    } catch (_) {}
+    const repositoryId = ['lesson', 'exam', 'presentation', 'quiz'].includes(moduleName)
+      ? String(params.get('repo') || '').toLowerCase()
+      : '';
+    return {
+      navigation: 'free',
+      manualCompletion: moduleName === 'quiz',
+      presentationMode: item.settings?.presentationMode || 'highest',
+      videoCompletionThreshold: item.settings?.videoCompletionThreshold || 90,
+      contentFile: moduleName === 'lesson' ? String(params.get('file') || '') : '',
+      repositoryId,
+      examId: moduleName === 'exam' ? String(params.get('exam') || '').toLowerCase() : ''
+    };
+  }
+
+  function toProgressCatalog(input) {
+    const model = input && typeof input === 'object' ? input : parse(input);
+    const nodes = [];
+    const append = (node, parentId, settings = {}) => {
+      nodes.push({
+        id: node.id,
+        parentId: parentId || null,
+        type: node.type,
+        title: node.title,
+        order: nodes.length,
+        progress: node.progress || defaultProgress(),
+        settings
+      });
+    };
+    const visitGroup = (group, parentId) => {
+      append(group, parentId, { navigation: group.navigation === 'sequential' ? 'sequential' : 'free' });
+      group.items.forEach((item) => append(item, group.id, itemProgressSettings(item)));
+      group.groups.forEach((child) => visitGroup(child, group.id));
+    };
+
+    append(model, null, { recordOpens: model.recordOpens !== false });
+    model.sections.forEach((section) => {
+      append(section, model.id);
+      section.items.forEach((item) => append(item, section.id, itemProgressSettings(item)));
+      section.groups.forEach((group) => visitGroup(group, section.id));
+    });
+    return {
+      version: 1,
+      global: {
+        tracking: model.progress?.tracking === 'OFF' ? 'OFF' : 'ON',
+        showProgress: model.progress?.showProgress === 'OFF' ? 'OFF' : 'ON',
+        recordOpens: model.recordOpens !== false
+      },
+      nodes
+    };
+  }
+
+  return Object.freeze({ parse, toProgressCatalog });
 });

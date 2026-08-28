@@ -500,6 +500,24 @@
     return window.ChemDashboardParser.parse(source);
   }
 
+  function dashboardProgressCatalog(model) {
+    if (!window.ChemDashboardParser || typeof window.ChemDashboardParser.toProgressCatalog !== 'function') {
+      throw new Error('Generator katalogu postępu nie został załadowany.');
+    }
+    return window.ChemDashboardParser.toProgressCatalog(model);
+  }
+
+  async function syncDashboardProgressCatalog(model) {
+    const payload = await adminProgressRequest('PUT', {
+      action: 'catalog',
+      catalog: dashboardProgressCatalog(model)
+    });
+    if (!payload?.catalog) throw new Error('Serwer nie potwierdził aktualnego katalogu postępu.');
+    adminProgressCatalog = payload.catalog;
+    adminProgressLoaded = false;
+    return payload;
+  }
+
   function hasRequiredHelpSection(model) {
     return Boolean(model && Array.isArray(model.sections) && model.sections.some(
       (section) => normalizeText(section && section.title) === 'pomoc i konto'
@@ -907,7 +925,7 @@
     });
   }
 
-  function renderDashboard(model) {
+  function renderDashboard(model, forceProgress = false) {
     model = ensureRequiredDashboardModel(model);
     elements.title.textContent = model.title;
     elements.intro.textContent = model.intro.length
@@ -934,7 +952,7 @@
     renderNavigation(renderedSections);
     filterResources();
     setupSectionTracking();
-    hydrateDashboardProgress(model);
+    hydrateDashboardProgress(model, forceProgress);
   }
 
   async function resetStudentProgress(materialId, title, trigger) {
@@ -2885,7 +2903,7 @@
     if (!busy) {
       elements.adminDashboardPreviewButton.disabled = !adminDashboardLoaded;
       elements.adminDashboardSave.disabled = !adminDashboardLoaded;
-      elements.adminDashboardRestore.disabled = !adminDashboardLoaded || adminDashboardSourceKind !== 'blob';
+      elements.adminDashboardRestore.disabled = !adminDashboardLoaded;
     }
   }
 
@@ -2959,8 +2977,9 @@
       return;
     }
     let text;
+    let model;
     try {
-      ({ text } = validateDashboardEditorContent(elements.adminDashboardSource.value));
+      ({ text, model } = validateDashboardEditorContent(elements.adminDashboardSource.value));
     } catch (error) {
       setPanelStatus(elements.adminDashboardStatus, error.message, 'error');
       return;
@@ -2985,8 +3004,22 @@
       adminDashboardBaseline = text;
       elements.adminDashboardSource.value = text;
       renderAdminDashboardPreview(text);
-      renderDashboard(parseMarkdown(text));
-      setPanelStatus(elements.adminDashboardStatus, 'Dashboard został opublikowany i jest już widoczny dla kursantów.', 'info');
+      try {
+        await syncDashboardProgressCatalog(model);
+        renderDashboard(model, true);
+        setPanelStatus(
+          elements.adminDashboardStatus,
+          'Dashboard został opublikowany. Postęp obejmuje teraz wyłącznie materiały znajdujące się w aktualnym dashboardzie.',
+          'info'
+        );
+      } catch (progressError) {
+        renderDashboard(model);
+        setPanelStatus(
+          elements.adminDashboardStatus,
+          `Dashboard zapisano, ale nie udało się zsynchronizować postępu: ${progressError?.message || 'spróbuj opublikować ponownie.'}`,
+          'error'
+        );
+      }
     } catch (error) {
       setPanelStatus(elements.adminDashboardStatus, error && error.message ? error.message : 'Nie udało się opublikować dashboardu.', 'error');
     } finally {
@@ -2995,36 +3028,53 @@
   }
 
   async function restoreStaticDashboard() {
-    if (!adminDashboardLoaded || adminDashboardSourceKind !== 'blob') return;
-    if (!window.confirm('Przywrócić dashboard.md z ostatniego wdrożenia? Aktywna wersja zapisana w Netlify zostanie usunięta.')) return;
+    if (!adminDashboardLoaded) return;
+    const removesOverride = adminDashboardSourceKind === 'blob';
+    const confirmation = removesOverride
+      ? 'Przywrócić dashboard.md z ostatniego wdrożenia? Aktywna wersja zapisana w Netlify zostanie usunięta.'
+      : 'Wczytać ponownie dashboard.md z wdrożenia i zsynchronizować z nim statusy postępu?';
+    if (!window.confirm(confirmation)) return;
     setAdminDashboardBusy(true);
     setPanelStatus(elements.adminDashboardStatus, 'Przywracanie wersji z wdrożenia…', 'loading');
     try {
-      const token = await getAdminToken();
-      const response = await fetch(ADMIN_DASHBOARD_URL, {
-        method: 'DELETE',
-        credentials: 'same-origin',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ expectedEtag: adminDashboardEtag })
-      });
-      await readAdminResponse(response);
+      if (removesOverride) {
+        const token = await getAdminToken();
+        const response = await fetch(ADMIN_DASHBOARD_URL, {
+          method: 'DELETE',
+          credentials: 'same-origin',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ expectedEtag: adminDashboardEtag })
+        });
+        await readAdminResponse(response);
+      }
       const content = await fetchStaticDashboard(true);
       adminDashboardEtag = null;
       adminDashboardSourceKind = 'static';
       const editorContent = ensureRequiredHelpSection(content);
+      const model = parseMarkdown(editorContent);
       adminDashboardBaseline = editorContent;
       elements.adminDashboardSource.value = editorContent;
       renderAdminDashboardPreview(editorContent);
-      renderDashboard(parseMarkdown(content));
-      setPanelStatus(
-        elements.adminDashboardStatus,
-        'Przywrócono pełny dashboard.md z wdrożenia. Domyślne materiały są znowu widoczne dla kursantów.',
-        'info'
-      );
+      try {
+        const synced = await syncDashboardProgressCatalog(model);
+        renderDashboard(model, true);
+        setPanelStatus(
+          elements.adminDashboardStatus,
+          `Przywrócono pełny dashboard.md i zsynchronizowano postęp. Usunięte materiały: ${Number(synced.removedCount) || 0}.`,
+          'info'
+        );
+      } catch (progressError) {
+        renderDashboard(model);
+        setPanelStatus(
+          elements.adminDashboardStatus,
+          `Przywrócono dashboard.md, ale nie udało się zsynchronizować postępu: ${progressError?.message || 'spróbuj ponownie.'}`,
+          'error'
+        );
+      }
     } catch (error) {
       setPanelStatus(elements.adminDashboardStatus, error && error.message ? error.message : 'Nie udało się przywrócić pliku.', 'error');
     } finally {

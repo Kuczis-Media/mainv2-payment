@@ -289,12 +289,17 @@ function activeUserDocument(input, catalogInput) {
   const catalog = normalizeCatalog(catalogInput);
   const sourceUserId = input?.userId || 'unknown';
   const user = normalizeUserDocument(input, sourceUserId);
+  const activeIds = new Set(catalog.nodes.map((node) => node.id));
   let removed = false;
   Object.entries(user.records).forEach(([id, record]) => {
     const invalidated = catalog.invalidatedAt[id];
     if (!invalidated) return;
     const activity = record.lastActivityAt || record.completedAt || record.lastOpenedAt || record.firstOpenedAt;
-    if (!activity || Date.parse(activity) <= Date.parse(invalidated)) {
+    // A progress request may start against the previous catalog and finish just
+    // after an administrator removes its material. While the ID is retired,
+    // never expose that racing write. If the same ID is deliberately added
+    // again, only records created after its invalidation belong to the new node.
+    if (!activeIds.has(id) || !activity || Date.parse(activity) <= Date.parse(invalidated)) {
       delete user.records[id];
       removed = true;
     }

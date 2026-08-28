@@ -55,6 +55,10 @@ test('Dashboard Builder loads and conditionally publishes the active Blob versio
   assert.match(script, /method:\s*['"]PUT['"]/);
   assert.match(script, /expectedEtag/);
   assert.match(script, /response\.status\s*===\s*409/);
+  assert.match(script, /catalogPending:\s*false/);
+  assert.match(script, /current === state\.dashboard\.baseline && !state\.dashboard\.catalogPending/);
+  assert.match(script, /state\.dashboard\.catalogPending = true;[\s\S]*const progressResponse = await fetch\(ADMIN_PROGRESS_URL/);
+  assert.match(script, /Ponów synchronizację katalogu postępu/);
   assert.match(script, /credentials:\s*['"]same-origin['"]/);
   assert.match(script, /getAccessToken\(\{\s*forceRefresh:\s*true\s*\}\)/);
   assert.match(model, /ADMIN_DASHBOARD_URL\s*=\s*['"]\/\.netlify\/functions\/admin-dashboard['"]/);

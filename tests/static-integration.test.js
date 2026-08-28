@@ -271,7 +271,13 @@ test('dashboard admin editor exposes the complete deployment file after load and
   assert.match(script, /function ensureRequiredHelpSection\(content\)/);
   assert.match(script, /model = ensureRequiredDashboardModel\(model\)/);
   assert.match(script, /fetchStaticDashboard\(true\)/);
-  assert.match(script, /renderDashboard\(parseMarkdown\(content\)\)/);
+  assert.match(script, /syncDashboardProgressCatalog\(model\)/);
+  assert.match(script, /action:\s*'catalog'/);
+  assert.match(script, /await syncDashboardProgressCatalog\(model\);[\s\S]*renderDashboard\(model, true\)/);
+  assert.match(script, /function renderDashboard\(model, forceProgress = false\)[\s\S]*hydrateDashboardProgress\(model, forceProgress\)/);
+  assert.match(script, /Postęp obejmuje teraz wyłącznie materiały znajdujące się w aktualnym dashboardzie/);
+  assert.match(script, /Usunięte materiały:/);
+  assert.doesNotMatch(script, /adminDashboardRestore\.disabled = !adminDashboardLoaded \|\| adminDashboardSourceKind !== 'blob'/);
 });
 
 test('sequential dashboard path is compact, readable and responsive', () => {

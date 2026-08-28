@@ -155,6 +155,7 @@
       remoteSource: 'draft',
       remoteUpdatedAt: null,
       baseline: '',
+      catalogPending: false,
       loading: false,
       publishing: false
     },
@@ -1587,13 +1588,16 @@
     try {
       current = dashboardModelApi.serialize(state.dashboard.model, { ensureRequiredHelp: true }).trim();
     } catch (_) {}
-    const dirty = !state.dashboard.remoteLoaded || current !== state.dashboard.baseline;
+    const dirty = !state.dashboard.remoteLoaded
+      || state.dashboard.catalogPending
+      || current !== state.dashboard.baseline;
     elements.dashboardPublish.disabled = !state.dashboard.remoteLoaded
       || !dirty
       || state.dashboard.loading
       || state.dashboard.publishing;
     elements.dashboardPublish.title = !state.dashboard.remoteLoaded
       ? 'Najpierw wczytaj aktywną wersję dashboardu'
+      : state.dashboard.catalogPending ? 'Ponów synchronizację katalogu postępu'
       : dirty ? 'Opublikuj zmiany w Netlify Blobs' : 'Brak zmian do opublikowania';
     if (state.dashboard.remoteLoaded && !dirty && !state.dashboard.publishing) {
       setSaveIndicator('Zgodny z aktywną wersją', 'saved');
@@ -1843,6 +1847,7 @@
       state.dashboard.remoteSource = source;
       state.dashboard.remoteUpdatedAt = updatedAt;
       state.dashboard.baseline = dashboardModelApi.serialize(model, { ensureRequiredHelp: true }).trim();
+      state.dashboard.catalogPending = false;
       scheduleDraftSave('dashboard');
       renderDashboard();
       toast(
@@ -1868,7 +1873,7 @@
       state.dashboard.model,
       { ensureRequiredHelp: true }
     ).trim();
-    if (current === state.dashboard.baseline) {
+    if (current === state.dashboard.baseline && !state.dashboard.catalogPending) {
       toast('Brak zmian do publikacji', 'Aktywna wersja dashboardu jest już aktualna.');
       return;
     }
@@ -1925,6 +1930,7 @@
         state.dashboard.model,
         { ensureRequiredHelp: true }
       ).trim();
+      state.dashboard.catalogPending = true;
       const progressResponse = await fetch(ADMIN_PROGRESS_URL, {
         method: 'PUT',
         credentials: 'same-origin',
@@ -1942,6 +1948,7 @@
         const progressError = await responseJson(progressResponse);
         throw new Error(`Dashboard zapisano, ale konfiguracja postępu wymaga ponowienia (${progressError?.error || progressResponse.status}).`);
       }
+      state.dashboard.catalogPending = false;
       scheduleDraftSave('dashboard');
       renderDashboard();
       toast('Dashboard opublikowany', 'Nowy układ jest już aktywny dla kursantów.');

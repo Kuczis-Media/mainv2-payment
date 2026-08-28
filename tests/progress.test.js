@@ -856,6 +856,38 @@ test('removing a dashboard node invalidates learner records without scanning eve
   assert.equal(JSON.parse(freshProgress.body).records.slides.progressPercent, 100);
 });
 
+test('a racing write cannot resurrect a retired dashboard node, while a fresh re-added node can progress', () => {
+  const invalidatedAt = '2026-08-15T10:00:00.000Z';
+  const completedAfterRemoval = progressCommon.normalizeUserDocument({
+    records: {
+      slides: {
+        materialType: 'presentation',
+        status: 'completed',
+        progressPercent: 100,
+        completedAt: '2026-08-15T10:00:01.000Z',
+        lastActivityAt: '2026-08-15T10:00:01.000Z'
+      }
+    }
+  }, USER_ONE);
+  const withoutSlides = catalog({
+    nodes: catalog().nodes.filter((node) => node.id !== 'slides'),
+    invalidatedAt: { slides: invalidatedAt }
+  });
+
+  assert.equal(
+    progressCommon.activeUserDocument(completedAfterRemoval, withoutSlides).records.slides,
+    undefined,
+    'a node absent from the active dashboard must stay retired even if its racing write is newer'
+  );
+
+  const readded = catalog({ invalidatedAt: { slides: invalidatedAt } });
+  assert.equal(
+    progressCommon.activeUserDocument(completedAfterRemoval, readded).records.slides?.status,
+    'completed',
+    'after deliberately re-adding the same ID, genuinely newer progress remains valid'
+  );
+});
+
 test('progress endpoint rejects opening a locked organizer step and unlocks it after completion', async (t) => {
   const store = new MemoryStore();
   const sequentialCatalog = progressCommon.normalizeCatalog({
