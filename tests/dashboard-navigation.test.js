@@ -45,11 +45,20 @@ test('dashboard binds immediate click, scroll and browser-history navigation tra
   assert.doesNotMatch(script, /new IntersectionObserver/);
 });
 
-test('members dashboard publishes a local ChemDisk SVG favicon', () => {
-  const html = fs.readFileSync(path.join(root, 'public', 'members', 'index.html'), 'utf8');
-  const faviconPath = path.join(root, 'public', 'members', 'favicon.svg');
+test('every published page uses the same GitHub CDN favicon', () => {
+  const canonical = 'https://cdn.jsdelivr.net/gh/Kuczis-Media/logo@main/benzene-ring.svg';
+  const htmlFiles = [];
+  const visit = (directory) => fs.readdirSync(directory, { withFileTypes: true }).forEach((entry) => {
+    const target = path.join(directory, entry.name);
+    if (entry.isDirectory()) visit(target);
+    else if (entry.name.endsWith('.html')) htmlFiles.push(target);
+  });
+  visit(path.join(root, 'public'));
 
-  assert.match(html, /<link rel=["']icon["'] href=["']\/members\/favicon\.svg["'] type=["']image\/svg\+xml["']\s*\/>/);
-  assert.equal(fs.existsSync(faviconPath), true);
-  assert.match(fs.readFileSync(faviconPath, 'utf8'), /<svg[\s\S]*aria-label=["']ChemDisk["']/);
+  assert.equal(htmlFiles.length, 26);
+  for (const filename of htmlFiles) {
+    const html = fs.readFileSync(filename, 'utf8');
+    assert.match(html, new RegExp(`<link rel=["']icon["'] href=["']${canonical.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'] type=["']image/svg\\+xml["']\\s*/?>`), filename);
+    assert.equal((html.match(/<link rel=["']icon["']/g) || []).length, 1, filename);
+  }
 });

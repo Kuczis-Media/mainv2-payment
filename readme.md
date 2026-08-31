@@ -21,11 +21,11 @@ public/
     ├── dashboard.js / dashboard.css   # interfejs, motyw, sidebar i wyszukiwarka
     ├── dashboard-parser.js            # bezpieczny parser kart i harmonijek
     ├── dashboard-navigation.js        # aktywna sekcja podczas kliknięcia/przewijania
-    ├── favicon.svg                    # lokalna ikona panelu kursanta
+    ├── favicon.svg                    # starszy lokalny fallback; strony używają wspólnego CDN
     └── module/
         ├── theme.js / theme.css       # wspólna paleta jasna/ciemna aplikacji
         ├── media-*.js / *.css         # wspólne mechanizmy podglądów mediów
-        ├── studio/                    # Dashboard, Lesson, Quiz, Prompt, Exam i Presentation Studio
+        ├── studio/                    # Buildery oraz lokalny generator pliku .env
         ├── exam/                      # wspólny odtwarzacz egzaminów
         ├── presentation/              # natywny odtwarzacz prezentacji ChemDisk
         ├── quiz/                      # odtwarzacz opublikowanych quizów ChemDisk
@@ -43,6 +43,8 @@ netlify/functions/
 ├── payment-admin.js                   # historia i odebranie płatnego dostępu
 ├── admin-forms.js                     # odczyt/usuwanie zgłoszeń Netlify Forms
 ├── admin-dashboard.js                 # aktywny Markdown w Netlify Blobs
+├── admin-landing.js / landing.js       # draft, publikacja i cache publicznego landingu
+├── admin-site-assets.js                # upload logo i obrazów do publicznego GitHuba
 ├── content-library.js                 # chroniona lista i odczyt repo treści
 ├── content-media.js                   # uwierzytelniony odczyt prywatnych obrazów
 ├── presentation.js                    # opublikowana definicja natywnej prezentacji
@@ -52,6 +54,7 @@ netlify/functions/
 └── chat.mjs                           # chroniony chat przez centralny router AI i limit Netlify
 netlify/admin-common.js                # wspólna kanoniczna autoryzacja
 netlify/content-repository.js           # serwerowy klient GitHub Contents API
+netlify/site-assets.js                  # publiczne assety i niezmienne adresy jsDelivr
 netlify/presentation-common.js          # walidacja modelu prezentacji i bezpiecznych mediów
 netlify/exam-common.js                  # model, losowanie i punktacja egzaminów
 netlify/exam-storage.js                 # próby, indeksy i agregaty w Blobs
@@ -109,11 +112,13 @@ GITHUB_CONTENT_REPOSITORIES=
 GITHUB_CONTENT_REPOSITORY=Kuczis-Media/chemdisk-content
 GITHUB_CONTENT_REF=main
 GITHUB_CONTENT_ROOT=
+GITHUB_SITE_ASSETS_TOKEN=github_pat_...
+GITHUB_SITE_ASSETS_DIRECTORY=
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 ```
 
-Nie umieszczaj kluczy w `public`, plikach JavaScript przeglądarki, `dashboard.md` ani `netlify.toml`. Klucze `GEMINI_API_KEY` i `OPENAI_API_KEY` są opcjonalnym mechanizmem awaryjnym; po pierwszym uruchomieniu dostawców AI konfiguruje się bez deployu w **Panel administratora → AI / Modele**. `GITHUB_CONTENT_TOKEN` jest używany wyłącznie przez Functions i nigdy nie jest zwracany do przeglądarki. `SITE_ID` jest ustawiane automatycznie na wdrożeniu Netlify; ręcznie jest potrzebne tylko lokalnie.
+Nie umieszczaj kluczy w `public`, plikach JavaScript przeglądarki, `dashboard.md` ani `netlify.toml`. Klucze `GEMINI_API_KEY` i `OPENAI_API_KEY` są opcjonalnym mechanizmem awaryjnym; po pierwszym uruchomieniu dostawców AI konfiguruje się bez deployu w **Panel administratora → AI / Modele**. Tokeny `GITHUB_CONTENT_TOKEN` i `GITHUB_SITE_ASSETS_TOKEN` są używane wyłącznie przez Functions i nigdy nie są zwracane do przeglądarki. `SITE_ID` jest ustawiane automatycznie na wdrożeniu Netlify; ręcznie jest potrzebne tylko lokalnie.
 
 `SITE_ID` i `NETLIFY_API_TOKEN` wskazują konkretną witrynę oraz jej site-wide Blobs. Jeżeli wpiszesz w lokalnym `.env` dane produkcyjne, funkcje uruchomione przez `netlify dev` mogą odczytać lub zmienić prawdziwy dashboard, konfigurację cen i księgi zakupów. Do prób administracyjnych i Stripe używaj osobnej witryny testowej z osobnym Identity, Blobs oraz kluczami Stripe test mode. Samo uruchomienie lokalne nie izoluje magazynów otwieranych z jawnymi poświadczeniami.
 
@@ -122,7 +127,7 @@ Nie umieszczaj kluczy w `public`, plikach JavaScript przeglądarki, `dashboard.m
 1. Utwórz witrynę z tego repozytorium. Ustawienia publikacji i funkcji są już zapisane w `netlify.toml` (`public` oraz `netlify/functions`).
 2. Włącz Netlify Identity. W ustawieniach rejestracji wybierz rejestrację otwartą albo tylko na zaproszenie, zależnie od sposobu sprzedaży kursu. Jeśli wymagane jest potwierdzenie e-maila, pozostaw włączone wiadomości potwierdzające.
 3. Dodaj `NETLIFY_API_TOKEN` w zmiennych środowiskowych witryny. Na Pro/Enterprise ustaw zakres **Functions**; na Free/Personal pozostaje domyślny zakres wszystkich usług. Token umożliwia panelowi administracyjnemu obsługę Forms oraz silnie spójny dostęp do Netlify Blobs, w tym metadanych i sekretów konfiguracji AI; traktuj go jak sekret. Musi należeć do konta mającego dostęp do witryny wskazanej przez automatyczne `SITE_ID`. Opcjonalnie dodaj `GEMINI_API_KEY` lub `OPENAI_API_KEY` jako awaryjny fallback dla chatu.
-4. Utwórz i podłącz prywatne repozytorium lub repozytoria materiałów według instrukcji poniżej. Dla `GITHUB_CONTENT_*` również wybierz zakres **Functions** tylko wtedy, gdy plan Pro/Enterprise udostępnia granularne zakresy.
+4. Utwórz i podłącz prywatne repozytorium lub repozytoria materiałów według instrukcji poniżej. Dodaj też token do stałego publicznego repo logo `Kuczis-Media/logo` jako `GITHUB_SITE_ASSETS_TOKEN`. Dla obu grup zmiennych wybierz zakres **Functions** tylko wtedy, gdy plan Pro/Enterprise udostępnia granularne zakresy.
 5. Skonfiguruj Stripe według osobnej instrukcji poniżej i dodaj `STRIPE_SECRET_KEY` oraz `STRIPE_WEBHOOK_SECRET` z zakresem **Functions**. Klucze live ogranicz do kontekstu Production; Preview/Branch powinny otrzymywać wyłącznie dane Stripe test mode i poświadczenia osobnej witryny testowej.
 6. Pierwszemu administratorowi przypisz ręcznie rolę `admin` w `app_metadata` w panelu Netlify Identity. Kolejnymi kontami można już zarządzać z panelu administratora w dashboardzie.
 7. Nowe konto bez roli może się uwierzytelnić i zobaczy cennik, ale nie otworzy `/members/`. Po udanej płatności rola i dokładny termin są nadawane automatycznie. Administrator nadal może przyznać dostęp ręcznie.
@@ -1216,9 +1221,28 @@ Nowe endpointy:
 
 ## Landing Page Builder
 
-Studio zawiera osobny **Landing Page Builder** pod `/members/module/studio/landing/`. Administrator układa sześć stabilnych sekcji strony głównej, zmienia ich kolejność, widoczność, tekst, obraz HTTPS/lokalny, CTA oraz kolory. **Zapisz draft** nie wpływa na stronę publiczną. **Opublikuj** po potwierdzeniu zapisuje osobną wersję publiczną w store `chemdisk-landing`; `public/index.html` pozostaje wersją awaryjną, jeśli store lub Function są niedostępne.
+Studio zawiera osobny **Landing Page Builder** pod `/members/module/studio/landing/`. Administrator układa sześć stabilnych sekcji strony głównej, zmienia ich kolejność, widoczność, tekst, obraz HTTPS/lokalny, CTA, kolory, logo oraz podstawowe metadane SEO. **Zapisz draft** nie wpływa na stronę publiczną. **Opublikuj** po potwierdzeniu zapisuje osobną wersję publiczną w store `chemdisk-landing`; `public/index.html` pozostaje wersją awaryjną, jeśli store lub Function są niedostępne.
+
+Przycisk **Wybierz / dodaj z GitHuba** otwiera bibliotekę plików w osobnym publicznym repo. Upload przechodzi przez funkcję administracyjną wyłącznie w chwili dodawania pliku. Po zapisie edytor zwraca niezmienny URL jsDelivr przypięty do SHA commita, a zwykłe wyświetlanie logo i obrazów odbywa się bezpośrednio z CDN, bez wywołania Function. Konfiguracja:
+
+```dotenv
+GITHUB_SITE_ASSETS_TOKEN=github_pat_TOKEN_TYLKO_DO_REPO_ASSETOW
+GITHUB_SITE_ASSETS_DIRECTORY=
+```
+
+Repozytorium `Kuczis-Media/logo` i gałąź `main` są celowo stałe, aby biblioteka logo oraz favicon wszystkich stron zawsze używały tego samego źródła. Repo musi pozostać publiczne. Token fine-grained powinien obejmować tylko to repo i uprawnienie **Contents: Read and write**. Token pozostaje po stronie Netlify; przeglądarka otrzymuje tylko nazwę repo, listę plików i publiczne adresy CDN. `GITHUB_SITE_ASSETS_DIRECTORY` można ustawić np. na `branding`, aby trzymać zarządzane pliki w jednym folderze; favicon pozostaje w katalogu głównym pod `benzene-ring.svg`.
+
+Edytor ma przełącznik podglądu desktop/mobile, skrót `Ctrl/Cmd+S`, lokalne odzyskiwanie niezapisanego draftu, przywracanie wersji opublikowanej, wykrywanie konfliktu równoczesnej edycji oraz timeouty zapisu. Link GitHub w formacie `blob` albo `raw` wklejony do pola obrazu jest normalizowany do jsDelivr.
+
+### Generator `.env` bez dodatkowych Functions
+
+Administrator otwiera **Studio → Generator .env** albo **Panel administratora → Materiały → Otwórz generator .env**. Narzędzie udostępnia gotową listę zmiennych ChemDisk, własne wiersze, lokalny import istniejącego pliku, wyszukiwarkę, ukrywanie sekretów, kopiowanie pełnej zawartości lub samych nazw i pobranie pliku `.env`.
+
+Generator działa wyłącznie w przeglądarce: nie wywołuje Function, nie zapisuje wpisanych sekretów w `localStorage` i nie wysyła ich do serwera. Fine-grained PAT GitHuba nie wymaga płatnego planu. Ograniczenie planu może dotyczyć automatycznego zapisu sekretu w Netlify; na planie bez tej funkcji skopiuj wygenerowane nazwy i wartości ręcznie do **Project configuration → Environment variables**, a potem uruchom deploy. Pobrany `.env` pozostaje sekretem i nie może zostać zacommitowany.
 
 Builder i runtime nie przyjmują dowolnego HTML. Serwer ogranicza pola i długości, akceptuje tylko kolory `#RRGGBB`, bezpieczne ścieżki/kotwice lub HTTPS, a przeglądarka wstawia treść przez `textContent`. Draft jest dostępny tylko przez `admin-landing` po kanonicznej kontroli roli administratora; publiczny endpoint `landing` zwraca wyłącznie opublikowany model.
+
+Publiczny model jest cache'owany na Netlify CDN i ma krótki `stale-while-revalidate`, natomiast endpointy administracyjne pozostają `no-store`. Studio pobiera repozytoria i pięć typów materiałów jednym żądaniem bootstrap zamiast sześciu osobnych wywołań. Functions są pakowane przez `esbuild`, co ogranicza rozmiar artefaktów i koszt zimnego startu bez zmiany ich API.
 
 ## Bezpieczeństwo i ograniczenia materiałów
 

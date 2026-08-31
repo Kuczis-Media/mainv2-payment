@@ -39,7 +39,7 @@ exports.handler = async function contentLibraryHandler(event = {}, context = {})
   const action = typeof query.action === 'string' ? query.action : 'list';
   const kind = typeof query.kind === 'string' ? query.kind : 'lesson';
   const repositoryId = typeof query.repo === 'string' ? query.repo : '';
-  const adminOnly = ['status', 'list-media'].includes(action)
+  const adminOnly = ['status', 'studio-bootstrap', 'list-media'].includes(action)
     || ['prompt', 'exam', 'question_bank', 'presentation', 'quiz'].includes(kind)
     || query.refresh === '1';
   const authorization = adminOnly
@@ -56,34 +56,16 @@ exports.handler = async function contentLibraryHandler(event = {}, context = {})
       let error = '';
       if (configuration.configured) {
         try {
-          const [lessons, prompts, exams, presentations, quizzes] = await Promise.all([
-            contentRepository.listAssets('lesson', {
-              force: query.refresh === '1',
-              repositoryId: configuration.id
-            }),
-            contentRepository.listAssets('prompt', {
-              force: query.refresh === '1',
-              repositoryId: configuration.id
-            }),
-            contentRepository.listAssets('exam', {
-              force: query.refresh === '1',
-              repositoryId: configuration.id
-            }),
-            contentRepository.listAssets('presentation', {
-              force: query.refresh === '1',
-              repositoryId: configuration.id
-            }),
-            contentRepository.listAssets('quiz', {
-              force: query.refresh === '1',
-              repositoryId: configuration.id
-            })
-          ]);
+          const assets = await contentRepository.listAssetBundle({
+            force: query.refresh === '1',
+            repositoryId: configuration.id
+          });
           counts = {
-            lessons: lessons.length,
-            prompts: prompts.length,
-            exams: exams.length,
-            presentations: presentations.length,
-            quizzes: quizzes.length
+            lessons: assets.lesson.length,
+            prompts: assets.prompt.length,
+            exams: assets.exam.length,
+            presentations: assets.presentation.length,
+            quizzes: assets.quiz.length
           };
           connection = 'ready';
         } catch (statusError) {
@@ -92,6 +74,19 @@ exports.handler = async function contentLibraryHandler(event = {}, context = {})
         }
       }
       return json({ configuration, repositories, connection, counts, error });
+    }
+
+    if (action === 'studio-bootstrap') {
+      const repository = contentRepository.publicConfiguration(process.env, repositoryId);
+      const assets = await contentRepository.listAssetBundle({
+        force: query.refresh === '1',
+        repositoryId: repository.id
+      });
+      return json({
+        repositories: contentRepository.publicConfigurations(),
+        repository,
+        assets
+      });
     }
 
     if (action === 'repositories') {

@@ -196,6 +196,12 @@ test('Studio exposes dashboard, lesson, exam and prompt authoring workflows', ()
   assert.match(script, /library\.list\(['"]lesson['"]/);
   assert.match(script, /library\.list\(['"]prompt['"]/);
   assert.match(script, /library\.repositories\(\)/);
+  assert.match(script, /library\.studioBootstrap\(/);
+  assert.match(script, /INVALID_CONTENT_ACTION/);
+  assert.match(script, /studioBootstrapCapability:\s*null/);
+  assert.match(script, /studioBootstrapCapability\s*===\s*false/);
+  assert.match(script, /INVALID_CONTENT_ACTION['"]\)\s*\{[\s\S]*?studioBootstrapCapability\s*=\s*false;[\s\S]*?return null/);
+  assert.match(script, /applyRepositoryAssetBundle/);
   assert.match(script, /ChemContentLibrary\.readLesson/);
   assert.match(script, /function createNewLessonDraft\(\)/);
   assert.match(script, /lessonModelApi\.parseEditableLesson\(source,\s*filename\)/);
@@ -300,6 +306,31 @@ test('Studio exposes dashboard, lesson, exam and prompt authoring workflows', ()
   assert.doesNotMatch(dashboardClone, /delete node\.id/);
   assert.match(script, /saveTimers:\s*\{\s*dashboard:\s*0,\s*lesson:\s*0,\s*prompt:\s*0\s*\}/);
   assert.match(script, /addEventListener\(['"]pagehide['"],\s*flushDrafts\)/);
+});
+
+test('Studio probes an unsupported bootstrap only once per page load', async () => {
+  const script = read('public/members/module/studio/script.js');
+  const source = /  (async function loadStudioBootstrap\(library, repositoryId, force\) \{[\s\S]*?\n  \})\n\n  function applyRepositoryAssetBundle/.exec(script);
+  assert.ok(source, 'missing loadStudioBootstrap helper');
+  const state = { contentLibrary: { studioBootstrapCapability: null } };
+  const loadStudioBootstrap = Function(
+    'state',
+    `'use strict';\n${source[1]}\nreturn loadStudioBootstrap;`
+  )(state);
+  let calls = 0;
+  const library = {
+    async studioBootstrap() {
+      calls += 1;
+      const error = new Error('Older Function');
+      error.code = 'INVALID_CONTENT_ACTION';
+      throw error;
+    }
+  };
+
+  assert.equal(await loadStudioBootstrap(library, '', false), null);
+  assert.equal(state.contentLibrary.studioBootstrapCapability, false);
+  assert.equal(await loadStudioBootstrap(library, '', true), null);
+  assert.equal(calls, 1);
 });
 
 test('lesson authoring extensions are rendered through strict, non-HTML directives', () => {

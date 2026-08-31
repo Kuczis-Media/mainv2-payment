@@ -58,6 +58,7 @@
     let deleting = false;
 
     const tick = () => {
+      if (!element.isConnected) return;
       const word = words[wordIndex];
       charIndex += deleting ? -1 : 1;
       element.textContent = word.slice(0, Math.max(0, charIndex));
@@ -87,7 +88,9 @@
     const menuLink = document.getElementById('login-btn');
     const callToAction = document.getElementById('login-cta');
     if (menuLink) menuLink.textContent = authenticated ? 'Panel kursanta' : 'Zaloguj';
-    if (callToAction) callToAction.textContent = authenticated ? 'Przejdź do kursu' : 'Zaloguj się';
+    if (callToAction && callToAction.dataset.landingManaged !== 'true') {
+      callToAction.textContent = authenticated ? 'Przejdź do kursu' : 'Zaloguj się';
+    }
   };
 
   const auth = window.ChemAuth;

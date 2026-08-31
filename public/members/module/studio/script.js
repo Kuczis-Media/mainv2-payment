@@ -131,6 +131,7 @@
     contentLibrary: {
       repositories: [],
       selectedRepositoryId: '',
+      studioBootstrapCapability: null,
       lessons: [],
       prompts: [],
       exams: [],
@@ -7290,13 +7291,65 @@
     if (state.mode === 'lesson') renderLessonInspector();
   }
 
+  async function loadRepositoryAssetLists(library, repositoryId, force) {
+    const [lesson, prompt, exam, presentation, quiz] = await Promise.all([
+      library.list('lesson', { refresh: Boolean(force), repositoryId }),
+      library.list('prompt', { refresh: Boolean(force), repositoryId }),
+      library.list('exam', { refresh: Boolean(force), repositoryId }),
+      library.list('presentation', { refresh: Boolean(force), repositoryId }),
+      library.list('quiz', { refresh: Boolean(force), repositoryId })
+    ]);
+    return { lesson, prompt, exam, presentation, quiz };
+  }
+
+  async function loadStudioBootstrap(library, repositoryId, force) {
+    if (
+      state.contentLibrary.studioBootstrapCapability === false ||
+      typeof library.studioBootstrap !== 'function'
+    ) return null;
+    let failure;
+    try {
+      const bootstrap = await library.studioBootstrap({
+        refresh: Boolean(force),
+        repositoryId
+      });
+      state.contentLibrary.studioBootstrapCapability = true;
+      return bootstrap;
+    } catch (error) {
+      failure = error;
+    }
+    if (repositoryId && failure?.code === 'INVALID_CONTENT_REPOSITORY') {
+      try {
+        const bootstrap = await library.studioBootstrap({ refresh: Boolean(force) });
+        state.contentLibrary.studioBootstrapCapability = true;
+        return bootstrap;
+      } catch (error) {
+        failure = error;
+      }
+    }
+    // A mixed deploy can briefly serve the new Studio with an older Function.
+    // Remember that capability until reload instead of paying for a failed probe
+    // before every repositories + list fallback.
+    if (failure?.code === 'INVALID_CONTENT_ACTION') {
+      state.contentLibrary.studioBootstrapCapability = false;
+      return null;
+    }
+    throw failure;
+  }
+
+  function applyRepositoryAssetBundle(assets = {}) {
+    state.contentLibrary.lessons = Array.isArray(assets.lesson) ? assets.lesson : [];
+    state.contentLibrary.prompts = Array.isArray(assets.prompt) ? assets.prompt : [];
+    state.contentLibrary.exams = Array.isArray(assets.exam) ? assets.exam : [];
+    state.contentLibrary.presentations = Array.isArray(assets.presentation) ? assets.presentation : [];
+    state.contentLibrary.quizzes = Array.isArray(assets.quiz) ? assets.quiz : [];
+  }
+
   async function loadRepositoryAssets(force) {
     const library = window.ChemContentLibrary;
-    if (
-      !library ||
-      typeof library.list !== 'function' ||
-      typeof library.repositories !== 'function'
-    ) {
+    const canLoadLegacy = typeof library?.list === 'function'
+      && typeof library?.repositories === 'function';
+    if (!library || (typeof library.studioBootstrap !== 'function' && !canLoadLegacy)) {
       elements.dashboardAssetStatus.textContent = 'Brakuje klienta biblioteki materiałów.';
       elements.lessonAssetStatus.textContent = 'Brakuje klienta biblioteki materiałów.';
       elements.promptAssetStatus.textContent = 'Brakuje klienta biblioteki materiałów.';
@@ -7316,32 +7369,41 @@
     }
     renderContentExplorer();
     try {
-      if (!state.contentLibrary.repositories.length) {
+      const bootstrap = await loadStudioBootstrap(
+        library,
+        state.contentLibrary.selectedRepositoryId,
+        force
+      );
+      if (requestId !== state.contentLibrary.requestId) return;
+      if (bootstrap) {
+        state.contentLibrary.repositories = Array.isArray(bootstrap.repositories)
+          ? bootstrap.repositories
+          : [];
+      } else if (!canLoadLegacy) {
+        throw new Error('Brakuje zgodnego klienta biblioteki materiałów.');
+      } else if (!state.contentLibrary.repositories.length) {
         state.contentLibrary.repositories = await library.repositories();
+        if (requestId !== state.contentLibrary.requestId) return;
       }
       if (!state.contentLibrary.repositories.length) {
         throw new Error('Nie skonfigurowano żadnego repozytorium materiałów.');
       }
-      if (!selectedRepository()) {
+      const bootstrapRepository = bootstrap?.repository?.id
+        ? state.contentLibrary.repositories.find((repository) => repository.id === bootstrap.repository.id)
+        : null;
+      if (bootstrapRepository) {
+        state.contentLibrary.selectedRepositoryId = bootstrapRepository.id;
+      } else if (!selectedRepository()) {
         const fallback = state.contentLibrary.repositories.find((repository) => repository.default)
           || state.contentLibrary.repositories[0];
         state.contentLibrary.selectedRepositoryId = fallback.id;
       }
       renderRepositorySelectors();
       const repositoryId = state.contentLibrary.selectedRepositoryId;
-      const [lessons, prompts, exams, presentations, quizzes] = await Promise.all([
-        library.list('lesson', { refresh: Boolean(force), repositoryId }),
-        library.list('prompt', { refresh: Boolean(force), repositoryId }),
-        library.list('exam', { refresh: Boolean(force), repositoryId }),
-        library.list('presentation', { refresh: Boolean(force), repositoryId }),
-        library.list('quiz', { refresh: Boolean(force), repositoryId })
-      ]);
+      const assets = bootstrap?.assets
+        || await loadRepositoryAssetLists(library, repositoryId, force);
       if (requestId !== state.contentLibrary.requestId) return;
-      state.contentLibrary.lessons = lessons;
-      state.contentLibrary.prompts = prompts;
-      state.contentLibrary.exams = exams;
-      state.contentLibrary.presentations = presentations;
-      state.contentLibrary.quizzes = quizzes;
+      applyRepositoryAssetBundle(assets);
       state.contentLibrary.loaded = true;
       renderRepositoryAssets();
       if (state.mode === 'dashboard') renderDashboardInspector();

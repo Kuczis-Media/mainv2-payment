@@ -5,6 +5,11 @@
   publish = "public"
   functions = "netlify/functions"
 
+## Bundle JavaScript Functions into compact artifacts. This especially reduces
+## the cold-start payload of endpoints that use @netlify/blobs.
+[functions]
+  node_bundler = "esbuild"
+
 ## Baseline browser hardening for all static pages. Module-specific iframes are
 ## still allowed to load external teaching tools; this only prevents ChemDisk
 ## itself from being embedded by unrelated sites.

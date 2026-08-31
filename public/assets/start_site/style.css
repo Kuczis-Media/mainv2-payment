@@ -7,11 +7,14 @@
     box-sizing: border-box;
     text-decoration: none;
 }
+[hidden]{
+    display: none !important;
+}
 
 [data-landing-managed="true"] .title::after,
 [data-landing-managed="true"] a,
 [data-landing-managed="true"] button {
-    border-color: var(--landing-accent, currentColor);
+    border-color: var(--landing-accent, crimson);
 }
 [data-landing-managed="true"] .title,
 [data-landing-managed="true"] .text,
@@ -21,7 +24,34 @@
 }
 [data-landing-managed="true"] a,
 [data-landing-managed="true"] button {
-    background-color: var(--landing-accent, currentColor);
+    background-color: var(--landing-accent, crimson);
+}
+section[data-landing-managed="true"] .title::after,
+section[data-landing-managed="true"].home .home-content .text-3 span,
+section[data-landing-managed="true"].about .about-content .right .text span,
+section[data-landing-managed="true"].services .serv-content .card i,
+section[data-landing-managed="true"].contact .contact-content .row i {
+    color: var(--landing-accent, crimson);
+}
+section[data-landing-managed="true"].services .serv-content .card:hover,
+section[data-landing-managed="true"].skills .steps-list .step-number {
+    background-color: var(--landing-accent, crimson);
+}
+section[data-landing-managed="true"].home .home-content a,
+section[data-landing-managed="true"].about .about-content .right a,
+section[data-landing-managed="true"].skills .skills-content .left a,
+section[data-landing-managed="true"] .landing-section-cta,
+section[data-landing-managed="true"].contact .right form .button-area button {
+    border-color: var(--landing-accent, crimson);
+    background-color: var(--landing-accent, crimson);
+}
+section[data-landing-managed="true"].home .home-content a:hover,
+section[data-landing-managed="true"].about .about-content .right a:hover,
+section[data-landing-managed="true"].skills .skills-content .left a:hover,
+section[data-landing-managed="true"] .landing-section-cta:hover,
+section[data-landing-managed="true"].contact .right form .button-area button:hover {
+    color: var(--landing-accent, crimson);
+    background: none;
 }
 html{
     scroll-behavior: smooth;
@@ -119,7 +149,8 @@ section .title::after{
     font-family: 'Ubuntu', sans-serif;
     transition: all 0.3s ease;
 }
-.navbar.sticky{
+.navbar.sticky,
+.navbar.landing-solid{
     padding: 15px 0;
     background: crimson;
 }
@@ -137,8 +168,25 @@ section .title::after{
     color: crimson;
     transition: all 0.3s ease;
 }
-.navbar.sticky .logo a span{
+.navbar.sticky .logo a span,
+.navbar.landing-solid .logo a span{
     color: #fff;
+}
+.navbar .logo a.has-brand-image{
+    display: flex;
+    min-width: 80px;
+    align-items: center;
+}
+.navbar .logo a.has-brand-image img{
+    display: block;
+    width: auto;
+    max-width: 220px;
+    height: 52px;
+    object-fit: contain;
+}
+.navbar.sticky .logo a.has-brand-image img,
+.navbar.landing-solid .logo a.has-brand-image img{
+    height: 40px;
 }
 .navbar .menu li{
     list-style: none;
@@ -155,8 +203,44 @@ section .title::after{
 .navbar .menu li a:hover{
     color: crimson;
 }
-.navbar.sticky .menu li a:hover{
+.navbar.sticky .menu li a:hover,
+.navbar.landing-solid .menu li a:hover{
     color: #fff;
+}
+
+.landing-section-subtitle,
+.landing-section-body{
+    max-width: 760px;
+    color: inherit;
+    line-height: 1.7;
+    text-align: center;
+}
+.landing-section-subtitle{
+    margin: -42px auto 8px;
+    font-size: 20px;
+    font-weight: 600;
+}
+.landing-section-body{
+    margin: 0 auto 42px;
+}
+.landing-section-image{
+    display: block;
+    width: min(100%, 920px);
+    max-height: 460px;
+    margin: 0 auto 44px;
+    border-radius: 12px;
+    object-fit: cover;
+}
+.landing-section-cta{
+    display: table;
+    margin: 30px auto 0;
+    padding: 10px 24px;
+    border: 2px solid crimson;
+    border-radius: 6px;
+    color: #fff;
+    background: crimson;
+    font-size: 18px;
+    font-weight: 500;
 }
 
 /* menu btn styling */
@@ -203,6 +287,7 @@ section .title::after{
 .home{
     display: flex;
     background: url("https://cdn.jsdelivr.net/gh/Kuczis-Media/landing-page-assets/images/banner-chemical.png") no-repeat center;
+    background-color: #111;
     height: 100vh;
     color: #fff;
     min-height: 500px;
@@ -265,6 +350,12 @@ section .title::after{
 }
 .about .about-content .right{
     width: 55%;
+}
+.about.landing-no-image .about-content .left{
+    display: none;
+}
+.about.landing-no-image .about-content .right{
+    width: 100%;
 }
 .about .about-content .right .text{
     font-size: 25px;

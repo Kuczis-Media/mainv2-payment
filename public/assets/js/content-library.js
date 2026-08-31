@@ -12,6 +12,13 @@
   const SAFE_EXAM_ID = /^[a-z0-9][a-z0-9-]{0,79}$/;
   const SAFE_QUESTION_BANK_FILENAME = /^question-bank\.json$/;
   const SAFE_REPOSITORY_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
+  const STUDIO_ASSET_KINDS = Object.freeze([
+    'lesson',
+    'prompt',
+    'exam',
+    'presentation',
+    'quiz'
+  ]);
   const MEDIA_CACHE_TTL_MS = 15 * 60 * 1000;
   const MEDIA_CACHE_MAX_ENTRIES = 96;
   const MEDIA_FETCH_TIMEOUT_MS = 12_000;
@@ -452,6 +459,27 @@
     return Array.isArray(payload.repositories) ? payload.repositories : [];
   }
 
+  async function studioBootstrap(options = {}) {
+    const payload = await request({
+      action: 'studio-bootstrap',
+      repo: validateRepositoryId(options.repositoryId),
+      refresh: options.refresh ? '1' : ''
+    });
+    const source = payload && payload.assets && typeof payload.assets === 'object'
+      ? payload.assets
+      : {};
+    return {
+      repositories: Array.isArray(payload.repositories) ? payload.repositories : [],
+      repository: payload && payload.repository && typeof payload.repository === 'object'
+        ? payload.repository
+        : null,
+      assets: Object.fromEntries(STUDIO_ASSET_KINDS.map((kind) => [
+        kind,
+        Array.isArray(source[kind]) ? source[kind] : []
+      ]))
+    };
+  }
+
   function lessonUrl(rawFilename, rawRepositoryId = '') {
     const filename = validateFilename('lesson', rawFilename);
     const repositoryId = validateRepositoryId(rawRepositoryId);
@@ -520,6 +548,7 @@
     save,
     search,
     status,
+    studioBootstrap,
     listMedia,
     readMediaBlob,
     uploadMedia,

@@ -220,6 +220,8 @@ Nie wpisuj ról do `user_metadata`. Uprawnienia aplikacji pochodzą wyłącznie 
 | `GITHUB_CONTENT_ROOT` | Opcjonalna | Własny układ repo | Pusty albo np. `materials` |
 | `GITHUB_CONTENT_REPOSITORIES` | Przy wielu repo | Tworzysz samodzielnie jako JSON | Lista repozytoriów do selektora |
 | `GITHUB_CONTENT_TOKEN_DOWOLNA_NAZWA` | Opcjonalna | Osobny token GitHub | Token dla repo innego właściciela |
+| `GITHUB_SITE_ASSETS_TOKEN` | Dla uploadu logo i obrazów | GitHub fine-grained PAT | Zapis do jednego publicznego repo assetów strony |
+| `GITHUB_SITE_ASSETS_DIRECTORY` | Opcjonalna | Własny układ repo | Pusty katalog główny albo np. `branding` |
 | `NETLIFY_API_TOKEN` | Dla Forms, Blobs i pełnego panelu admina | Konto Netlify | Dostęp serwerowy do bieżącej witryny |
 | `STRIPE_SECRET_KEY` | Dla płatności | Sandbox lub live Stripe | Tworzenie i sprawdzanie Checkout |
 | `STRIPE_WEBHOOK_SECRET` | Dla płatności | Endpoint webhooka Stripe | Sprawdzenie podpisu zdarzeń |
@@ -2104,12 +2106,45 @@ Najważniejsze komunikaty:
 ### 38.4. Landing Page Builder
 
 1. Otwórz **Studio treści → Landing Page Builder**.
-2. Wybierz sekcję. Zmień tytuł, podtytuł, opis, obraz, CTA i kolory.
-3. Przeciągnij sekcję albo użyj strzałek. Przełącznik **Widoczna** ukrywa ją po publikacji bez kasowania treści.
-4. Kliknij **Zapisz draft**, aby zachować pracę bez zmiany strony publicznej.
-5. Sprawdź bezpieczny podgląd i kliknij **Opublikuj**. Na końcu otwórz stronę główną w nowej karcie.
+2. Ustaw logo, tekst alternatywny, tytuł strony i opis SEO w panelu **Branding i SEO**.
+3. Wybierz sekcję. Zmień tytuł, podtytuł, opis, obraz, CTA i kolory.
+4. Obok pola logo lub obrazu kliknij **Wybierz / dodaj z GitHuba**, aby wyszukać plik, skopiować jego URL CDN albo wgrać nowy obraz przeciągnięciem, wklejeniem lub wyborem z dysku.
+5. Przeciągnij sekcję albo użyj strzałek. Przełącznik **Widoczna** ukrywa ją po publikacji bez kasowania treści.
+6. Sprawdź widok desktopowy i mobilny. `Ctrl+S` lub `Cmd+S` zapisuje draft.
+7. Kliknij **Zapisz draft**, aby zachować pracę bez zmiany strony publicznej.
+8. Sprawdź bezpieczny podgląd i kliknij **Opublikuj**. Na końcu otwórz stronę główną w nowej karcie.
+
+Do biblioteki assetów dodaj w Netlify:
+
+```dotenv
+GITHUB_SITE_ASSETS_TOKEN=github_pat_TUTAJ_WKLEJ_TOKEN
+GITHUB_SITE_ASSETS_DIRECTORY=
+```
+
+Kod celowo używa jednego stałego repo `Kuczis-Media/logo` na gałęzi `main`, aby logo i favicon zawsze pochodziły z tego samego miejsca. Repozytorium musi pozostać **Public**. Utwórz osobny fine-grained token ograniczony wyłącznie do tego repo i nadaj mu **Repository permissions → Contents: Read and write**. Nie używaj tokenu do prywatnych materiałów, jeśli może mieć węższy zakres. Po zmianie zmiennych wykonaj deploy. Samo późniejsze dodanie obrazu z Buildera nie wymaga deployu.
+
+Nowy upload dostaje unikalną nazwę i zwraca adres jsDelivr przypięty do SHA commita. Dzięki temu przeglądarka pobiera logo, favicon i obrazy bezpośrednio z CDN; Function działa tylko podczas listowania lub uploadu w panelu administratora. Token GitHub nie trafia do kodu strony. Wklejony adres `github.com/.../blob/...` albo `raw.githubusercontent.com/...` jest automatycznie przeliczany na jsDelivr.
+
+Wszystkie statyczne strony mają jeden favicon: `https://cdn.jsdelivr.net/gh/Kuczis-Media/logo@main/benzene-ring.svg`. Zmiana pliku pod tą samą nazwą może być widoczna z opóźnieniem cache CDN; do wersjonowanych obrazów landing page Builder używa URL z SHA commita.
+
+Edytor zachowuje lokalną kopię niezapisanego draftu, ostrzega przed zamknięciem karty i pozwala przywrócić ostatnią wersję opublikowaną. Serwer wykrywa zapis oparty na starej rewizji, więc druga sesja administratora nie nadpisze po cichu nowszej pracy.
+
+Publiczny odczyt landingu ma krótki cache Netlify CDN z odświeżaniem w tle. Endpointy administratora pozostają bez cache, a obrazy nigdy nie są proxy'owane przez Function. Konfiguracja `node_bundler = "esbuild"` w `netlify.toml` zmniejsza paczki Functions i ich zimny start.
 
 Obraz musi używać HTTPS albo ścieżki lokalnej `/...`. CTA przyjmuje kotwicę `#sekcja`, ścieżkę lokalną lub HTTPS. Builder nie obsługuje wklejania HTML/JavaScript; tekst jest renderowany jako tekst, więc próba `<script>` nie jest wykonywana. Opublikowany model jest w `chemdisk-landing`, a statyczne `public/index.html` pozostaje awaryjną wersją przy braku Blobs.
+
+### 38.4.1. Generator pliku `.env`
+
+Generator otworzysz z karty **Studio → Generator .env** albo z zakładki **Panel administratora → Materiały**. Działa bez wywoływania Netlify Functions i pozwala:
+
+- wypełnić gotowe zmienne ChemDisk;
+- dodać własne nazwy i wartości;
+- zaimportować istniejący `.env` wyłącznie lokalnie;
+- ukryć lub podejrzeć pola sekretów;
+- skopiować pełny plik albo same nazwy zmiennych;
+- pobrać gotowy plik o nazwie `.env`.
+
+Wpisane tokeny i klucze istnieją tylko w bieżącej karcie. Generator nie wysyła ich do serwera i nie zapisuje w `localStorage`. Fine-grained PAT GitHuba jest bezpłatny; płatny plan może być potrzebny jedynie do wybranych mechanizmów automatycznego zarządzania sekretami Netlify. Na planie bez tej możliwości skopiuj wartości ręcznie do **Project configuration → Environment variables**, wybierz właściwy kontekst i uruchom deploy. Pobrany `.env` trzymaj poza Gitem.
 
 ### 38.5. Store'y Netlify Blobs dodane dla AI i landing page
 
@@ -2117,7 +2152,7 @@ Obraz musi używać HTTPS albo ścieżki lokalnej `/...`. CTA przyjmuje kotwicę
 - `chemdisk-ai-usage` — agregaty, krótkie rezerwacje i ograniczony log szczegółowy;
 - `chemdisk-landing` — osobny draft i opublikowany model strony.
 
-Nie są potrzebne nowe zmienne poza `NETLIFY_API_TOKEN` i `SITE_ID`. Klucze providerów nadal konfiguruj w panelu, a ENV traktuj jako migracyjny fallback.
+Landing page nadal używa `NETLIFY_API_TOKEN` i `SITE_ID` do draftu oraz publikacji. Biblioteka publicznych logo i obrazów wymaga dodatkowo `GITHUB_SITE_ASSETS_TOKEN` i opcjonalnie `GITHUB_SITE_ASSETS_DIRECTORY`; bez tokenu ręczne URL-e obrazów nadal działają, ale listowanie i upload do GitHuba są niedostępne. Klucze providerów AI nadal konfiguruj w panelu, a ENV traktuj jako migracyjny fallback.
 
 ## 39. Oficjalne źródła
 

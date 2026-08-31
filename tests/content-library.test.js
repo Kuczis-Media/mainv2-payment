@@ -265,6 +265,52 @@ test('an older repository without exams keeps lessons and prompts available', as
   assert.deepEqual(exams, []);
 });
 
+test('content repository lists a Studio bundle with one shared catalog request', async () => {
+  repository._test.clearCache();
+  const requests = [];
+  const fetchImpl = async (url) => {
+    const value = String(url);
+    requests.push(value);
+    if (value.includes('/contents/catalog.json')) {
+      return githubResponse({
+        assets: {
+          'lessons/atom.md': { title: 'Atom z katalogu' },
+          'prompts/pomoc.txt': { title: 'Pomoc z katalogu' }
+        }
+      });
+    }
+    if (value.includes('/contents/lessons')) {
+      return githubResponse([{ type: 'file', name: 'atom.md', size: 120, sha: 'lesson-sha' }]);
+    }
+    if (value.includes('/contents/prompts')) {
+      return githubResponse([{ type: 'file', name: 'pomoc.txt', size: 80, sha: 'prompt-sha' }]);
+    }
+    if (['/contents/exams', '/contents/presentations', '/contents/quizzes'].some((path) => value.includes(path))) {
+      return githubResponse([]);
+    }
+    throw new Error(`Unexpected request: ${value}`);
+  };
+
+  const assets = await repository.listAssetBundle({
+    config: configured,
+    fetchImpl,
+    force: true
+  });
+
+  assert.equal(assets.lesson[0].title, 'Atom z katalogu');
+  assert.equal(assets.prompt[0].title, 'Pomoc z katalogu');
+  assert.deepEqual(assets.exam, []);
+  assert.deepEqual(assets.presentation, []);
+  assert.deepEqual(assets.quiz, []);
+  assert.equal(requests.filter((url) => url.includes('/contents/catalog.json')).length, 1);
+  assert.equal(requests.filter((url) => /\/contents\/(?:lessons|prompts|exams|presentations|quizzes)(?:\?|$)/.test(url)).length, 5);
+
+  requests.length = 0;
+  const cached = await repository.listAssetBundle({ config: configured, fetchImpl });
+  assert.equal(cached.lesson[0].title, 'Atom z katalogu');
+  assert.equal(requests.length, 0);
+});
+
 test('content repository reads UTF-8 lessons and rejects traversal', async () => {
   const fetchImpl = async () => githubResponse('# Lekcja\n\nTreść.', {
     headers: { etag: '"abc123"', 'content-length': '18' }
@@ -441,6 +487,54 @@ test('browser content client searches metadata and validates names locally', () 
   assert.deepEqual(browserLibrary.search(assets, 'ATOM'), [assets[0]]);
   assert.equal(browserLibrary.validateFilename('lesson', 'atom.md'), 'atom.md');
   assert.throws(() => browserLibrary.validateFilename('lesson', '../atom.md'));
+});
+
+test('browser content client loads and normalizes the Studio bootstrap in one request', async (t) => {
+  const originalDocument = global.document;
+  const originalLocation = global.location;
+  const originalAuth = global.ChemAuth;
+  const originalFetch = global.fetch;
+  const requests = [];
+  t.after(() => {
+    if (originalDocument === undefined) delete global.document;
+    else global.document = originalDocument;
+    if (originalLocation === undefined) delete global.location;
+    else global.location = originalLocation;
+    if (originalAuth === undefined) delete global.ChemAuth;
+    else global.ChemAuth = originalAuth;
+    global.fetch = originalFetch;
+  });
+  global.document = { querySelector: () => null };
+  global.location = { origin: 'https://course.example' };
+  global.ChemAuth = { getAccessToken: async () => 'identity-secret' };
+  global.fetch = async (url, options) => {
+    requests.push({ url: String(url), options });
+    return githubResponse({
+      repositories: [{ id: 'organiczna', label: 'Organiczna', default: true }],
+      repository: { id: 'organiczna', label: 'Organiczna', default: true },
+      assets: {
+        lesson: [{ filename: 'atom.md' }],
+        prompt: [{ filename: 'pomoc.txt' }]
+      }
+    });
+  };
+
+  const bootstrap = await browserLibrary.studioBootstrap({
+    repositoryId: 'organiczna',
+    refresh: true
+  });
+
+  assert.equal(requests.length, 1);
+  const url = new URL(requests[0].url);
+  assert.equal(url.searchParams.get('action'), 'studio-bootstrap');
+  assert.equal(url.searchParams.get('repo'), 'organiczna');
+  assert.equal(url.searchParams.get('refresh'), '1');
+  assert.equal(requests[0].options.headers.Authorization, 'Bearer identity-secret');
+  assert.equal(bootstrap.repository.id, 'organiczna');
+  assert.equal(bootstrap.assets.lesson[0].filename, 'atom.md');
+  assert.deepEqual(bootstrap.assets.exam, []);
+  assert.deepEqual(bootstrap.assets.presentation, []);
+  assert.deepEqual(bootstrap.assets.quiz, []);
 });
 
 test('browser media client reuses an authenticated image Blob and allows an explicit retry', async (t) => {
@@ -634,6 +728,75 @@ test('content status endpoint requires an admin and never returns a secret', asy
   assert.doesNotMatch(response.body, /identity-token|github_pat/);
 });
 
+test('Studio bootstrap returns repositories and five lists with one catalog download', async (t) => {
+  const originalFetch = global.fetch;
+  const originalToken = process.env.GITHUB_CONTENT_TOKEN;
+  const originalRepository = process.env.GITHUB_CONTENT_REPOSITORY;
+  const originalRepositories = process.env.GITHUB_CONTENT_REPOSITORIES;
+  const originalRef = process.env.GITHUB_CONTENT_REF;
+  const originalRoot = process.env.GITHUB_CONTENT_ROOT;
+  t.after(() => {
+    global.fetch = originalFetch;
+    if (originalToken === undefined) delete process.env.GITHUB_CONTENT_TOKEN;
+    else process.env.GITHUB_CONTENT_TOKEN = originalToken;
+    if (originalRepository === undefined) delete process.env.GITHUB_CONTENT_REPOSITORY;
+    else process.env.GITHUB_CONTENT_REPOSITORY = originalRepository;
+    if (originalRepositories === undefined) delete process.env.GITHUB_CONTENT_REPOSITORIES;
+    else process.env.GITHUB_CONTENT_REPOSITORIES = originalRepositories;
+    if (originalRef === undefined) delete process.env.GITHUB_CONTENT_REF;
+    else process.env.GITHUB_CONTENT_REF = originalRef;
+    if (originalRoot === undefined) delete process.env.GITHUB_CONTENT_ROOT;
+    else process.env.GITHUB_CONTENT_ROOT = originalRoot;
+  });
+  process.env.GITHUB_CONTENT_TOKEN = 'github_pat_bootstrap_secret';
+  process.env.GITHUB_CONTENT_REPOSITORY = 'Kuczis-Media/chemdisk-content';
+  process.env.GITHUB_CONTENT_REF = 'main';
+  delete process.env.GITHUB_CONTENT_ROOT;
+  delete process.env.GITHUB_CONTENT_REPOSITORIES;
+  repository._test.clearCache();
+  const githubRequests = [];
+  global.fetch = async (url) => {
+    const value = String(url);
+    if (value.includes('/.netlify/identity/user')) {
+      return githubResponse({ id: 'admin-1', app_metadata: { roles: ['admin'] } });
+    }
+    githubRequests.push(value);
+    if (value.includes('/contents/catalog.json')) return githubResponse({ assets: {} });
+    if (value.includes('/contents/lessons')) {
+      return githubResponse([{ type: 'file', name: 'atom.md', size: 100, sha: 'sha-1' }]);
+    }
+    if (value.includes('/contents/prompts')) {
+      return githubResponse([{ type: 'file', name: 'pomoc.txt', size: 80, sha: 'sha-2' }]);
+    }
+    if (['/contents/exams', '/contents/presentations', '/contents/quizzes'].some((path) => value.includes(path))) {
+      return githubResponse([]);
+    }
+    throw new Error(`Unexpected request: ${value}`);
+  };
+
+  const response = await contentFunction.handler({
+    httpMethod: 'GET',
+    headers: { authorization: 'Bearer identity-token' },
+    queryStringParameters: { action: 'studio-bootstrap', refresh: '1' }
+  }, {
+    clientContext: {
+      user: { id: 'admin-1', app_metadata: { roles: ['admin'] } },
+      identity: { url: 'https://course.example/.netlify/identity' }
+    }
+  });
+  const payload = JSON.parse(response.body);
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(payload.repositories.length, 1);
+  assert.equal(payload.repository.id, 'default');
+  assert.equal(payload.assets.lesson[0].filename, 'atom.md');
+  assert.equal(payload.assets.prompt[0].filename, 'pomoc.txt');
+  assert.deepEqual(payload.assets.exam, []);
+  assert.equal(githubRequests.filter((url) => url.includes('/contents/catalog.json')).length, 1);
+  assert.equal(githubRequests.length, 6);
+  assert.doesNotMatch(response.body, /github_pat_bootstrap_secret|identity-token/);
+});
+
 test('course users receive the safe repository selector without GitHub tokens', async (t) => {
   const originalFetch = global.fetch;
   const originalRepositories = process.env.GITHUB_CONTENT_REPOSITORIES;
@@ -745,7 +908,17 @@ test('course users can list lessons but prompt metadata remains admin-only', asy
   assert.equal(promptsResponse.statusCode, 403);
   assert.equal(JSON.parse(promptsResponse.body).error, 'ADMIN_REQUIRED');
   assert.equal(githubRequests, requestsBeforePrompts);
-  assert.doesNotMatch(lessonsResponse.body + promptsResponse.body, /test-content-token/);
+  const bootstrapResponse = await contentFunction.handler({
+    ...baseEvent,
+    queryStringParameters: { action: 'studio-bootstrap' }
+  }, context);
+  assert.equal(bootstrapResponse.statusCode, 403);
+  assert.equal(JSON.parse(bootstrapResponse.body).error, 'ADMIN_REQUIRED');
+  assert.equal(githubRequests, requestsBeforePrompts);
+  assert.doesNotMatch(
+    lessonsResponse.body + promptsResponse.body + bootstrapResponse.body,
+    /test-content-token/
+  );
 });
 
 test('repository mutations require same-origin JSON and a canonical administrator', async (t) => {

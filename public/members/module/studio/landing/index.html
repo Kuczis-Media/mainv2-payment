@@ -6,6 +6,7 @@
   <meta name="x-members" content="1">
   <meta name="referrer" content="no-referrer">
   <title>Landing Page Builder — ChemDisk Studio</title>
+  <link rel="icon" href="https://cdn.jsdelivr.net/gh/Kuczis-Media/logo@main/benzene-ring.svg" type="image/svg+xml">
   <script src="/members/module/theme.js"></script>
   <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
   <script defer src="/assets/js/auth.js"></script>
@@ -17,6 +18,8 @@
     <a href="/members/module/studio/" class="back-link">← Studio</a>
     <div><span>Landing Page Builder</span><small>Draft · podgląd · publikacja</small></div>
     <div class="header-actions">
+      <button id="recover-local" type="button" hidden>Odzyskaj kopię</button>
+      <button id="restore-published" type="button" hidden>Przywróć opublikowaną</button>
       <button id="save-draft" type="button">Zapisz draft</button>
       <button id="publish" class="primary" type="button">Opublikuj</button>
     </div>
@@ -30,12 +33,30 @@
     </aside>
 
     <section class="editor-panel" aria-labelledby="editor-title">
+      <details class="branding-card" open>
+        <summary><span><span class="eyebrow">Branding i SEO</span><strong>Logo strony</strong></span><small>Publiczny GitHub → jsDelivr</small></summary>
+        <div class="form-grid branding-grid">
+          <div class="wide asset-url-field">
+            <label for="branding-logo"><span>Adres logo (GitHub, jsDelivr albo HTTPS)</span></label>
+            <div><input id="branding-logo" maxlength="1000" placeholder="https://…"><button type="button" data-open-assets="logo">Wybierz / wgraj</button><button id="copy-logo-url" type="button">Kopiuj URL</button></div>
+            <small>Link typu github.com/…/blob/… zostanie automatycznie zamieniony na adres CDN.</small>
+          </div>
+          <label><span>Tekst ALT logo</span><input id="branding-logo-alt" maxlength="120"></label>
+          <label><span>Tytuł karty / SEO</span><input id="branding-site-title" maxlength="160"></label>
+          <label class="wide"><span>Opis strony dla wyszukiwarki</span><textarea id="branding-site-description" rows="3" maxlength="320"></textarea></label>
+        </div>
+        <div id="logo-preview" class="logo-preview" hidden><img alt="Podgląd logo"></div>
+      </details>
       <div class="panel-heading"><div><span class="eyebrow">Edycja</span><h2 id="editor-title">Sekcja</h2></div><label class="toggle"><input id="section-enabled" type="checkbox"><span>Widoczna</span></label></div>
       <div class="form-grid">
         <label><span>Tytuł</span><input id="section-title" maxlength="120"></label>
         <label><span>Podtytuł</span><input id="section-subtitle" maxlength="180"></label>
         <label class="wide"><span>Opis</span><textarea id="section-body" rows="5" maxlength="2000"></textarea></label>
-        <label class="wide"><span>Adres obrazu (HTTPS albo ścieżka /assets/...)</span><input id="section-image" maxlength="1000" placeholder="https://…"></label>
+        <div class="wide asset-url-field">
+          <label for="section-image"><span>Adres obrazu (GitHub, jsDelivr, HTTPS albo /assets/...)</span></label>
+          <div><input id="section-image" maxlength="1000" placeholder="https://…"><button type="button" data-open-assets="section">Wybierz / wgraj</button></div>
+        </div>
+        <label class="wide"><span>Opis ALT obrazu</span><input id="section-image-alt" maxlength="180" placeholder="Co przedstawia obraz?"></label>
         <label><span>Tekst przycisku</span><input id="section-cta-label" maxlength="80"></label>
         <label><span>Link przycisku</span><input id="section-cta-href" maxlength="1000" placeholder="#pricing lub /members/"></label>
       </div>
@@ -51,10 +72,24 @@
     </section>
 
     <section class="preview-panel" aria-labelledby="preview-title">
-      <div class="panel-heading"><div><span class="eyebrow">Bezpieczny podgląd</span><h2 id="preview-title">Strona główna</h2></div><a href="/" target="_blank" rel="noopener">Otwórz stronę ↗</a></div>
+      <div class="panel-heading"><div><span class="eyebrow">Bezpieczny podgląd</span><h2 id="preview-title">Strona główna</h2></div><div class="preview-actions"><div class="preview-size" role="group" aria-label="Szerokość podglądu"><button type="button" data-preview-size="desktop" aria-pressed="true">Desktop</button><button type="button" data-preview-size="mobile" aria-pressed="false">Telefon</button></div><a href="/" target="_blank" rel="noopener">Otwórz stronę ↗</a></div></div>
+      <div id="preview-brand" class="preview-brand"><strong>Chem<span>Disk</span></strong></div>
       <div id="landing-preview" class="landing-preview"></div>
     </section>
   </main>
+
+  <dialog id="asset-dialog" class="asset-dialog" aria-labelledby="asset-dialog-title">
+    <div class="asset-shell">
+      <header><div><span class="eyebrow">Publiczne repozytorium GitHub</span><h2 id="asset-dialog-title">Logo i obrazy strony</h2><p>Plik zapisze się jako odwracalny commit, a Studio zwróci gotowy adres jsDelivr.</p></div><button id="asset-close" type="button" aria-label="Zamknij">×</button></header>
+      <section id="asset-drop" class="asset-drop" tabindex="0">
+        <input id="asset-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" multiple hidden>
+        <span aria-hidden="true">＋</span><div><strong>Przeciągnij, wklej lub wybierz plik</strong><small>PNG, JPG, WebP, GIF lub bezpieczny SVG · maks. 4 MB</small></div><button id="asset-file-button" type="button">Wybierz pliki</button>
+      </section>
+      <div class="asset-toolbar"><label><span class="sr-only">Szukaj pliku</span><input id="asset-search" type="search" placeholder="Szukaj po nazwie…"></label><button id="asset-refresh" type="button">↻ Odśwież</button></div>
+      <p id="asset-status" class="asset-status" role="status" aria-live="polite"></p>
+      <div id="asset-grid" class="asset-grid"></div>
+    </div>
+  </dialog>
 
   <section id="access-state" class="access-state" aria-live="polite"><span class="spinner"></span><h1>Otwieram Landing Builder…</h1><p>Sprawdzam sesję administratora.</p></section>
   <script defer src="./script.js"></script>

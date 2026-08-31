@@ -37,6 +37,13 @@ const mediaReadCache = new Map();
 let mediaReadCacheBytes = 0;
 const mutationQueues = new Map();
 const MAX_REPOSITORIES = 20;
+const STUDIO_ASSET_KINDS = Object.freeze([
+  'lesson',
+  'prompt',
+  'exam',
+  'presentation',
+  'quiz'
+]);
 
 class ContentRepositoryError extends Error {
   constructor(code, status = 503) {
@@ -447,9 +454,14 @@ async function listAssets(kind, options = {}) {
     if (definition.nestedFilename && error instanceof ContentRepositoryError && error.code === 'CONTENT_DIRECTORY_NOT_FOUND') return null;
     throw error;
   });
+  const catalogRequest = typeof options.catalogLoader === 'function'
+    ? options.catalogLoader()
+    : Object.prototype.hasOwnProperty.call(options, 'catalog')
+      ? Promise.resolve(options.catalog)
+      : readCatalog(config, options);
   const [response, catalog] = await Promise.all([
     directoryRequest,
-    readCatalog(config, options)
+    catalogRequest
   ]);
   if (!response) {
     listCache.set(cacheKey, { expiresAt: Date.now() + LIST_CACHE_MS, value: [] });
@@ -520,6 +532,33 @@ async function listAssets(kind, options = {}) {
     value: assets
   });
   return assets.map((asset) => ({ ...asset, tags: [...asset.tags] }));
+}
+
+async function listAssetBundle(rawKinds = STUDIO_ASSET_KINDS, rawOptions = {}) {
+  const kinds = Array.isArray(rawKinds) ? rawKinds : STUDIO_ASSET_KINDS;
+  const options = Array.isArray(rawKinds) ? rawOptions : rawKinds;
+  if (!kinds.length || !options || typeof options !== 'object' || Array.isArray(options)) {
+    throw new ContentRepositoryError('INVALID_CONTENT_KIND', 400);
+  }
+  const normalizedKinds = [...new Set(kinds.map(cleanString))];
+  normalizedKinds.forEach(assetDefinition);
+  const config = configFromOptions(options);
+  if (!config.configured) {
+    throw new ContentRepositoryError('CONTENT_REPOSITORY_NOT_CONFIGURED', 503);
+  }
+
+  // Every uncached list shares this lazy promise. Directory requests still start
+  // in parallel, while a fully cached bundle avoids catalog.json altogether.
+  let catalogRequest = null;
+  const catalogLoader = () => {
+    if (!catalogRequest) catalogRequest = readCatalog(config, options);
+    return catalogRequest;
+  };
+  const entries = await Promise.all(normalizedKinds.map(async (kind) => [
+    kind,
+    await listAssets(kind, { ...options, config, catalogLoader })
+  ]));
+  return Object.fromEntries(entries);
 }
 
 async function readAsset(kind, rawFilename, options = {}) {
@@ -864,6 +903,7 @@ function safeSvg(buffer) {
   } catch {
     throw new ContentRepositoryError('MEDIA_INVALID', 422);
   }
+  source = source.replace(/^<\?xml(?:\s[^?>]*)?\?>\s*/i, '');
   if (!/^<svg(?:\s|>)/i.test(source)) throw new ContentRepositoryError('MEDIA_INVALID', 422);
   const unsafe = [
     /<\s*(?:script|foreignObject|iframe|object|embed|audio|video|style|link|meta)\b/i,
@@ -1107,8 +1147,10 @@ function clearCache() {
 module.exports = {
   ContentRepositoryError,
   GITHUB_API_VERSION,
+  decodeMediaUpload: decodeMedia,
   deleteAsset,
   deleteMedia,
+  listAssetBundle,
   listAssets,
   listMedia,
   publicConfiguration,
