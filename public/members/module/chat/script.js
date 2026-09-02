@@ -476,8 +476,8 @@ const LESSON_CONTEXT_MAX_CHARS = 12_000;
         return;
       }
       els.ownUsageTimezone.textContent = `Okresy wg ${payload.timezone}`;
-      const labels = { day: 'Dzisiaj', month: 'Ten miesiąc' };
-      const cards = ['day', 'month'].map((period) => {
+      const labels = { hour: 'Ta godzina', day: 'Dzisiaj', week: 'Ten tydzień', month: 'Ten miesiąc', lifetime: 'Łącznie' };
+      const cards = ['hour', 'day', 'week', 'month', 'lifetime'].map((period) => {
         const data = payload.periods?.[period];
         const card = document.createElement('article');
         const requests = Number(data?.usage?.requests || 0);

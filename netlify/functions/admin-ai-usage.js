@@ -34,6 +34,12 @@ exports.handler = async (event = {}, context = {}) => {
         return json(settings);
       }
       if (view === 'audit') return json({ audit: await usage.listAudit(stores.config, query.limit) });
+      if (view === 'users') {
+        const userIds = String(query.ids || '').split(',').map((value) => value.trim()).filter(Boolean);
+        return json(await usage.readUsersReport(stores, userIds, {
+          period: String(query.period || 'day')
+        }));
+      }
       if (view !== 'report') throw apiError('INVALID_VIEW', 400);
       return json(await usage.readReport(stores, {
         period: String(query.period || 'day'),

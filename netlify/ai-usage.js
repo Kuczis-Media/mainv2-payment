@@ -701,34 +701,15 @@ function normalizeProviderUsage(raw) {
 async function readReport(stores, options = {}) {
   const { settings } = await readSettings(stores.config);
   const period = PERIODS.includes(options.period) ? options.period : 'day';
-  const key = periodKeys(Number.isFinite(options.now) ? options.now : Date.now(), settings.timezone)[period];
+  const now = Number.isFinite(options.now) ? options.now : Date.now();
+  const key = periodKeys(now, settings.timezone)[period];
   const globalEntry = await readEntry(stores.usage, GLOBAL_KEY);
   const globalDocument = normalizeUsageDocument(globalEntry && globalEntry.value, 'global');
   const window = globalDocument.windows[key] || normalizeWindow({});
   const listing = await listUserDocuments(stores.usage, options);
-  const users = listing.documents.map((document) => {
-    const userWindow = document.windows[key] || normalizeWindow({});
-    const limits = effectiveUserLimits(settings, document.userId);
-    const warning = warningLevel(userWindow.total, limits, period, settings.warningThresholds);
-    const currentKeys = periodKeys(Number.isFinite(options.now) ? options.now : Date.now(), settings.timezone);
-    return {
-      userId: document.userId,
-      ...publicMetrics(userWindow.total),
-      limit: limits ? limits.requests[period] : null,
-      usagePercent: warning && warning.percent || 0,
-      warning,
-      periods: Object.fromEntries(['day', 'week', 'month'].map((name) => [
-        name,
-        publicMetrics((document.windows[currentKeys[name]] || normalizeWindow({})).total)
-      ])),
-      breakdown: {
-        providers: dimensionRows(userWindow.providers),
-        modules: dimensionRows(userWindow.modules),
-        configs: dimensionRows(userWindow.configs),
-        models: dimensionRows(userWindow.models)
-      }
-    };
-  }).sort((a, b) => b.requests - a.requests);
+  const users = listing.documents
+    .map((document) => userReportRow(settings, document, period, now))
+    .sort((a, b) => b.requests - a.requests);
   return {
     period,
     key,
@@ -742,6 +723,61 @@ async function readReport(stores, options = {}) {
     users,
     recent: globalDocument.recent.slice(0, Math.max(1, Math.min(100, Number(options.recentLimit) || 50))),
     cursor: listing.cursor
+  };
+}
+
+async function readUsersReport(stores, userIds, options = {}) {
+  const rawIds = Array.isArray(userIds) ? userIds : [];
+  if (rawIds.length > 50) throw usageError('INVALID_AI_USAGE_USERS', 400);
+  const ids = [];
+  const seen = new Set();
+  for (const raw of rawIds) {
+    const id = cleanString(raw, 160);
+    if (!ID_PATTERN.test(id)) throw usageError('INVALID_AI_USAGE_USER', 400);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+  }
+  const { settings } = await readSettings(stores.config);
+  const period = PERIODS.includes(options.period) ? options.period : 'day';
+  const now = Number.isFinite(options.now) ? options.now : Date.now();
+  const users = await Promise.all(ids.map(async (userId) => {
+    const entry = await readEntry(stores.usage, userKey(userId));
+    const document = normalizeUsageDocument(entry && entry.value, 'user', userId);
+    return userReportRow(settings, document, period, now);
+  }));
+  return {
+    period,
+    key: periodKeys(now, settings.timezone)[period],
+    timezone: settings.timezone,
+    currency: settings.currency,
+    users
+  };
+}
+
+function userReportRow(settings, document, period, now) {
+  const keys = periodKeys(now, settings.timezone);
+  const userWindow = document.windows[keys[period]] || normalizeWindow({});
+  const limits = effectiveUserLimits(settings, document.userId);
+  const warning = warningLevel(userWindow.total, limits, period, settings.warningThresholds);
+  const mode = (settings.users[document.userId] || {}).mode || 'inherit';
+  return {
+    userId: document.userId,
+    mode,
+    ...publicMetrics(userWindow.total),
+    limit: limits ? limits.requests[period] : null,
+    usagePercent: warning && warning.percent || 0,
+    warning,
+    periods: Object.fromEntries(PERIODS.map((name) => [
+      name,
+      publicMetrics((document.windows[keys[name]] || normalizeWindow({})).total)
+    ])),
+    breakdown: {
+      providers: dimensionRows(userWindow.providers),
+      modules: dimensionRows(userWindow.modules),
+      configs: dimensionRows(userWindow.configs),
+      models: dimensionRows(userWindow.models)
+    }
   };
 }
 
@@ -964,6 +1000,7 @@ module.exports = {
   periodKeys,
   readOwnUsage,
   readReport,
+  readUsersReport,
   readSettings,
   reserveRequest,
   resetUserUsage,

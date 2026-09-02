@@ -374,7 +374,7 @@ button.chip:hover {
 .ai-own-usage > div:first-child { display: flex; justify-content: space-between; gap: 10px; }
 .ai-own-usage > div:first-child strong { color: var(--text); font-size: 12px; }
 .ai-own-usage > div:first-child small { color: var(--muted); font-size: 9px; }
-.ai-own-usage-periods { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.ai-own-usage-periods { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
 .ai-own-usage-periods article { display: grid; gap: 3px; padding: 9px 10px; border-radius: 10px; background: var(--bg); }
 .ai-own-usage-periods article strong { color: var(--text); font-size: 10px; }
 .ai-own-usage-periods article span { color: var(--muted); font-size: 9px; }

@@ -641,7 +641,7 @@ GITHUB_CONTENT_ROOT=</pre>
         </div>
 
         <div class="admin-ai-usage-toolbar">
-          <label><span class="field-label">Okres raportu</span><select class="text-field" id="admin-ai-usage-period"><option value="day">Dzisiaj</option><option value="week">Ten tydzień</option><option value="month">Ten miesiąc</option></select></label>
+          <label><span class="field-label">Okres raportu</span><select class="text-field" id="admin-ai-usage-period"><option value="hour">Ta godzina</option><option value="day" selected>Dzisiaj</option><option value="week">Ten tydzień</option><option value="month">Ten miesiąc</option><option value="lifetime">Łącznie</option></select></label>
           <button class="button button-secondary" id="admin-ai-usage-refresh" type="button">Odśwież raport</button>
         </div>
         <div class="admin-status" id="admin-ai-usage-status" role="status" aria-live="polite"></div>
@@ -688,7 +688,14 @@ GITHUB_CONTENT_ROOT=</pre>
           <section class="admin-ai-usage-card"><h3>Modele</h3><div id="admin-ai-usage-models"></div></section>
           <section class="admin-ai-usage-card"><h3>Konfiguracje</h3><div id="admin-ai-usage-configs"></div></section>
           <section class="admin-ai-usage-card"><h3>Moduły</h3><div id="admin-ai-usage-modules"></div></section>
-          <section class="admin-ai-usage-card admin-ai-usage-users"><h3>Użytkownicy</h3><div id="admin-ai-usage-users"></div><button class="button button-secondary admin-ai-users-more" id="admin-ai-users-more" type="button" hidden>Wczytaj więcej użytkowników</button></section>
+          <section class="admin-ai-usage-card admin-ai-usage-users">
+            <div class="admin-ai-users-heading">
+              <div><h3>Użytkownicy</h3><small id="admin-ai-users-count" aria-live="polite"></small></div>
+              <label><span class="field-label">Szukaj użytkownika</span><input class="text-field" id="admin-ai-users-search" type="search" autocomplete="off" placeholder="Imię, e-mail lub ID" /></label>
+            </div>
+            <div id="admin-ai-usage-users"></div>
+            <button class="button button-secondary admin-ai-users-more" id="admin-ai-users-more" type="button" hidden>Pokaż więcej</button>
+          </section>
         </div>
         <section class="admin-ai-usage-card admin-ai-user-detail" id="admin-ai-user-detail" hidden></section>
         <details class="admin-ai-audit" id="admin-ai-usage-audit">

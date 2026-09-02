@@ -1211,7 +1211,7 @@ Cennik nie jest zaszyty w kodzie. Administrator wpisuje osobno cenę wejścia i 
 
 Store `chemdisk-ai-limit-config` zawiera politykę limitów, strefę czasową, progi ostrzeżeń, cenniki, fallbacki i audyt. Store `chemdisk-ai-usage` zawiera agregaty globalne i per-user. Dla każdego okresu utrzymuje sumy total/module/provider/config/model, a szczegółowy log globalny jest ograniczony do 300 wpisów i nie zawiera promptu. Retencja agregatów jest ograniczona do 48 godzin, 90 dni, 26 tygodni, 18 miesięcy i lifetime. Rezerwacje starsze niż 10 minut zwalniają zarezerwowane tokeny. Ręczny reset czyści dokument użytkownika, nie fałszuje historycznych sum globalnych, i trafia do audytu.
 
-Raport pokazuje requesty, sukcesy, błędy, input/output/total tokens, średnią tokenów na request i szacowany koszt dla dostawców, modeli, konfiguracji, modułów i użytkowników. Widok użytkownika ma rozbicie dzień/tydzień/miesiąc oraz szczegóły warstw. Tabela użytkowników jest stronicowana. Jeśli administrator włączy ustawienie widoczności, chat pobiera z `GET /.netlify/functions/ai-usage` wyłącznie własne liczniki oraz pozostały limit.
+Raport pokazuje requesty, sukcesy, błędy, input/output/total tokens, średnią tokenów na request i szacowany koszt dla dostawców, modeli, konfiguracji, modułów i użytkowników. Widok użytkownika obejmuje godzinę, dzień, tydzień, miesiąc i lifetime oraz szczegóły warstw. Tabela użytkowników łączy wszystkie konta Identity z ich użyciem AI, obsługuje wyszukiwanie i doładowuje kolejne wiersze partiami. Jeśli administrator włączy ustawienie widoczności, chat pobiera z `GET /.netlify/functions/ai-usage` wyłącznie własne liczniki oraz pozostały limit.
 
 Nowe endpointy:
 

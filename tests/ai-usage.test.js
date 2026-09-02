@@ -76,9 +76,13 @@ test('admin and student interfaces expose AI limits without a client-side securi
   const chatScript = fs.readFileSync(path.join(root, 'public/members/module/chat/script.js'), 'utf8');
   assert.match(html, /data-admin-tab="ai-usage"/);
   assert.match(html, /id="admin-ai-limit-grid"/);
+  assert.match(html, /id="admin-ai-users-search"/);
+  assert.match(html, /id="admin-ai-usage-period"[\s\S]*value="hour"/);
   assert.match(dashboard, /admin-ai-usage/);
+  assert.match(dashboard, /view=users/);
   assert.match(chatHtml, /id="ai-own-usage"/);
   assert.match(chatScript, /\.netlify\/functions\/ai-usage/);
+  assert.match(chatScript, /'hour', 'day', 'week', 'month', 'lifetime'/);
   assert.doesNotMatch(chatScript, /USER_RATE_LIMIT|userRateBuckets/);
 });
 
@@ -165,6 +169,46 @@ test('user policies support inherit, custom, unlimited and disabled modes', asyn
   assert.ok(await usage.reserveRequest(stores, request({ userId: 'unlimited' })));
   assert.ok(await usage.reserveRequest(stores, request({ userId: 'custom' })));
   await assert.rejects(usage.reserveRequest(stores, request({ userId: 'custom' })), (error) => error.code === 'AI_USER_DAY_LIMIT_REACHED');
+});
+
+test('hourly per-user limits persist, are reported before first use and block the next request', async () => {
+  const stores = usageStores();
+  const settings = usage.emptySettings();
+  settings.users.student = { mode: 'custom', limits: usage.emptyLimitSet() };
+  settings.users.student.limits.requests.hour = 1;
+  await usage.saveSettings(stores, settings, 'admin', []);
+
+  const before = await usage.readUsersReport(stores, ['student'], { period: 'hour' });
+  assert.equal(before.users.length, 1);
+  assert.equal(before.users[0].mode, 'custom');
+  assert.equal(before.users[0].requests, 0);
+  assert.equal(before.users[0].limit, 1);
+
+  const reservation = await usage.reserveRequest(stores, request({ userId: 'student' }));
+  await usage.completeReservation(stores, reservation, {
+    success: true,
+    usage: { inputTokens: 2, outputTokens: 3, totalTokens: 5 }
+  });
+  const after = await usage.readUsersReport(stores, ['student'], { period: 'hour' });
+  assert.equal(after.users[0].requests, 1);
+  assert.equal(after.users[0].limit, 1);
+  assert.equal(after.users[0].usagePercent, 100);
+  await assert.rejects(
+    usage.reserveRequest(stores, request({ userId: 'student' })),
+    (error) => error.code === 'AI_USER_HOUR_LIMIT_REACHED'
+  );
+});
+
+test('batched user report includes accounts without an existing usage document', async () => {
+  const stores = usageStores();
+  const settings = usage.emptySettings();
+  settings.defaultUser.requests.hour = 20;
+  await usage.saveSettings(stores, settings, 'admin', []);
+  const report = await usage.readUsersReport(stores, ['never-used'], { period: 'hour' });
+  assert.equal(report.users[0].userId, 'never-used');
+  assert.equal(report.users[0].mode, 'inherit');
+  assert.equal(report.users[0].requests, 0);
+  assert.equal(report.users[0].limit, 20);
 });
 
 test('module request limits apply per user and cost limits fail closed without pricing', async () => {

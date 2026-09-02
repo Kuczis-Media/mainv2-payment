@@ -3283,6 +3283,10 @@ html[data-theme="dark"] .admin-ai-badge.is-rate_limited { color: #efd588; backgr
 .admin-ai-limit-table input { min-width: 88px; height: 34px; padding: 6px 7px; font-size: 9px; }
 .admin-ai-usage-tables { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
 .admin-ai-usage-users { grid-column: 1 / -1; }
+.admin-ai-users-heading { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.admin-ai-users-heading h3 { margin-bottom: 3px; }
+.admin-ai-users-heading small { color: var(--muted); font-size: 9px; }
+.admin-ai-users-heading label { display: grid; width: min(320px, 100%); gap: 6px; }
 .admin-ai-user-detail { margin-top: 12px; }
 .admin-ai-user-detail[hidden] { display: none; }
 .admin-ai-usage-table td:last-child .button { margin: 2px 4px 2px 0; }
@@ -3323,6 +3327,8 @@ html[data-theme="dark"] .admin-ai-badge.is-rate_limited { color: #efd588; backgr
   .admin-ai-warning-fields,
   .admin-ai-config-policy { grid-template-columns: 1fr; }
   .admin-ai-usage-toolbar { align-items: stretch; flex-direction: column; }
+  .admin-ai-users-heading { align-items: stretch; flex-direction: column; }
+  .admin-ai-users-heading label { width: 100%; }
 }
 
 .admin-payment-switch,
