@@ -16,7 +16,10 @@ const MUTATING_ACTIONS = new Set([
   'set-module', 'test-connection'
 ]);
 const PROVIDER_CONNECTION_ERRORS = new Set([
-  'AI_INVALID_KEY', 'AI_MODEL_UNAVAILABLE', 'AI_RATE_LIMITED', 'AI_PROVIDER_ERROR'
+  'AI_INVALID_KEY', 'AI_MODEL_UNAVAILABLE', 'AI_RATE_LIMITED',
+  'AI_CREDIT_BALANCE_EXHAUSTED', 'AI_ORGANIZATION_SPEND_LIMIT_REACHED',
+  'AI_PROJECT_SPEND_LIMIT_REACHED', 'AI_ORGANIZATION_USAGE_LIMIT_REACHED',
+  'AI_QUOTA_EXHAUSTED', 'AI_PROVIDER_ERROR'
 ]);
 
 exports.handler = async (event = {}, context = {}) => {
@@ -118,7 +121,7 @@ exports.handler = async (event = {}, context = {}) => {
       const normalized = normalizeError(error);
       const next = config ? await manager.updateConnectionStatus(stores, aiConfigId, normalized.status, auth.userId) : settings;
       await manager.appendAudit(stores.metadata, { adminId: auth.userId, action: 'ai.connection.tested', aiConfigId, previousValue: config?.connectionStatus || 'env', newValue: normalized.status });
-      return json({ ...publicAdminSettings(next), error: normalized.code, test: normalized }, normalized.status === 'rate_limited' ? 429 : 400);
+      return json({ ...publicAdminSettings(next), error: normalized.code, test: normalized }, normalized.status === 'rate_limited' ? 429 : normalized.status === 'billing_required' ? 402 : 400);
     }
   } catch (error) {
     return errorResponse(error);

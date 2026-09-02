@@ -77,12 +77,17 @@ test('admin and student interfaces expose AI limits without a client-side securi
   assert.match(html, /data-admin-tab="ai-usage"/);
   assert.match(html, /id="admin-ai-limit-grid"/);
   assert.match(html, /id="admin-ai-users-search"/);
+  assert.match(html, /Każdy użytkownik — limit bazowy/);
+  assert.match(html, /Konfiguracja — na użytkownika/);
   assert.match(html, /id="admin-ai-usage-period"[\s\S]*value="hour"/);
   assert.match(dashboard, /admin-ai-usage/);
+  assert.match(dashboard, /Limit bazowy/);
+  assert.match(dashboard, /billing_required/);
   assert.match(dashboard, /view=users/);
   assert.match(chatHtml, /id="ai-own-usage"/);
   assert.match(chatScript, /\.netlify\/functions\/ai-usage/);
   assert.match(chatScript, /'hour', 'day', 'week', 'month', 'lifetime'/);
+  assert.match(chatScript, /AI_CREDIT_BALANCE_EXHAUSTED/);
   assert.doesNotMatch(chatScript, /USER_RATE_LIMIT|userRateBuckets/);
 });
 
@@ -209,6 +214,43 @@ test('batched user report includes accounts without an existing usage document',
   assert.equal(report.users[0].mode, 'inherit');
   assert.equal(report.users[0].requests, 0);
   assert.equal(report.users[0].limit, 20);
+});
+
+test('default user and configuration-per-user hourly limits are enforced independently', async () => {
+  const stores = usageStores();
+  const settings = usage.emptySettings();
+  settings.defaultUser.requests.hour = 20;
+  settings.configs['env-openai'] = {
+    global: usage.emptyLimitSet(), perUser: usage.emptyLimitSet(),
+    pricing: { inputPerMillion: null, outputPerMillion: null }, fallbackConfigId: null
+  };
+  settings.configs['env-openai'].perUser.requests.hour = 5;
+  await usage.saveSettings(stores, settings, 'admin', ['env-openai']);
+
+  for (let index = 0; index < 5; index += 1) {
+    const reservation = await usage.reserveRequest(stores, request({
+      userId: 'student-a', aiConfigId: 'env-openai', provider: 'openai', model: 'gpt-test'
+    }));
+    await usage.completeReservation(stores, reservation, { success: true, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } });
+  }
+  await assert.rejects(
+    usage.reserveRequest(stores, request({ userId: 'student-a', aiConfigId: 'env-openai', provider: 'openai', model: 'gpt-test' })),
+    (error) => error.code === 'AI_CONFIG_HOUR_LIMIT_REACHED' && error.details.limit === 5
+  );
+  assert.ok(await usage.reserveRequest(stores, request({
+    userId: 'student-b', aiConfigId: 'env-openai', provider: 'openai', model: 'gpt-test'
+  })));
+
+  for (let index = 0; index < 15; index += 1) {
+    const reservation = await usage.reserveRequest(stores, request({
+      userId: 'student-a', aiConfigId: 'env-gemini', provider: 'gemini', model: 'gemini-test'
+    }));
+    await usage.completeReservation(stores, reservation, { success: true, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } });
+  }
+  await assert.rejects(
+    usage.reserveRequest(stores, request({ userId: 'student-a', aiConfigId: 'env-gemini', provider: 'gemini', model: 'gemini-test' })),
+    (error) => error.code === 'AI_USER_HOUR_LIMIT_REACHED' && error.details.limit === 20
+  );
 });
 
 test('saving a default hourly user limit removes only previously orphaned AI policies', async (t) => {

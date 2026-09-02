@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const manager = require('../netlify/ai-provider-manager.js');
 const router = require('../netlify/ai-router.js');
-const { geminiAdapter, openAiAdapter } = require('../netlify/ai-providers.js');
+const { geminiAdapter, normalizeError: normalizeProviderError, openAiAdapter } = require('../netlify/ai-providers.js');
 const adminAi = require('../netlify/functions/admin-ai.js');
 
 class MemoryStore {
@@ -273,11 +273,39 @@ test('server-side connection tests normalize invalid keys and unavailable models
   );
 });
 
+test('OpenAI billing exhaustion is not reported as a temporary rate limit', async () => {
+  const billingCases = [
+    ['credit_balance_exhausted', 'AI_CREDIT_BALANCE_EXHAUSTED'],
+    ['organization_spend_limit_exceeded', 'AI_ORGANIZATION_SPEND_LIMIT_REACHED'],
+    ['project_spend_limit_exceeded', 'AI_PROJECT_SPEND_LIMIT_REACHED'],
+    ['organization_usage_limit_exceeded', 'AI_ORGANIZATION_USAGE_LIMIT_REACHED'],
+    ['insufficient_quota', 'AI_QUOTA_EXHAUSTED']
+  ];
+  for (const [providerCode, expectedCode] of billingCases) {
+    await assert.rejects(
+      openAiAdapter.testConnection({ model: 'gpt-test', apiKey: 'valid-looking-key' }, {
+        fetchImpl: async () => new Response(JSON.stringify({ error: { code: providerCode, type: providerCode } }), { status: 429 })
+      }),
+      (error) => error.code === expectedCode && error.status === 402
+    );
+  }
+  await assert.rejects(
+    openAiAdapter.testConnection({ model: 'gpt-test', apiKey: 'valid-looking-key' }, {
+      fetchImpl: async () => new Response(JSON.stringify({ error: { code: 'rate_limit_exceeded' } }), { status: 429 })
+    }),
+    (error) => error.code === 'AI_RATE_LIMITED' && error.status === 429
+  );
+  assert.deepEqual(normalizeProviderError({ code: 'AI_CREDIT_BALANCE_EXHAUSTED' }), {
+    status: 'billing_required', code: 'AI_CREDIT_BALANCE_EXHAUSTED'
+  });
+});
+
 test('connection testing does not misclassify an internal ChemDisk limit as a provider failure', () => {
   assert.equal(adminAi._test.isProviderConnectionError({ code: 'AI_RATE_LIMITED' }), true);
   assert.equal(adminAi._test.isProviderConnectionError({ code: 'AI_INVALID_KEY' }), true);
   assert.equal(adminAi._test.isProviderConnectionError({ code: 'AI_GLOBAL_DAY_LIMIT_REACHED' }), false);
   assert.equal(adminAi._test.isProviderConnectionError({ code: 'AI_LIMIT_STORAGE_UNAVAILABLE' }), false);
+  assert.equal(adminAi._test.isProviderConnectionError({ code: 'AI_CREDIT_BALANCE_EXHAUSTED' }), true);
 });
 
 test('deleting an AI configuration removes its secret and assignments', async () => {

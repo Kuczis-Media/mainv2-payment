@@ -667,7 +667,7 @@ GITHUB_CONTENT_ROOT=</pre>
             <span class="eyebrow">Edytor limitów</span>
             <h3>Zakres reguły</h3>
             <div class="admin-ai-scope-controls">
-              <label><span class="field-label">Warstwa</span><select class="text-field" id="admin-ai-limit-scope"><option value="global">Globalnie</option><option value="defaultUser">Domyślnie dla użytkownika</option><option value="provider">Dostawca</option><option value="module">Moduł</option><option value="config">Konfiguracja globalnie</option><option value="configUser">Konfiguracja per użytkownik</option><option value="user">Konkretny użytkownik</option></select></label>
+              <label><span class="field-label">Warstwa</span><select class="text-field" id="admin-ai-limit-scope"><option value="global">Globalnie — wspólna pula</option><option value="defaultUser">Każdy użytkownik — limit bazowy</option><option value="provider">Dostawca — wspólna pula</option><option value="module">Moduł — na użytkownika</option><option value="config">Konfiguracja — wspólna pula</option><option value="configUser">Konfiguracja — na użytkownika</option><option value="user">Konkretny użytkownik — nadpisanie</option></select></label>
               <label id="admin-ai-limit-scope-id-wrap" hidden><span class="field-label">Obiekt</span><select class="text-field" id="admin-ai-limit-scope-id"></select></label>
               <label id="admin-ai-limit-module-wrap" hidden><span class="field-label">Stałe ID modułu</span><input class="text-field" id="admin-ai-limit-module-id" maxlength="160" placeholder="np. chat lub exam-coach" /></label>
               <label id="admin-ai-limit-user-mode-wrap" hidden><span class="field-label">Tryb użytkownika</span><select class="text-field" id="admin-ai-limit-user-mode"><option value="inherit">Dziedzicz domyślne</option><option value="custom">Własne limity</option><option value="unlimited">Bez limitu użytkownika</option><option value="disabled">AI wyłączone</option></select></label>
@@ -677,6 +677,7 @@ GITHUB_CONTENT_ROOT=</pre>
               <label><span class="field-label">Cena wyjścia / 1 mln tokenów</span><input class="text-field" id="admin-ai-price-output" type="number" min="0" step="0.000001" /></label>
               <label><span class="field-label">Jawny fallback</span><select class="text-field" id="admin-ai-fallback"><option value="">Brak fallbacku</option></select></label>
             </div>
+            <p class="field-hint" id="admin-ai-limit-explanation">Limit bazowy jest liczony osobno dla każdego użytkownika korzystającego z trybu „Dziedzicz”.</p>
             <p class="field-hint">Wartości kosztu podawaj w mikrojednostkach waluty (1 000 000 = 1 jednostka). Zero blokuje dany zakres od razu.</p>
             <div class="admin-ai-limit-grid" id="admin-ai-limit-grid"></div>
             <div class="admin-ai-editor-actions"><button class="button button-primary" id="admin-ai-usage-save" type="button">Zapisz wszystkie limity</button></div>

@@ -58,7 +58,7 @@ function normalizeSettings(raw) {
       isDefault: value.isDefault === true,
       secretConfigured: value.secretConfigured === true,
       secretHint: value.secretConfigured === true ? cleanString(value.secretHint, 8) : '',
-      connectionStatus: ['ok', 'invalid_key', 'model_unavailable', 'rate_limited', 'provider_error', 'untested'].includes(value.connectionStatus)
+      connectionStatus: ['ok', 'invalid_key', 'model_unavailable', 'rate_limited', 'billing_required', 'provider_error', 'untested'].includes(value.connectionStatus)
         ? value.connectionStatus : 'untested',
       lastTestedAt: isoOrNull(value.lastTestedAt),
       createdAt: isoOrNull(value.createdAt),
@@ -262,7 +262,7 @@ async function setModuleAssignment(stores, moduleName, aiConfigId, adminId) {
 }
 
 async function updateConnectionStatus(stores, aiConfigId, status, adminId) {
-  const normalized = ['ok', 'invalid_key', 'model_unavailable', 'rate_limited', 'provider_error'].includes(status) ? status : 'provider_error';
+  const normalized = ['ok', 'invalid_key', 'model_unavailable', 'rate_limited', 'billing_required', 'provider_error'].includes(status) ? status : 'provider_error';
   const result = await updateSettings(stores.metadata, adminId, (settings) => {
     const item = settings.configs.find((candidate) => candidate.aiConfigId === aiConfigId);
     if (!item) throw aiError('AI_CONFIG_NOT_FOUND', 404);

@@ -56,6 +56,11 @@
     AI_NOT_CONFIGURED: 'Nie skonfigurowano jeszcze dostawcy AI.',
     AI_PROVIDER_ERROR: 'Dostawca AI jest chwilowo niedostępny.',
     AI_RATE_LIMITED: 'Dostawca AI ograniczył liczbę żądań. Spróbuj ponownie później.',
+    AI_CREDIT_BALANCE_EXHAUSTED: 'Na koncie OpenAI nie ma środków API. Dodaj środki w rozliczeniach OpenAI.',
+    AI_ORGANIZATION_SPEND_LIMIT_REACHED: 'Organizacja OpenAI osiągnęła ustawiony limit wydatków.',
+    AI_PROJECT_SPEND_LIMIT_REACHED: 'Projekt OpenAI osiągnął ustawiony limit wydatków.',
+    AI_ORGANIZATION_USAGE_LIMIT_REACHED: 'Organizacja OpenAI osiągnęła przyznany limit użycia API.',
+    AI_QUOTA_EXHAUSTED: 'Konto OpenAI nie ma dostępnego limitu API. Sprawdź środki i limity rozliczeniowe.',
     AI_SECRET_MISSING: 'Najpierw ustaw klucz API dla tej konfiguracji.',
     AI_STORAGE_INVALID: 'Zapisana konfiguracja AI jest uszkodzona.',
     AI_STORAGE_UNAVAILABLE: 'Magazyn konfiguracji AI jest chwilowo niedostępny.',
@@ -318,6 +323,7 @@
     adminAiLimitModuleId: document.getElementById('admin-ai-limit-module-id'),
     adminAiLimitUserModeWrap: document.getElementById('admin-ai-limit-user-mode-wrap'),
     adminAiLimitUserMode: document.getElementById('admin-ai-limit-user-mode'),
+    adminAiLimitExplanation: document.getElementById('admin-ai-limit-explanation'),
     adminAiConfigPolicy: document.getElementById('admin-ai-config-policy'),
     adminAiPriceInput: document.getElementById('admin-ai-price-input'),
     adminAiPriceOutput: document.getElementById('admin-ai-price-output'),
@@ -4585,6 +4591,7 @@
       invalid_key: 'Nieprawidłowy klucz',
       model_unavailable: 'Model niedostępny',
       rate_limited: 'Limit dostawcy',
+      billing_required: 'Sprawdź rozliczenia',
       provider_error: 'Błąd dostawcy',
       untested: 'Nie przetestowano'
     })[status] || 'Nie przetestowano';
@@ -5007,6 +5014,17 @@
     elements.adminAiLimitModuleWrap.hidden = !usesModuleInput;
     elements.adminAiLimitUserModeWrap.hidden = scope !== 'user';
     elements.adminAiConfigPolicy.hidden = !['config', 'configUser'].includes(scope);
+    if (elements.adminAiLimitExplanation) {
+      elements.adminAiLimitExplanation.textContent = ({
+        global: 'Wspólna pula dla wszystkich wywołań AI. Jeden użytkownik może zużyć ją także innym.',
+        defaultUser: 'Limit bazowy jest liczony osobno dla każdego użytkownika w trybie „Dziedzicz”.',
+        provider: 'Wspólna pula wybranego dostawcy dla wszystkich użytkowników i konfiguracji.',
+        module: 'Limit modułu jest liczony osobno dla każdego użytkownika, np. osobno dla czatu.',
+        config: 'Wspólna pula wybranej konfiguracji AI dla wszystkich użytkowników.',
+        configUser: 'Dodatkowy limit wybranej konfiguracji, liczony osobno dla każdego użytkownika. Obowiązuje równolegle z limitem bazowym.',
+        user: 'Tryb „Własne limity” zastępuje limit bazowy tylko dla wskazanego użytkownika; nie wyłącza limitów modułu ani konfiguracji.'
+      })[scope] || '';
+    }
     let choices = [];
     if (scope === 'provider') choices = ['gemini', 'openai'].map((id) => ({ id, label: adminAiProviderLabel(id) }));
     if (scope === 'config' || scope === 'configUser') choices = availableAdminAiConfigs().map((config) => ({ id: config.aiConfigId, label: `${config.name} · ${config.aiConfigId}` }));
@@ -5191,7 +5209,7 @@
     const head = document.createElement('thead');
     const header = document.createElement('tr');
     const headings = ['Nazwa / ID', 'Żądania', 'OK', 'Błędy', 'Wejście', 'Wyjście', 'Łącznie', 'Śr./request', 'Koszt'];
-    if (options.reset) headings.push('Limit req.', 'Użycie');
+    if (options.reset) headings.push('Limit bazowy', 'Użycie bazowe');
     headings.forEach((label) => header.append(Object.assign(document.createElement('th'), { textContent: label })));
     if (options.reset) header.append(Object.assign(document.createElement('th'), { textContent: 'Akcje' }));
     head.append(header);

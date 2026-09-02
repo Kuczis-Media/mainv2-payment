@@ -44,7 +44,7 @@ const geminiAdapter = Object.freeze({
       }, runtime
     );
     const data = await readProviderJson(response);
-    if (!response.ok) throw errorFromResponse(response);
+    if (!response.ok) throw errorFromResponse(response, data);
     const text = (data?.candidates?.[0]?.content?.parts || []).map((part) => typeof part.text === 'string' ? part.text : '').join('');
     if (!text) throw new AiProviderError('EMPTY_MODEL_RESPONSE', 502);
     return { text, usage: normalizeGeminiUsage(data?.usageMetadata) };
@@ -62,7 +62,7 @@ const geminiAdapter = Object.freeze({
       headers: { Accept: 'application/json', 'x-goog-api-key': config.apiKey }
     }, runtime);
     const data = await readProviderJson(response);
-    if (!response.ok) throw errorFromResponse(response);
+    if (!response.ok) throw errorFromResponse(response, data);
     return (Array.isArray(data?.models) ? data.models : [])
       .filter((item) => !Array.isArray(item.supportedGenerationMethods) || item.supportedGenerationMethods.includes('generateContent'))
       .map((item) => ({ id: String(item.name || '').replace(/^models\//, ''), name: String(item.displayName || item.name || '') }))
@@ -98,7 +98,7 @@ const openAiAdapter = Object.freeze({
       })
     }, runtime);
     const data = await readProviderJson(response);
-    if (!response.ok) throw errorFromResponse(response);
+    if (!response.ok) throw errorFromResponse(response, data);
     const text = (Array.isArray(data?.output) ? data.output : [])
       .flatMap((item) => Array.isArray(item?.content) ? item.content : [])
       .map((part) => part?.type === 'output_text' && typeof part.text === 'string' ? part.text : '')
@@ -144,8 +144,8 @@ async function providerFetch(url, options, runtime) {
 
 async function consumeProviderResponse(response) {
   if (!response.ok) {
-    try { await response.text(); } catch {}
-    throw errorFromResponse(response);
+    const data = await readProviderJson(response);
+    throw errorFromResponse(response, data);
   }
   try { await response.text(); } catch {}
 }
@@ -154,10 +154,19 @@ async function readProviderJson(response) {
   try { return await response.json(); } catch { return null; }
 }
 
-function errorFromResponse(response) {
+function errorFromResponse(response, data) {
   if (response.status === 401 || response.status === 403) return new AiProviderError('AI_INVALID_KEY', 400);
   if (response.status === 404) return new AiProviderError('AI_MODEL_UNAVAILABLE', 400);
-  if (response.status === 429) return new AiProviderError('AI_RATE_LIMITED', 429);
+  if (response.status === 429) {
+    const providerCode = String(data?.error?.code || '').toLowerCase();
+    const providerType = String(data?.error?.type || '').toLowerCase();
+    if (providerCode === 'credit_balance_exhausted') return new AiProviderError('AI_CREDIT_BALANCE_EXHAUSTED', 402);
+    if (providerCode === 'organization_spend_limit_exceeded') return new AiProviderError('AI_ORGANIZATION_SPEND_LIMIT_REACHED', 402);
+    if (providerCode === 'project_spend_limit_exceeded') return new AiProviderError('AI_PROJECT_SPEND_LIMIT_REACHED', 402);
+    if (providerCode === 'organization_usage_limit_exceeded') return new AiProviderError('AI_ORGANIZATION_USAGE_LIMIT_REACHED', 402);
+    if (providerCode === 'insufficient_quota' || providerType === 'insufficient_quota') return new AiProviderError('AI_QUOTA_EXHAUSTED', 402);
+    return new AiProviderError('AI_RATE_LIMITED', 429);
+  }
   return new AiProviderError('AI_PROVIDER_ERROR', 502);
 }
 
@@ -166,6 +175,8 @@ function normalizeError(error) {
   if (code === 'AI_INVALID_KEY') return { status: 'invalid_key', code };
   if (code === 'AI_MODEL_UNAVAILABLE') return { status: 'model_unavailable', code };
   if (code === 'AI_RATE_LIMITED') return { status: 'rate_limited', code };
+  if (['AI_CREDIT_BALANCE_EXHAUSTED', 'AI_ORGANIZATION_SPEND_LIMIT_REACHED', 'AI_PROJECT_SPEND_LIMIT_REACHED',
+    'AI_ORGANIZATION_USAGE_LIMIT_REACHED', 'AI_QUOTA_EXHAUSTED'].includes(code)) return { status: 'billing_required', code };
   return { status: 'provider_error', code: 'AI_PROVIDER_ERROR' };
 }
 

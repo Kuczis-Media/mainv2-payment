@@ -3203,6 +3203,7 @@ html[data-theme="dark"] .accordion-children .accordion-children .accordion-child
 .admin-ai-badge.is-model_unavailable,
 .admin-ai-badge.is-provider_error { color: #9a3f49; background: #fbe7e9; }
 .admin-ai-badge.is-rate_limited { color: #846319; background: #fff3d2; }
+.admin-ai-badge.is-billing_required { color: #846319; background: #fff3d2; }
 .admin-ai-card-actions { display: flex; flex-wrap: wrap; gap: 7px; padding-top: 2px; }
 .admin-ai-card-actions .button { min-height: 32px; padding: 6px 9px; font-size: 9px; }
 .admin-ai-audit { margin-top: 13px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); }
@@ -3227,6 +3228,7 @@ html[data-theme="dark"] .admin-ai-badge.is-invalid_key,
 html[data-theme="dark"] .admin-ai-badge.is-model_unavailable,
 html[data-theme="dark"] .admin-ai-badge.is-provider_error { color: #f4b0b7; background: #402328; }
 html[data-theme="dark"] .admin-ai-badge.is-rate_limited { color: #efd588; background: #403717; }
+html[data-theme="dark"] .admin-ai-badge.is-billing_required { color: #efd588; background: #403717; }
 
 .admin-ai-usage-toolbar {
   display: flex;

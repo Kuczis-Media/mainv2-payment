@@ -591,6 +591,11 @@ const LESSON_CONTEXT_MAX_CHARS = 12_000;
         AI_NOT_CONFIGURED: 'Czat nie jest jeszcze skonfigurowany przez administratora.',
         AI_INVALID_KEY: 'Klucz dostawcy AI wymaga poprawienia przez administratora.',
         AI_MODEL_UNAVAILABLE: 'Wybrany model AI jest niedostępny.',
+        AI_CREDIT_BALANCE_EXHAUSTED: 'Na koncie OpenAI zabrakło środków API. Administrator musi uzupełnić saldo.',
+        AI_ORGANIZATION_SPEND_LIMIT_REACHED: 'Organizacja OpenAI osiągnęła ustawiony limit wydatków.',
+        AI_PROJECT_SPEND_LIMIT_REACHED: 'Projekt OpenAI osiągnął ustawiony limit wydatków.',
+        AI_ORGANIZATION_USAGE_LIMIT_REACHED: 'Organizacja OpenAI osiągnęła przyznany limit użycia API.',
+        AI_QUOTA_EXHAUSTED: 'Konto OpenAI nie ma dostępnego limitu API. Administrator musi sprawdzić saldo i limity.',
         AI_PROVIDER_ERROR: 'Dostawca AI jest chwilowo niedostępny.',
         AI_LIMIT_STORAGE_UNAVAILABLE: 'Serwer nie może teraz bezpiecznie sprawdzić limitu AI. Spróbuj ponownie później.',
         AI_USAGE_RECORD_FAILED: 'Nie udało się bezpiecznie zapisać użycia AI. Spróbuj ponownie.'
