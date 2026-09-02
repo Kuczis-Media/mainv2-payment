@@ -9,6 +9,7 @@ const {
 } = require('../admin-common.js');
 const usage = require('../ai-usage.js');
 const manager = require('../ai-provider-manager.js');
+const router = require('../ai-router.js');
 
 exports.handler = async (event = {}, context = {}) => {
   const method = String(event.httpMethod || '').toUpperCase();
@@ -58,10 +59,19 @@ exports.handler = async (event = {}, context = {}) => {
       assertOnlyFields(body, ['settings']);
       const aiStores = manager.getAiStores();
       const { settings: providerSettings } = await manager.readSettings(aiStores.metadata);
-      const validConfigIds = providerSettings.configs.map((config) => config.aiConfigId);
-      if (process.env.GEMINI_API_KEY) validConfigIds.push('env-gemini');
-      if (process.env.OPENAI_API_KEY) validConfigIds.push('env-openai');
-      return json(await usage.saveSettings(stores, body.settings, auth.userId, validConfigIds));
+      const validConfigIds = [
+        ...providerSettings.configs.map((config) => config.aiConfigId),
+        ...router.environmentConfigs().map((config) => config.aiConfigId)
+      ];
+      const { settings: currentUsageSettings } = await usage.readSettings(stores.config);
+      const referencedConfigIds = new Set(Object.keys(currentUsageSettings.configs));
+      Object.values(currentUsageSettings.configs).forEach((policy) => {
+        if (policy.fallbackConfigId) referencedConfigIds.add(policy.fallbackConfigId);
+      });
+      const validSet = new Set(validConfigIds);
+      const staleConfigIds = Array.from(referencedConfigIds).filter((aiConfigId) => !validSet.has(aiConfigId));
+      const settings = usage.pruneStaleConfigPolicies(body.settings, staleConfigIds);
+      return json(await usage.saveSettings(stores, settings, auth.userId, validConfigIds));
     }
 
     assertOnlyFields(body, ['action', 'userId', 'confirmed']);

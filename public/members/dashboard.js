@@ -4596,8 +4596,15 @@
 
   function availableAdminAiConfigs() {
     const configs = [...(adminAiSettings?.configs || [])];
-    if (adminAiSettings?.legacyEnvironment?.gemini) configs.push({ aiConfigId: 'env-gemini', name: 'Gemini (ENV)', provider: 'gemini' });
-    if (adminAiSettings?.legacyEnvironment?.openai) configs.push({ aiConfigId: 'env-openai', name: 'OpenAI (ENV)', provider: 'openai' });
+    const environmentConfigs = Array.isArray(adminAiSettings?.environmentConfigs)
+      ? adminAiSettings.environmentConfigs
+      : [
+          ...(adminAiSettings?.legacyEnvironment?.gemini ? [{ aiConfigId: 'env-gemini', name: 'Gemini (ENV)', provider: 'gemini' }] : []),
+          ...(adminAiSettings?.legacyEnvironment?.openai ? [{ aiConfigId: 'env-openai', name: 'OpenAI (ENV)', provider: 'openai' }] : [])
+        ];
+    environmentConfigs.forEach((config) => {
+      if (!configs.some((item) => item.aiConfigId === config.aiConfigId)) configs.push(config);
+    });
     return configs;
   }
 
@@ -4707,10 +4714,10 @@
     if (!select) return;
     const current = adminAiSettings?.moduleAssignments?.[moduleName] || '';
     const options = [Object.assign(document.createElement('option'), { value: '', textContent: 'Konfiguracja domyślna' })];
-    (adminAiSettings?.configs || []).forEach((config) => {
+    availableAdminAiConfigs().forEach((config) => {
       options.push(Object.assign(document.createElement('option'), {
         value: config.aiConfigId,
-        textContent: `${config.name} · ${adminAiProviderLabel(config.provider)}`
+        textContent: `${config.name} · ${adminAiProviderLabel(config.provider)}${config.source === 'env' ? ' · zmienna ENV' : ''}`
       }));
     });
     select.replaceChildren(...options);
@@ -4719,8 +4726,9 @@
 
   function renderAdminAi() {
     const configs = Array.isArray(adminAiSettings?.configs) ? adminAiSettings.configs : [];
+    const environmentConfigs = Array.isArray(adminAiSettings?.environmentConfigs) ? adminAiSettings.environmentConfigs : [];
     elements.adminAiList.replaceChildren();
-    elements.adminAiEmpty.hidden = configs.length > 0;
+    elements.adminAiEmpty.hidden = configs.length + environmentConfigs.length > 0;
     fillAdminAiModuleSelect(elements.adminAiModuleChat, 'chat');
     fillAdminAiModuleSelect(elements.adminAiModuleGrader, 'aiGrader');
     fillAdminAiModuleSelect(elements.adminAiModuleForms, 'aiForms');
@@ -4766,6 +4774,35 @@
         button('Ustaw domyślną', 'button button-secondary', () => setAdminAiDefault(config.aiConfigId)),
         button('Usuń', 'button button-secondary button-danger-soft', () => deleteAdminAiConfig(config))
       );
+      card.append(heading, details, keyState, actions);
+      elements.adminAiList.append(card);
+    });
+    environmentConfigs.forEach((config) => {
+      const card = document.createElement('article');
+      card.className = 'admin-ai-card';
+      const heading = document.createElement('div');
+      heading.className = 'admin-ai-card-heading';
+      const title = document.createElement('div');
+      title.append(
+        Object.assign(document.createElement('strong'), { textContent: config.name }),
+        Object.assign(document.createElement('small'), { textContent: `${adminAiProviderLabel(config.provider)} · ${config.model}` })
+      );
+      const badges = document.createElement('span');
+      badges.className = 'admin-ai-badges';
+      badges.append(Object.assign(document.createElement('span'), { className: 'admin-ai-badge is-ok', textContent: 'ENV serwera' }));
+      heading.append(title, badges);
+      const details = Object.assign(document.createElement('p'), {
+        textContent: 'Klucz pochodzi ze zmiennej środowiskowej Netlify. Możesz wybrać tę pozycję w routingu modułów i objąć ją limitami.'
+      });
+      const keyState = Object.assign(document.createElement('small'), {
+        className: 'admin-ai-key-state',
+        textContent: 'Klucz jest ustawiony po stronie serwera i nie jest wysyłany do przeglądarki.'
+      });
+      const actions = document.createElement('div');
+      actions.className = 'admin-ai-card-actions';
+      const testButton = Object.assign(document.createElement('button'), { type: 'button', className: 'button button-secondary', textContent: 'Testuj' });
+      testButton.addEventListener('click', () => testAdminAiConnection(config.aiConfigId));
+      actions.append(testButton);
       card.append(heading, details, keyState, actions);
       elements.adminAiList.append(card);
     });

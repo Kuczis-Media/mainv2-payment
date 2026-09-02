@@ -48,18 +48,12 @@ exports.handler = async (event = {}, context = {}) => {
       if (view === 'audit') return json({ audit: await manager.listAudit(stores.metadata, 50) });
       if (view !== 'settings') throw apiError('INVALID_VIEW', 400);
       const { settings } = await manager.readSettings(stores.metadata);
-      return json({
-        ...manager.publicSettings(settings),
-        legacyEnvironment: {
-          gemini: Boolean(process.env.GEMINI_API_KEY),
-          openai: Boolean(process.env.OPENAI_API_KEY)
-        }
-      });
+      return json(publicAdminSettings(settings));
     }
     if (method === 'DELETE') {
       assertOnlyFields(body, ['aiConfigId']);
       const settings = await manager.deleteConfig(stores, requiredId(body.aiConfigId), auth.userId);
-      return json(manager.publicSettings(settings));
+      return json(publicAdminSettings(settings));
     }
 
     const action = typeof body.action === 'string' ? body.action : '';
@@ -68,35 +62,39 @@ exports.handler = async (event = {}, context = {}) => {
     if (action === 'save-config') {
       assertOnlyFields(body, ['action', 'config']);
       const settings = await manager.saveConfig(stores, body.config, auth.userId);
-      return json(manager.publicSettings(settings));
+      return json(publicAdminSettings(settings));
     }
     if (action === 'set-secret') {
       assertOnlyFields(body, ['action', 'aiConfigId', 'secret']);
       const settings = await manager.setConfigSecret(stores, requiredId(body.aiConfigId), body.secret, auth.userId);
-      return json(manager.publicSettings(settings));
+      return json(publicAdminSettings(settings));
     }
     if (action === 'remove-secret') {
       assertOnlyFields(body, ['action', 'aiConfigId']);
       const settings = await manager.removeConfigSecret(stores, requiredId(body.aiConfigId), auth.userId);
-      return json(manager.publicSettings(settings));
+      return json(publicAdminSettings(settings));
     }
     if (action === 'set-default') {
       assertOnlyFields(body, ['action', 'aiConfigId']);
       const settings = await manager.setDefaultConfig(stores, requiredId(body.aiConfigId), auth.userId);
-      return json(manager.publicSettings(settings));
+      return json(publicAdminSettings(settings));
     }
     if (action === 'set-module') {
       assertOnlyFields(body, ['action', 'module', 'aiConfigId']);
       const aiConfigId = body.aiConfigId == null || body.aiConfigId === '' ? null : requiredId(body.aiConfigId);
+      if (manager.ENV_CONFIG_IDS.has(aiConfigId) && !router.environmentConfigs().some((config) => config.aiConfigId === aiConfigId)) {
+        throw apiError('AI_CONFIG_NOT_FOUND', 404);
+      }
       const settings = await manager.setModuleAssignment(stores, String(body.module || ''), aiConfigId, auth.userId);
-      return json(manager.publicSettings(settings));
+      return json(publicAdminSettings(settings));
     }
 
     assertOnlyFields(body, ['action', 'aiConfigId']);
     const aiConfigId = requiredId(body.aiConfigId);
     const { settings } = await manager.readSettings(stores.metadata);
     const config = settings.configs.find((item) => item.aiConfigId === aiConfigId);
-    if (!config) throw apiError('AI_CONFIG_NOT_FOUND', 404);
+    const resolvedConfig = await router.resolveConfigById(aiConfigId);
+    if (!resolvedConfig) throw apiError('AI_CONFIG_NOT_FOUND', 404);
     if (action === 'list-models') {
       const operation = await router.runProviderOperation({
         userId: auth.userId,
@@ -112,20 +110,32 @@ exports.handler = async (event = {}, context = {}) => {
         aiConfigId,
         operation: 'testConnection'
       });
-      const next = await manager.updateConnectionStatus(stores, aiConfigId, 'ok', auth.userId);
-      await manager.appendAudit(stores.metadata, { adminId: auth.userId, action: 'ai.connection.tested', aiConfigId, previousValue: config.connectionStatus, newValue: 'ok' });
-      return json({ ...manager.publicSettings(next), test: { status: 'ok' } });
+      const next = config ? await manager.updateConnectionStatus(stores, aiConfigId, 'ok', auth.userId) : settings;
+      await manager.appendAudit(stores.metadata, { adminId: auth.userId, action: 'ai.connection.tested', aiConfigId, previousValue: config?.connectionStatus || 'env', newValue: 'ok' });
+      return json({ ...publicAdminSettings(next), test: { status: 'ok' } });
     } catch (error) {
       if (!PROVIDER_CONNECTION_ERRORS.has(error && error.code)) throw error;
       const normalized = normalizeError(error);
-      const next = await manager.updateConnectionStatus(stores, aiConfigId, normalized.status, auth.userId);
-      await manager.appendAudit(stores.metadata, { adminId: auth.userId, action: 'ai.connection.tested', aiConfigId, previousValue: config.connectionStatus, newValue: normalized.status });
-      return json({ ...manager.publicSettings(next), error: normalized.code, test: normalized }, normalized.status === 'rate_limited' ? 429 : 400);
+      const next = config ? await manager.updateConnectionStatus(stores, aiConfigId, normalized.status, auth.userId) : settings;
+      await manager.appendAudit(stores.metadata, { adminId: auth.userId, action: 'ai.connection.tested', aiConfigId, previousValue: config?.connectionStatus || 'env', newValue: normalized.status });
+      return json({ ...publicAdminSettings(next), error: normalized.code, test: normalized }, normalized.status === 'rate_limited' ? 429 : 400);
     }
   } catch (error) {
     return errorResponse(error);
   }
 };
+
+function publicAdminSettings(settings) {
+  const environmentConfigs = router.environmentConfigs();
+  return {
+    ...manager.publicSettings(settings),
+    environmentConfigs,
+    legacyEnvironment: {
+      gemini: environmentConfigs.some((config) => config.provider === 'gemini'),
+      openai: environmentConfigs.some((config) => config.provider === 'openai')
+    }
+  };
+}
 
 function requiredId(value) {
   const id = typeof value === 'string' ? value.trim() : '';
@@ -154,5 +164,6 @@ function apiError(code, status) {
 exports._test = {
   assertOnlyFields,
   isProviderConnectionError(error) { return PROVIDER_CONNECTION_ERRORS.has(error && error.code); },
+  publicAdminSettings,
   requiredId
 };

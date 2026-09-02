@@ -18,9 +18,10 @@ async function resolveConfig(moduleName = 'chat', options = {}) {
   try {
     const stores = storesFactory();
     const { settings } = await manager.readSettings(stores.metadata);
-    if (!settings.configs.length) return legacyEnvironmentConfig();
     const assignmentName = manager.MODULES.includes(moduleName) ? moduleName : 'other';
     const assignedId = settings.moduleAssignments[assignmentName];
+    if (manager.ENV_CONFIG_IDS.has(assignedId)) return resolveConfigById(assignedId, options);
+    if (!settings.configs.length) return legacyEnvironmentConfig();
     const config = assignedId
       ? settings.configs.find((item) => item.aiConfigId === assignedId)
       : settings.configs.find((item) => item.isDefault);
@@ -70,6 +71,19 @@ function legacyEnvironmentConfig(requestedProvider = '') {
     source: 'env'
   };
   return null;
+}
+
+function environmentConfigs() {
+  return ['gemini', 'openai'].map((provider) => legacyEnvironmentConfig(provider)).filter(Boolean).map((config) => ({
+    aiConfigId: config.aiConfigId,
+    name: config.name,
+    provider: config.provider,
+    model: config.model,
+    description: 'Konfiguracja z bezpiecznych zmiennych środowiskowych serwera.',
+    source: 'env',
+    secretConfigured: true,
+    connectionStatus: 'untested'
+  }));
 }
 
 async function sendRequest(input, options = {}) {
@@ -225,6 +239,7 @@ function routerError(code, status, details) {
 
 module.exports = {
   applyPolicy,
+  environmentConfigs,
   legacyEnvironmentConfig,
   resolveConfig,
   resolveConfigById,

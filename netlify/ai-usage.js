@@ -199,6 +199,17 @@ async function readSettings(configStore) {
   return { settings: normalizeSettings(entry && entry.value), etag: entry && entry.etag || null };
 }
 
+function pruneStaleConfigPolicies(raw, staleConfigIds) {
+  const stale = new Set(Array.from(staleConfigIds || [], (value) => String(value || '')).filter(Boolean));
+  const next = structuredClone(plainObject(raw) ? raw : {});
+  if (!stale.size || !plainObject(next.configs)) return next;
+  stale.forEach((aiConfigId) => { delete next.configs[aiConfigId]; });
+  Object.values(next.configs).forEach((policy) => {
+    if (plainObject(policy) && stale.has(String(policy.fallbackConfigId || ''))) policy.fallbackConfigId = null;
+  });
+  return next;
+}
+
 async function saveSettings(stores, raw, adminId, validConfigIds = []) {
   const input = normalizeSettings(raw, { strict: true });
   const validIds = new Set(validConfigIds);
@@ -1002,6 +1013,7 @@ module.exports = {
   readReport,
   readUsersReport,
   readSettings,
+  pruneStaleConfigPolicies,
   reserveRequest,
   resetUserUsage,
   saveSettings,

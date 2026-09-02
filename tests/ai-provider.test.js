@@ -122,6 +122,33 @@ test('router preserves legacy Gemini ENV fallback when panel storage is unavaila
   assert.equal(config.apiKey, 'legacy-key');
 });
 
+test('OpenAI from ENV can be assigned to chat even when panel configurations exist', async (t) => {
+  const stores = freshStores();
+  const originalGemini = process.env.GEMINI_API_KEY;
+  const originalOpenAi = process.env.OPENAI_API_KEY;
+  const originalOpenAiModel = process.env.OPENAI_MODEL;
+  t.after(() => {
+    if (originalGemini === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = originalGemini;
+    if (originalOpenAi === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = originalOpenAi;
+    if (originalOpenAiModel === undefined) delete process.env.OPENAI_MODEL; else process.env.OPENAI_MODEL = originalOpenAiModel;
+  });
+  delete process.env.GEMINI_API_KEY;
+  process.env.OPENAI_API_KEY = 'openai-env-secret';
+  process.env.OPENAI_MODEL = 'gpt-env-model';
+  await manager.saveConfig(stores, { name: 'Panel Gemini', provider: 'gemini', model: 'gemini-panel' }, 'admin');
+  await manager.setModuleAssignment(stores, 'chat', 'env-openai', 'admin');
+
+  const { settings } = await manager.readSettings(stores.metadata);
+  const config = await router.resolveConfig('chat', { getStores: () => stores });
+  const publicEnv = router.environmentConfigs();
+  assert.equal(settings.moduleAssignments.chat, 'env-openai');
+  assert.equal(config.aiConfigId, 'env-openai');
+  assert.equal(config.model, 'gpt-env-model');
+  assert.equal(config.apiKey, 'openai-env-secret');
+  assert.equal(publicEnv[0].aiConfigId, 'env-openai');
+  assert.equal(JSON.stringify(publicEnv).includes('openai-env-secret'), false);
+});
+
 test('OpenAI and Gemini adapters normalize responses without exposing keys in URLs', async () => {
   const requested = [];
   const openAi = await openAiAdapter.sendRequest({ model: 'gpt-test', apiKey: 'openai-secret' }, {
@@ -182,6 +209,53 @@ test('admin endpoint returns key status but never the stored secret', async (t) 
   assert.equal(response.statusCode, 200);
   assert.equal(response.body.includes('endpoint-secret-value'), false);
   assert.equal(JSON.parse(response.body).configs[0].secretConfigured, true);
+});
+
+test('admin public settings retain ENV configurations after mutations', async (t) => {
+  const originalOpenAi = process.env.OPENAI_API_KEY;
+  t.after(() => {
+    if (originalOpenAi === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = originalOpenAi;
+  });
+  process.env.OPENAI_API_KEY = 'never-return-this-env-key';
+  const payload = adminAi._test.publicAdminSettings(manager.emptySettings());
+  assert.equal(payload.environmentConfigs.some((config) => config.aiConfigId === 'env-openai'), true);
+  assert.equal(payload.legacyEnvironment.openai, true);
+  assert.equal(JSON.stringify(payload).includes('never-return-this-env-key'), false);
+});
+
+test('admin endpoint saves OpenAI ENV as the chat route', async (t) => {
+  const stores = freshStores();
+  manager._test.setStoreFactory(() => stores);
+  const originalOpenAi = process.env.OPENAI_API_KEY;
+  const originalFetch = global.fetch;
+  t.after(() => {
+    global.fetch = originalFetch;
+    if (originalOpenAi === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = originalOpenAi;
+  });
+  process.env.OPENAI_API_KEY = 'server-only-openai-key';
+  global.fetch = async () => new Response(JSON.stringify({
+    id: 'admin-1', app_metadata: { roles: ['admin'], session_id: 's1' }
+  }), { status: 200 });
+  const response = await adminAi.handler({
+    httpMethod: 'POST',
+    headers: {
+      authorization: 'Bearer token',
+      'content-type': 'application/json',
+      origin: 'https://example.netlify.app',
+      host: 'example.netlify.app',
+      'x-forwarded-proto': 'https'
+    },
+    body: JSON.stringify({ action: 'set-module', module: 'chat', aiConfigId: 'env-openai' }),
+    clientContext: {
+      user: { id: 'admin-1', app_metadata: { roles: ['admin'], session_id: 's1' } },
+      identity: { url: 'https://example.netlify.app/.netlify/identity' }
+    }
+  });
+  const payload = JSON.parse(response.body);
+  assert.equal(response.statusCode, 200);
+  assert.equal(payload.moduleAssignments.chat, 'env-openai');
+  assert.equal(payload.environmentConfigs.some((config) => config.aiConfigId === 'env-openai'), true);
+  assert.equal(response.body.includes('server-only-openai-key'), false);
 });
 
 test('server-side connection tests normalize invalid keys and unavailable models', async () => {

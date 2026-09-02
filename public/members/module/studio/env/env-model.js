@@ -18,10 +18,10 @@
     preset('GITHUB_CONTENT_ROOT', 'Materiały GitHub', 'Opcjonalny katalog bazowy materiałów.', false),
     preset('GITHUB_SITE_ASSETS_TOKEN', 'Logo i landing', 'Fine-grained PAT tylko do publicznego Kuczis-Media/logo.', true),
     preset('GITHUB_SITE_ASSETS_DIRECTORY', 'Logo i landing', 'Opcjonalny katalog na nowe logo i obrazy.', false),
-    preset('GEMINI_API_KEY', 'AI', 'Opcjonalny klucz awaryjny Google Gemini.', true),
-    preset('GEMINI_MODEL', 'AI', 'Model awaryjny Gemini.', false, 'gemini-2.5-flash'),
-    preset('OPENAI_API_KEY', 'AI', 'Opcjonalny klucz awaryjny OpenAI.', true),
-    preset('OPENAI_MODEL', 'AI', 'Model awaryjny OpenAI.', false, 'gpt-4.1-mini'),
+    preset('GEMINI_API_KEY', 'AI', 'Klucz konfiguracji Gemini (ENV), dostępnej w routerze AI.', true),
+    preset('GEMINI_MODEL', 'AI', 'Model konfiguracji Gemini (ENV).', false, 'gemini-2.5-flash'),
+    preset('OPENAI_API_KEY', 'AI', 'Klucz konfiguracji OpenAI (ENV), dostępnej w routerze AI i czacie.', true),
+    preset('OPENAI_MODEL', 'AI', 'Model konfiguracji OpenAI (ENV).', false, 'gpt-4.1-mini'),
     preset('STRIPE_SECRET_KEY', 'Płatności', 'Sekretny klucz Stripe test albo live.', true),
     preset('STRIPE_WEBHOOK_SECRET', 'Płatności', 'Sekret podpisu webhooka Stripe.', true)
   ]);

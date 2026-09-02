@@ -10,6 +10,7 @@ const SETTINGS_KEY = 'settings.json';
 const MAX_WRITE_RETRIES = 8;
 const PROVIDERS = new Set(['openai', 'gemini']);
 const MODULES = Object.freeze(['chat', 'aiGrader', 'aiForms', 'other']);
+const ENV_CONFIG_IDS = new Set(['env-gemini', 'env-openai']);
 const CONFIG_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,95}$/;
 const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,159}$/;
 let injectedStoreFactory = null;
@@ -75,7 +76,7 @@ function normalizeSettings(raw) {
   const sourceAssignments = plainObject(source.moduleAssignments) ? source.moduleAssignments : {};
   const moduleAssignments = Object.fromEntries(MODULES.map((name) => {
     const value = cleanString(sourceAssignments[name], 96);
-    return [name, ids.has(value) ? value : null];
+    return [name, ids.has(value) || ENV_CONFIG_IDS.has(value) ? value : null];
   }));
   return {
     version: 1,
@@ -249,7 +250,9 @@ async function setDefaultConfig(stores, aiConfigId, adminId) {
 async function setModuleAssignment(stores, moduleName, aiConfigId, adminId) {
   if (!MODULES.includes(moduleName)) throw aiError('INVALID_AI_MODULE', 400);
   const result = await updateSettings(stores.metadata, adminId, (settings) => {
-    if (aiConfigId && !settings.configs.some((item) => item.aiConfigId === aiConfigId)) throw aiError('AI_CONFIG_NOT_FOUND', 404);
+    if (aiConfigId && !ENV_CONFIG_IDS.has(aiConfigId) && !settings.configs.some((item) => item.aiConfigId === aiConfigId)) {
+      throw aiError('AI_CONFIG_NOT_FOUND', 404);
+    }
     const previous = settings.moduleAssignments[moduleName] || null;
     settings.moduleAssignments[moduleName] = aiConfigId || null;
     return { settings, result: { previous } };
@@ -361,6 +364,7 @@ function plainObject(value) {
 }
 
 module.exports = {
+  ENV_CONFIG_IDS,
   MODULES,
   PROVIDERS,
   appendAudit,

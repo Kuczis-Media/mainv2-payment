@@ -211,6 +211,65 @@ test('batched user report includes accounts without an existing usage document',
   assert.equal(report.users[0].limit, 20);
 });
 
+test('saving a default hourly user limit removes only previously orphaned AI policies', async (t) => {
+  const ledger = usageStores();
+  const aiStores = providerStores();
+  const oldSettings = usage.emptySettings();
+  oldSettings.configs['deleted-ai'] = {
+    global: usage.emptyLimitSet(), perUser: usage.emptyLimitSet(),
+    pricing: { inputPerMillion: null, outputPerMillion: null }, fallbackConfigId: null
+  };
+  await usage.saveSettings(ledger, oldSettings, 'admin', ['deleted-ai']);
+  await manager.saveConfig(aiStores, { aiConfigId: 'current-ai', name: 'Current', provider: 'openai', model: 'gpt-test' }, 'admin');
+  usage._test.setStoreFactory(() => ledger);
+  manager._test.setStoreFactory(() => aiStores);
+
+  const submitted = structuredClone(oldSettings);
+  submitted.defaultUser.requests.hour = 20;
+  const originalFetch = global.fetch;
+  t.after(() => { global.fetch = originalFetch; });
+  global.fetch = async () => new Response(JSON.stringify({
+    id: 'admin-1', app_metadata: { roles: ['admin'], session_id: 's1' }
+  }), { status: 200 });
+  const response = await adminUsageEndpoint.handler({
+    httpMethod: 'PUT',
+    headers: {
+      authorization: 'Bearer token',
+      'content-type': 'application/json',
+      origin: 'https://example.netlify.app',
+      host: 'example.netlify.app',
+      'x-forwarded-proto': 'https'
+    },
+    body: JSON.stringify({ settings: submitted }),
+    clientContext: {
+      user: { id: 'admin-1', app_metadata: { roles: ['admin'], session_id: 's1' } },
+      identity: { url: 'https://example.netlify.app/.netlify/identity' }
+    }
+  });
+  assert.equal(response.statusCode, 200);
+  const saved = JSON.parse(response.body);
+  assert.equal(saved.defaultUser.requests.hour, 20);
+  assert.equal(Object.hasOwn(saved.configs, 'deleted-ai'), false);
+});
+
+test('stale-policy cleanup does not allow a newly invented AI configuration ID', async () => {
+  const ledger = usageStores();
+  const current = usage.emptySettings();
+  current.configs['old-ai'] = {
+    global: usage.emptyLimitSet(), perUser: usage.emptyLimitSet(),
+    pricing: { inputPerMillion: null, outputPerMillion: null }, fallbackConfigId: null
+  };
+  const cleaned = usage.pruneStaleConfigPolicies(current, ['old-ai']);
+  cleaned.configs['invented-ai'] = {
+    global: usage.emptyLimitSet(), perUser: usage.emptyLimitSet(),
+    pricing: { inputPerMillion: null, outputPerMillion: null }, fallbackConfigId: null
+  };
+  await assert.rejects(
+    usage.saveSettings(ledger, cleaned, 'admin', ['current-ai']),
+    (error) => error.code === 'AI_CONFIG_NOT_FOUND'
+  );
+});
+
 test('module request limits apply per user and cost limits fail closed without pricing', async () => {
   const stores = usageStores();
   const settings = usage.emptySettings();
