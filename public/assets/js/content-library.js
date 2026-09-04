@@ -21,9 +21,23 @@
   ]);
   const MEDIA_CACHE_TTL_MS = 15 * 60 * 1000;
   const MEDIA_CACHE_MAX_ENTRIES = 96;
-  const MEDIA_FETCH_TIMEOUT_MS = 12_000;
-  const MEDIA_RETRY_DELAYS_MS = Object.freeze([0, 300, 900]);
+  const MEDIA_FETCH_TIMEOUT_MS = 8_000;
+  const MEDIA_FETCH_CONCURRENCY = 4;
+  const MEDIA_RETRY_DELAYS_MS = Object.freeze([0, 250]);
   const mediaBlobCache = new Map();
+  const mediaFetchQueue = [];
+  let activeMediaFetches = 0;
+  let mediaCacheGeneration = 0;
+  const JSON_CACHE_MAX_ENTRIES = 160;
+  const JSON_CACHE_TTL_MS = Object.freeze({
+    repositories: 5 * 60 * 1000,
+    bootstrap: 30 * 1000,
+    list: 30 * 1000,
+    read: 60 * 1000,
+    mediaList: 30 * 1000,
+    status: 30 * 1000
+  });
+  const jsonResponseCache = new Map();
 
   const ERROR_MESSAGES = Object.freeze({
     ACCESS_EXPIRED: 'Dostęp do kursu wygasł.',
@@ -125,6 +139,84 @@
     return token;
   }
 
+  function cachePrincipal() {
+    try {
+      const user = root?.ChemAuth?.getUser?.();
+      return String(user?.id || user?.sub || user?.email || 'session');
+    } catch {
+      return 'session';
+    }
+  }
+
+  function jsonCacheKey(...parts) {
+    return [cachePrincipal(), ...parts.map((part) => String(part ?? ''))].join('\u001f');
+  }
+
+  function cloneJson(value) {
+    if (typeof root?.structuredClone === 'function') {
+      try { return root.structuredClone(value); } catch { /* fall back below */ }
+    }
+    if (value === undefined) return undefined;
+    return JSON.parse(JSON.stringify(value));
+  }
+
+  function trimJsonResponseCache() {
+    while (jsonResponseCache.size > JSON_CACHE_MAX_ENTRIES) {
+      const oldestKey = jsonResponseCache.keys().next().value;
+      if (oldestKey === undefined) break;
+      jsonResponseCache.delete(oldestKey);
+    }
+  }
+
+  function seedJsonResponse(key, value, ttl) {
+    const snapshot = cloneJson(value);
+    jsonResponseCache.delete(key);
+    jsonResponseCache.set(key, {
+      pending: false,
+      expiresAt: Date.now() + ttl,
+      promise: Promise.resolve(snapshot)
+    });
+    trimJsonResponseCache();
+  }
+
+  function cachedJsonResponse(key, ttl, refresh, loader) {
+    const existing = jsonResponseCache.get(key);
+    if (existing && (existing.pending || (!refresh && existing.expiresAt > Date.now()))) {
+      return existing.promise.then(cloneJson);
+    }
+    if (existing) jsonResponseCache.delete(key);
+    const entry = { pending: true, expiresAt: 0, promise: null };
+    const promise = Promise.resolve()
+      .then(loader)
+      .then((value) => {
+        entry.pending = false;
+        entry.expiresAt = Date.now() + ttl;
+        return cloneJson(value);
+      })
+      .catch((error) => {
+        if (jsonResponseCache.get(key) === entry) jsonResponseCache.delete(key);
+        throw error;
+      });
+    entry.promise = promise;
+    jsonResponseCache.set(key, entry);
+    trimJsonResponseCache();
+    return promise.then(cloneJson);
+  }
+
+  function clearJsonResponseCache() {
+    jsonResponseCache.clear();
+  }
+
+  // A long-lived tab can be signed into a different account. Never carry
+  // private repository metadata or image Blobs across that boundary.
+  if (root && typeof root.addEventListener === 'function') {
+    root.addEventListener('chem-auth-user-changed', () => {
+      clearJsonResponseCache();
+      mediaCacheGeneration += 1;
+      mediaBlobCache.clear();
+    });
+  }
+
   async function request(params, options = {}) {
     const applicationOrigin = root && root.location ? root.location.origin : 'https://local.invalid';
     const url = new URL(endpoint(), applicationOrigin);
@@ -175,13 +267,21 @@
     if (!['lesson', 'prompt', 'exam', 'question_bank', 'presentation', 'quiz'].includes(kind)) {
       throw new ContentLibraryError('INVALID_CONTENT_KIND', 400);
     }
-    const payload = await request({
-      action: 'list',
-      kind,
-      repo: validateRepositoryId(options.repositoryId),
-      refresh: options.refresh ? '1' : ''
-    });
-    return Array.isArray(payload.assets) ? payload.assets : [];
+    const repositoryId = validateRepositoryId(options.repositoryId);
+    return cachedJsonResponse(
+      jsonCacheKey('list', repositoryId, kind),
+      JSON_CACHE_TTL_MS.list,
+      Boolean(options.refresh),
+      async () => {
+        const payload = await request({
+          action: 'list',
+          kind,
+          repo: repositoryId,
+          refresh: options.refresh ? '1' : ''
+        });
+        return Array.isArray(payload.assets) ? payload.assets : [];
+      }
+    );
   }
 
   async function readLesson(rawFilename, options = {}) {
@@ -210,16 +310,24 @@
 
   async function read(kind, rawFilename, options = {}) {
     const filename = validateFilename(kind, rawFilename);
-    const payload = await request({
-      action: 'read',
-      kind,
-      file: filename,
-      repo: validateRepositoryId(options.repositoryId)
-    });
-    if (!payload || typeof payload.content !== 'string') {
-      throw new ContentLibraryError('CONTENT_FILE_INVALID', 422);
-    }
-    return payload;
+    const repositoryId = validateRepositoryId(options.repositoryId);
+    return cachedJsonResponse(
+      jsonCacheKey('read', repositoryId, kind, filename),
+      JSON_CACHE_TTL_MS.read,
+      Boolean(options.refresh),
+      async () => {
+        const payload = await request({
+          action: 'read',
+          kind,
+          file: filename,
+          repo: repositoryId
+        });
+        if (!payload || typeof payload.content !== 'string') {
+          throw new ContentLibraryError('CONTENT_FILE_INVALID', 422);
+        }
+        return payload;
+      }
+    );
   }
 
   async function save(kind, input = {}) {
@@ -227,7 +335,7 @@
     if (typeof input.content !== 'string') {
       throw new ContentLibraryError('CONTENT_FILE_INVALID', 422);
     }
-    return request({}, {
+    const saved = await request({}, {
       method: 'PUT',
       body: {
         kind,
@@ -237,11 +345,13 @@
         repositoryId: validateRepositoryId(input.repositoryId)
       }
     });
+    clearJsonResponseCache();
+    return saved;
   }
 
   async function remove(kind, input = {}) {
     const filename = validateFilename(kind, input.filename);
-    return request({}, {
+    const removed = await request({}, {
       method: 'DELETE',
       body: {
         kind,
@@ -250,6 +360,8 @@
         repositoryId: validateRepositoryId(input.repositoryId)
       }
     });
+    clearJsonResponseCache();
+    return removed;
   }
 
   async function uploadExamMedia(input = {}) {
@@ -261,7 +373,7 @@
     if (typeof input.contentBase64 !== 'string' || !input.contentBase64) {
       throw new ContentLibraryError('EXAM_MEDIA_INVALID', 422);
     }
-    return request({}, {
+    const saved = await request({}, {
       method: 'PUT',
       body: {
         kind: 'exam_media',
@@ -272,6 +384,8 @@
         repositoryId: validateRepositoryId(input.repositoryId)
       }
     });
+    clearJsonResponseCache();
+    return saved;
   }
 
   function normalizeMediaOwner(input = {}) {
@@ -290,16 +404,24 @@
 
   async function listMedia(input = {}) {
     const owner = normalizeMediaOwner(input);
-    const payload = await request({
-      action: 'list-media',
-      scope: owner.scope,
-      materialKind: owner.materialKind,
-      materialId: owner.materialId,
-      repo: validateRepositoryId(input.repositoryId),
-      refresh: input.refresh ? '1' : '',
-      usage: input.usage ? '1' : ''
-    });
-    return Array.isArray(payload.assets) ? payload.assets : [];
+    const repositoryId = validateRepositoryId(input.repositoryId);
+    return cachedJsonResponse(
+      jsonCacheKey('media-list', repositoryId, owner.scope, owner.materialKind, owner.materialId, input.usage ? 'usage' : ''),
+      JSON_CACHE_TTL_MS.mediaList,
+      Boolean(input.refresh),
+      async () => {
+        const payload = await request({
+          action: 'list-media',
+          scope: owner.scope,
+          materialKind: owner.materialKind,
+          materialId: owner.materialId,
+          repo: repositoryId,
+          refresh: input.refresh ? '1' : '',
+          usage: input.usage ? '1' : ''
+        });
+        return Array.isArray(payload.assets) ? payload.assets : [];
+      }
+    );
   }
 
   async function uploadMedia(input = {}) {
@@ -322,6 +444,7 @@
         repositoryId: validateRepositoryId(input.repositoryId)
       }
     });
+    clearJsonResponseCache();
     invalidateMediaBlob(owner, saved.reference || saved.ref || `photos/${filename}`, input.repositoryId);
     return saved;
   }
@@ -338,18 +461,41 @@
         repositoryId: validateRepositoryId(input.repositoryId)
       }
     });
+    clearJsonResponseCache();
     invalidateMediaBlob(owner, input.reference, input.repositoryId);
     return removed;
   }
 
   function mediaBlobCacheKey(owner, reference, repositoryId) {
     return [
+      cachePrincipal(),
       validateRepositoryId(repositoryId),
       owner.scope,
       owner.materialKind,
       owner.materialId,
       String(reference || '').trim().toLowerCase()
     ].join(':');
+  }
+
+  function drainMediaFetchQueue() {
+    while (activeMediaFetches < MEDIA_FETCH_CONCURRENCY && mediaFetchQueue.length) {
+      const entry = mediaFetchQueue.shift();
+      activeMediaFetches += 1;
+      Promise.resolve()
+        .then(entry.loader)
+        .then(entry.resolve, entry.reject)
+        .finally(() => {
+          activeMediaFetches -= 1;
+          drainMediaFetchQueue();
+        });
+    }
+  }
+
+  function scheduleMediaFetch(loader) {
+    return new Promise((resolve, reject) => {
+      mediaFetchQueue.push({ loader, resolve, reject });
+      drainMediaFetchQueue();
+    });
   }
 
   function invalidateMediaBlob(owner, reference, repositoryId) {
@@ -367,7 +513,9 @@
   }
 
   function transientMediaStatus(status) {
-    return [404, 408, 425, 429].includes(status) || status >= 500;
+    // Missing files and rate limits do not recover within a sub-second retry.
+    // Retrying those only spends another Function invocation and delays the UI.
+    return [408, 425].includes(status) || status >= 500;
   }
 
   async function fetchMediaBlob(owner, input, options = {}) {
@@ -395,7 +543,7 @@
       try {
         response = await root.fetch(url, {
           method: 'GET',
-          cache: 'default',
+          cache: options.bypassCache ? 'reload' : 'default',
           credentials: 'same-origin',
           headers: { Accept: 'image/*', Authorization: `Bearer ${token}` },
           ...(controller ? { signal: controller.signal } : {})
@@ -435,49 +583,91 @@
     const owner = normalizeMediaOwner(input);
     const key = mediaBlobCacheKey(owner, input.reference, input.repositoryId);
     const cached = mediaBlobCache.get(key);
-    if (!options.bypassCache && cached && cached.expiresAt > Date.now()) return cached.promise;
+    if (cached?.pending || (!options.bypassCache && cached && cached.expiresAt > Date.now())) return cached.promise;
     if (cached) mediaBlobCache.delete(key);
-    const promise = fetchMediaBlob(owner, input, options).catch((error) => {
+    const generation = mediaCacheGeneration;
+    const entry = { promise: null, pending: true, expiresAt: 0 };
+    const promise = scheduleMediaFetch(() => {
+      if (generation !== mediaCacheGeneration) throw new ContentLibraryError('AUTH_EXPIRED', 401);
+      return fetchMediaBlob(owner, input, options);
+    }).then((blob) => {
+      if (generation !== mediaCacheGeneration) throw new ContentLibraryError('AUTH_EXPIRED', 401);
+      entry.pending = false;
+      entry.expiresAt = Date.now() + MEDIA_CACHE_TTL_MS;
+      return blob;
+    }).catch((error) => {
       if (mediaBlobCache.get(key)?.promise === promise) mediaBlobCache.delete(key);
       throw error;
     });
-    mediaBlobCache.set(key, { promise, expiresAt: Date.now() + MEDIA_CACHE_TTL_MS });
+    entry.promise = promise;
+    mediaBlobCache.set(key, entry);
     trimMediaBlobCache();
     return promise;
   }
 
   async function status(options = {}) {
-    return request({
-      action: 'status',
-      repo: validateRepositoryId(options.repositoryId),
-      refresh: options.refresh ? '1' : ''
-    });
+    const repositoryId = validateRepositoryId(options.repositoryId);
+    return cachedJsonResponse(
+      jsonCacheKey('status', repositoryId),
+      JSON_CACHE_TTL_MS.status,
+      Boolean(options.refresh),
+      () => request({
+        action: 'status',
+        repo: repositoryId,
+        refresh: options.refresh ? '1' : ''
+      })
+    );
   }
 
-  async function repositories() {
-    const payload = await request({ action: 'repositories' });
-    return Array.isArray(payload.repositories) ? payload.repositories : [];
+  async function repositories(options = {}) {
+    return cachedJsonResponse(
+      jsonCacheKey('repositories'),
+      JSON_CACHE_TTL_MS.repositories,
+      Boolean(options.refresh),
+      async () => {
+        const payload = await request({ action: 'repositories' });
+        return Array.isArray(payload.repositories) ? payload.repositories : [];
+      }
+    );
   }
 
   async function studioBootstrap(options = {}) {
-    const payload = await request({
-      action: 'studio-bootstrap',
-      repo: validateRepositoryId(options.repositoryId),
-      refresh: options.refresh ? '1' : ''
+    const repositoryId = validateRepositoryId(options.repositoryId);
+    const result = await cachedJsonResponse(
+      jsonCacheKey('bootstrap', repositoryId),
+      JSON_CACHE_TTL_MS.bootstrap,
+      Boolean(options.refresh),
+      async () => {
+        const payload = await request({
+          action: 'studio-bootstrap',
+          repo: repositoryId,
+          refresh: options.refresh ? '1' : ''
+        });
+        const source = payload && payload.assets && typeof payload.assets === 'object'
+          ? payload.assets
+          : {};
+        return {
+          repositories: Array.isArray(payload.repositories) ? payload.repositories : [],
+          repository: payload && payload.repository && typeof payload.repository === 'object'
+            ? payload.repository
+            : null,
+          assets: Object.fromEntries(STUDIO_ASSET_KINDS.map((kind) => [
+            kind,
+            Array.isArray(source[kind]) ? source[kind] : []
+          ]))
+        };
+      }
+    );
+    seedJsonResponse(jsonCacheKey('repositories'), result.repositories, JSON_CACHE_TTL_MS.repositories);
+    const resolvedRepositoryId = validateRepositoryId(result.repository?.id || repositoryId);
+    STUDIO_ASSET_KINDS.forEach((kind) => {
+      seedJsonResponse(
+        jsonCacheKey('list', resolvedRepositoryId, kind),
+        result.assets[kind],
+        JSON_CACHE_TTL_MS.list
+      );
     });
-    const source = payload && payload.assets && typeof payload.assets === 'object'
-      ? payload.assets
-      : {};
-    return {
-      repositories: Array.isArray(payload.repositories) ? payload.repositories : [],
-      repository: payload && payload.repository && typeof payload.repository === 'object'
-        ? payload.repository
-        : null,
-      assets: Object.fromEntries(STUDIO_ASSET_KINDS.map((kind) => [
-        kind,
-        Array.isArray(source[kind]) ? source[kind] : []
-      ]))
-    };
+    return result;
   }
 
   function lessonUrl(rawFilename, rawRepositoryId = '') {
@@ -561,8 +751,13 @@
     validateRepositoryId,
     _test: {
       endpoint,
+      clearRequestCache: clearJsonResponseCache,
+      requestCacheSize() { return jsonResponseCache.size; },
       clearMediaCache() { mediaBlobCache.clear(); },
-      mediaCacheSize() { return mediaBlobCache.size; }
+      mediaCacheSize() { return mediaBlobCache.size; },
+      mediaRequestState() {
+        return { active: activeMediaFetches, queued: mediaFetchQueue.length };
+      }
     }
   };
 });

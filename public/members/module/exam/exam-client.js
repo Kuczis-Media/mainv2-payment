@@ -52,6 +52,18 @@
   }
 
   const api = {
+    bootstrap(input) {
+      return request({}, {
+        method: 'POST',
+        body: {
+          action: 'bootstrap',
+          repositoryId: input.repositoryId || 'default',
+          examId: input.examId,
+          preview: Boolean(input.preview),
+          ...(input.materialId ? { materialId: input.materialId } : {})
+        }
+      });
+    },
     definition(input) { return request({ action: 'definition', ...reference(input), preview: input.preview ? '1' : '' }); },
     attempt(input) { return request({ action: 'attempt', ...reference(input), attemptId: input.attemptId, preview: input.preview ? '1' : '' }); },
     result(input) { return request({ action: 'result', ...reference(input), attemptId: input.attemptId, preview: input.preview ? '1' : '' }); },

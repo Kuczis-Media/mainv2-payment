@@ -160,6 +160,31 @@ test('usage detail contains required routing and token fields but never stores p
   assert.equal(JSON.stringify(Array.from(stores.usage.entries.values())).includes('NIE ZAPISUJ TEGO'), false);
 });
 
+test('usage completion repairs a transient partial global/user write without a second provider call', async () => {
+  const stores = usageStores();
+  const reservation = await usage.reserveRequest(stores, request());
+  const originalSet = stores.usage.set.bind(stores.usage);
+  let failedUserWrite = false;
+  stores.usage.set = async (key, data, options) => {
+    if (key.startsWith('users/') && !failedUserWrite) {
+      failedUserWrite = true;
+      throw new Error('temporary user ledger failure');
+    }
+    return originalSet(key, data, options);
+  };
+  await usage.completeReservation(stores, reservation, {
+    success: true,
+    usage: { inputTokens: 2, outputTokens: 3, totalTokens: 5 }
+  });
+  const report = await usage.readReport(stores, { period: 'day' });
+  const user = await usage.readUsersReport(stores, ['user-1'], { period: 'day' });
+  assert.equal(failedUserWrite, true);
+  assert.equal(report.totals.requests, 1);
+  assert.equal(report.totals.successfulRequests, 1);
+  assert.equal(user.users[0].successfulRequests, 1);
+  assert.equal(user.users[0].totalTokens, 5);
+});
+
 test('user policies support inherit, custom, unlimited and disabled modes', async () => {
   const stores = usageStores();
   const settings = usage.emptySettings();
@@ -216,6 +241,34 @@ test('batched user report includes accounts without an existing usage document',
   assert.equal(report.users[0].limit, 20);
 });
 
+test('a zero user limit is reported as immediately exhausted', async () => {
+  const stores = usageStores();
+  const settings = usage.emptySettings();
+  settings.defaultUser.requests.hour = 0;
+  await usage.saveSettings(stores, settings, 'admin', []);
+  const report = await usage.readUsersReport(stores, ['never-used'], { period: 'hour' });
+  assert.equal(report.users[0].limit, 0);
+  assert.equal(report.users[0].usagePercent, 100);
+  assert.equal(report.users[0].warning.level, 'limit');
+});
+
+test('a zero cost limit blocks immediately even when the estimated cost rounds to zero', async () => {
+  const stores = usageStores();
+  const settings = usage.emptySettings();
+  settings.defaultUser.estimatedCostMicros.hour = 0;
+  settings.configs['ai-primary'] = {
+    global: usage.emptyLimitSet(), perUser: usage.emptyLimitSet(),
+    pricing: { inputPerMillion: 0, outputPerMillion: 0 }, fallbackConfigId: null
+  };
+  await usage.saveSettings(stores, settings, 'admin', ['ai-primary']);
+  await assert.rejects(
+    usage.reserveRequest(stores, request({
+      estimate: { inputTokens: 1, outputTokens: 1, totalTokens: 2, estimatedCostMicros: 0 }
+    })),
+    (error) => error.code === 'AI_USER_HOUR_COST_LIMIT_REACHED' && error.details.limit === 0
+  );
+});
+
 test('default user and configuration-per-user hourly limits are enforced independently', async () => {
   const stores = usageStores();
   const settings = usage.emptySettings();
@@ -251,6 +304,30 @@ test('default user and configuration-per-user hourly limits are enforced indepen
     usage.reserveRequest(stores, request({ userId: 'student-a', aiConfigId: 'env-gemini', provider: 'gemini', model: 'gemini-test' })),
     (error) => error.code === 'AI_USER_HOUR_LIMIT_REACHED' && error.details.limit === 20
   );
+});
+
+test('configuration IDs matching inherited object names cannot bypass their limits', async () => {
+  const stores = usageStores();
+  const settings = usage.emptySettings();
+  settings.configs.toString = {
+    global: usage.emptyLimitSet(), perUser: usage.emptyLimitSet(),
+    pricing: { inputPerMillion: null, outputPerMillion: null }, fallbackConfigId: null
+  };
+  settings.configs.toString.perUser.requests.hour = 1;
+  await usage.saveSettings(stores, settings, 'admin', ['toString']);
+
+  const first = await usage.reserveRequest(stores, request({ aiConfigId: 'toString', model: 'toString' }));
+  await usage.completeReservation(stores, first, {
+    success: true,
+    usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }
+  });
+  await assert.rejects(
+    usage.reserveRequest(stores, request({ aiConfigId: 'toString', model: 'toString' })),
+    (error) => error.code === 'AI_CONFIG_HOUR_LIMIT_REACHED'
+  );
+  const report = await usage.readReport(stores, { period: 'hour' });
+  assert.equal(report.configs.some((row) => row.id === 'toString' && row.requests === 1), true);
+  assert.equal(report.models.some((row) => row.id === 'toString' && row.requests === 1), true);
 });
 
 test('saving a default hourly user limit removes only previously orphaned AI policies', async (t) => {
@@ -328,6 +405,20 @@ test('module request limits apply per user and cost limits fail closed without p
   await assert.rejects(
     usage.reserveRequest(stores, request({ userId: 'third-user', estimate: { inputTokens: 1, outputTokens: 1, totalTokens: 2, estimatedCostMicros: null } })),
     (error) => error.code === 'AI_COST_ESTIMATE_UNAVAILABLE'
+  );
+});
+
+test('the other module limit covers unregistered future module IDs', async () => {
+  const stores = usageStores();
+  const settings = usage.emptySettings();
+  settings.modules.other = usage.emptyLimitSet();
+  settings.modules.other.requests.hour = 1;
+  await usage.saveSettings(stores, settings, 'admin', []);
+  const first = await usage.reserveRequest(stores, request({ userId: 'student', moduleId: 'future-tutor' }));
+  await usage.completeReservation(stores, first, { success: true, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } });
+  await assert.rejects(
+    usage.reserveRequest(stores, request({ userId: 'student', moduleId: 'future-tutor' })),
+    (error) => error.code === 'AI_MODULE_HOUR_LIMIT_REACHED'
   );
 });
 

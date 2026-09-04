@@ -8,9 +8,12 @@
     includeEmpty: document.getElementById('env-include-empty'), search: document.getElementById('env-search'), import: document.getElementById('env-import'),
     add: document.getElementById('env-add'), defaults: document.getElementById('env-defaults'), clear: document.getElementById('env-clear'),
     copy: document.getElementById('env-copy'), copyNames: document.getElementById('env-copy-names'), download: document.getElementById('env-download'),
+    outputVisibility: document.getElementById('env-output-visibility'),
     theme: document.getElementById('theme-toggle')
   };
   let entries = modelApi.defaultEntries();
+  let serializedOutput = '';
+  let outputMasked = true;
 
   document.addEventListener('DOMContentLoaded', bootstrap, { once: true });
 
@@ -37,9 +40,18 @@
     elements.search.addEventListener('input', applyFilter);
     elements.includeEmpty.addEventListener('change', updateOutput);
     elements.import.addEventListener('change', importFile);
-    elements.copy.addEventListener('click', () => copyText(elements.output.value, 'Skopiowano gotowy plik .env.'));
-    elements.copyNames.addEventListener('click', () => copyText(entries.map((entry) => entry.name).filter((name) => modelApi.NAME_PATTERN.test(name)).join('\n'), 'Skopiowano nazwy zmiennych.'));
+    elements.copy.addEventListener('click', () => copyText(serializedOutput, 'Skopiowano gotowy plik .env.', 'output'));
+    elements.copyNames.addEventListener('click', () => {
+      const names = entries.map((entry) => String(entry.name || '').trim()).filter(Boolean).join('\n');
+      return copyText(names, 'Skopiowano nazwy zmiennych.', 'names');
+    });
     elements.download.addEventListener('click', downloadEnv);
+    elements.outputVisibility.addEventListener('click', () => {
+      outputMasked = !outputMasked;
+      elements.outputVisibility.setAttribute('aria-pressed', String(!outputMasked));
+      elements.outputVisibility.textContent = outputMasked ? 'Pokaż wartości' : 'Ukryj wartości';
+      updateOutput();
+    });
     elements.theme.addEventListener('click', () => {
       const root = document.documentElement;
       root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
@@ -64,7 +76,11 @@
       name.addEventListener('input', () => {
         entry.name = name.value.trim();
         entry.secret = entry.secret || modelApi.looksSecret(entry.name);
-        name.setAttribute('aria-invalid', String(Boolean(entry.name && !modelApi.NAME_PATTERN.test(entry.name))));
+        if (entry.secret) {
+          value.type = 'password';
+          reveal.hidden = false;
+          reveal.textContent = 'Pokaż';
+        }
         row.querySelector('.env-label').textContent = entry.name || 'Nowa zmienna';
         updateOutput();
       });
@@ -114,16 +130,21 @@
     if (file.size > modelApi.MAX_SOURCE_LENGTH) return setStatus('Plik .env przekracza 256 KB.', 'error');
     try {
       const parsed = modelApi.parseEnv(await file.text());
-      const imported = new Map(parsed.entries.map((entry) => [entry.name, entry]));
-      entries = entries.map((entry) => imported.has(entry.name) ? { ...entry, value: imported.get(entry.name).value } : entry);
-      const known = new Set(entries.map((entry) => entry.name));
-      parsed.entries.forEach((entry) => { if (!known.has(entry.name)) entries.push(entry); });
+      entries = modelApi.mergeEntries(entries, parsed.entries);
       render();
-      setStatus(parsed.invalidLines.length
-        ? `Zaimportowano plik; pominięto niepoprawne wiersze: ${parsed.invalidLines.join(', ')}.`
-        : `Zaimportowano ${parsed.entries.length} zmiennych lokalnie.`, parsed.invalidLines.length ? 'warning' : 'success');
-    } catch {
-      setStatus('Nie udało się odczytać tego pliku .env.', 'error');
+      const warnings = [];
+      if (parsed.invalidLines.length) warnings.push(`pominięte wiersze: ${parsed.invalidLines.join(', ')}`);
+      if (parsed.duplicateNames.length) warnings.push(`powtórzone nazwy (zachowano ostatnią wartość): ${parsed.duplicateNames.join(', ')}`);
+      setStatus(warnings.length
+        ? `Zaimportowano plik; ${warnings.join('; ')}.`
+        : `Zaimportowano ${parsed.entries.length} zmiennych lokalnie.`, warnings.length ? 'warning' : 'success');
+    } catch (error) {
+      const message = error?.code === 'ENV_TOO_MANY_ENTRIES'
+        ? `Po imporcie byłoby więcej niż ${modelApi.MAX_ENTRIES} zmiennych. Usuń zbędne pozycje i spróbuj ponownie.`
+        : error?.code === 'ENV_SOURCE_TOO_LARGE'
+          ? 'Plik .env przekracza 256 KB.'
+          : 'Nie udało się odczytać tego pliku .env.';
+      setStatus(message, 'error');
     }
   }
 
@@ -136,32 +157,82 @@
   }
 
   function updateOutput() {
-    elements.output.value = modelApi.serializeEnv(entries, { includeEmpty: elements.includeEmpty.checked });
-    const invalid = entries.filter((entry) => entry.name && !modelApi.NAME_PATTERN.test(entry.name)).length;
-    if (invalid) setStatus(`${invalid} ${invalid === 1 ? 'nazwa jest niepoprawna' : 'nazwy są niepoprawne'} i nie trafi do wyniku.`, 'error');
+    const validation = modelApi.validateEntries(entries);
+    const duplicates = new Set(validation.duplicateNames);
+    elements.list.querySelectorAll('.env-row').forEach((row) => {
+      const entry = entries[Number(row.dataset.index)];
+      const name = String(entry?.name || '').trim();
+      const invalid = Boolean((entry?.value && !name) || (name && (!modelApi.NAME_PATTERN.test(name) || duplicates.has(name))));
+      row.querySelector('.env-name')?.setAttribute('aria-invalid', String(invalid));
+    });
+    const actions = [elements.copy, elements.copyNames, elements.download];
+    if (!validation.ok) {
+      serializedOutput = '';
+      elements.output.value = '';
+      actions.forEach((button) => { button.disabled = true; });
+      return setStatus(validationMessage(validation), 'error');
+    }
+    serializedOutput = modelApi.serializeEnv(entries, { includeEmpty: elements.includeEmpty.checked });
+    elements.output.value = outputMasked
+      ? modelApi.serializeEnv(entries, { includeEmpty: elements.includeEmpty.checked, maskSecrets: true })
+      : serializedOutput;
+    actions.forEach((button) => { button.disabled = !serializedOutput; });
+    const filled = entries.filter((entry) => entry.name && String(entry.value || '').length > 0).length;
+    setStatus(`Gotowe: ${entries.filter((entry) => entry.name).length} zmiennych, ${filled} z wartością.${outputMasked ? ' Sekrety w podglądzie są ukryte.' : ''}`, 'success');
   }
 
-  async function copyText(value, message) {
+  function validationMessage(validation) {
+    if (validation.tooMany) return `Lista ma ${validation.count} pozycji, a limit wynosi ${validation.max}. Usuń nadmiarowe wiersze.`;
+    if (validation.missingNameRows.length) return `Wartość bez nazwy w wierszu: ${validation.missingNameRows.join(', ')}.`;
+    if (validation.invalidNames.length) return `Niepoprawne nazwy: ${validation.invalidNames.join(', ')}.`;
+    if (validation.duplicateNames.length) return `Nazwy nie mogą się powtarzać: ${validation.duplicateNames.join(', ')}.`;
+    return `Tych wartości nie da się bezpiecznie zapisać w formacie .env: ${validation.unrepresentableNames.join(', ')}.`;
+  }
+
+  async function copyText(value, message, fallbackKind) {
     if (!value) return setStatus('Nie ma jeszcze nic do skopiowania.', 'error');
     try {
       await navigator.clipboard.writeText(value);
       setStatus(message, 'success');
     } catch {
+      if (legacyCopy(value)) return setStatus(message, 'success');
+      if (fallbackKind === 'names') {
+        window.prompt('Przeglądarka zablokowała schowek. Skopiuj poniższe nazwy:', value);
+        return setStatus('Schowek jest zablokowany — pokazano wyłącznie nazwy zmiennych.', 'warning');
+      }
+      outputMasked = false;
+      elements.outputVisibility.setAttribute('aria-pressed', 'true');
+      elements.outputVisibility.textContent = 'Ukryj wartości';
+      elements.output.value = serializedOutput;
       elements.output.focus();
       elements.output.select();
-      setStatus('Przeglądarka zablokowała schowek. Zaznaczony tekst skopiuj ręcznie.', 'error');
+      setStatus('Przeglądarka zablokowała schowek. Wynik został odsłonięty i zaznaczony do ręcznego kopiowania.', 'warning');
     }
   }
 
+  function legacyCopy(value) {
+    const helper = document.createElement('textarea');
+    helper.value = value;
+    helper.readOnly = true;
+    helper.style.position = 'fixed';
+    helper.style.opacity = '0';
+    document.body.append(helper);
+    helper.select();
+    let copied = false;
+    try { copied = document.execCommand('copy'); } catch {}
+    helper.remove();
+    return copied;
+  }
+
   function downloadEnv() {
-    const value = elements.output.value;
+    const value = serializedOutput;
     if (!value) return setStatus('Nie ma jeszcze nic do pobrania.', 'error');
     const url = URL.createObjectURL(new Blob([value], { type: 'text/plain;charset=utf-8' }));
     const link = document.createElement('a');
     link.href = url;
     link.download = '.env';
     link.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
     setStatus('Pobrano plik .env. Nie commituj go do repozytorium.', 'success');
   }
 

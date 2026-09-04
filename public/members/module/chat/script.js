@@ -475,7 +475,10 @@ const LESSON_CONTEXT_MAX_CHARS = 12_000;
         els.ownUsage.hidden = true;
         return;
       }
-      els.ownUsageTimezone.textContent = `Okresy wg ${payload.timezone}`;
+      const policyLabel = payload.mode === 'disabled'
+        ? 'AI wyłączone dla konta'
+        : payload.mode === 'unlimited' ? 'bez limitów per użytkownik' : payload.mode === 'custom' ? 'własny limit' : 'limit domyślny';
+      els.ownUsageTimezone.textContent = `${policyLabel} · okresy wg ${payload.timezone}`;
       const labels = { hour: 'Ta godzina', day: 'Dzisiaj', week: 'Ten tydzień', month: 'Ten miesiąc', lifetime: 'Łącznie' };
       const cards = ['hour', 'day', 'week', 'month', 'lifetime'].map((period) => {
         const data = payload.periods?.[period];
@@ -558,6 +561,7 @@ const LESSON_CONTEXT_MAX_CHARS = 12_000;
     }
     if (res.status === 403) {
       if (detail === 'AI_DISABLED_FOR_USER') throw new Error('Administrator wyłączył dostęp do AI dla tego konta.');
+      if (detail === 'AI_PERMISSION_DENIED') throw new Error('Klucz API nie ma uprawnień do wybranego modelu lub projektu.');
       throw new Error('To konto nie ma dostępu do czatu.');
     }
     if (res.status === 429) {
@@ -596,6 +600,8 @@ const LESSON_CONTEXT_MAX_CHARS = 12_000;
         AI_PROJECT_SPEND_LIMIT_REACHED: 'Projekt OpenAI osiągnął ustawiony limit wydatków.',
         AI_ORGANIZATION_USAGE_LIMIT_REACHED: 'Organizacja OpenAI osiągnęła przyznany limit użycia API.',
         AI_QUOTA_EXHAUSTED: 'Konto OpenAI nie ma dostępnego limitu API. Administrator musi sprawdzić saldo i limity.',
+        AI_PERMISSION_DENIED: 'Klucz API nie ma uprawnień do wybranego modelu lub projektu.',
+        AI_PROVIDER_TIMEOUT: 'Dostawca AI nie odpowiedział w ciągu 45 sekund. Spróbuj ponownie.',
         AI_PROVIDER_ERROR: 'Dostawca AI jest chwilowo niedostępny.',
         AI_LIMIT_STORAGE_UNAVAILABLE: 'Serwer nie może teraz bezpiecznie sprawdzić limitu AI. Spróbuj ponownie później.',
         AI_USAGE_RECORD_FAILED: 'Nie udało się bezpiecznie zapisać użycia AI. Spróbuj ponownie.'
@@ -690,6 +696,8 @@ const LESSON_CONTEXT_MAX_CHARS = 12_000;
       console.error('MathJax error', err);
     }
   }
+
+  window.addEventListener('chem-mathjax-ready', () => typesetMath(els.chats));
 
   document.addEventListener('DOMContentLoaded', bootstrap);
 })();

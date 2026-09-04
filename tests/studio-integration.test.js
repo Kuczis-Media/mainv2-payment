@@ -38,6 +38,47 @@ test('Studio is an admin-only member application linked only for administrators'
   );
 });
 
+test('Studio start cards keep links undecorated and icons square at every breakpoint', () => {
+  const html = read('public/members/module/studio/index.html');
+  const styles = read('public/members/module/studio/style.css');
+  const home = html.slice(html.indexOf('<section class="home-view"'), html.indexOf('<section class="content-explorer"'));
+  const cards = home.match(/<(?:button|a) class="project-card\b/g) || [];
+  const linkedCards = home.match(/<a class="project-card\b/g) || [];
+  const iconSvgs = [...home.matchAll(/<span class="project-icon"[^>]*>\s*<svg\s+([^>]+)>/g)];
+
+  assert.ok(cards.length >= 10, 'the start screen should expose all Studio tools');
+  assert.ok(linkedCards.length >= 1, 'the regression requires link-backed cards');
+  assert.equal(iconSvgs.length, cards.length, 'every start card should have one stable SVG icon');
+  iconSvgs.forEach((match) => {
+    assert.match(match[1], /viewBox="0 0 40 40"/);
+    assert.match(match[1], /width="40"/);
+    assert.match(match[1], /height="40"/);
+    assert.match(match[1], /focusable="false"/);
+  });
+
+  assert.match(styles, /\.project-card\s*\{[\s\S]*?text-decoration:\s*none/);
+  assert.match(styles, /\.project-card:visited\s*\{[\s\S]*?color:\s*var\(--chem-text\)/);
+  assert.match(styles, /\.project-card:focus-visible\s*\{[\s\S]*?border-color:/);
+  assert.match(styles, /\.project-icon svg\s*\{[\s\S]*?display:\s*block[\s\S]*?aspect-ratio:\s*1/);
+  assert.match(styles, /\.project-icon svg > \*\s*\{[\s\S]*?vector-effect:\s*non-scaling-stroke/);
+  assert.match(styles, /\.project-card-presentation\s*\{\s*--card-color:/);
+  assert.match(styles, /@media \(max-width: 760px\)[\s\S]*?\.project-choices\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\)/);
+  assert.doesNotMatch(styles, /\.project-card-ai\s*\{[^}]*text-decoration/);
+});
+
+test('Studio defers repository bootstrap until a builder or explorer is opened', () => {
+  const html = read('public/members/module/studio/index.html');
+  const script = read('public/members/module/studio/script.js');
+  assert.match(html, /id="content-explorer"/);
+  assert.match(script, /function initializeContentExplorerLoader\(\)/);
+  assert.match(script, /new window\.IntersectionObserver/);
+  assert.match(script, /switchMode\('home'\);\s*initializeContentExplorerLoader\(\);/);
+  assert.match(script, /elements\.contentExplorerRefresh\.disabled = state\.contentLibrary\.loading/);
+  assert.match(script, /const repositoryReady = next === 'home'\s*\? Promise\.resolve\(\)\s*:\s*loadRepositoryAssets\(false\)/);
+  assert.match(script, /if \(state\.mode === 'quiz'\) return window\.ChemQuizBuilder\?\.activate\?\.\(\)/);
+  assert.match(script, /if \(state\.mode === 'exam'\) return window\.ChemExamBuilder\?\.activate\?\.\(\)/);
+});
+
 test('Dashboard Builder loads and conditionally publishes the active Blob version', () => {
   const html = read('public/members/module/studio/index.html');
   const script = read('public/members/module/studio/script.js');
@@ -59,6 +100,12 @@ test('Dashboard Builder loads and conditionally publishes the active Blob versio
   assert.match(script, /current === state\.dashboard\.baseline && !state\.dashboard\.catalogPending/);
   assert.match(script, /state\.dashboard\.catalogPending = true;[\s\S]*const progressResponse = await fetch\(ADMIN_PROGRESS_URL/);
   assert.match(script, /Ponów synchronizację katalogu postępu/);
+  assert.match(script, /DASHBOARD_CATALOG_PENDING_KEY/);
+  assert.match(script, /retryCatalogOnly = state\.dashboard\.catalogPending && current === state\.dashboard\.baseline/);
+  assert.match(script, /let dashboardPublishedThisAttempt = false/);
+  assert.match(script, /const dashboardSaved = retryCatalogOnly \|\| dashboardPublishedThisAttempt/);
+  assert.doesNotMatch(script, /const dashboardSaved = state\.dashboard\.catalogPending/);
+  assert.match(script, /removeStorage\(DASHBOARD_CATALOG_PENDING_KEY\)/);
   assert.match(script, /credentials:\s*['"]same-origin['"]/);
   assert.match(script, /getAccessToken\(\{\s*forceRefresh:\s*true\s*\}\)/);
   assert.match(model, /ADMIN_DASHBOARD_URL\s*=\s*['"]\/\.netlify\/functions\/admin-dashboard['"]/);
@@ -107,9 +154,12 @@ test('Studio exposes dashboard, lesson, exam and prompt authoring workflows', ()
   assert.match(examBuilder, /uploadExamMedia/);
   assert.match(examBuilder, /handleMediaPaste/);
   assert.match(examBuilder, /handleMediaDrop/);
+  assert.match(examBuilder, /ChemContentLibrary\.readMediaBlob/);
+  assert.match(examBuilder, /loadAssets\(true, \{ keepBank: true \}\)/);
   assert.match(styles, /\.exam-media-dropzone/);
   assert.match(examStyles, /\[hidden\]\s*\{\s*display:\s*none\s*!important/);
   assert.match(examPlayer, /ANSWER_SAVE_INTERVAL_MS\s*=\s*8_000/);
+  assert.match(examPlayer, /client\.bootstrap\(/);
   assert.match(examPlayer, /SIGNAL_THROTTLE_MS\s*=\s*10_000/);
   assert.match(examPlayer, /autosave-batch/);
   assert.match(examPlayer, /sessionStorage/);
@@ -158,6 +208,15 @@ test('Studio exposes dashboard, lesson, exam and prompt authoring workflows', ()
   assert.match(script, /window\.open\(/);
   assert.match(script, /data-full-preview/);
   assert.match(script, /state\.lesson\.model\.slides\.forEach/);
+  assert.match(script, /Ponów manifest postępu/);
+  assert.match(script, /syncLessonProgressManifest\(pendingManifest\)/);
+  assert.match(script, /Nie utworzono dodatkowego commitu w GitHubie/);
+  assert.match(script, /LESSON_MANIFEST_PENDING_KEY/);
+  assert.match(script, /state\.lesson\.manifestPending = readPendingLessonManifest\(\)/);
+  assert.match(script, /setPendingLessonManifest\(manifest\)/);
+  assert.match(script, /writeStorage\(LESSON_DRAFT_KEY, state\.lesson\.model\)/);
+  assert.match(script, /pendingManifest\.content === String\(result\.content \|\| ''\)/);
+  assert.match(script, /type === 'error' \|\| type === 'warning'/);
   assert.match(script, /function bindPreviewTasks/);
   assert.match(script, /function bindPreviewAtonom/);
   assert.match(script, /function bindPreviewAiHelp/);

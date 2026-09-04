@@ -9,7 +9,7 @@ const PUBLISHED_KEY = 'published.json';
 const MAX_RETRIES = 8;
 const MODEL_VERSION = 2;
 const SECTION_IDS = Object.freeze(['home', 'about', 'services', 'pricing', 'skills', 'contact']);
-const DEFAULT_HERO_IMAGE_URL = 'https://cdn.jsdelivr.net/gh/Kuczis-Media/landing-page-assets/images/banner-chemical.png';
+const DEFAULT_HERO_IMAGE_URL = 'https://cdn.jsdelivr.net/gh/Kuczis-Media/landing-page-assets@main/images/banner-chemical.png';
 const DEFAULT_BRANDING = Object.freeze({
   logoUrl: '',
   logoAlt: 'ChemDisk',
@@ -84,6 +84,13 @@ function normalizeModel(raw, strict = false) {
       ctaHref: urlField(value, 'ctaHref', fallback.ctaHref, 'link', strict, legacy)
     };
   }).sort((left, right) => left.order - right.order).map((section, order) => ({ ...section, order }));
+  if (strict) {
+    const enabledIds = new Set(sections.filter((section) => section.enabled !== false).map((section) => section.id));
+    for (const section of sections) {
+      const target = /^#([A-Za-z][A-Za-z0-9_-]{0,79})$/.exec(section.ctaHref);
+      if (section.ctaLabel && target && !enabledIds.has(target[1])) throw landingError('INVALID_LANDING_LINK_TARGET', 400);
+    }
+  }
   const branding = plainObject(source.branding) ? source.branding : {};
   return {
     version: MODEL_VERSION,

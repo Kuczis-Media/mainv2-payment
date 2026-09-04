@@ -36,8 +36,13 @@
   let assetBusy = false;
   let dirty = false;
   let renderFrame = 0;
+  let previewTimer = 0;
   let localSaveTimer = 0;
   let imagePreviewTimer = 0;
+  let logoPreviewTimer = 0;
+  let imagePreviewRequestId = 0;
+  let logoPreviewRequestId = 0;
+  const previewSectionNodes = new Map();
 
   document.addEventListener('DOMContentLoaded', bootstrap, { once: true });
 
@@ -147,17 +152,26 @@
   function updateSelected(field, value) {
     selectedSection()[field] = value;
     renderList();
-    if (field === 'imageUrl') scheduleImagePreview();
-    else if (field === 'imageAlt') renderImagePreview();
-    schedulePreview();
+    if (field === 'imageUrl') {
+      scheduleImagePreview();
+      schedulePreview(350);
+    } else {
+      if (field === 'imageAlt') renderImagePreview();
+      schedulePreview();
+    }
     markDirty('Masz niezapisane zmiany.');
   }
 
   function updateBranding(field, value) {
     model.branding = model.branding || {};
     model.branding[field] = value;
-    renderBrandingPreview();
-    schedulePreview();
+    if (field === 'logoUrl') {
+      scheduleBrandingPreview();
+      schedulePreview(350);
+    } else if (field === 'logoAlt') {
+      renderBrandingPreview();
+      schedulePreview();
+    }
     markDirty('Branding zmieniony — zapisz draft albo opublikuj.');
   }
 
@@ -235,39 +249,81 @@
     imagePreviewTimer = window.setTimeout(renderImagePreview, 350);
   }
 
+  function scheduleBrandingPreview() {
+    window.clearTimeout(logoPreviewTimer);
+    logoPreviewTimer = window.setTimeout(renderBrandingPreview, 350);
+  }
+
   function renderImagePreview() {
     const url = safeImageUrl(selectedSection().imageUrl);
-    elements.imagePreview.hidden = !url;
-    elements.imagePreview.dataset.state = '';
     const image = elements.imagePreview.querySelector('img');
     image.alt = selectedSection().imageAlt || 'Podgląd obrazu sekcji';
-    image.onload = () => { elements.imagePreview.dataset.state = 'ready'; };
-    image.onerror = () => { elements.imagePreview.dataset.state = 'error'; };
-    if (url) image.src = url;
-    else image.removeAttribute('src');
+    elements.imagePreview.hidden = !url;
+    if (!url) {
+      imagePreviewRequestId += 1;
+      elements.imagePreview.dataset.state = '';
+      delete image.dataset.previewUrl;
+      image.removeAttribute('src');
+      return;
+    }
+    if (image.dataset.previewUrl === url) return;
+    const requestId = ++imagePreviewRequestId;
+    elements.imagePreview.dataset.state = '';
+    image.decoding = 'async';
+    image.fetchPriority = 'low';
+    image.onload = () => {
+      if (requestId === imagePreviewRequestId) elements.imagePreview.dataset.state = 'ready';
+    };
+    image.onerror = () => {
+      if (requestId === imagePreviewRequestId) elements.imagePreview.dataset.state = 'error';
+    };
+    image.dataset.previewUrl = url;
+    image.src = url;
   }
 
   function renderBrandingPreview() {
     const url = safeImageUrl(model.branding?.logoUrl);
     const image = elements.logoPreview.querySelector('img');
     elements.logoPreview.hidden = !url;
-    elements.logoPreview.dataset.state = '';
     image.alt = model.branding?.logoAlt || 'Podgląd logo';
-    image.onload = () => { elements.logoPreview.dataset.state = 'ready'; };
-    image.onerror = () => { elements.logoPreview.dataset.state = 'error'; };
-    if (url) image.src = url;
-    else image.removeAttribute('src');
+    if (!url) {
+      logoPreviewRequestId += 1;
+      elements.logoPreview.dataset.state = '';
+      delete image.dataset.previewUrl;
+      image.removeAttribute('src');
+      return;
+    }
+    if (image.dataset.previewUrl === url) return;
+    const requestId = ++logoPreviewRequestId;
+    elements.logoPreview.dataset.state = '';
+    image.decoding = 'async';
+    image.fetchPriority = 'low';
+    image.onload = () => {
+      if (requestId === logoPreviewRequestId) elements.logoPreview.dataset.state = 'ready';
+    };
+    image.onerror = () => {
+      if (requestId === logoPreviewRequestId) elements.logoPreview.dataset.state = 'error';
+    };
+    image.dataset.previewUrl = url;
+    image.src = url;
   }
 
   function renderPreviewBrand() {
     const url = safeImageUrl(model.branding?.logoUrl);
     if (url) {
-      const image = document.createElement('img');
-      image.src = url;
+      const current = elements.previewBrand.firstElementChild;
+      const image = current?.tagName === 'IMG' ? current : document.createElement('img');
       image.alt = model.branding?.logoAlt || 'ChemDisk';
-      elements.previewBrand.replaceChildren(image);
+      image.decoding = 'async';
+      image.fetchPriority = 'high';
+      if (image.dataset.previewUrl !== url) {
+        image.dataset.previewUrl = url;
+        image.src = url;
+      }
+      if (current !== image) elements.previewBrand.replaceChildren(image);
       return;
     }
+    if (elements.previewBrand.firstElementChild?.tagName === 'STRONG') return;
     const strong = document.createElement('strong');
     const accent = document.createElement('span');
     accent.textContent = 'Disk';
@@ -275,43 +331,89 @@
     elements.previewBrand.replaceChildren(strong);
   }
 
+  function previewSectionNode(section) {
+    let card = previewSectionNodes.get(section.id);
+    if (!card) {
+      card = document.createElement('article');
+      card.className = 'preview-section';
+      card.dataset.previewSectionId = section.id;
+      ['label', 'title', 'subtitle', 'body'].forEach((field) => {
+        const tag = field === 'label' ? 'span' : field === 'title' ? 'h3' : field === 'subtitle' ? 'strong' : 'p';
+        const node = document.createElement(tag);
+        node.dataset.previewField = field;
+        card.append(node);
+      });
+      previewSectionNodes.set(section.id, card);
+    }
+    card.style.setProperty('--preview-bg', section.backgroundColor || '#ffffff');
+    card.style.setProperty('--preview-accent', section.accentColor || '#0e665a');
+    card.style.backgroundColor = section.backgroundColor || '';
+    card.style.color = section.textColor || '';
+
+    const imageUrl = safeImageUrl(section.imageUrl);
+    let image = card.querySelector('[data-preview-image]');
+    if (imageUrl) {
+      if (!image) {
+        image = document.createElement('img');
+        image.dataset.previewImage = '';
+        image.loading = 'lazy';
+        image.decoding = 'async';
+        image.fetchPriority = 'low';
+        card.prepend(image);
+      }
+      image.alt = section.imageAlt || '';
+      if (image.dataset.previewUrl !== imageUrl) {
+        image.dataset.previewUrl = imageUrl;
+        image.src = imageUrl;
+      }
+    } else if (image) {
+      image.remove();
+    }
+
+    card.querySelector('[data-preview-field="label"]').textContent = SECTION_LABELS[section.id] || section.id;
+    card.querySelector('[data-preview-field="title"]').textContent = section.title || '';
+    card.querySelector('[data-preview-field="subtitle"]').textContent = section.subtitle || '';
+    card.querySelector('[data-preview-field="body"]').textContent = section.body || '';
+    card.querySelectorAll('[data-preview-action]').forEach((node) => node.remove());
+    const ctaHref = safePreviewHref(section.ctaHref);
+    if (section.ctaLabel && ctaHref) {
+      const cta = Object.assign(document.createElement('a'), {
+        textContent: section.ctaLabel,
+        href: ctaHref
+      });
+      cta.dataset.previewAction = '';
+      cta.title = 'Link jest wyłączony w bezpiecznym podglądzie';
+      cta.addEventListener('click', (event) => event.preventDefault());
+      card.append(cta);
+    } else if (section.ctaLabel) {
+      const warning = Object.assign(document.createElement('small'), {
+        className: 'preview-cta-warning',
+        textContent: 'CTA bez poprawnego linku nie pojawi się na stronie.'
+      });
+      warning.dataset.previewAction = '';
+      card.append(warning);
+    }
+    return card;
+  }
+
   function renderPreview() {
     renderPreviewBrand();
-    const sections = model.sections.filter((section) => section.enabled !== false).map((section) => {
-      const card = document.createElement('article');
-      card.className = 'preview-section';
-      card.style.setProperty('--preview-bg', section.backgroundColor || '#ffffff');
-      card.style.setProperty('--preview-accent', section.accentColor || '#0e665a');
-      card.style.backgroundColor = section.backgroundColor || '';
-      card.style.color = section.textColor || '';
-      const imageUrl = safeImageUrl(section.imageUrl);
-      if (imageUrl) card.append(Object.assign(document.createElement('img'), { src: imageUrl, alt: section.imageAlt || '' }));
-      card.append(
-        Object.assign(document.createElement('span'), { textContent: SECTION_LABELS[section.id] || section.id }),
-        Object.assign(document.createElement('h3'), { textContent: section.title || '' }),
-        Object.assign(document.createElement('strong'), { textContent: section.subtitle || '' }),
-        Object.assign(document.createElement('p'), { textContent: section.body || '' })
-      );
-      const ctaHref = safePreviewHref(section.ctaHref);
-      if (section.ctaLabel && ctaHref) {
-        const cta = Object.assign(document.createElement('a'), { textContent: section.ctaLabel, href: ctaHref });
-        cta.title = 'Link jest wyłączony w bezpiecznym podglądzie';
-        cta.addEventListener('click', (event) => event.preventDefault());
-        card.append(cta);
-      } else if (section.ctaLabel) {
-        card.append(Object.assign(document.createElement('small'), {
-          className: 'preview-cta-warning',
-          textContent: 'CTA bez poprawnego linku nie pojawi się na stronie.'
-        }));
-      }
-      return card;
+    const activeIds = new Set(model.sections.map((section) => section.id));
+    previewSectionNodes.forEach((_, id) => {
+      if (!activeIds.has(id)) previewSectionNodes.delete(id);
     });
+    const sections = model.sections
+      .filter((section) => section.enabled !== false)
+      .map(previewSectionNode);
     elements.preview.replaceChildren(...sections);
   }
 
-  function schedulePreview() {
+  function schedulePreview(delay = 0) {
+    window.clearTimeout(previewTimer);
     cancelAnimationFrame(renderFrame);
-    renderFrame = requestAnimationFrame(renderPreview);
+    const render = () => { renderFrame = requestAnimationFrame(renderPreview); };
+    if (delay) previewTimer = window.setTimeout(render, delay);
+    else render();
   }
 
   function setPreviewSize(size) {
@@ -320,9 +422,18 @@
     document.querySelectorAll('[data-preview-size]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.previewSize === selected)));
   }
 
-  function safePreviewHref(value) { return /^(?:https:\/\/|\/(?!\/)|#[A-Za-z])/.test(value || '') ? value : ''; }
-  function safeImageUrl(value) {
+  function safePreviewHref(value) {
     const raw = String(value || '').trim();
+    const hash = /^#([A-Za-z][A-Za-z0-9_-]{0,79})$/.exec(raw);
+    if (hash) return model.sections.some((section) => section.id === hash[1] && section.enabled !== false) ? raw : '';
+    if (/^\/(?!\/)[^\s]*$/.test(raw)) return raw;
+    try {
+      const url = new URL(raw);
+      return url.protocol === 'https:' && url.hostname ? url.toString() : '';
+    } catch { return ''; }
+  }
+  function safeImageUrl(value) {
+    const raw = normalizeGitHubUrl(value);
     if (/^\/(?!\/)[^\s]*$/.test(raw)) return raw;
     try {
       const url = new URL(raw);
@@ -522,6 +633,8 @@
     image.src = asset.cdnUrl;
     image.alt = '';
     image.loading = 'lazy';
+    image.decoding = 'async';
+    image.fetchPriority = 'low';
     const copy = document.createElement('div');
     copy.append(
       Object.assign(document.createElement('strong'), { textContent: asset.filename || 'obraz' }),
@@ -639,6 +752,7 @@
     return authenticatedRequest(API_URL, method, body, {
       INVALID_LANDING_IMAGE_URL: 'Adres obrazu musi być ścieżką lokalną albo adresem HTTPS.',
       INVALID_LANDING_LINK: 'Link przycisku musi być kotwicą, ścieżką lokalną albo adresem HTTPS.',
+      INVALID_LANDING_LINK_TARGET: 'Link CTA prowadzi do wyłączonej lub nieistniejącej sekcji. Włącz sekcję albo zmień link.',
       INVALID_LANDING_COLOR: 'Kolor musi mieć format #RRGGBB.',
       LANDING_CONFLICT: 'Landing został zmieniony w innej karcie. Odśwież stronę, sprawdź treść i spróbuj ponownie.'
     });

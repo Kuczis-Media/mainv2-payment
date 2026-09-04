@@ -58,7 +58,9 @@ function normalizeSettings(raw) {
       isDefault: value.isDefault === true,
       secretConfigured: value.secretConfigured === true,
       secretHint: value.secretConfigured === true ? cleanString(value.secretHint, 8) : '',
-      connectionStatus: ['ok', 'invalid_key', 'model_unavailable', 'rate_limited', 'billing_required', 'provider_error', 'untested'].includes(value.connectionStatus)
+      secretDigest: value.secretConfigured === true && /^[a-f0-9]{64}$/.test(String(value.secretDigest || ''))
+        ? String(value.secretDigest) : '',
+      connectionStatus: ['ok', 'invalid_key', 'permission_denied', 'model_unavailable', 'rate_limited', 'timeout', 'billing_required', 'provider_error', 'untested'].includes(value.connectionStatus)
         ? value.connectionStatus : 'untested',
       lastTestedAt: isoOrNull(value.lastTestedAt),
       createdAt: isoOrNull(value.createdAt),
@@ -131,6 +133,7 @@ function validateConfigInput(raw, existingId) {
   const model = normalizeModelId(provider, cleanString(raw.model, 160));
   const name = cleanString(raw.name, 100);
   const description = cleanString(raw.description, 500);
+  if (ENV_CONFIG_IDS.has(aiConfigId)) throw aiError('AI_CONFIG_ID_RESERVED', 400);
   if (!CONFIG_ID.test(aiConfigId) || !PROVIDERS.has(provider) || !MODEL_ID.test(model) || !name) {
     throw aiError('INVALID_AI_CONFIG', 400);
   }
@@ -151,6 +154,7 @@ async function saveConfig(stores, raw, adminId) {
       isDefault: previous ? previous.isDefault : settings.configs.length === 0,
       secretConfigured: previous && !providerChanged ? previous.secretConfigured : false,
       secretHint: previous && !providerChanged ? previous.secretHint : '',
+      secretDigest: previous && !providerChanged ? previous.secretDigest : '',
       connectionStatus: previous && previous.provider === input.provider && previous.model === input.model
         ? previous.connectionStatus : 'untested',
       lastTestedAt: previous && previous.provider === input.provider && previous.model === input.model
@@ -195,19 +199,30 @@ async function setConfigSecret(stores, aiConfigId, rawSecret, adminId) {
   const current = await readSettings(stores.metadata);
   const config = current.settings.configs.find((item) => item.aiConfigId === aiConfigId);
   if (!config) throw aiError('AI_CONFIG_NOT_FOUND', 404);
+  const previousSecret = await readSecret(stores.secrets, aiConfigId);
   await stores.secrets.set(secretKey(aiConfigId), secret, {
     metadata: { aiConfigId, updatedAt: new Date().toISOString() }
   });
-  const result = await updateSettings(stores.metadata, adminId, (settings) => {
-    const item = settings.configs.find((candidate) => candidate.aiConfigId === aiConfigId);
-    if (!item) throw aiError('AI_CONFIG_NOT_FOUND', 404);
-    item.secretConfigured = true;
-    item.secretHint = secret.slice(-4);
-    item.connectionStatus = 'untested';
-    item.lastTestedAt = null;
-    item.updatedAt = new Date().toISOString();
-    return { settings };
-  });
+  let result;
+  try {
+    result = await updateSettings(stores.metadata, adminId, (settings) => {
+      const item = settings.configs.find((candidate) => candidate.aiConfigId === aiConfigId);
+      if (!item) throw aiError('AI_CONFIG_NOT_FOUND', 404);
+      item.secretConfigured = true;
+      item.secretHint = secret.slice(-4);
+      item.secretDigest = digestSecret(secret);
+      item.connectionStatus = 'untested';
+      item.lastTestedAt = null;
+      item.updatedAt = new Date().toISOString();
+      return { settings };
+    });
+  } catch (error) {
+    try {
+      if (previousSecret) await stores.secrets.set(secretKey(aiConfigId), previousSecret, { metadata: { aiConfigId, restoredAt: new Date().toISOString() } });
+      else await stores.secrets.delete(secretKey(aiConfigId));
+    } catch {}
+    throw error;
+  }
   await appendAudit(stores.metadata, { adminId, action: 'ai.secret.changed', aiConfigId, previousValue: { configured: config.secretConfigured }, newValue: { configured: true } });
   return result.settings;
 }
@@ -222,6 +237,7 @@ async function removeConfigSecret(stores, aiConfigId, adminId) {
     if (!item) throw aiError('AI_CONFIG_NOT_FOUND', 404);
     item.secretConfigured = false;
     item.secretHint = '';
+    item.secretDigest = '';
     item.connectionStatus = 'untested';
     item.lastTestedAt = null;
     item.updatedAt = new Date().toISOString();
@@ -262,7 +278,7 @@ async function setModuleAssignment(stores, moduleName, aiConfigId, adminId) {
 }
 
 async function updateConnectionStatus(stores, aiConfigId, status, adminId) {
-  const normalized = ['ok', 'invalid_key', 'model_unavailable', 'rate_limited', 'billing_required', 'provider_error'].includes(status) ? status : 'provider_error';
+  const normalized = ['ok', 'invalid_key', 'permission_denied', 'model_unavailable', 'rate_limited', 'timeout', 'billing_required', 'provider_error'].includes(status) ? status : 'provider_error';
   const result = await updateSettings(stores.metadata, adminId, (settings) => {
     const item = settings.configs.find((candidate) => candidate.aiConfigId === aiConfigId);
     if (!item) throw aiError('AI_CONFIG_NOT_FOUND', 404);
@@ -294,8 +310,25 @@ function publicSettings(settings) {
   const normalized = normalizeSettings(settings);
   return {
     ...normalized,
-    configs: normalized.configs.map((item) => ({ ...item }))
+    configs: normalized.configs.map(({ secretDigest: _secretDigest, ...item }) => item)
   };
+}
+
+function digestSecret(secret) {
+  return crypto.createHash('sha256').update(String(secret || ''), 'utf8').digest('hex');
+}
+
+function secretMatchesConfig(config, secret) {
+  if (!config || config.secretConfigured !== true || typeof secret !== 'string' || !secret) return false;
+  if (config.secretDigest) {
+    const actual = Buffer.from(digestSecret(secret), 'hex');
+    const expected = Buffer.from(config.secretDigest, 'hex');
+    return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+  }
+  // Legacy records used the last four characters as their commit marker.
+  // Missing both markers is an incomplete record, not permission to activate
+  // whichever orphaned value happens to exist in the secret store.
+  return Boolean(config.secretHint) && secret.endsWith(config.secretHint);
 }
 
 async function appendAudit(metadataStore, raw) {
@@ -378,6 +411,7 @@ module.exports = {
   readSettings,
   removeConfigSecret,
   saveConfig,
+  secretMatchesConfig,
   setConfigSecret,
   setDefaultConfig,
   setModuleAssignment,

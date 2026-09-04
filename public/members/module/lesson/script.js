@@ -64,10 +64,14 @@
     mediaObjectUrls: [],
     isAdmin: false,
     topbarCollapsed: false,
-    outlineCollapsed: false
+    outlineCollapsed: false,
+    loadRequestId: 0,
+    examProgressRefreshAt: 0,
+    examProgressPromise: null
   };
 
   const UI_PREFERENCES_KEY = 'chemdisk.lesson.ui.v1';
+  const EXAM_PROGRESS_FOCUS_COOLDOWN_MS = 15_000;
 
   function isAdminUser(user) {
     const roles = user?.app_metadata?.roles;
@@ -291,7 +295,12 @@
     return output;
   }
 
-  async function loadProgress() {
+  function isCurrentLessonLoad(requestId) {
+    return requestId === state.loadRequestId;
+  }
+
+  async function loadProgress(requestId) {
+    if (!isCurrentLessonLoad(requestId)) return false;
     try {
       const saved = JSON.parse(sessionStorage.getItem(progressKey()) || 'null');
       if (saved && state.lesson && saved.signature === state.lesson.signature) {
@@ -310,9 +319,11 @@
       }
     } catch {}
     state.sequential = state.lesson?.navigation !== 'free';
-    if (!progressApi) return;
+    if (!progressApi) return isCurrentLessonLoad(requestId);
     try {
       await progressApi.load();
+      if (!isCurrentLessonLoad(requestId)) return false;
+      state.examProgressRefreshAt = Date.now();
       const record = progressApi.record(lessonMaterialId());
       const details = record?.details || {};
       mergeStudentAnswers(details.lessonAnswers, { respectPersistence: true });
@@ -331,6 +342,7 @@
     } catch (_) {
       // sessionStorage pozostaje wyłącznie awaryjnym cache'em interfejsu.
     }
+    return isCurrentLessonLoad(requestId);
   }
 
   function trackedSlides() {
@@ -417,6 +429,7 @@
   }
 
   async function loadLesson() {
+    const requestId = ++state.loadRequestId;
     elements.app.setAttribute('aria-busy', 'true');
     elements.resetProgress.disabled = true;
     elements.loading.hidden = false;
@@ -425,10 +438,12 @@
     elements.completion.hidden = true;
     elements.navigation.hidden = true;
 
-    state.filename = readFilename();
-    state.repositoryId = readRepositoryId();
+    const filename = readFilename();
+    const repositoryId = readRepositoryId();
+    state.filename = filename;
+    state.repositoryId = repositoryId;
     state.materialId = '';
-    if (!state.filename) {
+    if (!filename) {
       if (state.isAdmin) {
         showError(
           'Wybierz lekcję z biblioteki',
@@ -447,8 +462,9 @@
     }
 
     try {
-      const markdown = await fetchLessonMarkdown(state.filename, state.repositoryId);
-      state.lesson = parser.parseLesson(markdown, state.filename);
+      const markdown = await fetchLessonMarkdown(filename, repositoryId);
+      if (!isCurrentLessonLoad(requestId)) return;
+      state.lesson = parser.parseLesson(markdown, filename);
       state.index = 0;
       state.maxReached = 0;
       state.solved = new Set();
@@ -458,7 +474,8 @@
       state.attempts = new Map();
       state.studentAnswers = new Map();
       collectOpenAnswerMetadata();
-      await loadProgress();
+      const progressLoaded = await loadProgress(requestId);
+      if (!progressLoaded || !isCurrentLessonLoad(requestId)) return;
       updateSequenceControl();
 
       document.title = `${state.lesson.title} — ChemDisk`;
@@ -470,6 +487,7 @@
       if (state.completed) showCompletion(false);
       else renderSlide();
     } catch (error) {
+      if (!isCurrentLessonLoad(requestId)) return;
       console.error('Nie udało się wczytać lekcji', error);
       showError('Nie udało się wczytać lekcji', friendlyLoadError(error));
     }
@@ -791,7 +809,7 @@
       placeholder.append(message, retry);
       figure.replaceChildren(placeholder);
     };
-    const loadFigure = async (figure, bypassCache = false) => {
+    const loadFigure = async (figure, bypassCache = false, position = 0) => {
       const reference = figure.dataset.lessonMediaRef || '';
       try {
         const blob = await library.readMediaBlob({
@@ -808,9 +826,9 @@
         const image = document.createElement('img');
         image.src = objectUrl;
         image.alt = figure.dataset.lessonMediaAlt || 'Ilustracja';
-        image.loading = 'eager';
+        image.loading = position < 2 ? 'eager' : 'lazy';
         image.decoding = 'async';
-        image.fetchPriority = 'high';
+        image.fetchPriority = position === 0 ? 'high' : 'auto';
         try { void image.decode?.().catch(() => undefined); } catch { /* dekodowanie dokończy się przy malowaniu */ }
         if (!figure.isConnected) {
           URL.revokeObjectURL(objectUrl);
@@ -827,20 +845,33 @@
       figures.forEach((figure) => showError(figure, { code: 'MEDIA_CLIENT_UNAVAILABLE' }));
       return;
     }
-    await Promise.all(figures.map((figure) => loadFigure(figure)));
+    let nextFigure = 0;
+    const worker = async () => {
+      while (nextFigure < figures.length) {
+        const position = nextFigure;
+        nextFigure += 1;
+        if (!figures[position].isConnected) continue;
+        await loadFigure(figures[position], false, position);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, figures.length) }, worker));
   }
 
   function scheduleLessonImagePrefetch() {
     const library = window.ChemContentLibrary;
     if (!library?.readMediaBlob || !state.lesson?.slides?.length) return;
+    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (connection?.saveData || /(?:^|-)2g$/i.test(connection?.effectiveType || '')) return;
     const unique = new Map();
-    const orderedSlides = state.lesson.slides.slice(state.index, state.index + 3);
+    // The current slide is already loading. Warm only the next one so
+    // prefetch cannot compete with visible images or spend dozens of calls.
+    const orderedSlides = state.lesson.slides.slice(state.index + 1, state.index + 2);
     orderedSlides.forEach((slide) => {
-      if (unique.size >= 12 || !slide?.html?.includes('data-lesson-media-ref')) return;
+      if (unique.size >= 4 || !slide?.html?.includes('data-lesson-media-ref')) return;
       const template = document.createElement('template');
       template.innerHTML = slide.html;
       template.content.querySelectorAll('[data-lesson-media-ref]').forEach((figure) => {
-        if (unique.size >= 12) return;
+        if (unique.size >= 4) return;
         const shared = figure.dataset.lessonMediaScope === 'shared';
         const input = {
           scope: shared ? 'shared' : 'local',
@@ -854,6 +885,7 @@
         ].join(':'), input);
       });
     });
+    if (!unique.size) return;
     const preload = async () => {
       const images = [...unique.values()];
       for (let index = 0; index < images.length; index += 4) {
@@ -1314,6 +1346,7 @@
   function friendlyAnswerReviewAiError(status, code) {
     if (status === 401) return 'Sesja wygasła. Zaloguj się ponownie i spróbuj jeszcze raz.';
     if (status === 403 && code === 'AI_DISABLED_FOR_USER') return 'Administrator wyłączył dostęp do AI dla tego konta.';
+    if (status === 403 && code === 'AI_PERMISSION_DENIED') return 'Klucz API nie ma uprawnień do wybranego modelu lub projektu.';
     if (status === 403) return 'To konto nie ma dostępu do AI.';
     if (status === 429) {
       if (code === 'AI_RATE_LIMITED') return 'Dostawca AI chwilowo ogranicza ruch. Spróbuj ponownie później.';
@@ -1331,6 +1364,8 @@
       AI_PROJECT_SPEND_LIMIT_REACHED: 'Projekt OpenAI osiągnął ustawiony limit wydatków.',
       AI_ORGANIZATION_USAGE_LIMIT_REACHED: 'Organizacja OpenAI osiągnęła przyznany limit użycia API.',
       AI_QUOTA_EXHAUSTED: 'Konto OpenAI nie ma dostępnego limitu API.',
+      AI_PERMISSION_DENIED: 'Klucz API nie ma uprawnień do wybranego modelu lub projektu.',
+      AI_PROVIDER_TIMEOUT: 'Dostawca AI nie odpowiedział w ciągu 45 sekund.',
       AI_PROVIDER_ERROR: 'Dostawca AI jest chwilowo niedostępny.',
       AI_LIMIT_STORAGE_UNAVAILABLE: 'Nie można teraz bezpiecznie sprawdzić limitu AI.',
       AI_USAGE_RECORD_FAILED: 'Nie udało się bezpiecznie zapisać użycia AI.',
@@ -1545,10 +1580,20 @@
 
   async function refreshExamProgress(force = false) {
     if (!progressApi || !elements.slideContent.querySelector('.lesson-exam-card')) return;
-    try { await progressApi.load({ force }); } catch (_) {}
-    initializeExamBlocks(elements.slideContent);
-    const slide = state.lesson?.slides[state.index];
-    if (slide) updateNavigationAccess(slide, state.solved.has(state.index));
+    if (state.examProgressPromise) return state.examProgressPromise;
+    const now = Date.now();
+    if (force && now - state.examProgressRefreshAt < EXAM_PROGRESS_FOCUS_COOLDOWN_MS) return;
+    if (force) state.examProgressRefreshAt = now;
+    const operation = (async () => {
+      try { await progressApi.load({ force }); } catch (_) {}
+      initializeExamBlocks(elements.slideContent);
+      const slide = state.lesson?.slides[state.index];
+      if (slide) updateNavigationAccess(slide, state.solved.has(state.index));
+    })();
+    state.examProgressPromise = operation;
+    try { await operation; } finally {
+      if (state.examProgressPromise === operation) state.examProgressPromise = null;
+    }
   }
 
   function renderTask(task, solved) {

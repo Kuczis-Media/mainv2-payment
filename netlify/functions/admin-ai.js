@@ -16,7 +16,7 @@ const MUTATING_ACTIONS = new Set([
   'set-module', 'test-connection'
 ]);
 const PROVIDER_CONNECTION_ERRORS = new Set([
-  'AI_INVALID_KEY', 'AI_MODEL_UNAVAILABLE', 'AI_RATE_LIMITED',
+  'AI_INVALID_KEY', 'AI_PERMISSION_DENIED', 'AI_MODEL_UNAVAILABLE', 'AI_RATE_LIMITED', 'AI_PROVIDER_TIMEOUT',
   'AI_CREDIT_BALANCE_EXHAUSTED', 'AI_ORGANIZATION_SPEND_LIMIT_REACHED',
   'AI_PROJECT_SPEND_LIMIT_REACHED', 'AI_ORGANIZATION_USAGE_LIMIT_REACHED',
   'AI_QUOTA_EXHAUSTED', 'AI_PROVIDER_ERROR'
@@ -121,7 +121,7 @@ exports.handler = async (event = {}, context = {}) => {
       const normalized = normalizeError(error);
       const next = config ? await manager.updateConnectionStatus(stores, aiConfigId, normalized.status, auth.userId) : settings;
       await manager.appendAudit(stores.metadata, { adminId: auth.userId, action: 'ai.connection.tested', aiConfigId, previousValue: config?.connectionStatus || 'env', newValue: normalized.status });
-      return json({ ...publicAdminSettings(next), error: normalized.code, test: normalized }, normalized.status === 'rate_limited' ? 429 : normalized.status === 'billing_required' ? 402 : 400);
+      return json({ ...publicAdminSettings(next), error: normalized.code, test: normalized }, connectionResponseStatus(normalized.status));
     }
   } catch (error) {
     return errorResponse(error);
@@ -157,6 +157,15 @@ function errorResponse(error) {
   return json({ error: code }, status);
 }
 
+function connectionResponseStatus(status) {
+  if (status === 'rate_limited') return 429;
+  if (status === 'billing_required') return 402;
+  if (status === 'permission_denied') return 403;
+  if (status === 'timeout') return 504;
+  if (status === 'provider_error') return 502;
+  return 400;
+}
+
 function apiError(code, status) {
   const error = new Error(code);
   error.code = code;
@@ -166,6 +175,7 @@ function apiError(code, status) {
 
 exports._test = {
   assertOnlyFields,
+  connectionResponseStatus,
   isProviderConnectionError(error) { return PROVIDER_CONNECTION_ERRORS.has(error && error.code); },
   publicAdminSettings,
   requiredId

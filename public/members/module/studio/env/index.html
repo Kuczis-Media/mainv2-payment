@@ -62,7 +62,10 @@
 
         <aside class="output-panel">
           <header class="panel-heading"><div><span class="eyebrow">Wynik</span><h2>Gotowy .env</h2></div></header>
-          <label class="include-empty"><input id="env-include-empty" type="checkbox" checked> Dołącz puste zmienne jako szablon</label>
+          <div class="output-options">
+            <label class="include-empty"><input id="env-include-empty" type="checkbox" checked> Dołącz puste zmienne jako szablon</label>
+            <button class="text-button" id="env-output-visibility" type="button" aria-pressed="false">Pokaż wartości</button>
+          </div>
           <textarea id="env-output" readonly spellcheck="false" aria-label="Wygenerowana zawartość pliku .env"></textarea>
           <p class="status" id="env-status" role="status" aria-live="polite">Wpisz wartości albo zaimportuj istniejący plik.</p>
           <div class="output-actions">

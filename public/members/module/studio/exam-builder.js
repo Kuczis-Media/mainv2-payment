@@ -245,22 +245,24 @@
     elements.repository.disabled = state.repositories.length < 2;
   }
 
-  async function loadAssets(force) {
+  async function loadAssets(force, options = {}) {
     elements.status.className = 'exam-builder-status';
     elements.status.textContent = 'Pobieranie biblioteki egzaminów…';
     elements.libraryStatus.classList.remove('is-error');
     elements.libraryStatus.textContent = 'Pobieranie biblioteki egzaminów…';
     try {
       state.assets = await library.list('exam', { repositoryId: state.repositoryId, refresh: force });
-      try {
-        const bank = await library.readQuestionBank({ repositoryId: state.repositoryId });
-        state.bank = modelApi.createQuestionBank(JSON.parse(bank.content));
-        state.bankSha = bank.sha || '';
-        state.bankDirty = false;
-      } catch (error) {
-        if (error.status !== 404) throw error;
-        state.bank = modelApi.createQuestionBank(readDraft(BANK_KEY, null));
-        state.bankSha = '';
+      if (!options.keepBank) {
+        try {
+          const bank = await library.readQuestionBank({ repositoryId: state.repositoryId });
+          state.bank = modelApi.createQuestionBank(JSON.parse(bank.content));
+          state.bankSha = bank.sha || '';
+          state.bankDirty = false;
+        } catch (error) {
+          if (error.status !== 404) throw error;
+          state.bank = modelApi.createQuestionBank(readDraft(BANK_KEY, null));
+          state.bankSha = '';
+        }
       }
       elements.status.textContent = `${state.assets.length} egzaminów · ${state.bank.questions.length} pytań w banku.`;
       renderLibrary();
@@ -517,12 +519,25 @@
 
   async function loadMediaThumbnail(image, ref) {
     try {
-      const token = await window.ChemAuth.getAccessToken();
-      const url = new URL('/.netlify/functions/exam', window.location.origin);
-      url.search = new URLSearchParams({ action: 'image', repo: state.repositoryId, exam: state.exam.examId, ref, preview: '1' });
-      const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store', headers: { Authorization: `Bearer ${token}` } });
-      if (!response.ok) return;
-      const objectUrl = URL.createObjectURL(await response.blob());
+      let blob;
+      if (window.ChemContentLibrary?.readMediaBlob) {
+        const shared = String(ref || '').startsWith('assets/shared/');
+        blob = await window.ChemContentLibrary.readMediaBlob({
+          scope: shared ? 'shared' : 'local',
+          materialKind: shared ? '' : 'exam',
+          materialId: shared ? '' : state.exam.examId,
+          reference: ref,
+          repositoryId: state.repositoryId
+        });
+      } else {
+        const token = await window.ChemAuth.getAccessToken();
+        const url = new URL('/.netlify/functions/exam', window.location.origin);
+        url.search = new URLSearchParams({ action: 'image', repo: state.repositoryId, exam: state.exam.examId, ref, preview: '1' });
+        const response = await fetch(url, { credentials: 'same-origin', cache: 'default', headers: { Authorization: `Bearer ${token}` } });
+        if (!response.ok) return;
+        blob = await response.blob();
+      }
+      const objectUrl = URL.createObjectURL(blob);
       if (!image.isConnected) { URL.revokeObjectURL(objectUrl); return; }
       state.mediaObjectUrls.push(objectUrl);
       image.src = objectUrl; image.hidden = false;
@@ -1517,7 +1532,10 @@
       state.remoteExamId = state.exam.examId;
       saveDrafts();
       elements.status.textContent = status === 'published' ? 'Egzamin został opublikowany.' : 'Draft został zapisany w GitHubie.';
-      await loadAssets(true);
+      await loadAssets(true, { keepBank: true });
+      window.document.dispatchEvent(new CustomEvent('chemdisk-content-changed', {
+        detail: { kind: 'exam', repositoryId: state.repositoryId }
+      }));
     } catch (error) {
       elements.status.textContent = error.message || 'Nie udało się zapisać egzaminu.';
       elements.status.classList.add('is-error');
@@ -1544,7 +1562,10 @@
       state.remoteSha = '';
       state.remoteExamId = '';
       elements.status.textContent = 'Egzamin usunięto z GitHuba. Lokalny draft pozostał w Builderze.';
-      await loadAssets(true);
+      await loadAssets(true, { keepBank: true });
+      window.document.dispatchEvent(new CustomEvent('chemdisk-content-changed', {
+        detail: { kind: 'exam', repositoryId: state.repositoryId }
+      }));
     } catch (error) { elements.status.textContent = error.message || 'Nie udało się usunąć egzaminu.'; }
   }
 

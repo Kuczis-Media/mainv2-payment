@@ -4,6 +4,7 @@
   const ENDPOINT = '/.netlify/functions/landing';
   const CACHE_KEY = 'chem.landing.public.v2';
   const REQUEST_TIMEOUT_MS = 5_000;
+  let brandingRequestId = 0;
   const COPY_TARGETS = {
     home: { title: '.text-2', subtitle: '.text-1', body: '.text-3', image: 'background', cta: '#login-cta' },
     about: { title: '.title', subtitle: '.column.right .text', body: '.column.right p', image: '.column.left img', cta: '.column.right a' },
@@ -28,10 +29,16 @@
       });
       if (!response.ok) return;
       const payload = await response.json();
-      if (!payload?.active || !Array.isArray(payload.model?.sections)) {
-        try { localStorage.removeItem(CACHE_KEY); } catch {}
+      if (payload?.active === false) {
+        let cacheRemoved = false;
+        try {
+          localStorage.removeItem(CACHE_KEY);
+          cacheRemoved = !readCache();
+        } catch {}
+        if (cached && cacheRemoved && typeof window.location?.reload === 'function') window.location.reload();
         return;
       }
+      if (payload?.active !== true || !Array.isArray(payload.model?.sections)) return;
       applyModel(payload.model);
       writeCache(payload.model);
     } catch {
@@ -45,6 +52,7 @@
     applyBranding(model.branding || {});
     const footer = document.querySelector('footer');
     const ordered = [...model.sections].sort((left, right) => (left.order || 0) - (right.order || 0));
+    const enabledSectionIds = new Set(ordered.filter((section) => section.enabled !== false).map((section) => section.id));
     ordered.forEach((config) => {
       const section = document.getElementById(config.id);
       if (!section) return;
@@ -58,7 +66,7 @@
       setText(section, targets.subtitle, config.subtitle);
       setText(section, targets.body, config.body);
       applyImage(section, targets.image, config);
-      applyCta(section, targets.cta, config);
+      applyCta(section, targets.cta, config, enabledSectionIds);
       syncNavigation(config);
       if (footer) footer.before(section);
     });
@@ -70,6 +78,7 @@
   }
 
   function applyBranding(branding) {
+    const requestId = ++brandingRequestId;
     if (typeof branding.siteTitle === 'string') document.title = branding.siteTitle;
     const description = document.querySelector('meta[name="description"]');
     if (description && typeof branding.siteDescription === 'string') description.content = branding.siteDescription;
@@ -87,7 +96,9 @@
     image.src = logoUrl;
     image.alt = String(branding.logoAlt || 'ChemDisk');
     image.decoding = 'async';
+    image.fetchPriority = 'high';
     image.addEventListener('error', () => {
+      if (requestId !== brandingRequestId) return;
       anchor.classList.remove('has-brand-image');
       const accent = document.createElement('span');
       accent.textContent = 'Disk';
@@ -116,6 +127,7 @@
       image.src = url;
       image.loading = 'lazy';
       image.decoding = 'async';
+      image.fetchPriority = 'low';
     } else {
       image.removeAttribute('src');
     }
@@ -134,12 +146,12 @@
     return image;
   }
 
-  function applyCta(section, selector, config) {
+  function applyCta(section, selector, config, enabledSectionIds) {
     if (!selector) return;
     const cta = section.querySelector(selector);
     if (!cta) return;
     const label = String(config.ctaLabel || '');
-    const href = safeHref(config.ctaHref);
+    const href = safeHref(config.ctaHref, enabledSectionIds);
     cta.textContent = label;
     cta.hidden = !label || !href;
     cta.dataset.landingManaged = 'true';
@@ -187,9 +199,15 @@
     return (red * 299 + green * 587 + blue * 114) / 255000 > 0.56;
   }
 
-  function safeHref(value) {
-    const raw = String(value || '');
-    return /^(?:https:\/\/|\/(?!\/)|#[A-Za-z])/.test(raw) ? raw : '';
+  function safeHref(value, enabledSectionIds) {
+    const raw = String(value || '').trim();
+    const hash = /^#([A-Za-z][A-Za-z0-9_-]{0,79})$/.exec(raw);
+    if (hash) return !enabledSectionIds || enabledSectionIds.has(hash[1]) ? raw : '';
+    if (/^\/(?!\/)[^\s]*$/.test(raw)) return raw;
+    try {
+      const url = new URL(raw);
+      return url.protocol === 'https:' && url.hostname ? url.toString() : '';
+    } catch { return ''; }
   }
 
   function safeImageUrl(value) {

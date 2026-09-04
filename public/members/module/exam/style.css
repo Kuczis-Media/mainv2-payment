@@ -96,6 +96,7 @@ button, input, textarea, select { font: inherit; }
 .exam-question h2 { margin: 10px 0 22px; font-size: clamp(1.25rem, 2.7vw, 1.8rem); line-height: 1.3; white-space: pre-line; }
 .exam-question-images, .exam-answer-images { display: grid; margin: 12px 0; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
 .exam-question-images img, .exam-answer-images img { display: block; width: 100%; max-height: 340px; object-fit: contain; background: var(--exam-surface); border-radius: 12px; }
+.exam-question-images img.is-loading, .exam-answer-images img.is-loading { min-height: 110px; opacity: .62; }
 .exam-options { display: grid; gap: 9px; border: 0; padding: 0; }
 .exam-option { display: grid; padding: 13px 14px; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 11px; background: var(--exam-surface); border: 1px solid var(--exam-line); border-radius: 12px; cursor: pointer; }
 .exam-option:has(input:checked) { border-color: var(--exam-primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--exam-primary) 10%, transparent); }

@@ -678,7 +678,7 @@ GITHUB_CONTENT_ROOT=</pre>
               <label><span class="field-label">Jawny fallback</span><select class="text-field" id="admin-ai-fallback"><option value="">Brak fallbacku</option></select></label>
             </div>
             <p class="field-hint" id="admin-ai-limit-explanation">Limit bazowy jest liczony osobno dla każdego użytkownika korzystającego z trybu „Dziedzicz”.</p>
-            <p class="field-hint">Wartości kosztu podawaj w mikrojednostkach waluty (1 000 000 = 1 jednostka). Zero blokuje dany zakres od razu.</p>
+            <p class="field-hint">Przy kilku regułach wszystkie obowiązują naraz: np. limit bazowy 20/h i limit konfiguracji 5/h zablokują szóste wywołanie tej konfiguracji. Puste pole oznacza brak limitu, a zero blokuje zakres od razu. Koszt podawaj w mikrojednostkach waluty (1 000 000 = 1 jednostka).</p>
             <div class="admin-ai-limit-grid" id="admin-ai-limit-grid"></div>
             <div class="admin-ai-editor-actions"><button class="button button-primary" id="admin-ai-usage-save" type="button">Zapisz wszystkie limity</button></div>
           </section>

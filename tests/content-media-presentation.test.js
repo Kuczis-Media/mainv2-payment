@@ -243,6 +243,8 @@ test('Studio publishes the shared Media Manager and a nested, lazy content explo
   const html = fs.readFileSync(path.join(root, 'public/members/module/studio/index.html'), 'utf8');
   const script = fs.readFileSync(path.join(root, 'public/members/module/studio/script.js'), 'utf8');
   const lessonPlayer = fs.readFileSync(path.join(root, 'public/members/module/lesson/script.js'), 'utf8');
+  const examHtml = fs.readFileSync(path.join(root, 'public/members/module/exam/index.html'), 'utf8');
+  const examPlayer = fs.readFileSync(path.join(root, 'public/members/module/exam/script.js'), 'utf8');
   const manager = fs.readFileSync(path.join(root, 'public/assets/js/media-manager.js'), 'utf8');
   const mediaFunction = fs.readFileSync(path.join(root, 'netlify/functions/content-media.js'), 'utf8');
   assert.match(html, /media-manager\.css/);
@@ -253,7 +255,14 @@ test('Studio publishes the shared Media Manager and a nested, lazy content explo
   assert.match(script, /readMediaBlob/);
   assert.match(script, /bypassCache/);
   assert.match(script, /lesson-image-retry/);
+  assert.match(script, /Math\.min\(4, figures\.length\)/);
   assert.match(lessonPlayer, /scheduleLessonImagePrefetch/);
+  assert.match(lessonPlayer, /slice\(state\.index \+ 1, state\.index \+ 2\)/);
+  assert.match(lessonPlayer, /connection\?\.saveData/);
+  assert.match(lessonPlayer, /Math\.min\(4, figures\.length\)/);
+  assert.match(examHtml, /\/assets\/js\/content-library\.js/);
+  assert.match(examPlayer, /library\.readMediaBlob/);
+  assert.match(examPlayer, /IntersectionObserver/);
   assert.match(script, /uploadMedia/);
   assert.ok(script.indexOf("ChemContentLibrary.remove(kind") < script.indexOf("ChemContentLibrary.removeMedia({", script.indexOf('async function deleteContentExplorerAsset')));
   assert.match(script, /ChemMediaManager\.open/);

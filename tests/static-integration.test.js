@@ -174,6 +174,17 @@ test('large member modules keep CSS and JavaScript outside index.html', () => {
   }
 });
 
+test('chat loads shared mhchem support without blocking application scripts on the CDN', () => {
+  const html = fs.readFileSync(path.join(modulesRoot, 'chat', 'index.html'), 'utf8');
+  const script = fs.readFileSync(path.join(modulesRoot, 'chat', 'script.js'), 'utf8');
+  const config = fs.readFileSync(path.join(modulesRoot, 'mathjax-config.js'), 'utf8');
+  assert.match(html, /\/members\/module\/mathjax-config\.js/);
+  assert.match(html, /<script async src="https:\/\/cdn\.jsdelivr\.net\/npm\/mathjax@3\.2\.2/);
+  assert.match(config, /\[tex\]\/mhchem/);
+  assert.match(config, /chem-mathjax-ready/);
+  assert.match(script, /addEventListener\('chem-mathjax-ready'/);
+});
+
 test('members home is a local Markdown dashboard rather than a remote iframe', () => {
   const html = fs.readFileSync(path.join(root, 'public', 'members', 'index.html'), 'utf8');
   const script = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.js'), 'utf8');

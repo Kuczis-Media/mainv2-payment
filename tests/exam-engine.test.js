@@ -236,8 +236,13 @@ test('Exam Function provides autosave, resume, timer-safe result and blocks IDOR
   });
 
   const studentContext = () => contextFor(canonical);
-  const opened = await examFunction.handler(eventFor('POST', { action: 'open', repositoryId: 'default', examId: 'egzamin-testowy', materialId: 'exam-card' }), studentContext());
+  const opened = await examFunction.handler(eventFor('POST', { action: 'bootstrap', repositoryId: 'default', examId: 'egzamin-testowy', materialId: 'exam-card' }), studentContext());
   assert.equal(opened.statusCode, 200);
+  assert.equal(bodyOf(opened).opened, true);
+  assert.equal(bodyOf(opened).exam.examId, 'egzamin-testowy');
+  assert.deepEqual(bodyOf(opened).attempts, []);
+  assert.equal(bodyOf(opened).available.available, true);
+  assert.match(bodyOf(opened).serverNow, /^\d{4}-\d{2}-\d{2}T/);
   const forged = await examFunction.handler(eventFor('POST', { action: 'start', repositoryId: 'default', examId: 'egzamin-testowy', materialId: 'exam-card', userId: USER_B }), studentContext());
   assert.equal(forged.statusCode, 400);
   assert.equal(bodyOf(forged).error, 'UNEXPECTED_FIELDS');

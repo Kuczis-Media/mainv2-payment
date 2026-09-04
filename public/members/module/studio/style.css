@@ -397,6 +397,7 @@ button {
 
 .project-choices {
   display: grid;
+  min-width: 0;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
 }
@@ -404,6 +405,7 @@ button {
 .project-card {
   position: relative;
   display: grid;
+  min-width: 0;
   grid-template-columns: auto minmax(0, 1fr) auto;
   min-height: 245px;
   padding: clamp(24px, 4vw, 40px);
@@ -416,9 +418,16 @@ button {
   border-radius: 28px;
   box-shadow: var(--chem-shadow-sm);
   cursor: pointer;
+  font: inherit;
+  line-height: inherit;
   text-align: left;
+  text-decoration: none;
   isolation: isolate;
   transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.project-card:visited {
+  color: var(--chem-text);
 }
 
 .project-card::before {
@@ -439,6 +448,11 @@ button {
   transform: translateY(-5px);
 }
 
+.project-card:focus-visible {
+  border-color: color-mix(in srgb, var(--card-color) 62%, var(--chem-line));
+  box-shadow: var(--chem-shadow-lg);
+}
+
 .project-card-dashboard {
   --card-color: var(--chem-primary);
 }
@@ -457,7 +471,8 @@ button {
 
 .project-card-quiz { --card-color: #7c3aed; }
 .project-card-media { --card-color: #0f8c78; }
-.project-card-ai { --card-color: #2563eb; text-decoration: none; }
+.project-card-ai { --card-color: #2563eb; }
+.project-card-presentation { --card-color: var(--studio-blue); }
 
 /* Quiz Builder */
 .quiz-workspace {
@@ -1167,6 +1182,8 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
   display: grid;
   width: 68px;
   height: 68px;
+  aspect-ratio: 1;
+  place-self: start;
   place-items: center;
   color: var(--card-color);
   background: color-mix(in srgb, var(--card-color) 12%, var(--chem-surface));
@@ -1175,21 +1192,31 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
 }
 
 .project-icon svg {
+  display: block;
   width: 39px;
   height: 39px;
+  aspect-ratio: 1;
+  overflow: visible;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+  shape-rendering: geometricPrecision;
+}
+
+.project-icon svg > * {
+  vector-effect: non-scaling-stroke;
 }
 
 .project-copy {
+  min-width: 0;
   align-self: center;
 }
 
 .project-copy > * {
   display: block;
+  overflow-wrap: break-word;
 }
 
 .project-copy small {
@@ -1215,13 +1242,19 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
 }
 
 .project-arrow {
+  display: grid;
+  width: 38px;
+  height: 38px;
   align-self: center;
+  place-items: center;
   color: var(--card-color);
   font-size: 1.8rem;
+  line-height: 1;
+  text-decoration: none;
   transition: transform 180ms ease;
 }
 
-.project-card:hover .project-arrow {
+.project-card:is(:hover, :focus-visible) .project-arrow {
   transform: translateX(5px);
 }
 
@@ -5542,7 +5575,7 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
   }
 
   .project-choices {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .project-card-prompt {

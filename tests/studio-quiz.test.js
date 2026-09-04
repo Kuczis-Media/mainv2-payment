@@ -113,6 +113,8 @@ test('integrated Studio exposes the active Quiz Builder, shared media and AI man
   assert.match(studio, /ChemQuizBuilder\?\.openAsset/);
   assert.match(builder, /library\.save\(['"]quiz['"]/);
   assert.match(builder, /ChemMediaManager\.open/);
+  assert.match(builder, /previewImageObserver/);
+  assert.match(builder, /rootMargin:\s*['"]320px 0px['"]/);
   assert.doesNotMatch(builder, /\.innerHTML\s*=/);
   assert.match(dashboard, /searchParams\.get\(['"]admin['"]\)/);
   assert.match(dashboardModel, /card\.module === ['"]quiz['"]/);
@@ -124,5 +126,8 @@ test('integrated Studio exposes the active Quiz Builder, shared media and AI man
   assert.match(player, /opened:\s*true/);
   assert.match(player, /SEQUENCE_LOCKED/);
   assert.match(player, /details:\s*\{[\s\S]*passed:\s*result\.passed/);
+  assert.match(player, /IntersectionObserver/);
+  assert.match(player, /data-quiz-media-ref/);
+  assert.match(player, /rootMargin:\s*['"]400px 0px['"]/);
   assert.doesNotMatch(player, /\.innerHTML\s*=/);
 });

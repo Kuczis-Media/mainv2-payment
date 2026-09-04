@@ -660,6 +660,9 @@
       state.remoteId = state.presentation.presentationId; state.remoteSha = result.sha; saveLocal();
       setStatus(publish ? 'Prezentacja opublikowana. Uczniowie mogą ją otworzyć.' : 'Draft zapisany w prywatnym repozytorium.');
       await loadLibrary(true);
+      root.document.dispatchEvent(new CustomEvent('chemdisk-content-changed', {
+        detail: { kind: 'presentation', repositoryId: state.repositoryId }
+      }));
     } catch (error) { setStatus(error?.message || 'Nie udało się zapisać prezentacji.', true); }
   }
 

@@ -49,7 +49,8 @@
     active: false,
     busy: false,
     libraryPaging: pagedListApi.createState(),
-    objectUrls: new Set()
+    objectUrls: new Set(),
+    previewImageObserver: null
   };
 
   const create = (tag, className, text) => {
@@ -240,31 +241,57 @@
   }
 
   function revokeObjectUrls() {
+    state.previewImageObserver?.disconnect();
+    state.previewImageObserver = null;
     state.objectUrls.forEach((url) => root.URL.revokeObjectURL(url));
     state.objectUrls.clear();
   }
 
-  async function hydratePreviewImages() {
+  async function hydratePreviewImage(image, priority = false) {
+    const ref = image.dataset.quizPreviewImage;
+    try {
+      const blob = await library.readMediaBlob({
+        scope: ref.startsWith('assets/shared/') ? 'shared' : 'local',
+        materialKind: ref.startsWith('assets/shared/') ? '' : 'quiz',
+        materialId: ref.startsWith('assets/shared/') ? '' : state.quiz.quizId,
+        reference: ref,
+        repositoryId: state.repositoryId
+      });
+      if (!image.isConnected) return;
+      const url = root.URL.createObjectURL(blob);
+      state.objectUrls.add(url);
+      image.loading = priority ? 'eager' : 'lazy';
+      image.decoding = 'async';
+      image.fetchPriority = priority ? 'high' : 'auto';
+      image.src = url;
+      image.hidden = false;
+    } catch (_) {
+      if (image.isConnected) image.replaceWith(create('span', 'quiz-preview-image-error', 'Nie udało się wczytać obrazu.'));
+    }
+  }
+
+  function hydratePreviewImages() {
     const images = Array.from(elements.preview.querySelectorAll('[data-quiz-preview-image]'));
-    await Promise.all(images.map(async (image) => {
-      const ref = image.dataset.quizPreviewImage;
-      try {
-        const blob = await library.readMediaBlob({
-          scope: ref.startsWith('assets/shared/') ? 'shared' : 'local',
-          materialKind: ref.startsWith('assets/shared/') ? '' : 'quiz',
-          materialId: ref.startsWith('assets/shared/') ? '' : state.quiz.quizId,
-          reference: ref,
-          repositoryId: state.repositoryId
-        });
-        if (!image.isConnected) return;
-        const url = root.URL.createObjectURL(blob);
-        state.objectUrls.add(url);
-        image.src = url;
-        image.hidden = false;
-      } catch (_) {
-        image.replaceWith(create('span', 'quiz-preview-image-error', 'Nie udało się wczytać obrazu.'));
-      }
-    }));
+    const cover = images.find((image) => image.classList.contains('quiz-preview-cover'));
+    if (cover) void hydratePreviewImage(cover, true);
+    const questionImages = images.filter((image) => image !== cover);
+    if (!questionImages.length) return;
+    if (typeof root.IntersectionObserver !== 'function') {
+      questionImages.forEach((image) => { void hydratePreviewImage(image); });
+      return;
+    }
+    state.previewImageObserver = new root.IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        state.previewImageObserver?.unobserve(entry.target);
+        const image = entry.target.querySelector('[data-quiz-preview-image]');
+        if (image) void hydratePreviewImage(image);
+      });
+    }, { root: elements.preview.closest('.quiz-preview-panel'), rootMargin: '320px 0px' });
+    questionImages.forEach((image) => {
+      const question = image.closest('.quiz-preview-question');
+      if (question) state.previewImageObserver.observe(question);
+    });
   }
 
   function previewQuestion(question, index) {
@@ -323,7 +350,7 @@
     check.addEventListener('click', () => checkPreview(shell, result));
     shell.append(check, result);
     elements.preview.replaceChildren(shell);
-    if (quiz.metadata.cover.ref || quiz.questions.some((question) => question.image.ref)) void hydratePreviewImages();
+    if (quiz.metadata.cover.ref || quiz.questions.some((question) => question.image.ref)) hydratePreviewImages();
   }
 
   function checkPreview(form, resultNode) {
@@ -566,7 +593,9 @@
       saveLocal();
       setStatus(publish ? 'Quiz opublikowano w prywatnym repozytorium.' : 'Draft quizu zapisano w prywatnym repozytorium.');
       await loadLibrary(true);
-      root.document.dispatchEvent(new CustomEvent('chemdisk-content-changed', { detail: { kind: 'quiz' } }));
+      root.document.dispatchEvent(new CustomEvent('chemdisk-content-changed', {
+        detail: { kind: 'quiz', repositoryId: state.repositoryId }
+      }));
     } catch (error) {
       setStatus(error?.message || 'Nie udało się zapisać quizu.', true);
     } finally {
@@ -590,7 +619,9 @@
       state.remoteSha = '';
       setStatus('Quiz usunięto z GitHuba. Lokalny draft pozostał w Studio.');
       await loadLibrary(true);
-      root.document.dispatchEvent(new CustomEvent('chemdisk-content-changed', { detail: { kind: 'quiz' } }));
+      root.document.dispatchEvent(new CustomEvent('chemdisk-content-changed', {
+        detail: { kind: 'quiz', repositoryId: state.repositoryId }
+      }));
     } catch (error) {
       setStatus(error?.message || 'Nie udało się usunąć quizu.', true);
     } finally {

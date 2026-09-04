@@ -60,6 +60,26 @@ test('lesson application exposes a repository selector for the live library', ()
   assert.match(script, /searchParams\.set\(['"]repo['"],\s*asset\.repositoryId\)/);
 });
 
+test('lesson player ignores stale asynchronous lesson and progress loads', () => {
+  const script = fs.readFileSync(path.join(lessonRoot, 'script.js'), 'utf8');
+
+  assert.match(script, /loadRequestId:\s*0/);
+  assert.match(script, /const requestId = \+\+state\.loadRequestId/);
+  assert.match(
+    script,
+    /const markdown = await fetchLessonMarkdown\(filename, repositoryId\);\s*if \(!isCurrentLessonLoad\(requestId\)\) return;/
+  );
+  assert.match(script, /const progressLoaded = await loadProgress\(requestId\);/);
+  assert.match(
+    script,
+    /await progressApi\.load\(\);\s*if \(!isCurrentLessonLoad\(requestId\)\) return false;/
+  );
+  assert.match(
+    script,
+    /catch \(error\) \{\s*if \(!isCurrentLessonLoad\(requestId\)\) return;\s*console\.error\('Nie udało się wczytać lekcji'/
+  );
+});
+
 test('lesson library is admin-only and the player layout can be collapsed', () => {
   const html = fs.readFileSync(path.join(lessonRoot, 'index.html'), 'utf8');
   const script = fs.readFileSync(path.join(lessonRoot, 'script.js'), 'utf8');

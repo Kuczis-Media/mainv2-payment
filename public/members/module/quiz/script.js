@@ -27,7 +27,10 @@
     save: document.getElementById('quiz-player-save'),
     theme: document.getElementById('quiz-player-theme')
   };
-  const state = { quiz: null, questions: [], materialId: '', attempts: 0, savedRecord: null, urls: new Set(), lockedAfterAttempt: false };
+  const state = {
+    quiz: null, questions: [], materialId: '', attempts: 0, savedRecord: null,
+    urls: new Set(), lockedAfterAttempt: false, imageObserver: null
+  };
 
   const create = (tag, className, text) => {
     const node = document.createElement(tag);
@@ -113,12 +116,15 @@
     });
   }
 
-  async function loadImage(image, reference) {
+  async function loadImage(image, reference, priority = false) {
     try {
       const blob = await mediaBlob(reference);
       if (!image.isConnected) return;
       const url = URL.createObjectURL(blob);
       state.urls.add(url);
+      image.loading = priority ? 'eager' : 'lazy';
+      image.decoding = 'async';
+      image.fetchPriority = priority ? 'high' : 'auto';
       image.src = url;
       image.hidden = false;
     } catch (_) {
@@ -137,8 +143,8 @@
       const image = create('img');
       image.alt = question.image.alt || '';
       image.hidden = true;
+      image.dataset.quizMediaRef = question.image.ref;
       fieldset.append(image);
-      void loadImage(image, question.image.ref);
     }
     if (question.type === 'text') {
       const input = create('input', 'quiz-player-text');
@@ -161,6 +167,30 @@
     return fieldset;
   }
 
+  function queueQuestionImages() {
+    state.imageObserver?.disconnect();
+    state.imageObserver = null;
+    const images = Array.from(elements.form.querySelectorAll('[data-quiz-media-ref]'));
+    if (!images.length) return;
+    if (typeof window.IntersectionObserver !== 'function') {
+      images.forEach((image) => void loadImage(image, image.dataset.quizMediaRef));
+      return;
+    }
+    state.imageObserver = new window.IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        state.imageObserver?.unobserve(entry.target);
+        const image = entry.target.querySelector('[data-quiz-media-ref]');
+        if (image) void loadImage(image, image.dataset.quizMediaRef);
+      });
+    }, { rootMargin: '400px 0px' });
+    images.forEach((image) => {
+      const target = image.closest('.quiz-player-question');
+      if (target) state.imageObserver.observe(target);
+      else void loadImage(image, image.dataset.quizMediaRef);
+    });
+  }
+
   function renderQuiz() {
     const quiz = state.quiz;
     elements.title.textContent = quiz.metadata.title;
@@ -170,9 +200,10 @@
     elements.questionCount.textContent = String(quiz.questions.length);
     elements.threshold.textContent = `${quiz.settings.passingScore}%`;
     elements.points.textContent = String(quiz.questions.reduce((sum, question) => sum + question.points, 0));
-    if (quiz.metadata.cover.ref) void loadImage(elements.cover, quiz.metadata.cover.ref);
+    if (quiz.metadata.cover.ref) void loadImage(elements.cover, quiz.metadata.cover.ref, true);
     state.questions = quiz.settings.shuffleQuestions ? shuffle(quiz.questions) : quiz.questions.slice();
     elements.form.replaceChildren(...state.questions.map(renderQuestion));
+    queueQuestionImages();
   }
 
   function answerFor(question) {
@@ -329,5 +360,8 @@
     document.documentElement.dataset.theme = next;
     try { localStorage.setItem('chem.theme', next); } catch (_) {}
   });
-  window.addEventListener('pagehide', () => state.urls.forEach((url) => URL.revokeObjectURL(url)));
+  window.addEventListener('pagehide', () => {
+    state.imageObserver?.disconnect();
+    state.urls.forEach((url) => URL.revokeObjectURL(url));
+  });
 })();

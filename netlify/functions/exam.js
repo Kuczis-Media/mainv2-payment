@@ -44,7 +44,7 @@ const {
 
 const MAX_BODY_BYTES = 512 * 1024;
 const MAX_BATCH_ANSWERS = 500;
-const MUTATIONS = new Set(['open', 'start', 'autosave', 'autosave-batch', 'confirm-answer', 'navigate', 'event', 'submit']);
+const MUTATIONS = new Set(['bootstrap', 'open', 'start', 'autosave', 'autosave-batch', 'confirm-answer', 'navigate', 'event', 'submit']);
 const EVENT_TYPES = new Set([
   'refresh', 'leave', 'resume', 'visibility_hidden', 'visibility_visible',
   'cursor_leave', 'copy', 'paste', 'context_menu'
@@ -143,7 +143,7 @@ async function handlePost(event, auth) {
   const access = definitionAccess(loaded.definition, auth, preview);
   if (!access.ok) return json({ error: access.error, ...access.details }, access.status);
 
-  if (!preview && ['open', 'start'].includes(body.action) && validMaterialId(body.materialId)) {
+  if (!preview && ['bootstrap', 'open', 'start'].includes(body.action) && validMaterialId(body.materialId)) {
     await assertExamSequenceAccess({
       userId: auth.userId,
       user: auth.user,
@@ -153,7 +153,7 @@ async function handlePost(event, auth) {
     });
   }
 
-  if (body.action === 'open') {
+  if (['bootstrap', 'open'].includes(body.action)) {
     if (!preview) {
       await updateExamProgress({
         userId: auth.userId,
@@ -165,7 +165,23 @@ async function handlePost(event, auth) {
         opened: true
       });
     }
-    return json({ opened: true, exam: publicMetadata(loaded.definition) });
+    if (body.action === 'open') return json({ opened: true, exam: publicMetadata(loaded.definition) });
+    const store = getExamStore();
+    const profile = profileFrom(auth.user);
+    const index = await readUserExamIndex(
+      store,
+      reference.repositoryId,
+      reference.examId,
+      auth.userId,
+      profile
+    );
+    return json({
+      opened: true,
+      exam: publicMetadata(loaded.definition),
+      attempts: studentAttemptSummaries(index.attempts, loaded.definition),
+      serverNow: new Date().toISOString(),
+      available: access.availability
+    });
   }
   const store = getExamStore();
   if (body.action === 'start') return startAttempt(store, loaded, reference, body, auth);
@@ -796,6 +812,7 @@ function validMaterialId(value) {
 function validateBodyFields(body) {
   const common = ['action', 'repositoryId', 'repo', 'examId', 'exam', 'preview'];
   const byAction = {
+    bootstrap: ['materialId'],
     open: ['materialId'],
     start: ['materialId'],
     autosave: ['attemptId', 'revision', 'operationId', 'questionId', 'answer'],

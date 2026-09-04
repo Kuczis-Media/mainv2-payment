@@ -1,13 +1,3 @@
-window.MathJax = {
-        tex: {
-          inlineMath: [['$', '$'], ['\\(', '\\)']],
-          displayMath: [['$$', '$$'], ['\\[', '\\]']]
-        },
-        options: {
-          renderActions: { addMenu: [] }
-        }
-      };
-
 (function loadStoredTheme() {
         try {
           var stored = localStorage.getItem('chem.theme');

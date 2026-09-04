@@ -29,7 +29,7 @@ test('landing model has stable sections and rejects unsafe URLs and styles', () 
   const model = landing.defaultModel();
   assert.equal(model.version, 2);
   assert.equal(model.branding.logoAlt, 'ChemDisk');
-  assert.match(model.sections[0].imageUrl, /landing-page-assets\/images\/banner-chemical\.png$/);
+  assert.match(model.sections[0].imageUrl, /^https:\/\/cdn\.jsdelivr\.net\/gh\/Kuczis-Media\/landing-page-assets@main\/images\/banner-chemical\.png$/);
   assert.equal(model.sections.find((section) => section.id === 'about').ctaHref, '#services');
   assert.equal(model.sections.find((section) => section.id === 'skills').ctaHref, '#pricing');
   assert.deepEqual(model.sections.map((section) => section.id), landing.SECTION_IDS);
@@ -42,6 +42,16 @@ test('landing model has stable sections and rejects unsafe URLs and styles', () 
   unsafe.sections[0].ctaHref = '#pricing';
   unsafe.sections[0].backgroundColor = 'expression(alert(1))';
   assert.throws(() => landing.normalizeModel(unsafe, true), /INVALID_LANDING_COLOR/);
+});
+
+test('landing rejects a CTA targeting a disabled section', () => {
+  const model = landing.defaultModel();
+  model.sections.find((section) => section.id === 'about').ctaHref = '#services';
+  model.sections.find((section) => section.id === 'services').enabled = false;
+  assert.throws(
+    () => landing.normalizeModel(model, true),
+    (error) => error.code === 'INVALID_LANDING_LINK_TARGET' && error.status === 400
+  );
 });
 
 test('landing model preserves intentional blanks and converts GitHub image links to jsDelivr', () => {
@@ -128,6 +138,16 @@ test('landing builder uses textContent and server normalization instead of arbit
   assert.match(builder, /admin-site-assets/);
   assert.match(builder, /beforeunload/);
   assert.match(builder, /normalizeGitHubUrl/);
+  assert.match(builder, /const raw = normalizeGitHubUrl\(value\)/);
+  assert.match(builder, /schedulePreview\(350\)/);
+  assert.match(builder, /imagePreviewRequestId/);
+  assert.match(builder, /image\.dataset\.previewUrl === url/);
+  assert.match(builder, /previewSectionNodes\.get\(section\.id\)/);
+  assert.match(builder, /image\.dataset\.previewUrl !== imageUrl/);
+  assert.match(builder, /current\?\.tagName === 'IMG'/);
+  assert.match(builder, /fetchPriority = 'low'/);
+  assert.match(html, /rel="preconnect" href="https:\/\/cdn\.jsdelivr\.net"/);
+  assert.match(studio, /rel="preconnect" href="https:\/\/cdn\.jsdelivr\.net"/);
   assert.doesNotMatch(builder, /innerHTML\s*=/);
   assert.match(runtime, /textContent\s*=/);
   assert.match(runtime, /cache:\s*'default'/);

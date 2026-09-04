@@ -18,6 +18,7 @@ const MAX_WRITE_RETRIES = 40;
 const MAX_RECENT_EVENTS = 300;
 const MAX_PENDING = 500;
 const MAX_AGGREGATE_WINDOWS = 200;
+const MAX_COMPLETION_ATTEMPTS = 3;
 const RESERVATION_TTL_MS = 10 * 60 * 1000;
 let injectedStoreFactory = null;
 
@@ -89,7 +90,9 @@ function normalizeSettings(raw, options = {}) {
 }
 
 function normalizeScopeMap(raw, strict, normalizer) {
-  const result = {};
+  // IDs are administrator/user data. A null-prototype map prevents values such
+  // as "toString" from resolving to inherited Object properties.
+  const result = Object.create(null);
   if (!plainObject(raw)) return result;
   for (const [key, value] of Object.entries(raw)) {
     if (!ID_PATTERN.test(key) || ['__proto__', 'prototype', 'constructor'].includes(key)) {
@@ -344,9 +347,11 @@ async function reserveRequest(stores, request, options = {}) {
   const userLimits = userPolicy.mode === 'custom'
     ? userPolicy.limits
     : userPolicy.mode === 'unlimited' ? null : settings.defaultUser;
+  const moduleLimits = settings.modules[context.moduleId]
+    || (context.moduleId !== 'other' ? settings.modules.other : null);
   const userChecks = userPolicy.mode === 'unlimited' ? [] : [
     { scope: 'user', limits: userLimits, dimension: 'total' },
-    { scope: 'module', limits: settings.modules[context.moduleId], dimension: ['modules', context.moduleId] },
+    { scope: 'module', limits: moduleLimits, dimension: ['modules', context.moduleId] },
     { scope: 'config', limits: configPolicy.perUser, dimension: ['configs', context.aiConfigId] }
   ].filter((item) => item.limits);
   try {
@@ -383,7 +388,9 @@ function assertLimits(document, keys, checks, estimate) {
         const limit = check.limits[metric][period];
         if (limit == null) continue;
         const projected = projectedMetric(metrics, metric, estimate);
-        if (projected > limit) {
+        // In the editor an explicit zero means "block this scope now" for
+        // every metric. This must also hold for a rounded-to-zero cost estimate.
+        if (limit === 0 || projected > limit) {
           const used = currentMetric(metrics, metric);
           throw limitError(check.scope, period, metric, limit, used);
         }
@@ -425,15 +432,21 @@ async function completeReservation(stores, reservation, outcome = {}, options = 
     estimatedCostMicros,
     completedAt: new Date(now).toISOString()
   };
-  try {
-    await completeDocument(stores.usage, GLOBAL_KEY, 'global', null, reservation, completion, true);
-    await completeDocument(stores.usage, userKey(reservation.userId), 'user', reservation.userId, reservation, completion, false);
-  } catch (error) {
-    const wrapped = usageError('AI_USAGE_RECORD_FAILED', 503);
-    wrapped.cause = error;
-    throw wrapped;
+  let lastError = null;
+  for (let attempt = 0; attempt < MAX_COMPLETION_ATTEMPTS; attempt += 1) {
+    try {
+      // Both writes are idempotent by reservationId. Retrying the pair repairs
+      // the only possible partial state without ever calling the provider again.
+      await completeDocument(stores.usage, GLOBAL_KEY, 'global', null, reservation, completion, true);
+      await completeDocument(stores.usage, userKey(reservation.userId), 'user', reservation.userId, reservation, completion, false);
+      return completion;
+    } catch (error) {
+      lastError = error;
+    }
   }
-  return completion;
+  const wrapped = usageError('AI_USAGE_RECORD_FAILED', 503);
+  wrapped.cause = lastError;
+  throw wrapped;
 }
 
 async function completeDocument(store, key, kind, userId, reservation, completion, keepRecent) {
@@ -620,10 +633,10 @@ function normalizeWindow(raw) {
 }
 
 function normalizeDimensionMap(raw) {
-  const result = {};
+  const result = Object.create(null);
   if (!plainObject(raw)) return result;
   for (const [key, value] of Object.entries(raw).slice(0, 500)) {
-    if (ID_PATTERN.test(key) && !['__proto__', 'prototype', 'constructor'].includes(key)) result[key] = normalizeMetrics(value);
+    if (ID_PATTERN.test(key)) result[key] = normalizeMetrics(value);
   }
   return result;
 }
@@ -659,7 +672,7 @@ function ensureWindow(document, key) {
 function dimensionMetrics(window, dimension) {
   if (dimension === 'total') return window.total;
   const [group, id] = dimension;
-  if (!window[group][id]) window[group][id] = emptyMetrics();
+  if (!Object.prototype.hasOwnProperty.call(window[group], id)) window[group][id] = emptyMetrics();
   return window[group][id];
 }
 
@@ -906,7 +919,8 @@ function warningLevel(metrics, limits, period, thresholds) {
   let maximum = 0;
   for (const metric of METRICS) {
     const limit = limits[metric][period];
-    if (limit == null || limit <= 0) continue;
+    if (limit == null) continue;
+    if (limit === 0) return { level: 'limit', percent: 100 };
     maximum = Math.max(maximum, Math.round((currentMetric(normalizeMetrics(metrics), metric) / limit) * 100));
   }
   if (maximum >= thresholds[2]) return { level: 'limit', percent: maximum };

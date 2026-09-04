@@ -34,7 +34,8 @@
     pendingNavigationIndex: null,
     deadlineSaveFor: '',
     mutationQueue: Promise.resolve(),
-    objectUrls: []
+    objectUrls: [],
+    imageObserver: null
   };
 
   const ERROR_MESSAGES = {
@@ -94,11 +95,10 @@
     try { auth = await window.ChemAuth.ready; } catch (_) { auth = null; }
     if (!auth?.authenticated || !auth.session?.ok) return fatal('Sesja nie jest aktywna. Zaloguj się ponownie.');
     try {
-      const payload = await client.definition({ ...state.reference, materialId: state.materialId, preview: state.preview });
+      const payload = await client.bootstrap({ ...state.reference, materialId: state.materialId, preview: state.preview });
       state.definition = payload.exam;
       state.attempts = payload.attempts || [];
       syncServerTime(payload.serverNow);
-      await client.mutate('open', { ...state.reference, preview: state.preview, body: { materialId: state.materialId } });
       renderStart();
     } catch (error) { fatal(errorMessage(error)); }
   }
@@ -900,13 +900,61 @@
   function imageGrid(images, className = 'exam-question-images') {
     const grid = document.createElement('div'); grid.className = className;
     images.forEach((image) => {
-      const img = document.createElement('img'); img.alt = image.alt || 'Ilustracja'; img.loading = 'lazy'; grid.append(img);
-      protectedImageUrl(image.ref).then((url) => { img.src = url; }).catch(() => { img.remove(); });
+      const img = document.createElement('img');
+      img.alt = image.alt || 'Ilustracja';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.className = 'is-loading';
+      img.dataset.examImageRef = image.ref;
+      img.setAttribute('aria-busy', 'true');
+      grid.append(img);
+      queueProtectedImage(img);
     });
     return grid;
   }
 
+  function queueProtectedImage(image) {
+    if (typeof window.IntersectionObserver !== 'function') return void hydrateProtectedImage(image);
+    if (!state.imageObserver) {
+      state.imageObserver = new window.IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          state.imageObserver?.unobserve(entry.target);
+          void hydrateProtectedImage(entry.target);
+        });
+      }, { rootMargin: '400px 0px' });
+    }
+    state.imageObserver.observe(image);
+  }
+
+  async function hydrateProtectedImage(image) {
+    try {
+      const url = await protectedImageUrl(image.dataset.examImageRef);
+      if (!image.isConnected) {
+        URL.revokeObjectURL(url);
+        return;
+      }
+      image.src = url;
+      image.classList.remove('is-loading');
+      image.removeAttribute('aria-busy');
+    } catch (_) { image.remove(); }
+  }
+
   async function protectedImageUrl(ref) {
+    const library = window.ChemContentLibrary;
+    if (library?.readMediaBlob) {
+      const shared = String(ref || '').startsWith('assets/shared/');
+      const blob = await library.readMediaBlob({
+        scope: shared ? 'shared' : 'local',
+        materialKind: shared ? '' : 'exam',
+        materialId: shared ? '' : state.reference.examId,
+        reference: ref,
+        repositoryId: state.reference.repositoryId
+      });
+      const url = URL.createObjectURL(blob);
+      state.objectUrls.push(url);
+      return url;
+    }
     const token = await window.ChemAuth.getAccessToken();
     const response = await fetch(client.imageUrl({ ...state.reference, preview: state.preview }, ref), { headers: { Authorization: `Bearer ${token}` }, credentials: 'same-origin' });
     if (!response.ok) throw new Error('IMAGE_UNAVAILABLE');
@@ -914,6 +962,8 @@
   }
 
   function revokeObjectUrls() {
+    state.imageObserver?.disconnect();
+    state.imageObserver = null;
     state.objectUrls.splice(0).forEach((url) => URL.revokeObjectURL(url));
   }
 

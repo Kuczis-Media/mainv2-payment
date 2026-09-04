@@ -537,6 +537,116 @@ test('browser content client loads and normalizes the Studio bootstrap in one re
   assert.deepEqual(bootstrap.assets.quiz, []);
 });
 
+test('browser content client coalesces repeated reads, isolates users and honors refresh', async (t) => {
+  const originalDocument = global.document;
+  const originalLocation = global.location;
+  const originalAuth = global.ChemAuth;
+  const originalFetch = global.fetch;
+  let userId = 'user-a';
+  const requests = [];
+  t.after(() => {
+    browserLibrary._test.clearRequestCache();
+    if (originalDocument === undefined) delete global.document;
+    else global.document = originalDocument;
+    if (originalLocation === undefined) delete global.location;
+    else global.location = originalLocation;
+    if (originalAuth === undefined) delete global.ChemAuth;
+    else global.ChemAuth = originalAuth;
+    global.fetch = originalFetch;
+  });
+  browserLibrary._test.clearRequestCache();
+  global.document = { querySelector: () => null };
+  global.location = { origin: 'https://course.example' };
+  global.ChemAuth = {
+    getUser: () => ({ id: userId }),
+    getAccessToken: async () => 'identity-secret'
+  };
+  global.fetch = async (url, options) => {
+    requests.push({ url: String(url), options });
+    if (options.method === 'PUT') {
+      return githubResponse({ sha: 'a'.repeat(40), commitSha: 'b'.repeat(40), created: true });
+    }
+    return githubResponse({ assets: [{ filename: `atom-${requests.length}.md` }] });
+  };
+
+  const [first, concurrent] = await Promise.all([
+    browserLibrary.list('lesson', { repositoryId: 'default' }),
+    browserLibrary.list('lesson', { repositoryId: 'default' })
+  ]);
+  assert.equal(requests.length, 1);
+  assert.deepEqual(first, concurrent);
+  first[0].filename = 'local-change.md';
+  assert.notEqual(concurrent[0].filename, first[0].filename);
+
+  await browserLibrary.list('lesson', { repositoryId: 'default' });
+  assert.equal(requests.length, 1);
+  await browserLibrary.list('lesson', { repositoryId: 'default', refresh: true });
+  assert.equal(requests.length, 2);
+
+  userId = 'user-b';
+  await browserLibrary.list('lesson', { repositoryId: 'default' });
+  assert.equal(requests.length, 3);
+
+  await browserLibrary.save('lesson', {
+    filename: 'nowa-lekcja.md',
+    content: '# Nowa lekcja',
+    repositoryId: 'default'
+  });
+  await browserLibrary.list('lesson', { repositoryId: 'default' });
+  assert.equal(requests.length, 5);
+});
+
+test('Studio bootstrap primes repositories and every builder list without extra Functions', async (t) => {
+  const originalDocument = global.document;
+  const originalLocation = global.location;
+  const originalAuth = global.ChemAuth;
+  const originalFetch = global.fetch;
+  const requests = [];
+  t.after(() => {
+    browserLibrary._test.clearRequestCache();
+    if (originalDocument === undefined) delete global.document;
+    else global.document = originalDocument;
+    if (originalLocation === undefined) delete global.location;
+    else global.location = originalLocation;
+    if (originalAuth === undefined) delete global.ChemAuth;
+    else global.ChemAuth = originalAuth;
+    global.fetch = originalFetch;
+  });
+  browserLibrary._test.clearRequestCache();
+  global.document = { querySelector: () => null };
+  global.location = { origin: 'https://course.example' };
+  global.ChemAuth = {
+    getUser: () => ({ id: 'studio-admin' }),
+    getAccessToken: async () => 'identity-secret'
+  };
+  global.fetch = async (url, options) => {
+    requests.push({ url: String(url), options });
+    return githubResponse({
+      repositories: [{ id: 'chemia', label: 'Chemia', default: true }],
+      repository: { id: 'chemia', label: 'Chemia', default: true },
+      assets: {
+        lesson: [{ filename: 'atom.md' }],
+        prompt: [{ filename: 'pomoc.txt' }],
+        exam: [{ filename: 'egzamin' }],
+        presentation: [{ filename: 'prezentacja' }],
+        quiz: [{ filename: 'quiz' }]
+      }
+    });
+  };
+
+  await browserLibrary.studioBootstrap({ repositoryId: 'chemia' });
+  const repositories = await browserLibrary.repositories();
+  const assets = await Promise.all(
+    ['lesson', 'prompt', 'exam', 'presentation', 'quiz'].map((kind) => (
+      browserLibrary.list(kind, { repositoryId: 'chemia' })
+    ))
+  );
+
+  assert.equal(requests.length, 1);
+  assert.equal(repositories[0].id, 'chemia');
+  assert.deepEqual(assets.map((entries) => entries.length), [1, 1, 1, 1, 1]);
+});
+
 test('browser media client reuses an authenticated image Blob and allows an explicit retry', async (t) => {
   const originalDocument = global.document;
   const originalLocation = global.location;
@@ -579,6 +689,101 @@ test('browser media client reuses an authenticated image Blob and allows an expl
 
   await browserLibrary.readMediaBlob(image, { bypassCache: true });
   assert.equal(requests.length, 2);
+  assert.equal(requests[1].options.cache, 'reload');
+});
+
+test('browser media client does not repeat a missing-image Function request', async (t) => {
+  const originalDocument = global.document;
+  const originalLocation = global.location;
+  const originalAuth = global.ChemAuth;
+  const originalFetch = global.fetch;
+  let requests = 0;
+  t.after(() => {
+    browserLibrary._test.clearMediaCache();
+    if (originalDocument === undefined) delete global.document;
+    else global.document = originalDocument;
+    if (originalLocation === undefined) delete global.location;
+    else global.location = originalLocation;
+    if (originalAuth === undefined) delete global.ChemAuth;
+    else global.ChemAuth = originalAuth;
+    global.fetch = originalFetch;
+  });
+  browserLibrary._test.clearMediaCache();
+  global.document = { querySelector: () => null };
+  global.location = { origin: 'https://course.example' };
+  global.ChemAuth = { getAccessToken: async () => 'identity-secret' };
+  global.fetch = async () => {
+    requests += 1;
+    return new Response(JSON.stringify({ error: 'CONTENT_FILE_NOT_FOUND' }), {
+      status: 404,
+      headers: { 'content-type': 'application/json' }
+    });
+  };
+
+  await assert.rejects(
+    browserLibrary.readMediaBlob({
+      scope: 'local', materialKind: 'lesson', materialId: 'test.md',
+      reference: 'photos/missing.png', repositoryId: 'default'
+    }),
+    (error) => error.code === 'CONTENT_FILE_NOT_FOUND' && error.status === 404
+  );
+  assert.equal(requests, 1);
+  assert.equal(browserLibrary._test.mediaCacheSize(), 0);
+});
+
+test('browser media client limits protected image Functions to four at a time', async (t) => {
+  const originalDocument = global.document;
+  const originalLocation = global.location;
+  const originalAuth = global.ChemAuth;
+  const originalFetch = global.fetch;
+  const responses = [];
+  let requests = 0;
+  t.after(() => {
+    browserLibrary._test.clearMediaCache();
+    if (originalDocument === undefined) delete global.document;
+    else global.document = originalDocument;
+    if (originalLocation === undefined) delete global.location;
+    else global.location = originalLocation;
+    if (originalAuth === undefined) delete global.ChemAuth;
+    else global.ChemAuth = originalAuth;
+    global.fetch = originalFetch;
+  });
+  browserLibrary._test.clearMediaCache();
+  global.document = { querySelector: () => null };
+  global.location = { origin: 'https://course.example' };
+  global.ChemAuth = {
+    getUser: () => ({ id: 'image-reader' }),
+    getAccessToken: async () => 'identity-secret'
+  };
+  global.fetch = () => {
+    requests += 1;
+    return new Promise((resolve) => responses.push(resolve));
+  };
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
+  const reads = Array.from({ length: 6 }, (_, index) => browserLibrary.readMediaBlob({
+    scope: 'local',
+    materialKind: 'lesson',
+    materialId: 'test.md',
+    reference: `photos/model-${index}.png`,
+    repositoryId: 'default'
+  }));
+
+  await flush();
+  assert.equal(requests, 4);
+  assert.deepEqual(browserLibrary._test.mediaRequestState(), { active: 4, queued: 2 });
+  responses.slice(0, 4).forEach((resolve) => resolve(new Response(
+    new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
+    { status: 200, headers: { 'content-type': 'image/png' } }
+  )));
+  await flush();
+  await flush();
+  assert.equal(requests, 6);
+  responses.slice(4).forEach((resolve) => resolve(new Response(
+    new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
+    { status: 200, headers: { 'content-type': 'image/png' } }
+  )));
+  await Promise.all(reads);
+  assert.deepEqual(browserLibrary._test.mediaRequestState(), { active: 0, queued: 0 });
 });
 
 test('browser content client never sends an Identity token to a cross-origin endpoint', async (t) => {

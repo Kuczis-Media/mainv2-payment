@@ -65,6 +65,7 @@ test('AI configuration keeps metadata and secret in separate stores and never re
   assert.equal(settings.configs[0].secretConfigured, true);
   assert.equal(settings.configs[0].secretHint, '-key');
   assert.equal(JSON.stringify(manager.publicSettings(settings)).includes('very-secret'), false);
+  assert.equal(JSON.stringify(manager.publicSettings(settings)).includes('secretDigest'), false);
   assert.equal(await manager.readSecret(stores.secrets, id), 'very-secret-gemini-key');
   assert.equal(stores.metadata.entries.get('settings.json').data.includes('very-secret'), false);
   assert.equal(Array.from(stores.metadata.entries.values()).some((entry) => entry.data.includes('very-secret-gemini-key')), false);
@@ -84,6 +85,70 @@ test('AI key can be replaced and removed without leaving it in public metadata',
   settings = await manager.removeConfigSecret(stores, id, 'admin');
   assert.equal(await manager.readSecret(stores.secrets, id), '');
   assert.equal(settings.configs[0].secretConfigured, false);
+});
+
+test('router activates a panel secret only after its metadata commit succeeds', async () => {
+  const stores = freshStores();
+  const settings = await manager.saveConfig(stores, { name: 'OpenAI', provider: 'openai', model: 'gpt-test' }, 'admin');
+  const id = settings.configs[0].aiConfigId;
+  await stores.secrets.set(manager._test.secretKey(id), 'orphaned-secret-value');
+  assert.equal(await router.resolveConfig('chat', { getStores: () => stores }), null);
+  await manager.setConfigSecret(stores, id, 'committed-secret-value', 'admin');
+  assert.equal((await router.resolveConfig('chat', { getStores: () => stores })).apiKey, 'committed-secret-value');
+});
+
+test('a failed secret metadata commit restores the previously active key', async () => {
+  const stores = freshStores();
+  const settings = await manager.saveConfig(stores, { name: 'OpenAI', provider: 'openai', model: 'gpt-test' }, 'admin');
+  const id = settings.configs[0].aiConfigId;
+  await manager.setConfigSecret(stores, id, 'previous-secret-value', 'admin');
+  const originalSet = stores.metadata.set.bind(stores.metadata);
+  let failNextSettingsWrite = true;
+  stores.metadata.set = async (key, data, options) => {
+    if (key === 'settings.json' && failNextSettingsWrite) {
+      failNextSettingsWrite = false;
+      throw new Error('metadata write failed');
+    }
+    return originalSet(key, data, options);
+  };
+  await assert.rejects(
+    manager.setConfigSecret(stores, id, 'replacement-secret-value', 'admin'),
+    /metadata write failed/
+  );
+  assert.equal(await manager.readSecret(stores.secrets, id), 'previous-secret-value');
+  assert.equal((await router.resolveConfig('chat', { getStores: () => stores })).apiKey, 'previous-secret-value');
+});
+
+test('router rejects a secret that does not match committed metadata', async () => {
+  const stores = freshStores();
+  const settings = await manager.saveConfig(stores, { name: 'OpenAI', provider: 'openai', model: 'gpt-test' }, 'admin');
+  const id = settings.configs[0].aiConfigId;
+  await manager.setConfigSecret(stores, id, 'committed-secret-value', 'admin');
+  await stores.secrets.set(manager._test.secretKey(id), 'uncommitted-secret-value');
+  assert.equal(await router.resolveConfig('chat', { getStores: () => stores }), null);
+});
+
+test('router fails closed for an incomplete legacy secret marker', async () => {
+  const stores = freshStores();
+  const settings = await manager.saveConfig(stores, { name: 'OpenAI', provider: 'openai', model: 'gpt-test' }, 'admin');
+  const id = settings.configs[0].aiConfigId;
+  const stored = JSON.parse(stores.metadata.entries.get('settings.json').data);
+  stored.configs[0].secretConfigured = true;
+  stored.configs[0].secretHint = '';
+  delete stored.configs[0].secretDigest;
+  await stores.metadata.set('settings.json', JSON.stringify(stored));
+  await stores.secrets.set(manager._test.secretKey(id), 'orphaned-secret-value');
+  assert.equal(await router.resolveConfig('chat', { getStores: () => stores }), null);
+});
+
+test('panel configurations cannot shadow reserved ENV configuration IDs', async () => {
+  const stores = freshStores();
+  for (const aiConfigId of ['env-openai', 'env-gemini']) {
+    await assert.rejects(
+      manager.saveConfig(stores, { aiConfigId, name: 'Kolizja', provider: 'openai', model: 'gpt-test' }, 'admin'),
+      (error) => error.code === 'AI_CONFIG_ID_RESERVED'
+    );
+  }
 });
 
 test('default and per-module AI routing use stable config IDs', async () => {
@@ -122,6 +187,20 @@ test('router preserves legacy Gemini ENV fallback when panel storage is unavaila
   assert.equal(config.apiKey, 'legacy-key');
 });
 
+test('router does not switch to ENV after a selected panel secret read fails', async (t) => {
+  const stores = freshStores();
+  const originalGemini = process.env.GEMINI_API_KEY;
+  t.after(() => {
+    if (originalGemini === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = originalGemini;
+  });
+  process.env.GEMINI_API_KEY = 'legacy-key';
+  const settings = await manager.saveConfig(stores, { name: 'Panel OpenAI', provider: 'openai', model: 'gpt-test' }, 'admin');
+  const id = settings.configs[0].aiConfigId;
+  await manager.setConfigSecret(stores, id, 'panel-secret-value', 'admin');
+  stores.secrets.get = async () => { throw new Error('secret storage offline'); };
+  await assert.rejects(router.resolveConfig('chat', { getStores: () => stores }), /secret storage offline/);
+});
+
 test('OpenAI from ENV can be assigned to chat even when panel configurations exist', async (t) => {
   const stores = freshStores();
   const originalGemini = process.env.GEMINI_API_KEY;
@@ -147,6 +226,45 @@ test('OpenAI from ENV can be assigned to chat even when panel configurations exi
   assert.equal(config.apiKey, 'openai-env-secret');
   assert.equal(publicEnv[0].aiConfigId, 'env-openai');
   assert.equal(JSON.stringify(publicEnv).includes('openai-env-secret'), false);
+});
+
+test('ordinary requests work with blank limits for both ENV providers', async (t) => {
+  const names = ['GEMINI_API_KEY', 'GEMINI_MODEL', 'OPENAI_API_KEY', 'OPENAI_MODEL'];
+  const original = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  t.after(() => names.forEach((name) => {
+    if (original[name] === undefined) delete process.env[name]; else process.env[name] = original[name];
+  }));
+
+  const cases = [
+    {
+      provider: 'openai', keyName: 'OPENAI_API_KEY', modelName: 'OPENAI_MODEL', model: 'gpt-env-test',
+      response: { output: [{ type: 'message', content: [{ type: 'output_text', text: 'OpenAI ENV OK' }] }], usage: { input_tokens: 2, output_tokens: 2, total_tokens: 4 } },
+      expected: 'OpenAI ENV OK'
+    },
+    {
+      provider: 'gemini', keyName: 'GEMINI_API_KEY', modelName: 'GEMINI_MODEL', model: 'gemini-env-test',
+      response: { candidates: [{ content: { parts: [{ text: 'Gemini ENV OK' }] } }], usageMetadata: { promptTokenCount: 2, candidatesTokenCount: 2, totalTokenCount: 4 } },
+      expected: 'Gemini ENV OK'
+    }
+  ];
+
+  for (const item of cases) {
+    names.forEach((name) => { delete process.env[name]; });
+    process.env[item.keyName] = `${item.provider}-env-secret`;
+    process.env[item.modelName] = item.model;
+    const aiStores = freshStores();
+    const usageStores = { config: new MemoryStore(), usage: new MemoryStore() };
+    const response = await router.sendRequest({
+      module: 'chat', userId: 'ordinary-user', messages: [{ role: 'user', content: 'Hej' }], maxOutputTokens: 20
+    }, {
+      getStores: () => aiStores,
+      getUsageStores: () => usageStores,
+      fetchImpl: async () => new Response(JSON.stringify(item.response), { status: 200 })
+    });
+    assert.equal(response.provider, item.provider);
+    assert.equal(response.model, item.model);
+    assert.equal(response.text, item.expected);
+  }
 });
 
 test('OpenAI and Gemini adapters normalize responses without exposing keys in URLs', async () => {
@@ -298,6 +416,40 @@ test('OpenAI billing exhaustion is not reported as a temporary rate limit', asyn
   assert.deepEqual(normalizeProviderError({ code: 'AI_CREDIT_BALANCE_EXHAUSTED' }), {
     status: 'billing_required', code: 'AI_CREDIT_BALANCE_EXHAUSTED'
   });
+});
+
+test('OpenAI model listing preserves billing errors returned in the response body', async () => {
+  await assert.rejects(
+    openAiAdapter.listModels({ model: 'gpt-test', apiKey: 'valid-looking-key' }, {
+      fetchImpl: async () => new Response(JSON.stringify({ error: { code: 'insufficient_quota', type: 'insufficient_quota' } }), { status: 429 })
+    }),
+    (error) => error.code === 'AI_QUOTA_EXHAUSTED' && error.status === 402
+  );
+});
+
+test('provider errors distinguish permissions, timeouts and temporary failures', async () => {
+  await assert.rejects(
+    openAiAdapter.testConnection({ model: 'gpt-test', apiKey: 'restricted-key' }, {
+      fetchImpl: async () => new Response(JSON.stringify({ error: { code: 'permission_denied' } }), { status: 403 })
+    }),
+    (error) => error.code === 'AI_PERMISSION_DENIED' && error.status === 403
+  );
+  await assert.rejects(
+    openAiAdapter.testConnection({ model: 'gpt-test', apiKey: 'slow-key' }, {
+      timeoutMs: 1,
+      fetchImpl: async (_url, options) => new Promise((_resolve, reject) => {
+        options.signal.addEventListener('abort', () => {
+          const error = new Error('aborted');
+          error.name = 'AbortError';
+          reject(error);
+        }, { once: true });
+      })
+    }),
+    (error) => error.code === 'AI_PROVIDER_TIMEOUT' && error.status === 504
+  );
+  assert.equal(adminAi._test.connectionResponseStatus('permission_denied'), 403);
+  assert.equal(adminAi._test.connectionResponseStatus('timeout'), 504);
+  assert.equal(adminAi._test.connectionResponseStatus('provider_error'), 502);
 });
 
 test('connection testing does not misclassify an internal ChemDisk limit as a provider failure', () => {

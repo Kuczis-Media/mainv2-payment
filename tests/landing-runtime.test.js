@@ -274,3 +274,135 @@ test('landing runtime leaves checked-in HTML untouched when neither cache nor Fu
   assert.equal(dom.document.documentElement.dataset.landingPublished, undefined);
   assert.equal(dom.footer.beforeCalls, undefined);
 });
+
+test('an error from an obsolete logo request cannot replace the newer logo', async () => {
+  const dom = landingDom();
+  const sections = ['home', 'about', 'services', 'pricing', 'skills', 'contact'].map((id, order) => ({
+    id, order, enabled: true, title: id, subtitle: '', body: '', imageUrl: '', imageAlt: '', ctaLabel: '', ctaHref: ''
+  }));
+  const cached = { revision: 1, branding: { logoUrl: 'https://cdn.example/old.svg', logoAlt: 'Stare' }, sections };
+  const fresh = { revision: 2, branding: { logoUrl: 'https://cdn.example/new.svg', logoAlt: 'Nowe' }, sections };
+  const context = {
+    console,
+    document: dom.document,
+    localStorage: { getItem: () => JSON.stringify(cached), setItem: () => {}, removeItem: () => {} },
+    fetch: async () => ({ ok: true, json: async () => ({ active: true, model: fresh }) }),
+    AbortController,
+    CustomEvent: class CustomEvent { constructor(type, options) { this.type = type; this.detail = options?.detail; } },
+    URL,
+    location: { reload() {} }
+  };
+  context.window = context;
+  context.window.setTimeout = () => 1;
+  context.window.clearTimeout = () => {};
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../public/assets/js/landing-runtime.js'), 'utf8'), context);
+  const obsoleteImage = dom.brand.children[0];
+  await new Promise((resolve) => setImmediate(resolve));
+  const currentImage = dom.brand.children[0];
+  assert.equal(currentImage.src, 'https://cdn.example/new.svg');
+  obsoleteImage.onerror();
+  assert.equal(dom.brand.children[0], currentImage);
+  assert.equal(dom.brand.classList.contains('has-brand-image'), true);
+});
+
+test('an inactive server model clears a previously applied cache and restores static HTML once', async () => {
+  const dom = landingDom();
+  const model = {
+    revision: 1,
+    branding: {},
+    sections: ['home', 'about', 'services', 'pricing', 'skills', 'contact'].map((id, order) => ({
+      id, order, enabled: true, title: `Cache ${id}`, subtitle: '', body: '', imageUrl: '', ctaLabel: '', ctaHref: ''
+    }))
+  };
+  const storage = new Map([['chem.landing.public.v2', JSON.stringify(model)]]);
+  let reloads = 0;
+  const context = {
+    console,
+    document: dom.document,
+    localStorage: {
+      getItem: (key) => storage.get(key) || null,
+      setItem: (key, value) => storage.set(key, value),
+      removeItem: (key) => storage.delete(key)
+    },
+    fetch: async () => ({ ok: true, json: async () => ({ active: false }) }),
+    AbortController,
+    CustomEvent: class CustomEvent {},
+    URL,
+    location: { reload: () => { reloads += 1; } }
+  };
+  context.window = context;
+  context.window.setTimeout = () => 1;
+  context.window.clearTimeout = () => {};
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../public/assets/js/landing-runtime.js'), 'utf8'), context);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(storage.has('chem.landing.public.v2'), false);
+  assert.equal(reloads, 1);
+});
+
+test('a blocked landing cache cannot cause an endless reload loop', async () => {
+  const dom = landingDom();
+  const model = {
+    revision: 1,
+    branding: {},
+    sections: ['home', 'about', 'services', 'pricing', 'skills', 'contact'].map((id, order) => ({
+      id, order, enabled: true, title: id, subtitle: '', body: '', imageUrl: '', ctaLabel: '', ctaHref: ''
+    }))
+  };
+  let reloads = 0;
+  const context = {
+    console,
+    document: dom.document,
+    localStorage: {
+      getItem: () => JSON.stringify(model),
+      setItem: () => {},
+      removeItem: () => { throw new Error('storage blocked'); }
+    },
+    fetch: async () => ({ ok: true, json: async () => ({ active: false }) }),
+    AbortController,
+    CustomEvent: class CustomEvent {},
+    URL,
+    location: { reload: () => { reloads += 1; } }
+  };
+  context.window = context;
+  context.window.setTimeout = () => 1;
+  context.window.clearTimeout = () => {};
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../public/assets/js/landing-runtime.js'), 'utf8'), context);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(reloads, 0);
+});
+
+test('a malformed active response keeps the last valid landing cache', async () => {
+  const dom = landingDom();
+  const model = {
+    revision: 8,
+    branding: {},
+    sections: ['home', 'about', 'services', 'pricing', 'skills', 'contact'].map((id, order) => ({
+      id, order, enabled: true, title: `Cached ${id}`, subtitle: '', body: '', imageUrl: '', ctaLabel: '', ctaHref: ''
+    }))
+  };
+  const cachedText = JSON.stringify(model);
+  const storage = new Map([['chem.landing.public.v2', cachedText]]);
+  let reloads = 0;
+  const context = {
+    console,
+    document: dom.document,
+    localStorage: {
+      getItem: (key) => storage.get(key) || null,
+      setItem: (key, value) => storage.set(key, value),
+      removeItem: (key) => storage.delete(key)
+    },
+    fetch: async () => ({ ok: true, json: async () => ({ active: true, model: { revision: 9 } }) }),
+    AbortController,
+    CustomEvent: class CustomEvent {},
+    URL,
+    location: { reload: () => { reloads += 1; } }
+  };
+  context.window = context;
+  context.window.setTimeout = () => 1;
+  context.window.clearTimeout = () => {};
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../public/assets/js/landing-runtime.js'), 'utf8'), context);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(storage.get('chem.landing.public.v2'), cachedText);
+  assert.equal(dom.sections.home.selectors.get('.text-2').textContent, 'Cached home');
+  assert.equal(reloads, 0);
+});

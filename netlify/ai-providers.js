@@ -118,7 +118,7 @@ const openAiAdapter = Object.freeze({
       headers: { Accept: 'application/json', Authorization: `Bearer ${config.apiKey}` }
     }, runtime);
     const data = await readProviderJson(response);
-    if (!response.ok) throw errorFromResponse(response);
+    if (!response.ok) throw errorFromResponse(response, data);
     return (Array.isArray(data?.data) ? data.data : [])
       .map((item) => ({ id: String(item.id || ''), name: String(item.id || '') }))
       .filter((item) => item.id)
@@ -135,7 +135,10 @@ async function providerFetch(url, options, runtime) {
   const timeout = setTimeout(() => controller.abort(), runtime.timeoutMs || REQUEST_TIMEOUT_MS);
   try {
     return await fetchImpl(url, { ...options, signal: controller.signal });
-  } catch {
+  } catch (error) {
+    if (controller.signal.aborted || error?.name === 'AbortError') {
+      throw new AiProviderError('AI_PROVIDER_TIMEOUT', 504);
+    }
     throw new AiProviderError('AI_PROVIDER_ERROR', 502);
   } finally {
     clearTimeout(timeout);
@@ -155,16 +158,20 @@ async function readProviderJson(response) {
 }
 
 function errorFromResponse(response, data) {
-  if (response.status === 401 || response.status === 403) return new AiProviderError('AI_INVALID_KEY', 400);
+  const providerCode = String(data?.error?.code || data?.error?.status || '').toLowerCase();
+  const providerType = String(data?.error?.type || '').toLowerCase();
+  if (response.status === 401 || providerCode.includes('api_key_invalid') || providerCode === 'invalid_api_key') {
+    return new AiProviderError('AI_INVALID_KEY', 400);
+  }
+  if (response.status === 403) return new AiProviderError('AI_PERMISSION_DENIED', 403);
   if (response.status === 404) return new AiProviderError('AI_MODEL_UNAVAILABLE', 400);
   if (response.status === 429) {
-    const providerCode = String(data?.error?.code || '').toLowerCase();
-    const providerType = String(data?.error?.type || '').toLowerCase();
     if (providerCode === 'credit_balance_exhausted') return new AiProviderError('AI_CREDIT_BALANCE_EXHAUSTED', 402);
     if (providerCode === 'organization_spend_limit_exceeded') return new AiProviderError('AI_ORGANIZATION_SPEND_LIMIT_REACHED', 402);
     if (providerCode === 'project_spend_limit_exceeded') return new AiProviderError('AI_PROJECT_SPEND_LIMIT_REACHED', 402);
     if (providerCode === 'organization_usage_limit_exceeded') return new AiProviderError('AI_ORGANIZATION_USAGE_LIMIT_REACHED', 402);
-    if (providerCode === 'insufficient_quota' || providerType === 'insufficient_quota') return new AiProviderError('AI_QUOTA_EXHAUSTED', 402);
+    if (['insufficient_quota', 'billing_hard_limit_reached', 'billing_not_active', 'usage_limit_reached'].includes(providerCode)
+      || providerType === 'insufficient_quota') return new AiProviderError('AI_QUOTA_EXHAUSTED', 402);
     return new AiProviderError('AI_RATE_LIMITED', 429);
   }
   return new AiProviderError('AI_PROVIDER_ERROR', 502);
@@ -173,8 +180,10 @@ function errorFromResponse(response, data) {
 function normalizeError(error) {
   const code = error && error.code;
   if (code === 'AI_INVALID_KEY') return { status: 'invalid_key', code };
+  if (code === 'AI_PERMISSION_DENIED') return { status: 'permission_denied', code };
   if (code === 'AI_MODEL_UNAVAILABLE') return { status: 'model_unavailable', code };
   if (code === 'AI_RATE_LIMITED') return { status: 'rate_limited', code };
+  if (code === 'AI_PROVIDER_TIMEOUT') return { status: 'timeout', code };
   if (['AI_CREDIT_BALANCE_EXHAUSTED', 'AI_ORGANIZATION_SPEND_LIMIT_REACHED', 'AI_PROJECT_SPEND_LIMIT_REACHED',
     'AI_ORGANIZATION_USAGE_LIMIT_REACHED', 'AI_QUOTA_EXHAUSTED'].includes(code)) return { status: 'billing_required', code };
   return { status: 'provider_error', code: 'AI_PROVIDER_ERROR' };

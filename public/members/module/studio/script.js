@@ -2,7 +2,9 @@
   'use strict';
 
   const DASHBOARD_DRAFT_KEY = 'chemdisk.studio.dashboard.v1';
+  const DASHBOARD_CATALOG_PENDING_KEY = 'chemdisk.studio.dashboard-catalog-pending.v1';
   const LESSON_DRAFT_KEY = 'chemdisk.studio.lesson.v1';
+  const LESSON_MANIFEST_PENDING_KEY = 'chemdisk.studio.lesson-manifest-pending.v1';
   const PROMPT_DRAFT_KEY = 'chemdisk.studio.prompt.v1';
   const STUDIO_LAYOUT_KEY = 'chemdisk.studio.layout.v1';
   const THEME_KEY = 'chem.theme';
@@ -27,6 +29,7 @@
     accessState: byId('access-state'),
     app: byId('studio-app'),
     home: byId('home-view'),
+    contentExplorer: byId('content-explorer'),
     contentExplorerRepository: byId('content-explorer-repository'),
     contentExplorerSearch: byId('content-explorer-search'),
     contentExplorerRefresh: byId('content-explorer-refresh'),
@@ -143,6 +146,8 @@
       paging: pagedListApi.createState(),
       loaded: false,
       loading: false,
+      loadPromise: null,
+      loadRepositoryId: '',
       error: '',
       requestId: 0
     },
@@ -171,6 +176,7 @@
       remoteSha: '',
       remoteRepositoryId: '',
       mediaObjectUrls: [],
+      manifestPending: null,
       saving: false
     },
     prompt: {
@@ -204,8 +210,9 @@
   }
 
   function toast(title, message, type) {
-    const item = create('div', `toast${type === 'error' ? ' is-error' : ''}`);
-    const icon = create('span', '', type === 'error' ? '!' : '✓');
+    const needsAttention = type === 'error' || type === 'warning';
+    const item = create('div', `toast${needsAttention ? ' is-error' : ''}`);
+    const icon = create('span', '', needsAttention ? '!' : '✓');
     icon.setAttribute('aria-hidden', 'true');
     const copy = create('span');
     copy.append(create('strong', '', title), create('small', '', message || ''));
@@ -215,7 +222,7 @@
       item.style.opacity = '0';
       item.style.transform = 'translateY(8px)';
       window.setTimeout(() => item.remove(), 180);
-    }, type === 'error' ? 5200 : 3400);
+    }, needsAttention ? 5200 : 3400);
   }
 
   function setSaveIndicator(label, status) {
@@ -237,6 +244,43 @@
     try {
       localStorage.setItem(key, JSON.stringify(value));
       return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function removeStorage(key) {
+    try { localStorage.removeItem(key); } catch (_) {}
+  }
+
+  function readPendingLessonManifest() {
+    const pending = readStorage(LESSON_MANIFEST_PENDING_KEY);
+    const valid = pending
+      && typeof pending.filename === 'string'
+      && typeof pending.repositoryId === 'string'
+      && typeof pending.sha === 'string'
+      && typeof pending.content === 'string'
+      && ['free', 'sequential'].includes(pending.navigation)
+      && Array.isArray(pending.steps);
+    if (valid) return pending;
+    if (pending) removeStorage(LESSON_MANIFEST_PENDING_KEY);
+    return null;
+  }
+
+  function setPendingLessonManifest(manifest) {
+    state.lesson.manifestPending = manifest || null;
+    if (manifest) writeStorage(LESSON_MANIFEST_PENDING_KEY, manifest);
+    else removeStorage(LESSON_MANIFEST_PENDING_KEY);
+  }
+
+  function pendingLessonManifestMatches(model, pending, repositoryId) {
+    if (!pending || pending.repositoryId !== repositoryId) return false;
+    try {
+      const validation = lessonModelApi.validateLesson(model);
+      if (!validation.valid || validation.lesson.filename !== pending.filename) return false;
+      validation.lesson.navigationConfigured = true;
+      validation.lesson.slides.forEach((slide) => { slide.progressConfigured = true; });
+      return lessonModelApi.serializeLesson(validation.lesson) === pending.content;
     } catch (_) {
       return false;
     }
@@ -468,6 +512,7 @@
     state.lesson.remoteFilename = '';
     state.lesson.remoteSha = '';
     state.lesson.remoteRepositoryId = '';
+    setPendingLessonManifest(null);
     history.lesson.undo = [];
     history.lesson.redo = [];
     scheduleDraftSave('lesson');
@@ -513,6 +558,16 @@
     } catch (_) {
       state.lesson.model = defaultLesson();
     }
+    state.lesson.manifestPending = readPendingLessonManifest();
+    if (pendingLessonManifestMatches(
+      state.lesson.model,
+      state.lesson.manifestPending,
+      state.lesson.manifestPending?.repositoryId
+    )) {
+      state.lesson.remoteFilename = state.lesson.manifestPending.filename;
+      state.lesson.remoteSha = state.lesson.manifestPending.sha;
+      state.lesson.remoteRepositoryId = state.lesson.manifestPending.repositoryId;
+    }
     try {
       state.prompt.model = promptDraft
         ? promptModelApi.createPrompt(promptDraft)
@@ -554,14 +609,38 @@
       button.classList.toggle('is-active', active);
       button.setAttribute('aria-current', active ? 'page' : 'false');
     });
+    const repositoryReady = next === 'home'
+      ? Promise.resolve()
+      : loadRepositoryAssets(false);
     if (next === 'dashboard') renderDashboard();
     if (next === 'lesson') renderLesson();
     if (next === 'prompt') renderPrompt();
-    if (next === 'quiz') void window.ChemQuizBuilder?.activate?.();
-    if (next === 'exam') void window.ChemExamBuilder?.activate?.();
-    if (next === 'presentation') void window.ChemPresentationBuilder?.activate?.();
+    if (next === 'quiz') void repositoryReady.then(() => {
+      if (state.mode === 'quiz') return window.ChemQuizBuilder?.activate?.();
+    });
+    if (next === 'exam') void repositoryReady.then(() => {
+      if (state.mode === 'exam') return window.ChemExamBuilder?.activate?.();
+    });
+    if (next === 'presentation') void repositoryReady.then(() => {
+      if (state.mode === 'presentation') return window.ChemPresentationBuilder?.activate?.();
+    });
     updateHistoryButtons();
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function initializeContentExplorerLoader() {
+    if (!elements.contentExplorer) return;
+    const load = () => { void loadRepositoryAssets(false); };
+    if (typeof window.IntersectionObserver !== 'function') {
+      load();
+      return;
+    }
+    const observer = new window.IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      observer.disconnect();
+      load();
+    }, { rootMargin: '320px 0px' });
+    observer.observe(elements.contentExplorer);
   }
 
   function dashboardModuleDefaults(type) {
@@ -1848,7 +1927,14 @@
       state.dashboard.remoteSource = source;
       state.dashboard.remoteUpdatedAt = updatedAt;
       state.dashboard.baseline = dashboardModelApi.serialize(model, { ensureRequiredHelp: true }).trim();
-      state.dashboard.catalogPending = false;
+      const pendingCatalog = readStorage(DASHBOARD_CATALOG_PENDING_KEY);
+      state.dashboard.catalogPending = Boolean(
+        source === 'blob'
+        && pendingCatalog
+        && pendingCatalog.etag === etag
+        && pendingCatalog.baseline === state.dashboard.baseline
+      );
+      if (!state.dashboard.catalogPending && pendingCatalog) removeStorage(DASHBOARD_CATALOG_PENDING_KEY);
       scheduleDraftSave('dashboard');
       renderDashboard();
       toast(
@@ -1898,40 +1984,52 @@
     elements.dashboardPublish.disabled = true;
     elements.dashboardLoad.disabled = true;
     setSaveIndicator('Publikowanie w Blobs…', 'saving');
+    let retryCatalogOnly = false;
+    let dashboardPublishedThisAttempt = false;
     try {
+      const current = dashboardModelApi.serialize(state.dashboard.model, { ensureRequiredHelp: true }).trim();
+      retryCatalogOnly = state.dashboard.catalogPending && current === state.dashboard.baseline;
       const token = await adminToken();
-      const payload = dashboardModelApi.createPublishPayload(
-        state.dashboard.model,
-        state.dashboard.expectedEtag
-      );
-      const response = await fetch(dashboardModelApi.ADMIN_DASHBOARD_URL, {
-        method: 'PUT',
-        credentials: 'same-origin',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
-      const result = await responseJson(response);
-      if (!response.ok) {
-        if (response.status === 409) state.dashboard.remoteLoaded = false;
-        throw new Error(dashboardServerError(response, result));
+      if (!retryCatalogOnly) {
+        const payload = dashboardModelApi.createPublishPayload(
+          state.dashboard.model,
+          state.dashboard.expectedEtag
+        );
+        const response = await fetch(dashboardModelApi.ADMIN_DASHBOARD_URL, {
+          method: 'PUT',
+          credentials: 'same-origin',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
+        const result = await responseJson(response);
+        if (!response.ok) {
+          if (response.status === 409) state.dashboard.remoteLoaded = false;
+          throw new Error(dashboardServerError(response, result));
+        }
+        if (!result || typeof result.content !== 'string' || typeof result.etag !== 'string') {
+          throw new Error('Serwer nie potwierdził zapisanej wersji.');
+        }
+        state.dashboard.model = dashboardModelApi.parseMarkdown(result.content);
+        state.dashboard.expectedEtag = result.etag;
+        state.dashboard.remoteLoaded = true;
+        state.dashboard.remoteSource = 'blob';
+        state.dashboard.remoteUpdatedAt = result.updatedAt || null;
+        state.dashboard.baseline = dashboardModelApi.serialize(
+          state.dashboard.model,
+          { ensureRequiredHelp: true }
+        ).trim();
+        dashboardPublishedThisAttempt = true;
+        state.dashboard.catalogPending = true;
+        writeStorage(DASHBOARD_CATALOG_PENDING_KEY, {
+          etag: state.dashboard.expectedEtag,
+          baseline: state.dashboard.baseline
+        });
       }
-      if (!result || typeof result.content !== 'string' || typeof result.etag !== 'string') {
-        throw new Error('Serwer nie potwierdził zapisanej wersji.');
-      }
-      state.dashboard.model = dashboardModelApi.parseMarkdown(result.content);
-      state.dashboard.expectedEtag = result.etag;
-      state.dashboard.remoteLoaded = true;
-      state.dashboard.remoteSource = 'blob';
-      state.dashboard.remoteUpdatedAt = result.updatedAt || null;
-      state.dashboard.baseline = dashboardModelApi.serialize(
-        state.dashboard.model,
-        { ensureRequiredHelp: true }
-      ).trim();
-      state.dashboard.catalogPending = true;
+      setSaveIndicator(retryCatalogOnly ? 'Ponawianie katalogu postępu…' : 'Synchronizacja katalogu postępu…', 'saving');
       const progressResponse = await fetch(ADMIN_PROGRESS_URL, {
         method: 'PUT',
         credentials: 'same-origin',
@@ -1950,12 +2048,18 @@
         throw new Error(`Dashboard zapisano, ale konfiguracja postępu wymaga ponowienia (${progressError?.error || progressResponse.status}).`);
       }
       state.dashboard.catalogPending = false;
+      removeStorage(DASHBOARD_CATALOG_PENDING_KEY);
       scheduleDraftSave('dashboard');
       renderDashboard();
-      toast('Dashboard opublikowany', 'Nowy układ jest już aktywny dla kursantów.');
+      toast(retryCatalogOnly ? 'Katalog postępu zsynchronizowany' : 'Dashboard opublikowany', 'Nowy układ i liczenie postępu są już zgodne.');
     } catch (error) {
-      setSaveIndicator('Publikacja nieudana', 'error');
-      toast('Nie udało się opublikować', error && error.message ? error.message : 'Spróbuj ponownie.', 'error');
+      const dashboardSaved = retryCatalogOnly || dashboardPublishedThisAttempt;
+      setSaveIndicator(dashboardSaved ? 'Dashboard zapisany — ponów katalog postępu' : 'Publikacja nieudana', 'error');
+      toast(
+        dashboardSaved ? 'Dashboard jest już opublikowany' : 'Nie udało się opublikować',
+        error && error.message ? error.message : 'Spróbuj ponownie.',
+        'error'
+      );
     } finally {
       state.dashboard.publishing = false;
       elements.dashboardLoad.disabled = false;
@@ -5236,7 +5340,7 @@
       placeholder.append(message, retry);
       figure.replaceChildren(placeholder);
     };
-    const loadFigure = async (figure, bypassCache = false) => {
+    const loadFigure = async (figure, bypassCache = false, position = 0) => {
       const shared = figure.dataset.lessonMediaScope === 'shared';
       try {
         const blob = await library.readMediaBlob({
@@ -5255,9 +5359,9 @@
         const image = document.createElement('img');
         image.src = objectUrl;
         image.alt = figure.dataset.lessonMediaAlt || 'Ilustracja';
-        image.loading = 'eager';
+        image.loading = position < 2 ? 'eager' : 'lazy';
         image.decoding = 'async';
-        image.fetchPriority = 'high';
+        image.fetchPriority = position === 0 ? 'high' : 'auto';
         try { void image.decode?.().catch(() => undefined); } catch { /* dekodowanie dokończy się przy malowaniu */ }
         if (!figure.isConnected) {
           URL.revokeObjectURL(objectUrl);
@@ -5275,7 +5379,16 @@
       figures.forEach((figure) => showError(figure, { code: 'MEDIA_CLIENT_UNAVAILABLE' }));
       return;
     }
-    await Promise.all(figures.map((figure) => loadFigure(figure)));
+    let nextFigure = 0;
+    const worker = async () => {
+      while (nextFigure < figures.length) {
+        const position = nextFigure;
+        nextFigure += 1;
+        if (!figures[position].isConnected) continue;
+        await loadFigure(figures[position], false, position);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, figures.length) }, worker));
   }
 
   function bindLessonPreviewCanvasControls(root) {
@@ -6394,6 +6507,7 @@
         state.lesson.remoteFilename = '';
         state.lesson.remoteSha = '';
         state.lesson.remoteRepositoryId = '';
+        setPendingLessonManifest(null);
         updateRepositoryButtons();
       } else {
         const filename = promptModelApi.validateFilename(file.name)
@@ -6617,12 +6731,17 @@
         && state.lesson.remoteFilename === state.lesson.model.filename
         && state.lesson.remoteRepositoryId === selectedRepositoryId
       );
-      elements.lessonRepositorySave.textContent = updatesCurrentFile
-        ? 'Zapisz zmiany w GitHubie'
-        : 'Utwórz plik w GitHubie';
-      elements.lessonRepositorySave.title = updatesCurrentFile
-        ? `Zaktualizuj ${state.lesson.remoteFilename}`
-        : 'Utwórz nowy plik .md w wybranym repozytorium';
+      const retryManifestOnly = pendingLessonManifestMatches(
+        state.lesson.model,
+        state.lesson.manifestPending,
+        selectedRepositoryId
+      );
+      elements.lessonRepositorySave.textContent = retryManifestOnly
+        ? 'Ponów manifest postępu'
+        : updatesCurrentFile ? 'Zapisz zmiany w GitHubie' : 'Utwórz plik w GitHubie';
+      elements.lessonRepositorySave.title = retryManifestOnly
+        ? 'Plik jest już w GitHubie — ponów tylko synchronizację postępu'
+        : updatesCurrentFile ? `Zaktualizuj ${state.lesson.remoteFilename}` : 'Utwórz nowy plik .md w wybranym repozytorium';
       elements.lessonRepositoryDelete.disabled = state.lesson.saving
         || !state.lesson.remoteFilename
         || !state.lesson.remoteSha
@@ -6659,6 +6778,28 @@
       toast('Wybierz repozytorium', 'Najpierw wybierz docelowe repozytorium materiałów.', 'error');
       return;
     }
+    validation.lesson.navigationConfigured = true;
+    validation.lesson.slides.forEach((slide) => { slide.progressConfigured = true; });
+    const serializedLesson = lessonModelApi.serializeLesson(validation.lesson);
+    const pendingManifest = state.lesson.manifestPending;
+    if (pendingManifest
+      && pendingManifest.filename === filename
+      && pendingManifest.repositoryId === repositoryId
+      && pendingManifest.content === serializedLesson) {
+      state.lesson.saving = true;
+      updateRepositoryButtons();
+      try {
+        await syncLessonProgressManifest(pendingManifest);
+        setPendingLessonManifest(null);
+        toast('Manifest postępu zsynchronizowany', 'Nie utworzono dodatkowego commitu w GitHubie.');
+      } catch (error) {
+        toast('Plik nadal jest w GitHubie', `Synchronizacja postępu nadal się nie udała (${error?.message || 'błąd synchronizacji'}).`, 'error');
+      } finally {
+        state.lesson.saving = false;
+        updateRepositoryButtons();
+      }
+      return;
+    }
     const renamed = state.lesson.remoteFilename && state.lesson.remoteFilename !== filename;
     const moved = state.lesson.remoteRepositoryId && state.lesson.remoteRepositoryId !== repositoryId;
     if (
@@ -6672,58 +6813,79 @@
     state.lesson.saving = true;
     updateRepositoryButtons();
     try {
-      validation.lesson.navigationConfigured = true;
-      validation.lesson.slides.forEach((slide) => { slide.progressConfigured = true; });
-      const result = await window.ChemContentLibrary.save('lesson', {
-        filename,
-        content: lessonModelApi.serializeLesson(validation.lesson),
-        expectedSha: renamed || moved ? '' : state.lesson.remoteSha,
-        repositoryId
-      });
+      let result;
+      try {
+        result = await window.ChemContentLibrary.save('lesson', {
+          filename,
+          content: serializedLesson,
+          expectedSha: renamed || moved ? '' : state.lesson.remoteSha,
+          repositoryId
+        });
+      } catch (error) {
+        toast('Nie udało się zapisać lekcji', error && error.message ? error.message : 'Błąd repozytorium.', 'error');
+        return;
+      }
       state.lesson.remoteFilename = filename;
       state.lesson.remoteSha = result.sha;
       state.lesson.remoteRepositoryId = result.repositoryId || repositoryId;
       state.lesson.model = lessonModelApi.createLesson(validation.lesson);
-      const progressToken = await adminToken();
-      const manifestResponse = await fetch(ADMIN_PROGRESS_URL, {
-        method: 'PUT',
-        credentials: 'same-origin',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${progressToken}`
-        },
-        body: JSON.stringify({
-          action: 'lesson_manifest',
-          filename,
-          repositoryId,
-          manifest: {
-            navigation: validation.lesson.navigation,
-            steps: validation.lesson.slides.map((slide, index) => ({
-              id: slide.id,
-              title: slideTitle(slide, index),
-              includeInLesson: slide.includeInLesson !== 'OFF',
-              requiredToAdvance: slide.requiredToAdvance !== false,
-              condition: slide.condition
-            }))
-          }
-        })
-      });
-      if (!manifestResponse.ok) {
-        const progressError = await responseJson(manifestResponse);
-        throw new Error(`Lekcja została zapisana, ale manifest postępu wymaga ponowienia (${progressError?.error || manifestResponse.status}).`);
-      }
+      writeStorage(LESSON_DRAFT_KEY, state.lesson.model);
       toast(
         result.created ? 'Lekcja dodana do GitHuba' : 'Lekcja zaktualizowana',
         result.commitSha ? `Commit ${result.commitSha.slice(0, 7)} został zapisany.` : filename
       );
-      await loadRepositoryAssets(true);
-    } catch (error) {
-      toast('Nie udało się zapisać lekcji', error && error.message ? error.message : 'Błąd repozytorium.', 'error');
+      const manifest = {
+        filename,
+        repositoryId: state.lesson.remoteRepositoryId,
+        sha: state.lesson.remoteSha || '',
+        content: serializedLesson,
+        navigation: validation.lesson.navigation,
+        steps: validation.lesson.slides.map((slide, index) => ({
+          id: slide.id,
+          title: slideTitle(slide, index),
+          includeInLesson: slide.includeInLesson !== 'OFF',
+          requiredToAdvance: slide.requiredToAdvance !== false,
+          condition: slide.condition
+        }))
+      };
+      setPendingLessonManifest(manifest);
+      try {
+        await syncLessonProgressManifest(manifest);
+        setPendingLessonManifest(null);
+      } catch (error) {
+        toast('Lekcja jest w GitHubie', `Nie udało się odświeżyć manifestu postępu (${error?.message || 'błąd synchronizacji'}). Kliknij „Ponów manifest postępu” — bez nowego commitu.`, 'warning');
+      }
+      try {
+        await loadRepositoryAssets(true);
+      } catch (error) {
+        toast('Lekcja jest w GitHubie', `Nie udało się tylko odświeżyć listy plików (${error?.message || 'błąd odświeżania'}).`, 'warning');
+      }
     } finally {
       state.lesson.saving = false;
       updateRepositoryButtons();
     }
+  }
+
+  async function syncLessonProgressManifest(manifest) {
+    const progressToken = await adminToken();
+    const response = await fetch(ADMIN_PROGRESS_URL, {
+      method: 'PUT',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${progressToken}`
+      },
+      body: JSON.stringify({
+        action: 'lesson_manifest',
+        filename: manifest.filename,
+        repositoryId: manifest.repositoryId,
+        manifest: { navigation: manifest.navigation, steps: manifest.steps }
+      })
+    });
+    if (response.ok) return;
+    const progressError = await responseJson(response);
+    throw new Error(progressError?.error || String(response.status));
   }
 
   async function savePromptToRepository() {
@@ -6751,12 +6913,18 @@
     state.prompt.saving = true;
     updateRepositoryButtons();
     try {
-      const result = await window.ChemContentLibrary.save('prompt', {
-        filename,
-        content: promptModelApi.serializePrompt(validation.prompt),
-        expectedSha: renamed || moved ? '' : state.prompt.remoteSha,
-        repositoryId
-      });
+      let result;
+      try {
+        result = await window.ChemContentLibrary.save('prompt', {
+          filename,
+          content: promptModelApi.serializePrompt(validation.prompt),
+          expectedSha: renamed || moved ? '' : state.prompt.remoteSha,
+          repositoryId
+        });
+      } catch (error) {
+        toast('Nie udało się zapisać promptu', error && error.message ? error.message : 'Błąd repozytorium.', 'error');
+        return;
+      }
       state.prompt.remoteFilename = filename;
       state.prompt.remoteSha = result.sha;
       state.prompt.remoteRepositoryId = result.repositoryId || repositoryId;
@@ -6765,9 +6933,11 @@
         result.commitSha ? `Commit ${result.commitSha.slice(0, 7)} został zapisany.` : filename
       );
       renderPromptPreview();
-      await loadRepositoryAssets(true);
-    } catch (error) {
-      toast('Nie udało się zapisać promptu', error && error.message ? error.message : 'Błąd repozytorium.', 'error');
+      try {
+        await loadRepositoryAssets(true);
+      } catch (error) {
+        toast('Prompt jest w GitHubie', `Nie udało się tylko odświeżyć listy plików (${error?.message || 'błąd odświeżania'}).`, 'warning');
+      }
     } finally {
       state.prompt.saving = false;
       updateRepositoryButtons();
@@ -7005,6 +7175,13 @@
 
   function renderContentExplorer() {
     if (!elements.contentExplorerFolders) return;
+    if (elements.contentExplorerRefresh) {
+      elements.contentExplorerRefresh.disabled = state.contentLibrary.loading;
+      elements.contentExplorerRefresh.textContent = state.contentLibrary.loading
+        ? '↻ Odświeżam…'
+        : '↻ Odśwież pliki';
+    }
+    elements.contentExplorer?.setAttribute('aria-busy', String(state.contentLibrary.loading));
     const library = window.ChemContentLibrary;
     const query = elements.contentExplorerSearch?.value || '';
     const groups = [
@@ -7345,7 +7522,25 @@
     state.contentLibrary.quizzes = Array.isArray(assets.quiz) ? assets.quiz : [];
   }
 
-  async function loadRepositoryAssets(force) {
+  function loadRepositoryAssets(force) {
+    const repositoryId = state.contentLibrary.selectedRepositoryId;
+    if (state.contentLibrary.loadPromise && state.contentLibrary.loadRepositoryId === repositoryId) {
+      return state.contentLibrary.loadPromise;
+    }
+    if (!force && state.contentLibrary.loaded) return Promise.resolve();
+    const operation = performLoadRepositoryAssets(force);
+    state.contentLibrary.loadPromise = operation;
+    state.contentLibrary.loadRepositoryId = repositoryId;
+    operation.finally(() => {
+      if (state.contentLibrary.loadPromise === operation) {
+        state.contentLibrary.loadPromise = null;
+        state.contentLibrary.loadRepositoryId = '';
+      }
+    });
+    return operation;
+  }
+
+  async function performLoadRepositoryAssets(force) {
     const library = window.ChemContentLibrary;
     const canLoadLegacy = typeof library?.list === 'function'
       && typeof library?.repositories === 'function';
@@ -7406,6 +7601,7 @@
       applyRepositoryAssetBundle(assets);
       state.contentLibrary.loaded = true;
       renderRepositoryAssets();
+      updateRepositoryButtons();
       if (state.mode === 'dashboard') renderDashboardInspector();
       if (state.mode === 'lesson') renderLessonInspector();
     } catch (error) {
@@ -7428,6 +7624,35 @@
         renderContentExplorer();
       }
     }
+  }
+
+  async function refreshRepositoryAssetKind(kind, force = false) {
+    const propertyByKind = {
+      lesson: 'lessons',
+      prompt: 'prompts',
+      exam: 'exams',
+      presentation: 'presentations',
+      quiz: 'quizzes'
+    };
+    const property = propertyByKind[kind];
+    const library = window.ChemContentLibrary;
+    if (!property || typeof library?.list !== 'function' || !state.contentLibrary.selectedRepositoryId) {
+      return loadRepositoryAssets(Boolean(force));
+    }
+    state.contentLibrary[property] = await library.list(kind, {
+      repositoryId: state.contentLibrary.selectedRepositoryId,
+      refresh: Boolean(force)
+    });
+    renderRepositoryAssets();
+    updateRepositoryButtons();
+    renderContentExplorer();
+  }
+
+  function handleContentLibraryChanged(event) {
+    const kind = String(event?.detail?.kind || '');
+    const repositoryId = String(event?.detail?.repositoryId || '');
+    if (repositoryId && repositoryId !== state.contentLibrary.selectedRepositoryId) return;
+    void refreshRepositoryAssetKind(kind, false);
   }
 
   async function importRepositoryLesson(asset, options = {}) {
@@ -7453,6 +7678,17 @@
       state.lesson.remoteFilename = asset.filename;
       state.lesson.remoteSha = asset.sha || result.sha || '';
       state.lesson.remoteRepositoryId = asset.repositoryId || result.repositoryId || '';
+      const pendingManifest = state.lesson.manifestPending;
+      const matchesPendingManifest = Boolean(
+        !sourceWasEmpty
+        && pendingManifest
+        && pendingManifest.filename === asset.filename
+        && pendingManifest.repositoryId === state.lesson.remoteRepositoryId
+        && pendingManifest.content === String(result.content || '')
+      );
+      setPendingLessonManifest(matchesPendingManifest
+        ? { ...pendingManifest, sha: state.lesson.remoteSha || '' }
+        : null);
       scheduleDraftSave('lesson');
       renderLesson();
       updateHistoryButtons();
@@ -7629,6 +7865,9 @@
         state.lesson.remoteSha = '';
         state.lesson.remoteRepositoryId = '';
       }
+      if (kind === 'lesson'
+        && state.lesson.manifestPending?.filename === asset.filename
+        && state.lesson.manifestPending.repositoryId === repositoryId) setPendingLessonManifest(null);
       if (kind === 'prompt' && state.prompt.remoteFilename === asset.filename && state.prompt.remoteRepositoryId === repositoryId) {
         state.prompt.remoteFilename = '';
         state.prompt.remoteSha = '';
@@ -7926,7 +8165,7 @@
     });
     elements.contentExplorerFolders?.addEventListener('click', handleContentExplorerAction);
     elements.contentExplorerRefresh?.addEventListener('click', () => loadRepositoryAssets(true));
-    document.addEventListener('chemdisk-content-changed', () => loadRepositoryAssets(true));
+    document.addEventListener('chemdisk-content-changed', handleContentLibraryChanged);
     [elements.dashboardRepository, elements.lessonRepository, elements.promptRepository, elements.contentExplorerRepository].forEach((select) => {
       if (!select) return;
       select.addEventListener('change', () => selectContentRepository(select.value));
@@ -8243,8 +8482,8 @@
     elements.app.hidden = false;
     elements.modeSwitch.hidden = false;
     switchMode('home');
+    initializeContentExplorerLoader();
     setSaveIndicator('Drafty gotowe', 'saved');
-    loadRepositoryAssets(false);
   }
 
   document.addEventListener('DOMContentLoaded', start);

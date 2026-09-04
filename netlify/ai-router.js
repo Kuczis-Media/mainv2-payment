@@ -9,7 +9,7 @@ const LEGACY_DEFAULTS = Object.freeze({
   openai: 'gpt-4.1-mini'
 });
 const PROVIDER_FAILURES = new Set([
-  'AI_INVALID_KEY', 'AI_MODEL_UNAVAILABLE', 'AI_RATE_LIMITED',
+  'AI_INVALID_KEY', 'AI_PERMISSION_DENIED', 'AI_MODEL_UNAVAILABLE', 'AI_RATE_LIMITED', 'AI_PROVIDER_TIMEOUT',
   'AI_CREDIT_BALANCE_EXHAUSTED', 'AI_ORGANIZATION_SPEND_LIMIT_REACHED',
   'AI_PROJECT_SPEND_LIMIT_REACHED', 'AI_ORGANIZATION_USAGE_LIMIT_REACHED',
   'AI_QUOTA_EXHAUSTED', 'AI_PROVIDER_ERROR', 'EMPTY_MODEL_RESPONSE'
@@ -17,25 +17,26 @@ const PROVIDER_FAILURES = new Set([
 
 async function resolveConfig(moduleName = 'chat', options = {}) {
   const storesFactory = options.getStores || manager.getAiStores;
+  let stores;
+  let settings;
   try {
-    const stores = storesFactory();
-    const { settings } = await manager.readSettings(stores.metadata);
-    const assignmentName = manager.MODULES.includes(moduleName) ? moduleName : 'other';
-    const assignedId = settings.moduleAssignments[assignmentName];
-    if (manager.ENV_CONFIG_IDS.has(assignedId)) return resolveConfigById(assignedId, options);
-    if (!settings.configs.length) return legacyEnvironmentConfig();
-    const config = assignedId
-      ? settings.configs.find((item) => item.aiConfigId === assignedId)
-      : settings.configs.find((item) => item.isDefault);
-    if (!config) return null;
-    const apiKey = await manager.readSecret(stores.secrets, config.aiConfigId);
-    return apiKey ? { ...config, apiKey, source: 'panel' } : null;
+    stores = storesFactory();
+    ({ settings } = await manager.readSettings(stores.metadata));
   } catch {
-    // Legacy ENV remains a deployment migration path only when the panel
-    // stores cannot be read. A broken panel configuration never silently
-    // selects a different provider.
+    // ENV is the deployment migration path when the configuration store itself
+    // is unavailable. Once a panel config is selected, failures are fail-closed.
     return legacyEnvironmentConfig();
   }
+  const assignmentName = manager.MODULES.includes(moduleName) ? moduleName : 'other';
+  const assignedId = settings.moduleAssignments[assignmentName];
+  if (manager.ENV_CONFIG_IDS.has(assignedId)) return resolveConfigById(assignedId, options);
+  if (!settings.configs.length) return legacyEnvironmentConfig();
+  const config = assignedId
+    ? settings.configs.find((item) => item.aiConfigId === assignedId)
+    : settings.configs.find((item) => item.isDefault);
+  if (!config || config.secretConfigured !== true) return null;
+  const apiKey = await manager.readSecret(stores.secrets, config.aiConfigId);
+  return manager.secretMatchesConfig(config, apiKey) ? { ...config, apiKey, source: 'panel' } : null;
 }
 
 async function resolveConfigById(aiConfigId, options = {}) {
@@ -48,9 +49,9 @@ async function resolveConfigById(aiConfigId, options = {}) {
   const stores = storesFactory();
   const { settings } = await manager.readSettings(stores.metadata);
   const config = settings.configs.find((item) => item.aiConfigId === id);
-  if (!config) return null;
+  if (!config || config.secretConfigured !== true) return null;
   const apiKey = await manager.readSecret(stores.secrets, id);
-  return apiKey ? { ...config, apiKey, source: 'panel' } : null;
+  return manager.secretMatchesConfig(config, apiKey) ? { ...config, apiKey, source: 'panel' } : null;
 }
 
 function legacyEnvironmentConfig(requestedProvider = '') {
@@ -96,13 +97,13 @@ async function sendRequest(input, options = {}) {
   const settingsResult = await usage.readSettings(usageStores.config);
   let config = await resolveConfig(moduleId, options);
   if (!config) throw routerError('AI_NOT_CONFIGURED', 503);
+  const request = providerRequest(input);
   const visited = new Set();
   let fallbackFrom = null;
 
   while (config) {
     if (visited.has(config.aiConfigId)) throw routerError('AI_FALLBACK_CYCLE', 503);
     visited.add(config.aiConfigId);
-    const request = providerRequest(input);
     const configPolicy = settingsResult.settings.configs[config.aiConfigId];
     const estimate = usage.estimateRequest(request, configPolicy && configPolicy.pricing);
     let reservation;

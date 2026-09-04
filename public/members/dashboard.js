@@ -52,9 +52,11 @@
     AI_CONFIG_CONFLICT: 'Konfiguracja AI została zmieniona równocześnie. Odśwież listę i spróbuj ponownie.',
     AI_CONFIG_NOT_FOUND: 'Nie znaleziono tej konfiguracji AI.',
     AI_INVALID_KEY: 'Dostawca odrzucił klucz API.',
+    AI_PERMISSION_DENIED: 'Klucz API działa, ale nie ma uprawnień do wybranego modelu lub projektu.',
     AI_MODEL_UNAVAILABLE: 'Wybrany model jest niedostępny dla tego klucza.',
     AI_NOT_CONFIGURED: 'Nie skonfigurowano jeszcze dostawcy AI.',
     AI_PROVIDER_ERROR: 'Dostawca AI jest chwilowo niedostępny.',
+    AI_PROVIDER_TIMEOUT: 'Dostawca AI nie odpowiedział w ciągu 45 sekund. Spróbuj ponownie.',
     AI_RATE_LIMITED: 'Dostawca AI ograniczył liczbę żądań. Spróbuj ponownie później.',
     AI_CREDIT_BALANCE_EXHAUSTED: 'Na koncie OpenAI nie ma środków API. Dodaj środki w rozliczeniach OpenAI.',
     AI_ORGANIZATION_SPEND_LIMIT_REACHED: 'Organizacja OpenAI osiągnęła ustawiony limit wydatków.',
@@ -73,12 +75,13 @@
     AI_FALLBACK_CYCLE: 'Fallback AI tworzy niedozwoloną pętlę.',
     INVALID_AI_FALLBACK: 'Wybrany fallback AI jest nieprawidłowy.',
     INVALID_AI_LIMIT_TIMEZONE: 'Podaj poprawną strefę czasową IANA, np. Europe/Warsaw.',
-    INVALID_AI_LIMIT_VALUE: 'Limit musi być pusty albo dodatnią liczbą całkowitą (zero blokuje użycie).',
+    INVALID_AI_LIMIT_VALUE: 'Limit musi być pusty albo nieujemną liczbą całkowitą (zero blokuje użycie).',
     INVALID_AI_PRICING: 'Cena tokenów musi być nieujemną liczbą.',
     INVALID_AI_WARNING_THRESHOLDS: 'Progi ostrzeżeń muszą rosnąć i mieścić się od 1 do 100%.',
     RESET_CONFIRMATION_REQUIRED: 'Reset użycia wymaga wyraźnego potwierdzenia.',
     INVALID_AI_ACTION: 'Wybrano nieprawidłową operację AI.',
     INVALID_AI_CONFIG: 'Uzupełnij nazwę, dostawcę i poprawny identyfikator modelu.',
+    AI_CONFIG_ID_RESERVED: 'To ID jest zarezerwowane dla konfiguracji z ENV. Utwórz konfigurację z innym ID.',
     INVALID_AI_CONFIG_ID: 'Identyfikator konfiguracji AI jest nieprawidłowy.',
     INVALID_AI_MODULE: 'Wybrano nieprawidłowy moduł AI.',
     INVALID_AI_PROVIDER: 'Wybrano nieobsługiwanego dostawcę AI.',
@@ -4589,8 +4592,10 @@
     return ({
       ok: 'Połączenie działa',
       invalid_key: 'Nieprawidłowy klucz',
+      permission_denied: 'Brak uprawnień',
       model_unavailable: 'Model niedostępny',
       rate_limited: 'Limit dostawcy',
+      timeout: 'Przekroczony czas',
       billing_required: 'Sprawdź rozliczenia',
       provider_error: 'Błąd dostawcy',
       untested: 'Nie przetestowano'
@@ -5021,8 +5026,8 @@
         provider: 'Wspólna pula wybranego dostawcy dla wszystkich użytkowników i konfiguracji.',
         module: 'Limit modułu jest liczony osobno dla każdego użytkownika, np. osobno dla czatu.',
         config: 'Wspólna pula wybranej konfiguracji AI dla wszystkich użytkowników.',
-        configUser: 'Dodatkowy limit wybranej konfiguracji, liczony osobno dla każdego użytkownika. Obowiązuje równolegle z limitem bazowym.',
-        user: 'Tryb „Własne limity” zastępuje limit bazowy tylko dla wskazanego użytkownika; nie wyłącza limitów modułu ani konfiguracji.'
+        configUser: 'Dodatkowy limit wybranej konfiguracji, liczony osobno dla każdego użytkownika. Działa równolegle z limitem bazowym, ale tylko gdy routing wywołania używa dokładnie tej konfiguracji.',
+        user: '„Własne limity” zastępują tylko limit bazowy. „Bez limitu użytkownika” wyłącza warstwy bazową, modułową i konfiguracji na użytkownika, lecz nadal obowiązują pule wspólne.'
       })[scope] || '';
     }
     let choices = [];
@@ -5184,7 +5189,7 @@
       const card = document.createElement('article');
       const limit = metric ? adminAiUsageSettings?.global?.[metric]?.[period] : null;
       const raw = metric ? Number(totals[metric] || 0) : Number(value || 0);
-      const percent = limit == null || limit <= 0 ? 0 : Math.min(100, Math.round((raw / limit) * 100));
+      const percent = limit == null ? 0 : limit === 0 ? 100 : Math.min(100, Math.round((raw / limit) * 100));
       const thresholds = adminAiUsageSettings?.warningThresholds || [70, 90, 100];
       card.dataset.warning = percent >= thresholds[2] ? 'limit' : percent >= thresholds[1] ? 'critical' : percent >= thresholds[0] ? 'warning' : 'ok';
       card.append(
