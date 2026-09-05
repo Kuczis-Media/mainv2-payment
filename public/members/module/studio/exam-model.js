@@ -8,7 +8,7 @@
 
   const QUESTION_TYPES = Object.freeze([
     'single_choice', 'multiple_choice', 'true_false', 'short_text',
-    'number', 'matching', 'ordering', 'fill_blanks'
+    'number', 'matching', 'ordering', 'fill_blanks', 'open_answer'
   ]);
   const SAFE_EXAM_ID = /^[a-z0-9][a-z0-9-]{0,79}$/;
   const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
@@ -108,7 +108,7 @@
         });
       base.correctOrder = Array.isArray(source.correctOrder) && source.correctOrder.length === base.items.length
         ? source.correctOrder : base.items.map((item) => item.itemId);
-    } else {
+    } else if (type === 'fill_blanks') {
       base.template = text(source.template || 'Uzupełnij: {{luka}}.');
       base.blanks = (Array.isArray(source.blanks) && source.blanks.length ? source.blanks : [{ acceptedAnswers: ['odpowiedź'] }])
         .map((blank, index) => ({
@@ -116,6 +116,11 @@
           acceptedAnswers: list(blank.acceptedAnswers).length ? list(blank.acceptedAnswers) : ['odpowiedź'],
           caseInsensitive: blank.caseInsensitive !== false
         }));
+    } else if (type === 'open_answer') {
+      base.gradingMode = ['ai', 'manual', 'ungraded'].includes(source.gradingMode) ? source.gradingMode : 'ai';
+      base.answerKey = text(source.answerKey || source.modelAnswer, 10_000);
+      base.aiInstruction = text(source.aiInstruction || source.rubric, 2_000);
+      base.multiline = source.multiline !== false;
     }
     return base;
   }
@@ -237,6 +242,9 @@
       if (Array.isArray(question.options) && (question.options.length < 2 || !question.correctAnswerIds.length)) errors.push({ code: 'QUESTION_OPTIONS_REQUIRED', message: `Pytanie ${index + 1} wymaga odpowiedzi i klucza.` });
       if (question.type === 'matching' && question.pairs.length < 2) errors.push({ code: 'QUESTION_PAIRS_REQUIRED', message: `Pytanie ${index + 1} wymaga co najmniej dwóch par.` });
       if (question.type === 'ordering' && question.items.length < 2) errors.push({ code: 'QUESTION_ITEMS_REQUIRED', message: `Pytanie ${index + 1} wymaga co najmniej dwóch elementów.` });
+      if (question.type === 'open_answer' && question.gradingMode === 'ai' && !question.answerKey) {
+        errors.push({ code: 'QUESTION_ANSWER_KEY_REQUIRED', message: `Pytanie ${index + 1}: dodaj klucz odpowiedzi dla oceny AI.` });
+      }
     });
     return { valid: errors.length === 0, errors, exam };
   }

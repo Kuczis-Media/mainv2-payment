@@ -827,6 +827,7 @@
               <button type="button" data-quiz-add="multiple"><b>☑</b><span>Wiele odpowiedzi</span></button>
               <button type="button" data-quiz-add="true_false"><b>✓</b><span>Prawda / fałsz</span></button>
               <button type="button" data-quiz-add="text"><b>T</b><span>Odpowiedź tekstowa</span></button>
+              <button type="button" data-quiz-add="open"><b>Aa</b><span>Pytanie otwarte</span></button>
             </div>
           </aside>
 
@@ -867,6 +868,14 @@
             <div class="quiz-preview" id="quiz-preview"></div>
           </aside>
         </div>
+        <section class="quiz-report-panel" id="quiz-report-panel" aria-labelledby="quiz-report-title">
+          <header>
+            <div><small>Odpowiedzi otwarte</small><h2 id="quiz-report-title">Raport i ręczna punktacja</h2></div>
+            <button class="button button-soft" id="quiz-report-refresh" type="button">↻ Odśwież raport</button>
+          </header>
+          <p id="quiz-report-status" role="status" aria-live="polite">Wczytaj zapisany quiz, aby zobaczyć odpowiedzi wymagające sprawdzenia.</p>
+          <div id="quiz-report-body"></div>
+        </section>
       </section>
 
       <section class="workspace-view presentation-workspace" id="presentation-workspace" data-workspace="presentation" hidden>

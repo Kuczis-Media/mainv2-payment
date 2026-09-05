@@ -104,6 +104,7 @@ button, input, textarea, select { font: inherit; }
 .exam-option > div { display: grid; min-width: 0; gap: 7px; }
 .exam-option > div > .exam-answer-images { width: 100%; }
 .exam-text-answer { width: 100%; padding: 13px 14px; color: var(--exam-text); background: var(--exam-surface); border: 1px solid var(--exam-line); border-radius: 12px; }
+.exam-open-answer { min-height: 48px; line-height: 1.55; resize: vertical; }
 .exam-blank-sentence { margin: 0; font-size: 1rem; line-height: 2.65; }
 .exam-blank-sentence .exam-text-answer { display: inline-block; width: min(220px, 70vw); min-height: 40px; margin: 0 6px; padding-block: 7px; vertical-align: middle; }
 .exam-matching { display: grid; gap: 10px; }
@@ -122,6 +123,7 @@ button, input, textarea, select { font: inherit; }
 .exam-immediate-feedback { margin-top: 14px; padding: 15px; text-align: left; background: var(--exam-surface); border: 1px solid var(--exam-line); border-left-width: 4px; border-radius: 12px; }
 .exam-immediate-feedback.is-correct { border-left-color: var(--exam-primary); }
 .exam-immediate-feedback.is-incorrect { border-left-color: var(--exam-danger); }
+.exam-immediate-feedback.is-deferred { border-left-color: var(--exam-amber); }
 .exam-immediate-feedback > strong { color: var(--exam-text); }
 .exam-immediate-feedback.is-correct > strong { color: var(--exam-primary); }
 .exam-immediate-feedback.is-incorrect > strong { color: var(--exam-danger); }
@@ -133,6 +135,7 @@ button, input, textarea, select { font: inherit; }
 .exam-result-card { padding: clamp(30px, 6vw, 70px); text-align: center; background: var(--exam-surface); border: 1px solid var(--exam-line); border-radius: 28px; box-shadow: var(--exam-shadow); }
 .exam-result-icon { display: grid; width: 70px; height: 70px; margin: 0 auto 18px; place-items: center; color: #fff; background: var(--exam-primary-dark); border-radius: 50%; font-size: 2rem; }
 .exam-result-icon[data-state="failed"] { background: #a93443; }
+.exam-result-icon[data-state="pending"] { background: var(--exam-amber); }
 .exam-result-card > p { color: var(--exam-muted); }
 .exam-result-metrics { display: grid; margin: 28px 0; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
 .exam-result-metrics div { display: grid; padding: 16px; gap: 5px; background: var(--exam-soft); border-radius: 13px; }

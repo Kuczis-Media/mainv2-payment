@@ -33,7 +33,11 @@
     newButton: byId('quiz-new-button'),
     deleteButton: byId('quiz-delete-button'),
     saveButton: byId('quiz-save-draft-button'),
-    publishButton: byId('quiz-publish-button')
+    publishButton: byId('quiz-publish-button'),
+    reportPanel: byId('quiz-report-panel'),
+    reportRefresh: byId('quiz-report-refresh'),
+    reportStatus: byId('quiz-report-status'),
+    reportBody: byId('quiz-report-body')
   };
   if (!elements.workspace) return;
 
@@ -50,7 +54,10 @@
     busy: false,
     libraryPaging: pagedListApi.createState(),
     objectUrls: new Set(),
-    previewImageObserver: null
+    previewImageObserver: null,
+    report: null,
+    attemptReport: null,
+    reportLoading: false
   };
 
   const create = (tag, className, text) => {
@@ -131,7 +138,8 @@
       ['single', 'Jedna odpowiedź'],
       ['multiple', 'Wiele odpowiedzi'],
       ['true_false', 'Prawda / fałsz'],
-      ['text', 'Odpowiedź tekstowa']
+      ['text', 'Odpowiedź tekstowa'],
+      ['open', 'Pytanie otwarte']
     ].forEach(([value, label]) => {
       const option = create('option', '', label);
       option.value = value;
@@ -143,6 +151,41 @@
 
   function renderOptions(question, index) {
     const section = create('div', 'quiz-options-editor');
+    if (question.type === 'open') {
+      const mode = create('select');
+      mode.dataset.quizField = 'gradingMode';
+      [
+        ['ai', 'Uczeń uruchamia sprawdzanie AI'],
+        ['manual', 'Sprawdzający przyznaje punkty'],
+        ['ungraded', 'Bez punktów — nie licz do wyniku']
+      ].forEach(([value, label]) => {
+        const option = create('option', '', label); option.value = value; mode.append(option);
+      });
+      mode.value = question.gradingMode;
+      const answerKey = create('textarea');
+      answerKey.rows = 5; answerKey.maxLength = 10000; answerKey.value = question.answerKey;
+      answerKey.placeholder = 'Wzorcowa odpowiedź i najważniejsze wymagane elementy';
+      answerKey.dataset.quizField = 'answerKey';
+      const instruction = create('textarea');
+      instruction.rows = 3; instruction.maxLength = 2000; instruction.value = question.aiInstruction;
+      instruction.placeholder = 'Opcjonalnie: kryteria punktacji, elementy częściowo poprawne…';
+      instruction.dataset.quizField = 'aiInstruction';
+      const multiline = create('input');
+      multiline.type = 'checkbox'; multiline.checked = question.multiline !== false;
+      multiline.dataset.quizField = 'multiline';
+      section.append(
+        fieldLabel('Sposób oceniania', mode),
+        fieldLabel('Klucz odpowiedzi', answerKey),
+        fieldLabel('Dodatkowe kryteria dla AI', instruction),
+        fieldLabel('Odpowiedź wielowierszowa', multiline),
+        create('small', 'quiz-options-hint', question.gradingMode === 'manual'
+          ? 'Wynik ucznia pojawi się dopiero po przyznaniu punktów w raporcie.'
+          : question.gradingMode === 'ungraded'
+            ? 'Odpowiedź zostanie zachowana, ale pytanie nie zmieni wyniku.'
+            : 'AI uruchomi się dopiero po kliknięciu przez ucznia „Sprawdź odpowiedzi za pomocą AI”. Jedno zbiorcze żądanie ogranicza zużycie funkcji i tokenów.')
+      );
+      return section;
+    }
     if (question.type === 'text') {
       const accepted = create('textarea');
       accepted.rows = 3;
@@ -206,7 +249,7 @@
       heading.append(title, actions);
 
       const controls = create('div', 'quiz-question-controls');
-      const points = create('input'); points.type = 'number'; points.min = '1'; points.max = '100'; points.step = '1'; points.value = String(question.points); points.dataset.quizField = 'points';
+      const points = create('input'); points.type = 'number'; points.min = '0'; points.max = '10000'; points.step = '0.1'; points.value = String(question.points); points.dataset.quizField = 'points';
       const required = create('input'); required.type = 'checkbox'; required.checked = question.required; required.dataset.quizField = 'required';
       controls.append(
         fieldLabel('Rodzaj', questionSelect(question)),
@@ -307,7 +350,12 @@
       image.dataset.quizPreviewImage = question.image.ref;
       fieldset.append(image);
     }
-    if (question.type === 'text') {
+    if (question.type === 'open') {
+      const input = create(question.multiline === false ? 'input' : 'textarea');
+      if (question.multiline !== false) input.rows = 5;
+      input.placeholder = 'Twoja odpowiedź'; input.dataset.previewText = '1';
+      fieldset.append(input);
+    } else if (question.type === 'text') {
       const input = create('input');
       input.type = 'text'; input.placeholder = 'Twoja odpowiedź'; input.dataset.previewText = '1';
       fieldset.append(input);
@@ -358,7 +406,7 @@
     state.quiz.questions.forEach((question) => {
       const fieldset = form.querySelector(`[data-preview-question="${question.questionId}"]`);
       if (!fieldset) return;
-      if (question.type === 'text') answers[question.questionId] = fieldset.querySelector('[data-preview-text]')?.value || '';
+      if (['text', 'open'].includes(question.type)) answers[question.questionId] = fieldset.querySelector('[data-preview-text]')?.value || '';
       else answers[question.questionId] = Array.from(fieldset.querySelectorAll('input:checked')).map((input) => input.value);
     });
     const scored = modelApi.score(state.quiz, answers);
@@ -368,12 +416,22 @@
       if (!feedback) return;
       const question = state.quiz.questions.find((item) => item.questionId === entry.questionId);
       feedback.hidden = false;
-      feedback.className = `quiz-preview-feedback ${entry.correct ? 'is-correct' : 'is-wrong'}`;
-      feedback.textContent = `${entry.correct ? 'Poprawnie' : 'Niepoprawnie'} · ${entry.points}/${entry.maximum} pkt${state.quiz.settings.showFeedback && question?.explanation ? ` — ${question.explanation}` : ''}`;
+      const pending = entry.reviewStatus === 'pending';
+      const ungraded = entry.reviewStatus === 'not_scored';
+      feedback.className = `quiz-preview-feedback ${pending || ungraded ? '' : entry.correct ? 'is-correct' : 'is-wrong'}`;
+      feedback.textContent = pending
+        ? 'Odpowiedź będzie oceniona przez AI lub sprawdzającego po wysłaniu.'
+        : ungraded
+          ? 'Odpowiedź zostanie zapisana, ale nie wpływa na wynik.'
+          : `${entry.correct ? 'Poprawnie' : 'Niepoprawnie'} · ${entry.points}/${entry.maximum} pkt${state.quiz.settings.showFeedback && question?.explanation ? ` — ${question.explanation}` : ''}`;
     });
     resultNode.hidden = false;
-    resultNode.className = `quiz-preview-result ${scored.passed ? 'is-passed' : 'is-failed'}`;
-    resultNode.textContent = `${scored.earned}/${scored.maximum} pkt · ${scored.percent}% · ${scored.passed ? 'zaliczony' : 'jeszcze niezaliczony'}`;
+    resultNode.className = `quiz-preview-result ${scored.passed == null ? '' : scored.passed ? 'is-passed' : 'is-failed'}`;
+    resultNode.textContent = scored.gradingStatus === 'pending_review'
+      ? `Wynik oczekuje na ocenę pytań otwartych · obecnie ${scored.earned}/${scored.maximum} pkt.`
+      : scored.gradingStatus === 'not_scored'
+        ? 'Odpowiedzi zostaną zapisane, ale ten quiz nie ma punktacji.'
+      : `${scored.earned}/${scored.maximum} pkt · ${scored.percent}% · ${scored.passed ? 'zaliczony' : 'jeszcze niezaliczony'}`;
   }
 
   function renderValidation() {
@@ -426,6 +484,150 @@
     renderValidation();
     renderPreview();
     renderLibrary();
+    renderReport();
+  }
+
+  function renderReport() {
+    if (!elements.reportBody) return;
+    elements.reportRefresh.disabled = state.reportLoading || !state.remoteSha || state.remoteId !== state.quiz.quizId;
+    elements.reportRefresh.textContent = state.reportLoading ? 'Pobieranie…' : '↻ Odśwież raport';
+    elements.reportBody.replaceChildren();
+    if (!state.remoteSha || state.remoteId !== state.quiz.quizId) {
+      elements.reportStatus.textContent = 'Zapisz lub wczytaj quiz z GitHuba, aby otworzyć raport.';
+      return;
+    }
+    if (!state.report) {
+      elements.reportStatus.textContent = 'Kliknij „Odśwież raport”, aby pobrać odpowiedzi oczekujące na ocenę.';
+      return;
+    }
+    const metrics = create('div', 'quiz-report-metrics');
+    [
+      ['Uczestnicy', state.report.metrics.participants],
+      ['Próby z pytaniami otwartymi', state.report.metrics.attempts],
+      ['Do sprawdzenia', state.report.metrics.pendingReview],
+      ['Ocenione', state.report.metrics.graded],
+      ['Średnia', `${state.report.metrics.average}%`]
+    ].forEach(([label, value]) => {
+      const item = create('article'); item.append(create('small', '', label), create('strong', '', value)); metrics.append(item);
+    });
+    const list = create('div', 'quiz-report-attempts');
+    state.report.attempts.forEach((attempt) => {
+      const button = create('button'); button.type = 'button'; button.dataset.quizReportAction = 'open';
+      button.dataset.userId = attempt.userId; button.dataset.attemptId = attempt.attemptId;
+      button.append(
+        create('span', '', attempt.profile?.name || attempt.profile?.email || attempt.userId),
+        create('strong', '', attempt.gradingStatus === 'pending_review'
+          ? `Próba ${attempt.number} · oczekuje na ocenę`
+          : attempt.gradingStatus === 'not_scored'
+            ? `Próba ${attempt.number} · bez punktacji`
+            : `Próba ${attempt.number} · ${attempt.scorePercent ?? '—'}%`)
+      );
+      list.append(button);
+    });
+    if (!state.report.attempts.length) list.append(create('p', '', 'Brak prób wymagających raportowania.'));
+    elements.reportStatus.textContent = state.report.truncated ? 'Pokazano najnowsze próby.' : 'Raport jest aktualny.';
+    elements.reportBody.append(metrics, list);
+    if (state.attemptReport) elements.reportBody.append(quizAttemptReport(state.attemptReport));
+  }
+
+  function quizAttemptReport(attempt) {
+    const section = create('section', 'quiz-attempt-report');
+    section.append(create('h3', '', `${attempt.profile?.name || attempt.profile?.email || attempt.userId} · próba ${attempt.number}`));
+    attempt.questions.forEach((question, index) => {
+      const graded = attempt.result?.results?.find((entry) => entry.questionId === question.questionId);
+      const details = document.createElement('details'); details.open = question.type === 'open';
+      const summary = document.createElement('summary');
+      summary.append(
+        create('span', '', `${index + 1}. ${question.prompt}`),
+        create('strong', '', question.type === 'open' && question.gradingMode === 'ungraded'
+          ? 'bez punktów'
+          : `${graded?.points ?? '—'}/${graded?.maxPoints ?? question.points} pkt`)
+      );
+      details.append(summary, create('pre', '', `Odpowiedź ucznia:\n${String(attempt.answers?.[question.questionId] ?? 'Brak odpowiedzi')}`));
+      if (question.type === 'open' && question.gradingMode !== 'ungraded' && Number(question.points) > 0) {
+        const editor = create('div', 'quiz-grade-editor');
+        const points = create('input'); points.type = 'number'; points.min = '0'; points.max = String(graded?.maxPoints ?? question.points); points.step = '0.1'; points.value = graded?.points ?? '';
+        points.dataset.quizGradePoints = question.questionId;
+        const feedback = create('textarea'); feedback.rows = 3; feedback.maxLength = 2000; feedback.value = graded?.feedback || ''; feedback.placeholder = 'Komentarz dla ucznia';
+        feedback.dataset.quizGradeFeedback = question.questionId;
+        editor.append(fieldLabel(`Punkty (maks. ${graded?.maxPoints ?? question.points})`, points), fieldLabel('Komentarz', feedback));
+        details.append(editor);
+      }
+      section.append(details);
+    });
+    if (attempt.questions.some((question) => question.type === 'open' && question.gradingMode !== 'ungraded' && question.points > 0)) {
+      const save = create('button', 'button button-primary', 'Zapisz punkty i przelicz wynik');
+      save.type = 'button'; save.dataset.quizReportAction = 'grade'; section.append(save);
+    }
+    return section;
+  }
+
+  async function loadReport() {
+    if (state.reportLoading || !state.remoteSha) return;
+    state.reportLoading = true; renderReport();
+    try {
+      state.report = await quizAdminRequest({ view: 'overview', repo: state.repositoryId, quiz: state.quiz.quizId });
+      if (state.attemptReport) {
+        const selected = state.report.attempts.find((attempt) => attempt.attemptId === state.attemptReport.attemptId);
+        if (!selected) state.attemptReport = null;
+      }
+    } catch (error) {
+      elements.reportStatus.textContent = error.message;
+    } finally { state.reportLoading = false; renderReport(); }
+  }
+
+  async function openQuizAttempt(userId, attemptId) {
+    try {
+      const payload = await quizAdminRequest({ view: 'attempt', repo: state.repositoryId, quiz: state.quiz.quizId, userId, attemptId });
+      state.attemptReport = payload.attempt; renderReport();
+    } catch (error) { elements.reportStatus.textContent = error.message; }
+  }
+
+  async function gradeQuizAttempt() {
+    const attempt = state.attemptReport;
+    if (!attempt) return;
+    const grades = Array.from(elements.reportBody.querySelectorAll('[data-quiz-grade-points]')).map((control) => ({
+      questionId: control.dataset.quizGradePoints,
+      points: control.value === '' ? NaN : Number(control.value),
+      feedback: elements.reportBody.querySelector(`[data-quiz-grade-feedback="${CSS.escape(control.dataset.quizGradePoints)}"]`)?.value || ''
+    }));
+    if (!grades.length || grades.some((grade) => !Number.isFinite(grade.points))) {
+      elements.reportStatus.textContent = 'Wpisz punkty dla każdego ocenianego pytania.'; return;
+    }
+    try {
+      const payload = await quizAdminMutation({
+        action: 'grade', repositoryId: state.repositoryId, quizId: state.quiz.quizId,
+        targetUserId: attempt.userId, attemptId: attempt.attemptId, revision: attempt.revision,
+        operationId: `quiz-grade:${root.crypto?.randomUUID?.() || Date.now()}`, grades
+      });
+      state.attemptReport = payload.attempt;
+      elements.reportStatus.textContent = payload.warnings?.length
+        ? 'Punkty są zapisane. Synchronizacja części raportu dokończy się później.'
+        : 'Punkty zapisano i wynik ucznia został przeliczony.';
+      await loadReport();
+    } catch (error) { elements.reportStatus.textContent = error.message; }
+  }
+
+  async function quizAdminRequest(params) {
+    const token = await root.ChemAuth.getAccessToken();
+    const url = new URL('/.netlify/functions/admin-quizzes', root.location.origin);
+    Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
+    const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json', Authorization: `Bearer ${token}` } });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || 'Nie udało się pobrać raportu quizu.');
+    return payload;
+  }
+
+  async function quizAdminMutation(body) {
+    const token = await root.ChemAuth.getAccessToken();
+    const response = await fetch('/.netlify/functions/admin-quizzes', {
+      method: 'POST', credentials: 'same-origin', cache: 'no-store',
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || 'Nie udało się zapisać punktów.');
+    return payload;
   }
 
   async function loadLibrary(refresh = false) {
@@ -475,10 +677,14 @@
       const replacement = modelApi.createQuestion({ ...clone(question), type: control.value, questionId: question.questionId });
       state.quiz.questions.splice(state.quiz.questions.indexOf(question), 1, replacement);
     } else if (field === 'prompt') question.prompt = control.value;
-    else if (field === 'points') question.points = Math.max(1, Math.min(100, Math.round(Number(control.value) || 1)));
+    else if (field === 'points') question.points = Math.round(Math.max(0, Math.min(10000, Number(control.value) || 0)) * 100) / 100;
     else if (field === 'required') question.required = control.checked;
     else if (field === 'explanation') question.explanation = control.value;
     else if (field === 'acceptedAnswers') question.acceptedAnswers = control.value.split(/\r?\n/).map((value) => value.trim()).filter(Boolean).slice(0, 20);
+    else if (field === 'gradingMode') question.gradingMode = ['ai', 'manual', 'ungraded'].includes(control.value) ? control.value : 'ai';
+    else if (field === 'answerKey') question.answerKey = control.value.slice(0, 10000);
+    else if (field === 'aiInstruction') question.aiInstruction = control.value.slice(0, 2000);
+    else if (field === 'multiline') question.multiline = control.checked;
     else if (field === 'optionText') {
       const option = question.options.find((entry) => entry.optionId === control.dataset.optionId);
       if (option) option.text = control.value;
@@ -637,6 +843,8 @@
     state.repositoryId = asset.repositoryId || result.repositoryId || state.repositoryId;
     state.remoteId = asset.filename;
     state.remoteSha = asset.sha || result.sha;
+    state.report = null;
+    state.attemptReport = null;
     saveLocal();
     render();
     setStatus('Quiz wczytano z GitHuba.');
@@ -695,6 +903,13 @@
     elements.saveButton.addEventListener('click', () => void save(false));
     elements.publishButton.addEventListener('click', () => void save(true));
     elements.deleteButton.addEventListener('click', () => void removeCurrent());
+    elements.reportRefresh?.addEventListener('click', () => void loadReport());
+    elements.reportBody?.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-quiz-report-action]');
+      if (!button) return;
+      if (button.dataset.quizReportAction === 'open') void openQuizAttempt(button.dataset.userId, button.dataset.attemptId);
+      if (button.dataset.quizReportAction === 'grade') void gradeQuizAttempt();
+    });
   }
 
   async function activate() {

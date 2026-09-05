@@ -15,13 +15,15 @@
     questionList: byId('exam-question-list'), attemptMessage: byId('exam-attempt-message'), previous: byId('exam-previous-button'),
     save: byId('exam-save-button'), next: byId('exam-next-button'), submit: byId('exam-submit-button'),
     resultIcon: byId('exam-result-icon'), resultTitle: byId('exam-result-title'), resultMessage: byId('exam-result-message'),
-    resultMetrics: byId('exam-result-metrics'), resultQuestions: byId('exam-result-questions'), another: byId('exam-another-attempt')
+    resultMetrics: byId('exam-result-metrics'), resultQuestions: byId('exam-result-questions'),
+    refreshResult: byId('exam-refresh-result'), another: byId('exam-another-attempt')
   };
   const state = {
     reference: null,
     definition: null,
     attempts: [],
     attempt: null,
+    resultAttemptId: '',
     preview: false,
     materialId: '',
     serverOffset: 0,
@@ -105,6 +107,7 @@
 
   function bind() {
     elements.startButton.addEventListener('click', beginAttempt);
+    elements.refreshResult.addEventListener('click', refreshFinishedResult);
     elements.another.addEventListener('click', async () => {
       elements.another.disabled = true;
       await reloadAttemptHistory();
@@ -170,7 +173,9 @@
         Object.assign(document.createElement('strong'), { textContent: `Próba ${attempt.number}` }),
         Object.assign(document.createElement('span'), {
           textContent: active ? 'Wznów'
-            : attempt.scorePercent == null ? 'Wynik ukryty'
+            : attempt.gradingStatus === 'pending_review' ? 'Oczekuje na ocenę'
+              : attempt.gradingStatus === 'not_scored' ? 'Bez punktacji'
+              : attempt.scorePercent == null ? 'Wynik ukryty'
               : `${attempt.scorePercent}%${attempt.passed == null ? '' : attempt.passed ? ' · zaliczona' : ' · niezaliczona'}`
         })
       );
@@ -217,6 +222,7 @@
   async function showStoredResult(attemptId) {
     try {
       const payload = await client.result({ ...state.reference, materialId: state.materialId, attemptId, preview: state.preview });
+      state.resultAttemptId = attemptId;
       renderResult(payload.result);
     } catch (error) { setMessage(elements.startMessage, errorMessage(error)); }
   }
@@ -250,6 +256,7 @@
     state.pendingNavigationIndex = null;
     state.deadlineSaveFor = '';
     state.attempt = attempt;
+    state.resultAttemptId = attempt?.attemptId || '';
     if (restoreLocal && attempt?.status === 'active') restorePendingAnswers();
     else if (attempt?.status && attempt.status !== 'active') clearPendingAnswers(attempt.attemptId);
   }
@@ -385,13 +392,18 @@
     }
     if (state.attempt.timedOutQuestionIds.includes(question.questionId)) {
       const warning = tag('Czas na to pytanie minął. Odpowiedź jest zablokowana.', 'p'); warning.className = 'exam-message'; article.append(warning);
-      article.querySelectorAll('input,select,button').forEach((control) => { control.disabled = true; });
+      article.querySelectorAll('input,textarea,select,button').forEach((control) => { control.disabled = true; });
     }
     return article;
   }
 
   function immediateFeedbackView(feedback) {
     const card = document.createElement('div');
+    if (feedback.deferred) {
+      card.className = 'exam-immediate-feedback is-deferred';
+      card.append(tag(feedback.message || 'Odpowiedź zapisana. Ocena pojawi się po zakończeniu.', 'strong'));
+      return card;
+    }
     card.className = `exam-immediate-feedback ${feedback.correct ? 'is-correct' : 'is-incorrect'}`;
     card.append(tag(feedback.correct ? 'Odpowiedź poprawna' : 'Odpowiedź niepoprawna', 'strong'));
     appendResultAnswer(card, 'Prawidłowa odpowiedź', feedback.correctAnswerDisplay);
@@ -417,6 +429,18 @@
     }
     if (question.type === 'short_text' || question.type === 'number') {
       const control = document.createElement('input'); control.className = 'exam-text-answer'; control.type = question.type === 'number' ? 'text' : 'text'; control.inputMode = question.type === 'number' ? 'decimal' : 'text'; control.value = value ?? ''; control.dataset.answerInput = '1'; control.autocomplete = 'off';
+      return control;
+    }
+    if (question.type === 'open_answer') {
+      const control = document.createElement(question.multiline === false ? 'input' : 'textarea');
+      control.className = 'exam-text-answer exam-open-answer';
+      if (control.tagName === 'TEXTAREA') control.rows = 7;
+      else control.type = 'text';
+      control.value = value ?? '';
+      control.dataset.answerInput = '1';
+      control.maxLength = 8000;
+      control.autocomplete = 'off';
+      control.placeholder = 'Wpisz własną odpowiedź…';
       return control;
     }
     if (question.type === 'matching') {
@@ -506,7 +530,7 @@
       const selected = Array.from(article.querySelectorAll('input:checked')).map((input) => input.value);
       return question.type === 'multiple_choice' ? selected : selected[0] || '';
     }
-    if (question.type === 'short_text' || question.type === 'number') return article.querySelector('[data-answer-input]')?.value || '';
+    if (['short_text', 'number', 'open_answer'].includes(question.type)) return article.querySelector('[data-answer-input]')?.value || '';
     if (question.type === 'matching') return Object.fromEntries(Array.from(article.querySelectorAll('[data-match-left]')).map((select) => [select.dataset.matchLeft, select.value]));
     if (question.type === 'ordering') return Array.from(article.querySelectorAll('[data-item-id]')).map((item) => item.dataset.itemId);
     return Object.fromEntries(Array.from(article.querySelectorAll('[data-blank-id]')).map((input) => [input.dataset.blankId, input.value]));
@@ -842,10 +866,17 @@
     if (state.attempt?.status && state.attempt.status !== 'active') clearPendingAnswers(state.attempt.attemptId);
     setView('result');
     const passed = result.passed;
-    elements.resultIcon.textContent = passed === false ? '×' : '✓';
-    elements.resultIcon.dataset.state = passed === false ? 'failed' : 'passed';
-    elements.resultTitle.textContent = passed == null ? 'Wynik zapisany' : passed ? 'Egzamin zaliczony' : 'Egzamin niezaliczony';
-    elements.resultMessage.textContent = state.definition.metadata.afterFinishMessage || 'Twoja próba została bezpiecznie zapisana.';
+    const pending = result.gradingStatus === 'pending_review';
+    const unscored = result.gradingStatus === 'not_scored';
+    elements.refreshResult.hidden = !pending;
+    elements.resultIcon.textContent = pending ? '…' : unscored ? '—' : passed === false ? '×' : '✓';
+    elements.resultIcon.dataset.state = pending || unscored ? 'pending' : passed === false ? 'failed' : 'passed';
+    elements.resultTitle.textContent = pending ? 'Odpowiedzi czekają na ocenę' : passed == null ? 'Wynik zapisany' : passed ? 'Egzamin zaliczony' : 'Egzamin niezaliczony';
+    elements.resultMessage.textContent = unscored
+      ? 'Odpowiedzi zapisano. Ten egzamin nie ma punktowanych pytań i nie wyznacza wyniku.'
+      : pending
+      ? `Sprawdzający musi jeszcze ocenić ${result.pendingQuestionCount || 1} ${result.pendingQuestionCount === 1 ? 'pytanie otwarte' : 'pytań otwartych'}. Po sprawdzeniu kliknij „Odśwież wynik”.`
+      : state.definition.metadata.afterFinishMessage || 'Twoja próba została bezpiecznie zapisana.';
     elements.resultMetrics.replaceChildren();
     if (result.scorePercent != null) metric('Wynik', `${result.scorePercent}%`);
     if (result.points != null) metric('Punkty', `${result.points}/${result.maxPoints}`);
@@ -856,12 +887,38 @@
       const item = document.createElement('article'); item.className = 'exam-result-question';
       item.append(tag(`${index + 1}. ${question.prompt}`, 'strong'));
       if (Object.hasOwn(question, 'correct')) item.append(tag(question.correct ? 'Odpowiedź poprawna' : 'Odpowiedź niepoprawna', 'small'));
+      if (question.reviewStatus === 'pending') item.append(tag('Oczekuje na ocenę sprawdzającego', 'small'));
+      if (question.reviewStatus === 'not_scored') item.append(tag('Pytanie nie wpływa na wynik', 'small'));
+      if (question.points != null && question.maxPoints != null) item.append(tag(`${question.points}/${question.maxPoints} pkt`, 'small'));
       appendResultAnswer(item, 'Twoja odpowiedź', question.answerDisplay);
       appendResultAnswer(item, 'Prawidłowa odpowiedź', question.correctAnswerDisplay);
+      if (question.feedback) item.append(tag(question.feedback, 'small'));
       if (question.explanation) item.append(tag(question.explanation, 'small'));
       elements.resultQuestions.append(item);
     });
     void reloadAttemptHistory();
+  }
+
+  async function refreshFinishedResult() {
+    const attemptId = state.resultAttemptId || state.attempt?.attemptId;
+    if (!attemptId) return;
+    elements.refreshResult.disabled = true;
+    elements.refreshResult.textContent = 'Odświeżanie…';
+    try {
+      const payload = await client.result({
+        ...state.reference,
+        materialId: state.materialId,
+        attemptId,
+        preview: state.preview
+      });
+      if (state.attempt?.attemptId === attemptId) state.attempt.result = payload.result;
+      renderResult(payload.result);
+    } catch (error) {
+      elements.resultMessage.textContent = errorMessage(error);
+    } finally {
+      elements.refreshResult.disabled = false;
+      elements.refreshResult.textContent = 'Odśwież wynik';
+    }
   }
 
   function appendResultAnswer(item, label, values) {
@@ -986,7 +1043,7 @@
   }
 
   function tag(value, tagName = 'span') { const node = document.createElement(tagName); node.textContent = String(value); return node; }
-  function typeLabel(type) { return ({ single_choice: 'Jedna odpowiedź', multiple_choice: 'Wiele odpowiedzi', true_false: 'Prawda / fałsz', short_text: 'Krótka odpowiedź', number: 'Liczba', matching: 'Dopasowywanie', ordering: 'Kolejność', fill_blanks: 'Uzupełnianie luk' })[type] || 'Pytanie'; }
+  function typeLabel(type) { return ({ single_choice: 'Jedna odpowiedź', multiple_choice: 'Wiele odpowiedzi', true_false: 'Prawda / fałsz', short_text: 'Krótka odpowiedź', number: 'Liczba', matching: 'Dopasowywanie', ordering: 'Kolejność', fill_blanks: 'Uzupełnianie luk', open_answer: 'Pytanie otwarte' })[type] || 'Pytanie'; }
   function attemptLimitLabel() { const config = state.definition.attempts; return config.mode === 'unlimited' ? 'Próby bez limitu' : config.mode === 'one' ? 'Jedna próba' : `${config.maxAttempts} prób`; }
   function answerPresent(value) { return Array.isArray(value) ? value.length > 0 : value && typeof value === 'object' ? Object.values(value).some((entry) => String(entry).trim()) : value != null && String(value).trim() !== ''; }
   function operationId() { return `op:${cryptoId()}`; }

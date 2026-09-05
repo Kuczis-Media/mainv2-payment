@@ -93,7 +93,7 @@ test('question model supports all types, safe media and server-side scoring stra
   }));
   const checked = examCommon.validateDefinition(definition({ questions }));
   assert.equal(checked.valid, true, JSON.stringify(checked.errors));
-  assert.equal(checked.definition.questions.length, 8);
+  assert.equal(checked.definition.questions.length, examCommon.QUESTION_TYPES.length);
   assert.deepEqual(checked.definition.questions[0].images[0], { ref: 'photos/question.webp', alt: 'Schemat cząsteczki' });
   assert.equal(examCommon.normalizeImage({ ref: '../secret.png', alt: 'x' }), null);
 
@@ -188,7 +188,11 @@ test('Exam Builder preserves bank-only definitions and every extensible question
   assert.equal(bankOnly.questions.length, 0);
   assert.deepEqual(bankOnly.questionRefs, ['question-from-bank']);
   assert.equal(examStudioModel.validateExam(bankOnly).valid, true);
-  const allTypes = examStudioModel.QUESTION_TYPES.map((type, index) => examStudioModel.createQuestion({ type, questionId: `builder-question-${index}` }));
+  const allTypes = examStudioModel.QUESTION_TYPES.map((type, index) => examStudioModel.createQuestion({
+    type,
+    questionId: `builder-question-${index}`,
+    ...(type === 'open_answer' ? { answerKey: 'Wzorcowa odpowiedź do testu.' } : {})
+  }));
   const serialized = examStudioModel.serializeExam({ examId: 'wszystkie-typy', metadata: { name: 'Wszystkie typy' }, questions: allTypes });
   const parsed = JSON.parse(serialized);
   assert.deepEqual(parsed.questions.map((entry) => entry.type), examStudioModel.QUESTION_TYPES);
@@ -243,6 +247,18 @@ test('Exam Function provides autosave, resume, timer-safe result and blocks IDOR
   assert.deepEqual(bodyOf(opened).attempts, []);
   assert.equal(bodyOf(opened).available.available, true);
   assert.match(bodyOf(opened).serverNow, /^\d{4}-\d{2}-\d{2}T/);
+  currentDefinition = definition({
+    questions: [{
+      questionId: 'open-without-key', type: 'open_answer', prompt: 'Wyjaśnij.',
+      points: 2, gradingMode: 'ai', answerKey: ''
+    }]
+  });
+  const invalidAiExam = await examFunction.handler(eventFor('GET', undefined, {
+    repo: 'default', exam: 'egzamin-testowy'
+  }), studentContext());
+  assert.equal(invalidAiExam.statusCode, 422);
+  assert.equal(bodyOf(invalidAiExam).error, 'EXAM_FILE_INVALID');
+  currentDefinition = definition();
   const forged = await examFunction.handler(eventFor('POST', { action: 'start', repositoryId: 'default', examId: 'egzamin-testowy', materialId: 'exam-card', userId: USER_B }), studentContext());
   assert.equal(forged.statusCode, 400);
   assert.equal(bodyOf(forged).error, 'UNEXPECTED_FIELDS');

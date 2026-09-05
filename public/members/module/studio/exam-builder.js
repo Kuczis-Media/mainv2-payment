@@ -14,7 +14,8 @@
     number: 'Liczba',
     matching: 'Dopasowywanie',
     ordering: 'Ustalanie kolejności',
-    fill_blanks: 'Uzupełnianie luk'
+    fill_blanks: 'Uzupełnianie luk',
+    open_answer: 'Pytanie otwarte'
   };
   const TAB_LABELS = {
     information: 'Informacje', questions: 'Pytania', bank: 'Bank pytań', display: 'Wyświetlanie',
@@ -42,6 +43,7 @@
     saving: false,
     report: null,
     reportLoading: false,
+    aiGrading: false,
     attemptReport: null,
     users: [],
     usersPage: 0,
@@ -663,9 +665,23 @@
     )];
     if (question.type === 'matching') return [field('Pary', textarea('@pairs', question.pairs.map((pair) => `${pair.left} => ${pair.right}`).join('\n'), { rows: 8 }), 'Jedna para w wierszu: lewa => prawa.')];
     if (question.type === 'ordering') return [field('Poprawna kolejność', textarea('@items', question.items.map((item) => item.text).join('\n'), { rows: 8 }), 'Kolejność w edytorze jest kluczem; klient otrzymuje pozycje przetasowane.')];
-    return [
+    if (question.type === 'fill_blanks') return [
       field('Tekst z lukami', textarea('@template', question.template, { rows: 5 }), 'Użyj znaczników {{luka}}.'),
       field('Odpowiedzi do luk', textarea('@blanks', question.blanks.map((blank) => `${blank.blankId} | ${blank.acceptedAnswers.join('; ')}`).join('\n'), { rows: 6 }), 'Format: blankId | odpowiedź; alias')
+    ];
+    return [
+      field('Sposób oceniania', select('@gradingMode', question.gradingMode, [
+        { value: 'ai', label: 'Autor uruchamia ocenę AI w raporcie' },
+        { value: 'manual', label: 'Sprawdzający przyznaje punkty w raporcie' },
+        { value: 'ungraded', label: 'Bez punktów — nie licz do wyniku' }
+      ]), question.gradingMode === 'manual'
+        ? 'Wynik pozostanie oczekujący, aż administrator przyzna punkty.'
+        : question.gradingMode === 'ungraded'
+          ? 'Odpowiedź będzie zapisana, ale pytanie zostanie wyłączone z sumy punktów.'
+          : 'AI nie uruchamia się przy oddaniu egzaminu. Autor może później ocenić oczekujące odpowiedzi jednym przyciskiem w raporcie.'),
+      field('Klucz odpowiedzi', textarea('@answerKey', question.answerKey, { rows: 7, maxLength: 10000 }), 'Wymagany w trybie AI. Opisz poprawną odpowiedź i elementy, które powinny otrzymać część punktów.'),
+      field('Dodatkowe kryteria dla AI', textarea('@aiInstruction', question.aiInstruction, { rows: 4, maxLength: 2000 }), 'Opcjonalna rubryka lub reguły przyznawania punktów.'),
+      checkbox('@multiline', question.multiline, 'Odpowiedź wielowierszowa')
     ];
   }
 
@@ -952,6 +968,7 @@
     const metrics = create('div', 'exam-report-metrics');
     const values = [
       ['Uczestnicy', report.metrics.participants], ['Próby', report.metrics.attempts], ['Średnia', `${report.metrics.average}%`],
+      ['Do sprawdzenia', report.metrics.pendingReview || 0],
       ['Mediana', `${report.metrics.median}%`], ['Min / max', `${report.metrics.minimum}% / ${report.metrics.maximum}%`],
       ['Zdawalność', `${report.metrics.passRate}%`], ['Średni czas', formatDuration(report.metrics.averageTimeSeconds)]
     ];
@@ -963,6 +980,8 @@
     report.attempts.slice(0, 100).forEach((attempt) => {
       const line = create('button'); line.type = 'button'; line.dataset.examAction = 'open-attempt-report'; line.dataset.attemptId = attempt.attemptId; line.dataset.userId = attempt.userId;
       const outcome = attempt.status === 'active' ? 'w trakcie'
+        : attempt.gradingStatus === 'pending_review' ? 'oczekuje na ocenę'
+        : attempt.gradingStatus === 'not_scored' ? 'bez punktacji'
         : attempt.passed == null ? 'brak statusu' : attempt.passed ? 'zaliczona' : 'niezaliczona';
       const score = attempt.scorePercent == null ? 'wynik —' : `${attempt.scorePercent}%`;
       line.append(create('span', '', attempt.profile?.name || attempt.profile?.email || attempt.userId), create('span', '', `Próba ${attempt.number} · ${score} · ${outcome}`));
@@ -1001,6 +1020,7 @@
 
   function attemptReportView(attempt) {
     const report = create('section', 'exam-attempt-report');
+    const finished = ['submitted', 'timed_out'].includes(attempt.status);
     const heading = create('header');
     const copy = create('div');
     copy.append(
@@ -1008,7 +1028,9 @@
       create('h3', '', `${attempt.profile?.name || attempt.profile?.email || attempt.userId} · próba ${attempt.number}`),
       create('p', '', attempt.status === 'active'
         ? `W trakcie · odpowiedzi ${Object.keys(attempt.answers || {}).length}/${attempt.questions?.length || 0}`
-        : `${attempt.result?.scorePercent ?? '—'}% · ${attempt.result?.passed == null ? 'brak statusu' : attempt.result.passed ? 'zaliczona' : 'niezaliczona'} · ${formatDuration(attempt.durationSeconds)}`)
+        : attempt.result?.gradingStatus === 'pending_review'
+          ? `Oczekuje na ocenę · ${attempt.result.pendingQuestionIds?.length || 0} pytań · ${formatDuration(attempt.durationSeconds)}`
+          : `${attempt.result?.scorePercent ?? '—'}% · ${attempt.result?.passed == null ? 'brak statusu' : attempt.result.passed ? 'zaliczona' : 'niezaliczona'} · ${formatDuration(attempt.durationSeconds)}`)
     );
     const reset = create('button', 'button button-danger', 'Resetuj próbę');
     reset.type = 'button'; reset.dataset.examAction = 'reset-attempt'; reset.dataset.userId = attempt.userId; reset.dataset.attemptId = attempt.attemptId;
@@ -1034,10 +1056,24 @@
       const summary = document.createElement('summary');
       summary.append(
         create('span', '', `${index + 1}. ${question.prompt || question.template}`),
-        create('strong', '', `${graded?.points ?? 0}/${graded?.maxPoints ?? question.points} pkt`)
+        create('strong', '', `${graded?.points ?? '—'}/${graded?.maxPoints ?? question.points} pkt`)
       );
       const answer = create('pre', '', `Odpowiedź ucznia:\n${JSON.stringify(attempt.answers?.[question.questionId] ?? null, null, 2)}\n\nKlucz odpowiedzi:\n${JSON.stringify(answerKey(question), null, 2)}`);
       details.append(summary, answer);
+      if (finished && question.type === 'open_answer' && question.gradingMode !== 'ungraded' && Number(question.points) > 0) {
+        const grading = create('div', 'exam-manual-grade');
+        const points = input('', graded?.points ?? '', { type: 'number', min: 0, max: graded?.maxPoints ?? question.points, step: .1 });
+        points.removeAttribute('data-exam-path');
+        points.dataset.examGradePoints = question.questionId;
+        const feedback = textarea('', graded?.feedback || '', { rows: 3, maxLength: 2000, placeholder: 'Krótka informacja zwrotna dla ucznia' });
+        feedback.removeAttribute('data-exam-path');
+        feedback.dataset.examGradeFeedback = question.questionId;
+        grading.append(
+          field(`Przyznane punkty (maks. ${graded?.maxPoints ?? question.points})`, points),
+          field('Komentarz sprawdzającego', feedback)
+        );
+        details.append(grading);
+      }
       if (question.explanation) details.append(create('p', '', question.explanation));
       report.append(details);
     });
@@ -1047,6 +1083,21 @@
     events.append(eventSummary);
     ordinaryEvents.forEach((entry) => events.append(attemptEventRow(entry, false)));
     report.append(events);
+    const pendingAi = finished && (attempt.questions || []).some((question) => {
+      const graded = attempt.result?.questionResults?.find((entry) => entry.questionId === question.questionId);
+      return question.type === 'open_answer' && question.gradingMode === 'ai'
+        && Number(question.points) > 0 && graded?.reviewStatus !== 'graded';
+    });
+    if (pendingAi) {
+      const aiGrade = create('button', 'button button-soft', '✦ Sprawdź oczekujące odpowiedzi za pomocą AI');
+      aiGrade.type = 'button'; aiGrade.dataset.examAction = 'ai-grade-attempt';
+      report.append(aiGrade);
+    }
+    if (finished && (attempt.questions || []).some((question) => question.type === 'open_answer' && question.gradingMode !== 'ungraded' && Number(question.points) > 0)) {
+      const saveGrades = create('button', 'button button-primary', 'Zapisz punkty za pytania otwarte');
+      saveGrades.type = 'button'; saveGrades.dataset.examAction = 'grade-attempt';
+      report.append(saveGrades);
+    }
     return report;
   }
 
@@ -1069,6 +1120,11 @@
   }
 
   function answerKey(question) {
+    if (question.type === 'open_answer') return {
+      gradingMode: question.gradingMode,
+      answerKey: question.answerKey || '',
+      aiInstruction: question.aiInstruction || ''
+    };
     if (question.correctAnswerIds) return question.correctAnswerIds;
     if (question.acceptedAnswers) return question.acceptedAnswers;
     if (question.type === 'number') return { value: question.correctNumber, tolerance: question.tolerance };
@@ -1084,7 +1140,11 @@
     elements.validation.textContent = validation.valid ? 'Definicja jest gotowa do zapisu.' : validation.errors[0].message;
     const inlineQuestions = state.exam.questions.length;
     const refs = state.exam.questionRefs.length;
-    const maxPoints = state.exam.questions.reduce((sum, question) => sum + (state.exam.scoring.equalPoints ? state.exam.scoring.defaultPoints : question.points), 0);
+    const maxPoints = state.exam.questions.reduce((sum, question) => sum + (
+      question.type === 'open_answer' && question.gradingMode === 'ungraded'
+        ? 0
+        : state.exam.scoring.equalPoints ? state.exam.scoring.defaultPoints : question.points
+    ), 0);
     elements.summary.replaceChildren();
     [
       ['Status', state.exam.status === 'published' ? 'Opublikowany' : 'Draft'],
@@ -1174,6 +1234,12 @@
     if (fieldName === 'type') {
       const replacement = modelApi.createQuestion({ ...question, type: raw, questionId: question.questionId });
       collection.splice(collection.indexOf(question), 1, replacement);
+      if (editor.dataset.questionScope === 'bank') state.bankDirty = true;
+      render();
+      return;
+    }
+    if (fieldName === 'gradingMode') {
+      question.gradingMode = ['ai', 'manual', 'ungraded'].includes(raw) ? raw : 'ai';
       if (editor.dataset.questionScope === 'bank') state.bankDirty = true;
       render();
       return;
@@ -1420,6 +1486,8 @@
     else if (action === 'refresh-report') void loadReport();
     else if (action === 'open-attempt-report') void openAttemptReport(button.dataset.userId, button.dataset.attemptId);
     else if (action === 'reset-attempt') void resetAttempt(button.dataset.userId, button.dataset.attemptId);
+    else if (action === 'ai-grade-attempt') void aiGradeAttemptReport(button);
+    else if (action === 'grade-attempt') void gradeAttemptReport();
     else if (action === 'add-audience-user') {
       if (!state.exam.availability.userIds.includes(button.dataset.userId)) state.exam.availability.userIds.push(button.dataset.userId);
       state.exam.availability.audienceMode = 'selected'; render();
@@ -1626,6 +1694,72 @@
     } catch (error) { elements.status.textContent = error.message || 'Nie udało się zresetować próby.'; }
   }
 
+  async function gradeAttemptReport() {
+    const attempt = state.attemptReport;
+    if (!attempt) return;
+    const grades = Array.from(elements.editor.querySelectorAll('[data-exam-grade-points]')).map((control) => ({
+      questionId: control.dataset.examGradePoints,
+      points: control.value === '' ? NaN : Number(control.value),
+      feedback: elements.editor.querySelector(`[data-exam-grade-feedback="${CSS.escape(control.dataset.examGradePoints)}"]`)?.value || ''
+    }));
+    if (!grades.length || grades.some((grade) => !Number.isFinite(grade.points))) {
+      elements.status.textContent = 'Wpisz liczbę punktów dla każdego ocenianego pytania otwartego.';
+      elements.status.classList.add('is-error');
+      return;
+    }
+    try {
+      const payload = await adminGrade({
+        action: 'grade', repositoryId: state.repositoryId, examId: state.exam.examId,
+        targetUserId: attempt.userId, attemptId: attempt.attemptId, revision: attempt.revision,
+        operationId: `admin-grade:${cryptoId()}`, grades
+      });
+      state.attemptReport = payload.attempt;
+      elements.status.classList.remove('is-error');
+      const warning = payload.warnings?.length ? ' Ocena jest zapisana; synchronizacja raportu dokończy się później.' : '';
+      elements.status.textContent = payload.attempt.result?.gradingStatus === 'pending_review'
+        ? `Punkty zapisano. Niektóre odpowiedzi nadal czekają na ocenę.${warning}`
+        : `Punkty zapisano, a wynik ucznia został przeliczony.${warning}`;
+      await loadReport();
+    } catch (error) {
+      elements.status.textContent = error.message || 'Nie udało się zapisać punktów.';
+      elements.status.classList.add('is-error');
+    }
+  }
+
+  async function aiGradeAttemptReport(button) {
+    const attempt = state.attemptReport;
+    if (!attempt || state.aiGrading) return;
+    state.aiGrading = true;
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'AI sprawdza odpowiedzi…';
+    }
+    elements.status.classList.remove('is-error');
+    elements.status.textContent = 'AI ocenia oczekujące odpowiedzi. Zwykle jest to jedno zbiorcze wywołanie…';
+    try {
+      const payload = await adminGrade({
+        action: 'ai-grade', repositoryId: state.repositoryId, examId: state.exam.examId,
+        targetUserId: attempt.userId, attemptId: attempt.attemptId, revision: attempt.revision,
+        operationId: `admin-ai-grade:${cryptoId()}`
+      });
+      state.attemptReport = payload.attempt;
+      const warning = payload.warnings?.length ? ' Ocena jest zapisana; synchronizacja raportu dokończy się później.' : '';
+      elements.status.textContent = payload.attempt.result?.gradingStatus === 'pending_review'
+        ? `AI oceniło ${payload.aiGradedCount || 0} odpowiedzi. Pozostałe można ocenić ręcznie.${warning}`
+        : `AI oceniło odpowiedzi, a wynik ucznia został przeliczony.${warning}`;
+      await loadReport();
+    } catch (error) {
+      elements.status.textContent = error.message || 'Nie udało się uruchomić oceny AI.';
+      elements.status.classList.add('is-error');
+    } finally {
+      state.aiGrading = false;
+      if (button?.isConnected) {
+        button.disabled = false;
+        button.textContent = '✦ Sprawdź oczekujące odpowiedzi za pomocą AI';
+      }
+    }
+  }
+
   async function adminRequest(params) {
     const token = await window.ChemAuth.getAccessToken();
     const url = new URL('/.netlify/functions/admin-exams', window.location.origin);
@@ -1645,6 +1779,29 @@
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || 'Błąd resetowania próby.');
+    return payload;
+  }
+
+  async function adminGrade(body) {
+    const token = await window.ChemAuth.getAccessToken();
+    const response = await fetch('/.netlify/functions/admin-exams', {
+      method: 'POST', credentials: 'same-origin', cache: 'no-store',
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const messages = {
+        AI_NOT_CONFIGURED: 'Najpierw przypisz konfigurację AI do modułu aiGrader w panelu AI / Modele.',
+        AI_RATE_LIMITED: 'Dostawca AI ograniczył ruch. Spróbuj ponownie później albo oceń odpowiedzi ręcznie.',
+        AI_DISABLED_FOR_USER: 'Ocena AI jest wyłączona dla Twojego konta.',
+        AI_GRADING_INVALID_RESPONSE: 'AI nie zwróciło poprawnej punktacji. Spróbuj ponownie albo oceń ręcznie.',
+        NO_AI_ANSWERS_TO_GRADE: 'Nie ma już oczekujących odpowiedzi przeznaczonych do oceny AI.',
+        ATTEMPT_VERSION_CONFLICT: 'Raport został w międzyczasie zmieniony. Otwórz próbę ponownie i ponów ocenę.',
+        ATTEMPT_NOT_FINISHED: 'Ta próba nie została jeszcze zakończona.'
+      };
+      throw new Error(messages[payload.error] || payload.error || 'Błąd zapisywania punktów.');
+    }
     return payload;
   }
 

@@ -101,6 +101,7 @@ body {
 .quiz-player-option:hover { border-color: color-mix(in srgb, var(--quiz-accent) 35%, transparent); }
 .quiz-player-option input { flex: none; width: 18px; height: 18px; margin-top: 1px; accent-color: var(--quiz-accent); }
 .quiz-player-text { width: 100%; padding: 13px 14px; color: inherit; background: var(--chem-surface, #fff); border: 1px solid var(--chem-line, #d7e0e8); border-radius: 12px; font: inherit; }
+.quiz-player-open-answer { min-height: 150px; line-height: 1.55; resize: vertical; }
 .quiz-player-feedback { margin: 2px 0 0; padding: 11px 13px; border-radius: 11px; font-size: .88rem; font-weight: 700; line-height: 1.5; }
 .quiz-player-feedback.is-correct { color: var(--quiz-success); background: color-mix(in srgb, var(--quiz-success) 9%, transparent); }
 .quiz-player-feedback.is-wrong { color: var(--quiz-danger); background: color-mix(in srgb, var(--quiz-danger) 8%, transparent); }
@@ -117,6 +118,7 @@ body {
 .quiz-player-result { display: grid; padding: clamp(22px, 5vw, 38px); grid-template-columns: auto 1fr; align-items: center; gap: 18px; }
 .quiz-player-result > strong { display: grid; width: 82px; height: 82px; place-items: center; color: #fff; background: var(--quiz-accent); border-radius: 50%; font-size: 1.25rem; }
 .quiz-player-result.is-passed > strong { background: var(--quiz-success); }
+.quiz-player-result.is-pending > strong { background: #b7791f; }
 .quiz-player-result h2 { margin: 0 0 6px; }
 .quiz-player-result p { margin: 0; color: var(--chem-muted, #637083); line-height: 1.6; }
 

@@ -1,9 +1,11 @@
 'use strict';
 
+const openAnswerGrader = require('./open-answer-grader.js');
+
 const SAFE_ID = /^[a-z0-9][a-z0-9-]{0,79}$/;
 const SAFE_STABLE_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
 const SAFE_MEDIA_REF = /^(?:photos\/|assets\/shared\/)[A-Za-z0-9][A-Za-z0-9_.-]{0,99}\.(?:png|jpe?g|webp|gif|svg)$/i;
-const QUESTION_TYPES = new Set(['single', 'multiple', 'true_false', 'text']);
+const QUESTION_TYPES = new Set(['single', 'multiple', 'true_false', 'text', 'open']);
 
 function object(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -39,7 +41,7 @@ function validateDefinition(value, expectedQuizId = '') {
     if (!object(question) || !SAFE_STABLE_ID.test(question.questionId || '') || ids.has(question.questionId)) return invalid();
     ids.add(question.questionId);
     if (!QUESTION_TYPES.has(question.type) || !string(question.prompt, 3000, true)) return invalid();
-    if (!Number.isInteger(question.points) || question.points < 1 || question.points > 100 || typeof question.required !== 'boolean') return invalid();
+    if (!Number.isFinite(question.points) || question.points < 0 || question.points > 10_000 || typeof question.required !== 'boolean') return invalid();
     if (!validImage(question.image) || !string(question.explanation, 3000)) return invalid();
     if (!Array.isArray(question.options) || question.options.length > 12 || !Array.isArray(question.acceptedAnswers) || question.acceptedAnswers.length > 20) return invalid();
     if (question.acceptedAnswers.some((answer) => !string(answer, 500, true))) return invalid();
@@ -54,9 +56,81 @@ function validateDefinition(value, expectedQuizId = '') {
     if (question.type === 'multiple' && (question.options.length < 2 || correctCount < 1)) return invalid();
     if (question.type === 'true_false' && (question.options.length !== 2 || correctCount !== 1)) return invalid();
     if (question.type === 'text' && (question.options.length !== 0 || question.acceptedAnswers.length < 1)) return invalid();
-    if (question.type !== 'text' && question.acceptedAnswers.length !== 0) return invalid();
+    if (question.type === 'open') {
+      if (question.options.length !== 0 || question.acceptedAnswers.length !== 0) return invalid();
+      if (!openAnswerGrader.GRADING_MODES.includes(question.gradingMode)) return invalid();
+      if (!string(question.answerKey, 10_000) || !string(question.aiInstruction, 2_000) || typeof question.multiline !== 'boolean') return invalid();
+      if (question.gradingMode === 'ai' && !question.answerKey.trim()) return invalid();
+    }
+    if (!['text', 'open'].includes(question.type) && question.acceptedAnswers.length !== 0) return invalid();
   }
   return { valid: true, errors: [] };
 }
 
-module.exports = { validateDefinition };
+function normalizedAnswer(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('pl');
+}
+
+function objectiveGrade(question, answer) {
+  let correct = false;
+  if (question.type === 'text') {
+    const candidate = normalizedAnswer(answer);
+    correct = Boolean(candidate) && question.acceptedAnswers.some((value) => normalizedAnswer(value) === candidate);
+  } else {
+    const selected = new Set(Array.isArray(answer) ? answer : answer ? [answer] : []);
+    const expected = new Set(question.options.filter((option) => option.correct).map((option) => option.optionId));
+    correct = selected.size === expected.size && [...selected].every((optionId) => expected.has(optionId));
+  }
+  return {
+    questionId: question.questionId,
+    answer: answer ?? null,
+    correct,
+    points: correct ? question.points : 0,
+    maxPoints: question.points,
+    gradingMode: 'automatic',
+    reviewStatus: 'graded',
+    feedback: ''
+  };
+}
+
+function gradeQuiz(definition, answers = {}, gradingOptions = {}) {
+  const results = definition.questions.map((question) => {
+    const answer = answers && Object.hasOwn(answers, question.questionId) ? answers[question.questionId] : null;
+    if (question.type !== 'open') return objectiveGrade(question, answer);
+    return {
+      answer,
+      ...openAnswerGrader.gradeOpenQuestion(question, answer, gradingOptions)
+    };
+  });
+  const pendingQuestionIds = results.filter((entry) => entry.reviewStatus === 'pending').map((entry) => entry.questionId);
+  const earned = results.reduce((sum, entry) => sum + (Number.isFinite(Number(entry.points)) ? Number(entry.points) : 0), 0);
+  const maximum = results.reduce((sum, entry) => sum + (Number(entry.maxPoints) || 0), 0);
+  const percent = pendingQuestionIds.length ? null : maximum ? Math.round((earned / maximum) * 10_000) / 100 : null;
+  return {
+    earned: Math.round(earned * 100) / 100,
+    maximum: Math.round(maximum * 100) / 100,
+    percent,
+    passed: percent == null ? null : percent >= definition.settings.passingScore,
+    gradingStatus: pendingQuestionIds.length ? 'pending_review' : maximum > 0 ? 'graded' : 'not_scored',
+    pendingQuestionIds,
+    results
+  };
+}
+
+function publicDefinition(definition) {
+  const result = structuredClone(definition);
+  result.questions.forEach((question) => {
+    if (question.type !== 'open') return;
+    delete question.answerKey;
+    delete question.aiInstruction;
+    delete question.explanation;
+  });
+  return result;
+}
+
+module.exports = {
+  gradeQuiz,
+  objectiveGrade,
+  publicDefinition,
+  validateDefinition
+};

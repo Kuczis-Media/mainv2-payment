@@ -8,7 +8,7 @@
   const SAFE_ID = /^[a-z0-9][a-z0-9-]{0,79}$/;
   const SAFE_STABLE_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
   const SAFE_MEDIA_REF = /^(?:photos\/|assets\/shared\/)[A-Za-z0-9][A-Za-z0-9_.-]{0,99}\.(?:png|jpe?g|webp|gif|svg)$/i;
-  const QUESTION_TYPES = Object.freeze(['single', 'multiple', 'true_false', 'text']);
+  const QUESTION_TYPES = Object.freeze(['single', 'multiple', 'true_false', 'text', 'open']);
   let sequence = 0;
 
   function id(prefix) {
@@ -90,15 +90,22 @@
       .map((answer) => line(answer, 500))
       .filter(Boolean)
       .slice(0, 20);
+    const gradingMode = ['ai', 'manual', 'ungraded'].includes(seed.gradingMode) ? seed.gradingMode : 'ai';
     return {
       questionId: stable(seed.questionId, 'question'),
       type,
       prompt: text(seed.prompt, 3000) || 'Wpisz treść pytania.',
-      points: Math.round(clamp(seed.points, 1, 1, 100)),
+      points: Math.round(clamp(seed.points, 1, 0, 10_000) * 100) / 100,
       required: seed.required !== false,
       image: image(seed.image),
       options,
       acceptedAnswers: type === 'text' ? (acceptedAnswers.length ? acceptedAnswers : ['Poprawna odpowiedź']) : [],
+      ...(type === 'open' ? {
+        gradingMode,
+        answerKey: text(seed.answerKey || seed.modelAnswer, 10_000),
+        aiInstruction: text(seed.aiInstruction || seed.rubric, 2_000),
+        multiline: seed.multiline !== false
+      } : {}),
       explanation: text(seed.explanation, 3000)
     };
   }
@@ -161,6 +168,9 @@
       if (question.type === 'text' && !question.acceptedAnswers.length) {
         errors.push({ code: 'QUIZ_TEXT_ANSWER_REQUIRED', message: `${label}: podaj co najmniej jedną akceptowaną odpowiedź.` });
       }
+      if (question.type === 'open' && question.gradingMode === 'ai' && !question.answerKey) {
+        errors.push({ code: 'QUIZ_OPEN_ANSWER_KEY_REQUIRED', message: `${label}: dodaj klucz odpowiedzi dla oceny AI.` });
+      }
     });
     return { valid: errors.length === 0, errors, quiz };
   }
@@ -196,9 +206,17 @@
   function score(value, rawAnswers = {}) {
     const quiz = createQuiz(value);
     let earned = 0;
-    const maximum = quiz.questions.reduce((sum, question) => sum + question.points, 0);
+    const maximum = quiz.questions.reduce((sum, question) => (
+      sum + (question.type === 'open' && question.gradingMode === 'ungraded' ? 0 : question.points)
+    ), 0);
     const results = quiz.questions.map((question) => {
       const raw = rawAnswers[question.questionId];
+      if (question.type === 'open') {
+        if (question.gradingMode === 'ungraded') {
+          return { questionId: question.questionId, correct: null, points: 0, maximum: 0, reviewStatus: 'not_scored' };
+        }
+        return { questionId: question.questionId, correct: null, points: null, maximum: question.points, reviewStatus: 'pending' };
+      }
       let correct = false;
       if (question.type === 'text') {
         const answer = normalizeAnswer(raw);
@@ -209,10 +227,18 @@
         correct = selected.size === expected.size && [...selected].every((optionId) => expected.has(optionId));
       }
       if (correct) earned += question.points;
-      return { questionId: question.questionId, correct, points: correct ? question.points : 0, maximum: question.points };
+      return { questionId: question.questionId, correct, points: correct ? question.points : 0, maximum: question.points, reviewStatus: 'graded' };
     });
-    const percent = maximum ? Math.round((earned / maximum) * 100) : 0;
-    return { earned, maximum, percent, passed: percent >= quiz.settings.passingScore, results };
+    const pending = results.some((result) => result.reviewStatus === 'pending');
+    const percent = pending ? null : maximum ? Math.round((earned / maximum) * 100) : null;
+    return {
+      earned,
+      maximum,
+      percent,
+      passed: percent == null ? null : percent >= quiz.settings.passingScore,
+      gradingStatus: pending ? 'pending_review' : maximum > 0 ? 'graded' : 'not_scored',
+      results
+    };
   }
 
   return Object.freeze({

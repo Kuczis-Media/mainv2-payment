@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const openAnswerGrader = require('./open-answer-grader.js');
 
 const EXAM_VERSION = 1;
 const QUESTION_TYPES = Object.freeze([
@@ -11,7 +12,8 @@ const QUESTION_TYPES = Object.freeze([
   'number',
   'matching',
   'ordering',
-  'fill_blanks'
+  'fill_blanks',
+  'open_answer'
 ]);
 const QUESTION_TYPE_SET = new Set(QUESTION_TYPES);
 const SAFE_EXAM_ID = /^[a-z0-9][a-z0-9-]{0,79}$/;
@@ -84,6 +86,8 @@ function canonicalQuestionType(value) {
     multiple: 'multiple_choice',
     boolean: 'true_false',
     text: 'short_text',
+    open: 'open_answer',
+    essay: 'open_answer',
     numeric: 'number',
     blanks: 'fill_blanks'
   };
@@ -190,6 +194,8 @@ function normalizeQuestion(value, index = 0) {
         };
       })
       .slice(0, 50);
+  } else if (type === 'open_answer') {
+    Object.assign(question, openAnswerGrader.normalizeOpenFields(source));
   }
   return question;
 }
@@ -326,6 +332,9 @@ function validateQuestion(question, path, errors) {
   if (question.type === 'fill_blanks' && (!question.template || !question.blanks.length)) {
     errors.push({ code: 'QUESTION_BLANKS_REQUIRED', path });
   }
+  if (question.type === 'open_answer' && question.gradingMode === 'ai' && !question.answerKey) {
+    errors.push({ code: 'QUESTION_ANSWER_KEY_REQUIRED', path });
+  }
 }
 
 function validateDefinition(value, expectedExamId = '') {
@@ -438,7 +447,9 @@ function selectAttemptQuestions(definitionInput, bank, options = {}) {
   const ordered = definition.randomization.questionOrder ? shuffle(selected, options.randomInt) : selected;
   return ordered.map((question) => {
     const snapshot = structuredClone(question);
-    if (definition.scoring.equalPoints) snapshot.points = definition.scoring.defaultPoints;
+    if (definition.scoring.equalPoints && !(snapshot.type === 'open_answer' && snapshot.gradingMode === 'ungraded')) {
+      snapshot.points = definition.scoring.defaultPoints;
+    }
     if (definition.scoring.negativePointsEnabled && !snapshot.negativePoints) {
       snapshot.negativePoints = definition.scoring.defaultNegativePoints;
     }
@@ -520,6 +531,10 @@ function safeQuestion(question) {
     common.template = question.template;
     common.blanks = question.blanks.map((blank) => ({ blankId: blank.blankId }));
   }
+  if (question.type === 'open_answer') {
+    common.gradingMode = question.gradingMode;
+    common.multiline = question.multiline !== false;
+  }
   return common;
 }
 
@@ -537,10 +552,13 @@ function answerIsPresent(value) {
   return value !== null && value !== undefined && String(value).trim() !== '';
 }
 
-function gradeQuestion(question, rawAnswer, scoringInput = {}) {
+function gradeQuestion(question, rawAnswer, scoringInput = {}, gradingOptions = {}) {
   const scoring = normalizeDefinition({ examId: 'grade', metadata: { name: 'grade' }, questions: [], scoring: scoringInput }).scoring;
   const maxPoints = clamp(question.points, 0, 10_000, scoring.defaultPoints);
   const negative = scoring.negativePointsEnabled ? clamp(question.negativePoints, 0, 10_000, scoring.defaultNegativePoints) : 0;
+  if (question.type === 'open_answer') {
+    return openAnswerGrader.gradeOpenQuestion(question, rawAnswer, gradingOptions);
+  }
   let ratio = 0;
   let correct = false;
   if (['single_choice', 'true_false'].includes(question.type)) {
@@ -597,27 +615,40 @@ function gradeQuestion(question, rawAnswer, scoringInput = {}) {
     correct,
     points: Math.round(points * 10000) / 10000,
     maxPoints,
-    ratio: Math.round(ratio * 10000) / 10000
+    ratio: Math.round(ratio * 10000) / 10000,
+    gradingMode: 'automatic',
+    reviewStatus: 'graded',
+    feedback: ''
   };
 }
 
-function gradeAttempt(attempt, definitionInput) {
+function gradeAttempt(attempt, definitionInput, gradingOptions = {}) {
   const definition = normalizeDefinition(definitionInput, definitionInput?.examId);
   const answers = plainObject(attempt.answers) ? attempt.answers : {};
-  const questionResults = attempt.questions.map((question) => ({
-    questionId: question.questionId,
-    answer: answers[question.questionId] ?? null,
-    ...gradeQuestion(question, answers[question.questionId], definition.scoring)
-  }));
-  const points = questionResults.reduce((sum, result) => sum + result.points, 0);
+  const questionResults = attempt.questions.map((question) => {
+    const answer = Object.hasOwn(answers, question.questionId) ? answers[question.questionId] : null;
+    return {
+      questionId: question.questionId,
+      answer,
+      ...gradeQuestion(question, answer, definition.scoring, gradingOptions)
+    };
+  });
+  const pendingQuestionIds = questionResults
+    .filter((result) => result.reviewStatus === 'pending')
+    .map((result) => result.questionId);
+  const points = questionResults.reduce((sum, result) => sum + (Number.isFinite(Number(result.points)) ? Number(result.points) : 0), 0);
   const maxPoints = questionResults.reduce((sum, result) => sum + result.maxPoints, 0);
-  const scorePercent = maxPoints > 0 ? clamp((points / maxPoints) * 100, 0, 100, 0) : 0;
+  const scorePercent = pendingQuestionIds.length
+    ? null
+    : maxPoints > 0 ? clamp((points / maxPoints) * 100, 0, 100, 0) : null;
   return {
     questionResults,
     points: Math.round(points * 10000) / 10000,
     maxPoints: Math.round(maxPoints * 10000) / 10000,
-    scorePercent: Math.round(scorePercent * 100) / 100,
-    passed: scorePercent >= definition.metadata.passThreshold
+    scorePercent: scorePercent == null ? null : Math.round(scorePercent * 100) / 100,
+    passed: scorePercent == null ? null : scorePercent >= definition.metadata.passThreshold,
+    gradingStatus: pendingQuestionIds.length ? 'pending_review' : maxPoints > 0 ? 'graded' : 'not_scored',
+    pendingQuestionIds
   };
 }
 
@@ -645,7 +676,9 @@ function resultForStudent(attempt, definitionInput) {
     attemptId: attempt.attemptId,
     status: attempt.status,
     submittedAt: attempt.submittedAt || null,
-    timedOut: attempt.status === 'timed_out'
+    timedOut: attempt.status === 'timed_out',
+    gradingStatus: attempt.result?.gradingStatus || 'graded',
+    pendingQuestionCount: Array.isArray(attempt.result?.pendingQuestionIds) ? attempt.result.pendingQuestionIds.length : 0
   };
   if (!visibility.studentResultVisible) return result;
   if (visibility.scorePercent) result.scorePercent = attempt.result?.scorePercent ?? null;
@@ -662,13 +695,24 @@ function resultForStudent(attempt, definitionInput) {
       const graded = byId.get(question.questionId) || {};
       const item = { questionId: question.questionId, prompt: question.prompt, type: question.type };
       if (visibility.ownAnswers) {
-        item.answer = attempt.answers?.[question.questionId] ?? null;
+        item.answer = attempt.answers && Object.hasOwn(attempt.answers, question.questionId)
+          ? attempt.answers[question.questionId] : null;
         item.answerDisplay = displayAnswer(question, item.answer);
       }
-      if (answerFeedback) item.correct = graded.correct === true;
-      if (visibility.explanations) item.explanation = question.explanation || '';
+      if (answerFeedback && graded.correct != null) item.correct = graded.correct === true;
+      if (question.type === 'open_answer') {
+        item.reviewStatus = graded.reviewStatus || 'pending';
+        if (visibility.points) {
+          item.points = graded.points ?? null;
+          item.maxPoints = graded.maxPoints ?? openAnswerGrader.effectiveMaxPoints(question);
+        }
+        if (answerFeedback && graded.feedback) item.feedback = graded.feedback;
+      }
+      if (visibility.explanations && !(question.type === 'open_answer' && graded.reviewStatus === 'pending')) {
+        item.explanation = question.explanation || '';
+      }
       if (answerFeedback) {
-        item.correctAnswerDisplay = displayCorrectAnswer(question);
+        if (question.type !== 'open_answer') item.correctAnswerDisplay = displayCorrectAnswer(question);
         if (question.correctAnswerIds) item.correctAnswerIds = question.correctAnswerIds;
         if (question.acceptedAnswers) item.acceptedAnswers = question.acceptedAnswers;
         if (question.type === 'number') item.correctNumber = question.correctNumber;
@@ -685,6 +729,15 @@ function resultForStudent(attempt, definitionInput) {
 function immediateQuestionFeedback(question, rawAnswer, definitionInput) {
   const definition = normalizeDefinition(definitionInput, definitionInput?.examId);
   if (definition.resultVisibility.feedbackMode !== 'immediate') return null;
+  if (question.type === 'open_answer') {
+    return {
+      questionId: question.questionId,
+      deferred: true,
+      message: question.gradingMode === 'ungraded'
+        ? 'Odpowiedź zapisana. To pytanie nie wpływa na wynik.'
+        : 'Odpowiedź zapisana. Ocena pojawi się po zakończeniu egzaminu.'
+    };
+  }
   const graded = gradeQuestion(question, rawAnswer, definition.scoring);
   return {
     questionId: question.questionId,

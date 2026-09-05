@@ -7,13 +7,14 @@ const {
   gradeAttempt,
   immediateQuestionFeedback,
   normalizeDefinition,
-  normalizeQuestionBank,
   plainObject,
   publicMetadata,
   resolveExamQuestions,
   resultForStudent,
   safeQuestion,
   selectAttemptQuestions,
+  validateDefinition,
+  validateQuestionBank,
   SAFE_EXAM_ID,
   SAFE_REPOSITORY_ID
 } = require('../exam-common.js');
@@ -121,6 +122,9 @@ async function handleGet(event, auth) {
   if (!entry) return json({ error: 'ATTEMPT_NOT_FOUND' }, 404);
   let attempt = entry.value;
   attempt = await finalizeExpiredAttempt(store, attempt, profile);
+  if (!preview && attemptIndexNeedsSync(index, attempt)) {
+    await syncAttemptState(store, attempt, auth);
+  }
   if (action === 'result') {
     if (attempt.status === 'active') return json({ error: 'ATTEMPT_ACTIVE' }, 409);
     return json({ result: resultForStudent(attempt, attempt.definitionSnapshot), serverNow: new Date().toISOString() });
@@ -205,15 +209,18 @@ async function loadDefinition(repositoryId, examId) {
   let parsed;
   try { parsed = JSON.parse(asset.content); }
   catch { throw new contentRepository.ContentRepositoryError('EXAM_FILE_INVALID', 422); }
-  const definition = normalizeDefinition(parsed, examId);
-  if (!definition.examId || definition.examId !== examId) {
+  const validated = validateDefinition(parsed, examId);
+  if (!validated.valid) {
     throw new contentRepository.ContentRepositoryError('EXAM_FILE_INVALID', 422);
   }
+  const definition = validated.definition;
   let bank = { version: 1, questions: [] };
   if (definition.questionRefs.length) {
     try {
       const bankAsset = await contentRepository.readAsset('question_bank', 'question-bank.json', { repositoryId });
-      bank = normalizeQuestionBank(JSON.parse(bankAsset.content));
+      const validatedBank = validateQuestionBank(JSON.parse(bankAsset.content));
+      if (!validatedBank.valid) throw new contentRepository.ContentRepositoryError('EXAM_FILE_INVALID', 422);
+      bank = validatedBank.bank;
     } catch (error) {
       if (!(error instanceof contentRepository.ContentRepositoryError) || error.code !== 'CONTENT_FILE_NOT_FOUND') throw error;
     }
@@ -287,7 +294,7 @@ async function startAttempt(store, loaded, reference, body, auth) {
     definitionSha: loaded.sha,
     definitionSnapshot: loaded.definition,
     questions,
-    answers: {},
+    answers: Object.create(null),
     confirmedQuestionIds: [],
     flags: [],
     currentIndex: 0,
@@ -389,7 +396,7 @@ async function confirmAnswer(store, attempt, body, auth) {
   await syncAttemptState(store, saved, auth);
   return json({
     attempt: safeAttempt(saved),
-    feedback: immediateQuestionFeedback(saved.questions[index], saved.answers[questionId], saved.definitionSnapshot),
+    feedback: immediateQuestionFeedback(saved.questions[index], answerFor(saved.answers, questionId), saved.definitionSnapshot),
     confirmed: true,
     duplicate: Boolean(outcome.result?.duplicate)
   });
@@ -418,7 +425,7 @@ async function navigate(store, attempt, body, auth) {
     const advancing = targetIndex > draft.currentIndex;
     const crossed = advancing ? draft.questions.slice(draft.currentIndex, targetIndex) : [];
     const unanswered = crossed.filter((question) => (
-      !answerIsPresent(draft.answers[question.questionId]) && !questionTimedOut(draft, question.questionId)
+      !answerIsPresent(answerFor(draft.answers, question.questionId)) && !questionTimedOut(draft, question.questionId)
     ));
     if (advancing && navigation.requireAnswerBeforeNext && unanswered.length) return { error: 'ANSWER_REQUIRED' };
     if (advancing && !navigation.allowSkip && unanswered.length) return { error: 'SKIPPING_DISABLED' };
@@ -468,7 +475,7 @@ async function submit(store, attempt, body, auth, reason) {
   const outcome = await updateAttempt(store, operationInput(attempt, body), (draft) => {
     const applied = applyAnswerBatch(draft, body.answers);
     if (applied.error) return applied;
-    const missing = draft.questions.filter((question) => !answerIsPresent(draft.answers[question.questionId]));
+    const missing = draft.questions.filter((question) => !answerIsPresent(answerFor(draft.answers, question.questionId)));
     if (!body.force && draft.definitionSnapshot.navigation.requireAnswerBeforeNext && missing.length) {
       return { error: 'UNANSWERED_QUESTIONS', count: missing.length };
     }
@@ -477,17 +484,21 @@ async function submit(store, attempt, body, auth, reason) {
   });
   if (outcome.result?.error) return updateError(outcome.result);
   const saved = outcome.result?.attempt;
-  await syncAttemptState(store, saved, auth);
-  return json({ result: resultForStudent(saved, saved.definitionSnapshot), attempt: safeAttempt(saved) });
+  const warnings = await syncAttemptState(store, saved, auth);
+  return json({
+    result: resultForStudent(saved, saved.definitionSnapshot),
+    attempt: safeAttempt(saved),
+    ...(warnings.length ? { warnings } : {})
+  });
 }
 
-function finishAttempt(attempt, status, reason) {
+function finishAttempt(attempt, status, reason, gradingOptions = {}) {
   if (attempt.status !== 'active') return attempt;
   const now = new Date().toISOString();
   attempt.status = status;
   attempt.submittedAt = now;
   attempt.durationSeconds = Math.max(0, Math.floor((Date.parse(now) - Date.parse(attempt.startedAt)) / 1000));
-  attempt.result = gradeAttempt(attempt, attempt.definitionSnapshot);
+  attempt.result = gradeAttempt(attempt, attempt.definitionSnapshot, gradingOptions);
   addEvent(attempt, reason === 'timeout' ? 'timeout' : 'submit', { reason });
   return attempt;
 }
@@ -508,8 +519,10 @@ async function finalizeExpiredAttempt(store, attempt, profile) {
   });
   const saved = outcome.result?.attempt || attempt;
   if (saved.status !== 'active') {
-    if (!saved.preview) await syncAttemptIndexes(store, saved, profile || saved.profile);
-    if (!saved.preview) await progressForAttempt(store, saved, { userId: saved.userId, user: { email: saved.profile?.email, user_metadata: { full_name: saved.profile?.name } } });
+    await syncAttemptState(store, saved, {
+      userId: saved.userId,
+      user: { email: saved.profile?.email, user_metadata: { full_name: (profile || saved.profile)?.name } }
+    });
   }
   return saved;
 }
@@ -533,9 +546,30 @@ async function appendAttemptEvent(store, attempt, auth, type, details, expectedR
 }
 
 async function syncAttemptState(store, attempt, auth) {
-  if (attempt.preview) return;
-  await syncAttemptIndexes(store, attempt, attempt.profile);
-  await progressForAttempt(store, attempt, auth);
+  if (attempt.preview) return [];
+  const warnings = [];
+  try {
+    await syncAttemptIndexes(store, attempt, attempt.profile);
+  } catch (error) {
+    console.error('exam attempt index sync failed', error?.name || 'Error');
+    warnings.push('INDEX_SYNC_PENDING');
+    return warnings;
+  }
+  try {
+    await progressForAttempt(store, attempt, auth);
+  } catch (error) {
+    console.error('exam attempt progress sync failed', error?.name || 'Error');
+    warnings.push('PROGRESS_SYNC_PENDING');
+  }
+  return warnings;
+}
+
+function attemptIndexNeedsSync(index, attempt) {
+  const summary = (index?.attempts || []).find((entry) => entry.attemptId === attempt.attemptId);
+  return !summary
+    || summary.status !== attempt.status
+    || summary.lastActivityAt !== attempt.lastActivityAt
+    || summary.gradingStatus !== (attempt.result?.gradingStatus || (attempt.status === 'active' ? 'active' : 'graded'));
 }
 
 async function progressForAttempt(store, attempt, auth) {
@@ -561,7 +595,8 @@ async function progressForAttempt(store, attempt, auth) {
       studentResultVisible: attempt.definitionSnapshot.resultVisibility.studentResultVisible,
       scorePercent: attempt.status === 'active' ? undefined : selected.scorePercent,
       passed: attempt.status === 'active' ? undefined : selected.passed,
-      durationSeconds: attempt.durationSeconds
+      durationSeconds: attempt.durationSeconds,
+      gradingStatus: attempt.status === 'active' ? undefined : attempt.result?.gradingStatus
     }
   });
 }
@@ -625,7 +660,7 @@ function visibleStartIndex(display, targetIndex) {
 
 function selectedAttemptResult(attempts, definition) {
   const finished = (Array.isArray(attempts) ? attempts : [])
-    .filter((entry) => !entry.resetAt && ['submitted', 'timed_out'].includes(entry.status) && Number.isFinite(Number(entry.scorePercent)))
+    .filter((entry) => !entry.resetAt && ['submitted', 'timed_out'].includes(entry.status) && hasNumericScore(entry.scorePercent))
     .sort((left, right) => Date.parse(left.submittedAt || 0) - Date.parse(right.submittedAt || 0));
   if (!finished.length) return { scorePercent: null, passed: null };
   const strategy = definition.attempts.resultStrategy;
@@ -649,7 +684,9 @@ function studentAttemptSummaries(attempts, definition) {
         startedAt: attempt.startedAt,
         submittedAt: attempt.submittedAt,
         answeredCount: attempt.answeredCount,
-        totalQuestions: attempt.totalQuestions
+        totalQuestions: attempt.totalQuestions,
+        gradingStatus: attempt.gradingStatus || (attempt.scorePercent == null && attempt.status !== 'active' ? 'pending_review' : 'graded'),
+        pendingQuestionCount: Number(attempt.pendingQuestionCount) || 0
       };
       if (definition.resultVisibility.studentResultVisible) {
         if (definition.resultVisibility.scorePercent) summary.scorePercent = attempt.scorePercent;
@@ -702,11 +739,20 @@ function sanitizeAnswer(question, raw) {
     return [...new Set((Array.isArray(raw) ? raw : []).map((value) => String(value).slice(0, 128)))].slice(0, 100);
   }
   if (question.type === 'short_text' || question.type === 'number') return String(raw ?? '').slice(0, 10_000);
+  if (question.type === 'open_answer') return String(raw ?? '').replace(/\0/g, '').slice(0, 8_000);
   if (question.type === 'matching' || question.type === 'fill_blanks') {
     if (!plainObject(raw)) return {};
     return Object.fromEntries(Object.entries(raw).slice(0, 100).map(([key, value]) => [String(key).slice(0, 128), String(value ?? '').slice(0, 2_000)]));
   }
   return null;
+}
+
+function hasNumericScore(value) {
+  return value !== null && value !== '' && Number.isFinite(Number(value));
+}
+
+function answerFor(answers, questionId) {
+  return answers && Object.hasOwn(answers, questionId) ? answers[questionId] : null;
 }
 
 function applyAnswerBatch(attempt, rawAnswers) {
@@ -856,6 +902,7 @@ function emptyOptions() {
 }
 
 exports._test = {
+  attemptIndexNeedsSync,
   definitionAccess,
   finalizeExpiredAttempt,
   loadDefinition,

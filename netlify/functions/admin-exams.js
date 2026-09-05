@@ -1,12 +1,14 @@
 'use strict';
 
 const {
+  gradeAttempt,
   normalizeDefinition,
   SAFE_EXAM_ID,
   SAFE_REPOSITORY_ID
 } = require('../exam-common.js');
 const contentRepository = require('../content-repository.js');
 const examStorage = require('../exam-storage.js');
+const openAnswerGrader = require('../open-answer-grader.js');
 const progressStorage = require('../progress-storage.js');
 const { resetExamProgress, setProgressStoreFactory, updateExamProgress } = require('../exam-progress.js');
 const {
@@ -20,17 +22,19 @@ const {
 exports.handler = async function adminExamsHandler(event = {}, context = {}) {
   const method = String(event.httpMethod || '').toUpperCase();
   if (method === 'OPTIONS') return emptyOptions();
-  if (!['GET', 'DELETE'].includes(method)) {
-    return json({ error: 'METHOD_NOT_ALLOWED' }, 405, { Allow: 'GET, DELETE, OPTIONS' });
+  if (!['GET', 'POST', 'DELETE'].includes(method)) {
+    return json({ error: 'METHOD_NOT_ALLOWED' }, 405, { Allow: 'GET, POST, DELETE, OPTIONS' });
   }
-  if (method === 'DELETE') {
+  if (['POST', 'DELETE'].includes(method)) {
     const guard = mutationGuard(event, { maxBodyBytes: 32 * 1024 });
     if (!guard.ok) return responseForFailure(guard);
   }
   const auth = await requireAdmin(event, context);
   if (!auth.ok) return responseForFailure(auth);
   try {
-    return method === 'GET' ? await handleGet(event) : await handleDelete(event, auth);
+    if (method === 'GET') return await handleGet(event);
+    if (method === 'POST') return await handlePost(event, auth);
+    return await handleDelete(event, auth);
   } catch (error) {
     console.error('admin-exams failed', error?.name || 'Error');
     if (error instanceof contentRepository.ContentRepositoryError) return json({ error: error.code }, error.status);
@@ -85,6 +89,248 @@ async function handleGet(event) {
   });
 }
 
+async function handlePost(event, auth) {
+  const parsed = parseJsonBody(event);
+  if (!parsed.ok) return responseForFailure(parsed);
+  const body = parsed.value;
+  const allowed = new Set([
+    'action', 'repositoryId', 'examId', 'targetUserId', 'attemptId',
+    'operationId', 'revision', 'grades'
+  ]);
+  if (Object.keys(body).some((key) => !allowed.has(key))) return json({ error: 'UNEXPECTED_FIELDS' }, 400);
+  if (!['grade', 'ai-grade'].includes(body.action)) return json({ error: 'INVALID_EXAM_ACTION' }, 400);
+  const reference = validateReference(body);
+  if (!reference.ok) return json({ error: reference.error }, 400);
+  if (!safeIdentityId(body.targetUserId) || !safeAttemptId(body.attemptId)) {
+    return json({ error: 'INVALID_ATTEMPT_REFERENCE' }, 400);
+  }
+  const store = examStorage.getExamStore();
+  let outcome;
+  let aiEvaluation = null;
+  if (body.action === 'ai-grade') {
+    const operationId = safeOperationId(body.operationId) || `admin-ai-grade:${Date.now()}`;
+    const expectedRevision = Number.isSafeInteger(body.revision) ? body.revision : null;
+    const entry = await examStorage.readAttempt(
+      store, reference.repositoryId, reference.examId, body.targetUserId, body.attemptId
+    );
+    if (!entry) return json({ error: 'ATTEMPT_NOT_FOUND' }, 404);
+    if (Array.isArray(entry.value.operationIds) && entry.value.operationIds.includes(operationId)) {
+      const warnings = await syncGradeSideEffects(store, entry.value, reference, auth, body.action, { audit: false });
+      return json({
+        graded: true,
+        duplicate: true,
+        attempt: adminAttempt(entry.value),
+        aiGradedCount: 0,
+        aiPendingCount: entry.value.result?.pendingQuestionIds?.length || 0,
+        ...(warnings.length ? { warnings } : {})
+      });
+    }
+    if (!['submitted', 'timed_out'].includes(entry.value.status)) {
+      return json({ error: 'ATTEMPT_NOT_FINISHED' }, 409);
+    }
+    // Reject a stale report before contacting the provider. This avoids paying
+    // for an AI evaluation that could not be committed afterwards anyway.
+    if (expectedRevision != null && Number(entry.value.revision || 0) !== expectedRevision) {
+      return json({ error: 'ATTEMPT_VERSION_CONFLICT', attempt: adminAttempt(entry.value) }, 409);
+    }
+    const pendingAiQuestions = pendingAiReviewQuestions(entry.value);
+    if (!pendingAiQuestions.length) return json({ error: 'NO_AI_ANSWERS_TO_GRADE' }, 409);
+    aiEvaluation = await openAnswerGrader.evaluateAiQuestions(
+      pendingAiQuestions,
+      entry.value.answers,
+      { userId: auth.userId }
+    );
+    if (!Object.keys(aiEvaluation.grades).length) {
+      return json({
+        error: aiEvaluation.errorCode || 'AI_GRADING_INVALID_RESPONSE',
+        pendingQuestionCount: pendingAiQuestions.length
+      }, 503);
+    }
+    outcome = await examStorage.updateAttempt(store, {
+      repositoryId: reference.repositoryId,
+      examId: reference.examId,
+      userId: body.targetUserId,
+      attemptId: body.attemptId,
+      operationId,
+      expectedRevision,
+      now: Date.now()
+    }, (attempt) => applyAiGrades(attempt, aiEvaluation.grades, auth));
+  } else {
+    const grades = validateGrades(body.grades);
+    if (!grades.ok) return json({ error: grades.error }, 400);
+    outcome = await examStorage.updateAttempt(store, {
+      repositoryId: reference.repositoryId,
+      examId: reference.examId,
+      userId: body.targetUserId,
+      attemptId: body.attemptId,
+      operationId: safeOperationId(body.operationId) || `admin-grade:${Date.now()}`,
+      expectedRevision: Number.isSafeInteger(body.revision) ? body.revision : null,
+      now: Date.now()
+    }, (attempt) => applyManualGrades(attempt, grades.value, auth));
+  }
+  if (outcome.result?.error) {
+    const notFound = outcome.result.error === 'ATTEMPT_NOT_FOUND';
+    return json({ error: outcome.result.error, attempt: outcome.result.attempt }, notFound ? 404 : 409);
+  }
+  const attempt = outcome.result?.attempt;
+  const warnings = await syncGradeSideEffects(store, attempt, reference, auth, body.action);
+  return json({
+    graded: true,
+    attempt: adminAttempt(attempt),
+    ...(aiEvaluation ? {
+      aiGradedCount: Object.keys(aiEvaluation.grades).length,
+      aiPendingCount: attempt.result?.pendingQuestionIds?.length || 0
+    } : {}),
+    ...(warnings.length ? { warnings } : {})
+  });
+}
+
+async function syncGradeSideEffects(store, attempt, reference, auth, action, options = {}) {
+  const warnings = [];
+  try {
+    await examStorage.syncAttemptIndexes(store, attempt, attempt.profile);
+    const index = await examStorage.readUserExamIndex(
+      store, reference.repositoryId, reference.examId, attempt.userId, attempt.profile
+    );
+    const finished = (index.attempts || [])
+      .filter((entry) => ['submitted', 'timed_out'].includes(entry.status) && hasNumericScore(entry.scorePercent))
+      .sort((left, right) => Date.parse(left.submittedAt || 0) - Date.parse(right.submittedAt || 0));
+    const selectedScore = selectedScorePercent(finished, attempt.definitionSnapshot.attempts.resultStrategy);
+    await updateExamProgress({
+      userId: attempt.userId,
+      user: { email: attempt.profile?.email || '', user_metadata: { full_name: attempt.profile?.name || '' } },
+      repositoryId: reference.repositoryId,
+      examId: reference.examId,
+      materialId: attempt.materialId,
+      action: 'exam',
+      opened: true,
+      details: {
+        started: true,
+        completed: true,
+        attemptId: attempt.attemptId,
+        attempts: (index.attempts || []).filter((entry) => entry.status !== 'reset' && !entry.resetAt).length,
+        answeredQuestions: Object.keys(attempt.answers || {}).length,
+        totalQuestions: attempt.questions.length,
+        scorePercent: selectedScore,
+        passed: selectedScore == null ? null : selectedScore >= attempt.definitionSnapshot.metadata.passThreshold,
+        durationSeconds: attempt.durationSeconds,
+        gradingStatus: attempt.result?.gradingStatus
+      }
+    });
+  } catch (error) {
+    console.error('exam grade index/progress sync failed', error?.name || 'Error');
+    warnings.push('INDEX_OR_PROGRESS_SYNC_PENDING');
+  }
+  if (options.audit !== false) {
+    try {
+      await progressStorage.appendAudit(progressStorage.getProgressStore(), {
+        adminId: auth.userId,
+        targetUserId: attempt.userId,
+        action: action === 'ai-grade' ? 'exam.attempt.ai-grade' : 'exam.attempt.grade',
+        materialId: attempt.materialId || `exam:${reference.repositoryId}:${reference.examId}`,
+        previousValue: null,
+        newValue: {
+          attemptId: attempt.attemptId,
+          gradingStatus: attempt.result?.gradingStatus,
+          points: attempt.result?.points,
+          maxPoints: attempt.result?.maxPoints
+        }
+      });
+    } catch (error) {
+      console.error('exam grade audit sync failed', error?.name || 'Error');
+      warnings.push('AUDIT_SYNC_PENDING');
+    }
+  }
+  return warnings;
+}
+
+function applyManualGrades(attempt, grades, auth) {
+  if (!attempt || !['submitted', 'timed_out'].includes(attempt.status)) return { error: 'ATTEMPT_NOT_FINISHED' };
+  const questions = new Map((attempt.questions || []).map((question) => [question.questionId, question]));
+  const { aiGrades, manualGrades } = resolvedGradeMaps(attempt);
+  const reviewedAt = new Date().toISOString();
+  for (const grade of grades) {
+    const question = questions.get(grade.questionId);
+    if (!reviewableOpenQuestion(question)) {
+      return { error: 'QUESTION_NOT_REVIEWABLE' };
+    }
+    const target = question.gradingMode === 'manual' ? manualGrades : aiGrades;
+    target[grade.questionId] = {
+      points: grade.points,
+      feedback: grade.feedback,
+      gradedBy: auth.userId,
+      gradedAt: reviewedAt
+    };
+  }
+  attempt.result = gradeAttempt(attempt, attempt.definitionSnapshot, { aiGrades, manualGrades });
+  attempt.reviewedAt = reviewedAt;
+  attempt.reviewedBy = auth.userId;
+  attempt.reviewRevision = Number(attempt.reviewRevision || 0) + 1;
+  return { gradingStatus: attempt.result.gradingStatus };
+}
+
+function applyAiGrades(attempt, grades, auth) {
+  if (!attempt || !['submitted', 'timed_out'].includes(attempt.status)) return { error: 'ATTEMPT_NOT_FINISHED' };
+  const questions = new Map((attempt.questions || []).map((question) => [question.questionId, question]));
+  const { aiGrades, manualGrades } = resolvedGradeMaps(attempt);
+  let applied = 0;
+  for (const [questionId, grade] of Object.entries(grades || {})) {
+    const question = questions.get(questionId);
+    if (!reviewableOpenQuestion(question) || question.gradingMode !== 'ai') continue;
+    aiGrades[questionId] = grade;
+    applied += 1;
+  }
+  if (!applied) return { error: 'NO_AI_ANSWERS_TO_GRADE' };
+  const reviewedAt = new Date().toISOString();
+  attempt.result = gradeAttempt(attempt, attempt.definitionSnapshot, { aiGrades, manualGrades });
+  attempt.reviewedAt = reviewedAt;
+  attempt.reviewedBy = auth.userId;
+  attempt.reviewRevision = Number(attempt.reviewRevision || 0) + 1;
+  return { gradingStatus: attempt.result.gradingStatus, aiGradedCount: applied };
+}
+
+function resolvedGradeMaps(attempt) {
+  const existing = new Map((attempt.result?.questionResults || []).map((entry) => [entry.questionId, entry]));
+  const aiGrades = Object.create(null);
+  const manualGrades = Object.create(null);
+  for (const question of attempt.questions || []) {
+    if (!reviewableOpenQuestion(question)) continue;
+    const grade = existing.get(question.questionId);
+    if (!grade || grade.reviewStatus !== 'graded') continue;
+    (question.gradingMode === 'manual' ? manualGrades : aiGrades)[question.questionId] = grade;
+  }
+  return { aiGrades, manualGrades };
+}
+
+function pendingAiReviewQuestions(attempt) {
+  const results = new Map((attempt?.result?.questionResults || []).map((entry) => [entry.questionId, entry]));
+  return (attempt?.questions || []).filter((question) => {
+    if (!reviewableOpenQuestion(question) || question.gradingMode !== 'ai') return false;
+    if (!openAnswerGrader.answerPresent(
+      attempt.answers && Object.hasOwn(attempt.answers, question.questionId) ? attempt.answers[question.questionId] : null
+    )) return false;
+    return results.get(question.questionId)?.reviewStatus !== 'graded';
+  });
+}
+
+function validateGrades(value) {
+  if (!Array.isArray(value) || !value.length || value.length > 500) return { ok: false, error: 'INVALID_GRADES' };
+  const result = [];
+  const seen = new Set();
+  for (const grade of value) {
+    const questionId = typeof grade?.questionId === 'string' ? grade.questionId.trim() : '';
+    const points = grade?.points;
+    const feedback = typeof grade?.feedback === 'string' ? grade.feedback.replace(/\0/g, '').trim().slice(0, 2_000) : '';
+    if (!/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(questionId) || seen.has(questionId)
+      || typeof points !== 'number' || !Number.isFinite(points) || points < 0 || points > 10_000) {
+      return { ok: false, error: 'INVALID_GRADES' };
+    }
+    seen.add(questionId);
+    result.push({ questionId, points: Math.round(points * 100) / 100, feedback });
+  }
+  return { ok: true, value: result };
+}
+
 async function handleDelete(event, auth) {
   const parsed = parseJsonBody(event);
   if (!parsed.ok) return responseForFailure(parsed);
@@ -120,7 +366,7 @@ async function handleDelete(event, auth) {
   ]);
   const remaining = (index.attempts || []).filter((entry) => entry.status !== 'reset' && !entry.resetAt);
   const finished = remaining
-    .filter((entry) => ['submitted', 'timed_out'].includes(entry.status) && Number.isFinite(Number(entry.scorePercent)))
+    .filter((entry) => ['submitted', 'timed_out'].includes(entry.status) && hasNumericScore(entry.scorePercent))
     .sort((left, right) => Date.parse(left.submittedAt || 0) - Date.parse(right.submittedAt || 0));
   if (remaining.length) {
     const latest = remaining.slice().sort((left, right) => Date.parse(right.lastActivityAt || 0) - Date.parse(left.lastActivityAt || 0))[0];
@@ -227,7 +473,7 @@ function lessonExamReferences(markdown) {
 }
 
 function reportMetrics(summaries) {
-  const finished = summaries.filter((attempt) => ['submitted', 'timed_out'].includes(attempt.status) && Number.isFinite(Number(attempt.scorePercent)));
+  const finished = summaries.filter((attempt) => ['submitted', 'timed_out'].includes(attempt.status) && hasNumericScore(attempt.scorePercent));
   const scores = finished.map((attempt) => Number(attempt.scorePercent)).sort((a, b) => a - b);
   const durations = finished.map((attempt) => Number(attempt.durationSeconds)).filter(Number.isFinite);
   const average = (values) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
@@ -241,6 +487,7 @@ function reportMetrics(summaries) {
     participants: new Set(summaries.map((attempt) => attempt.userId)).size,
     attempts: summaries.length,
     completedAttempts: finished.length,
+    pendingReview: summaries.filter((attempt) => attempt.gradingStatus === 'pending_review').length,
     average: round(average(scores)),
     median: round(median),
     minimum: scores.length ? round(scores[0]) : 0,
@@ -257,7 +504,7 @@ function analyzeQuestions(attempts) {
     const resultById = new Map((attempt.result?.questionResults || []).map((result) => [result.questionId, result]));
     for (const question of attempt.questions || []) {
       const result = resultById.get(question.questionId);
-      if (!result) continue;
+      if (!result || ['pending', 'not_scored'].includes(result.reviewStatus)) continue;
       const entry = stats.get(question.questionId) || {
         questionId: question.questionId,
         prompt: question.prompt,
@@ -309,6 +556,7 @@ function selectedScorePercent(finished, strategy) {
 function adminAttempt(attempt) {
   return {
     attemptId: attempt.attemptId,
+    revision: attempt.revision,
     number: attempt.number,
     repositoryId: attempt.repositoryId,
     examId: attempt.examId,
@@ -357,16 +605,30 @@ function round(value) {
   return Math.round(Number(value || 0) * 100) / 100;
 }
 
+function hasNumericScore(value) {
+  return value !== null && value !== '' && Number.isFinite(Number(value));
+}
+
+function reviewableOpenQuestion(question) {
+  return Boolean(question) && question.type === 'open_answer'
+    && question.gradingMode !== 'ungraded' && Number(question.points) > 0;
+}
+
 function emptyOptions() {
-  return { statusCode: 204, headers: { Allow: 'GET, DELETE, OPTIONS', 'Cache-Control': 'no-store', Vary: 'Origin' }, body: '' };
+  return { statusCode: 204, headers: { Allow: 'GET, POST, DELETE, OPTIONS', 'Cache-Control': 'no-store', Vary: 'Origin' }, body: '' };
 }
 
 exports._test = {
   adminAttempt,
+  applyAiGrades,
+  applyManualGrades,
   analyzeQuestions,
   lessonExamReferences,
   reportMetrics,
+  pendingAiReviewQuestions,
   selectedScorePercent,
+  syncGradeSideEffects,
+  validateGrades,
   setExamStoreFactory: examStorage.setStoreFactory,
   setProgressStoreFactory: (factory) => {
     progressStorage.setStoreFactory(factory);

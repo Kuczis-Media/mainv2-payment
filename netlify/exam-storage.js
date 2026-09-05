@@ -92,10 +92,12 @@ function attemptSummary(attempt) {
     lastActivityAt: attempt.lastActivityAt,
     answeredCount: Object.keys(attempt.answers || {}).length,
     totalQuestions: Array.isArray(attempt.questions) ? attempt.questions.length : 0,
-    scorePercent: attempt.result?.scorePercent ?? null,
-    points: attempt.result?.points ?? null,
-    maxPoints: attempt.result?.maxPoints ?? null,
+    scorePercent: attempt.result?.scorePercent ?? attempt.result?.percent ?? null,
+    points: attempt.result?.points ?? attempt.result?.earned ?? null,
+    maxPoints: attempt.result?.maxPoints ?? attempt.result?.maximum ?? null,
     passed: attempt.result?.passed ?? null,
+    gradingStatus: attempt.result?.gradingStatus || (attempt.status === 'active' ? 'active' : 'graded'),
+    pendingQuestionCount: Array.isArray(attempt.result?.pendingQuestionIds) ? attempt.result.pendingQuestionIds.length : 0,
     durationSeconds: attempt.durationSeconds ?? null,
     resetAt: attempt.resetAt || null
   };
@@ -114,7 +116,10 @@ async function reserveAttempt(store, input) {
     index.attempts = Array.isArray(index.attempts) ? index.attempts : [];
     const active = index.attempts.find((entry) => entry.status === 'active' && !entry.resetAt);
     if (active && input.allowResume) {
-      return { abort: true, result: { resumed: true, attemptId: active.attemptId } };
+      return {
+        abort: true,
+        result: { resumed: true, attemptId: active.attemptId, number: active.number, startedAt: active.startedAt }
+      };
     }
     const counted = index.attempts.filter((entry) => entry.status !== 'reset' && !entry.resetAt);
     if (counted.length >= maxAttemptCount(input.attemptsConfig)) {

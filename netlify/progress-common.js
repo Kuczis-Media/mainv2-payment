@@ -320,7 +320,8 @@ function safeObject(input, depth = 0) {
   Object.entries(input).slice(0, 50).forEach(([rawKey, rawValue]) => {
     const key = oneLine(rawKey, 64).replace(/[^A-Za-z0-9_.-]/g, '');
     if (!key) return;
-    if (typeof rawValue === 'boolean') result[key] = rawValue;
+    if (rawValue === null) result[key] = null;
+    else if (typeof rawValue === 'boolean') result[key] = rawValue;
     else if (typeof rawValue === 'number' && Number.isFinite(rawValue)) result[key] = rawValue;
     else if (typeof rawValue === 'string') result[key] = oneLine(rawValue, 500);
     else if (Array.isArray(rawValue)) {
@@ -459,14 +460,16 @@ function transitionConditionSatisfied(previous, completed, records) {
   if (['material_completed', 'quiz_completed', 'exam_completed'].includes(condition.type)) {
     return related?.status === 'completed';
   }
-  const score = Number(related?.details?.scorePercent);
+  const rawScore = related?.details?.scorePercent;
+  const score = rawScore !== null && rawScore !== '' && Number.isFinite(Number(rawScore))
+    ? Number(rawScore) : null;
   if (condition.type === 'exam_passed') {
     return related?.status === 'completed'
       && related?.details?.passed === true
       && (!Number(condition.minimumScore || 0) || score >= Number(condition.minimumScore));
   }
   if (condition.type === 'minimum_score') {
-    return Number.isFinite(score) && score >= Number(condition.minimumScore || 0);
+    return score !== null && score >= Number(condition.minimumScore || 0);
   }
   return false;
 }
@@ -675,9 +678,22 @@ function applyTypedProgress(record, event, node, now) {
 
   if (event.action === 'quiz') {
     record.details.started = Boolean(record.details.started || details.started);
-    record.details.scorePercent = Number.isFinite(Number(details.scorePercent)) ? clamp(details.scorePercent) : record.details.scorePercent ?? null;
-    record.details.attempts = Math.max(0, Math.floor(Number(details.attempts) || Number(record.details.attempts) || 0));
-    if (typeof details.passed === 'boolean') record.details.passed = details.passed;
+    const previousAttempts = Math.max(0, Math.floor(Number(record.details.attempts) || 0));
+    const incomingAttempts = Object.hasOwn(details, 'attempts') && Number.isFinite(Number(details.attempts))
+      ? Math.max(0, Math.floor(Number(details.attempts))) : previousAttempts;
+    const isLatestAttempt = incomingAttempts >= previousAttempts;
+    if (isLatestAttempt && Object.hasOwn(details, 'scorePercent')) {
+      if (details.scorePercent == null) record.details.scorePercent = null;
+      else if (details.scorePercent !== '' && Number.isFinite(Number(details.scorePercent))) {
+        record.details.scorePercent = clamp(details.scorePercent);
+      }
+    } else if (!Object.hasOwn(record.details, 'scorePercent')) record.details.scorePercent = null;
+    record.details.attempts = Math.max(previousAttempts, incomingAttempts);
+    if (isLatestAttempt && (typeof details.passed === 'boolean' || details.passed === null)) record.details.passed = details.passed;
+    if (isLatestAttempt && ['graded', 'pending_review', 'not_scored'].includes(details.gradingStatus)) {
+      record.details.gradingStatus = details.gradingStatus;
+    }
+    if (isLatestAttempt && typeof details.attemptId === 'string') record.details.attemptId = oneLine(details.attemptId, 128);
     if (details.completed === true) {
       record.progressPercent = 100;
       record.completedAt = record.completedAt || now;
@@ -698,9 +714,14 @@ function applyTypedProgress(record, event, node, now) {
     if (typeof details.studentResultVisible === 'boolean') {
       record.details.studentResultVisible = details.studentResultVisible;
     }
-    record.details.scorePercent = Number.isFinite(Number(details.scorePercent))
-      ? clamp(details.scorePercent) : record.details.scorePercent ?? null;
-    if (typeof details.passed === 'boolean') record.details.passed = details.passed;
+    if (Object.hasOwn(details, 'scorePercent')) {
+      if (details.scorePercent === null) record.details.scorePercent = null;
+      else if (details.scorePercent !== '' && Number.isFinite(Number(details.scorePercent))) {
+        record.details.scorePercent = clamp(details.scorePercent);
+      }
+    } else if (!Object.hasOwn(record.details, 'scorePercent')) record.details.scorePercent = null;
+    if (typeof details.passed === 'boolean' || details.passed === null) record.details.passed = details.passed;
+    if (['graded', 'pending_review', 'not_scored'].includes(details.gradingStatus)) record.details.gradingStatus = details.gradingStatus;
     if (Number.isFinite(Number(details.durationSeconds))) {
       record.details.durationSeconds = Math.max(0, Math.floor(Number(details.durationSeconds)));
     }

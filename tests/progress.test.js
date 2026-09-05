@@ -550,6 +550,10 @@ test('lesson exam conditions stay locked after a failed attempt and unlock after
     materialId: 'lesson-exam', action: 'lesson_step', details: { currentStepId: 'summary', completedStepIds: ['exam-step'] }
   }, { node: minimumNode, records: { [examMaterialId]: { status: 'completed', details: { scorePercent: 80, passed: true } } } });
   assert.equal(atMinimum.ok, true);
+  const pendingWithoutScore = merge(null, {
+    materialId: 'lesson-exam', action: 'lesson_step', details: { currentStepId: 'summary', completedStepIds: ['exam-step'] }
+  }, { node: minimumNode, records: { [examMaterialId]: { status: 'completed', details: { scorePercent: null, passed: null } } } });
+  assert.equal(pendingWithoutScore.code, 'STEP_NOT_UNLOCKED');
 });
 
 test('lesson completion requirements are independent from percentage inclusion', () => {
@@ -620,6 +624,28 @@ test('PDF progress is explicitly navigational and quiz progress differs from sco
   assert.equal(quiz.record.details.scorePercent, 25);
   assert.equal(quiz.record.details.attempts, 2);
   assert.equal(quiz.record.details.passed, false);
+});
+
+test('quiz progress clears a previous score for a newer pending attempt and ignores late grading of an older attempt', () => {
+  const first = merge(null, {
+    materialId: 'quiz-latest', materialType: 'quiz', action: 'quiz',
+    details: { started: true, completed: true, attempts: 1, attemptId: 'attempt-one', scorePercent: 90, passed: true, gradingStatus: 'graded' }
+  });
+  const pending = merge(first.record, {
+    materialId: 'quiz-latest', materialType: 'quiz', action: 'quiz',
+    details: { started: true, completed: true, attempts: 2, attemptId: 'attempt-two', scorePercent: null, passed: null, gradingStatus: 'pending_review' }
+  });
+  assert.equal(pending.record.details.scorePercent, null);
+  assert.equal(pending.record.details.passed, null);
+  assert.equal(pending.record.details.attemptId, 'attempt-two');
+  const staleGrade = merge(pending.record, {
+    materialId: 'quiz-latest', materialType: 'quiz', action: 'quiz',
+    details: { started: true, completed: true, attempts: 1, attemptId: 'attempt-one', scorePercent: 100, passed: true, gradingStatus: 'graded' }
+  });
+  assert.equal(staleGrade.record.details.scorePercent, null);
+  assert.equal(staleGrade.record.details.passed, null);
+  assert.equal(staleGrade.record.details.attemptId, 'attempt-two');
+  assert.equal(staleGrade.record.details.gradingStatus, 'pending_review');
 });
 
 test('a native dashboard quiz stays incomplete on open and completes after answers are submitted', () => {

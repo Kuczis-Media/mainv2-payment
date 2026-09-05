@@ -29,7 +29,7 @@
   };
   const state = {
     quiz: null, questions: [], materialId: '', attempts: 0, savedRecord: null,
-    urls: new Set(), lockedAfterAttempt: false, imageObserver: null
+    urls: new Set(), lockedAfterAttempt: false, imageObserver: null, latestAttempt: null
   };
 
   const create = (tag, className, text) => {
@@ -66,7 +66,47 @@
       if (payload.error === 'ADMIN_REQUIRED') throw new Error('Podgląd draftu jest dostępny tylko dla administratora.');
       throw new Error(payload.error || 'Nie udało się pobrać quizu.');
     }
-    return payload.quiz;
+    return payload;
+  }
+
+  async function submitForServerGrading(answers) {
+    const token = await window.ChemAuth.getAccessToken();
+    const response = await fetch('/.netlify/functions/quiz', {
+      method: 'POST',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'submit', repositoryId, quizId, answers,
+        materialId: state.materialId, preview
+      })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const messages = {
+        QUIZ_ANSWERS_REQUIRED: 'Uzupełnij wymagane pytania.',
+        ATTEMPT_LIMIT_REACHED: 'Ten quiz został już wysłany i nie pozwala na kolejną próbę.',
+        AI_DISABLED_FOR_USER: 'Ocena AI jest wyłączona dla tego konta.'
+      };
+      throw new Error(messages[payload.error] || 'Nie udało się ocenić pytań otwartych. Spróbuj ponownie.');
+    }
+    return payload;
+  }
+
+  async function requestStoredResult(attemptId) {
+    const token = await window.ChemAuth.getAccessToken();
+    const url = new URL('/.netlify/functions/quiz', location.origin);
+    url.searchParams.set('action', 'result');
+    url.searchParams.set('repo', repositoryId);
+    url.searchParams.set('quiz', quizId);
+    url.searchParams.set('attemptId', attemptId);
+    const response = await fetch(url, {
+      credentials: 'same-origin', cache: 'no-store',
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` }
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || 'Nie udało się pobrać ocenionego wyniku.');
+    return payload.result;
   }
 
   async function beginProgress() {
@@ -136,7 +176,9 @@
     const fieldset = create('fieldset', 'quiz-player-question');
     fieldset.dataset.questionId = question.questionId;
     const heading = create('div', 'quiz-player-question-heading');
-    heading.append(create('span', '', `Pytanie ${index + 1}`), create('span', '', `${question.points} ${question.points === 1 ? 'pkt' : 'pkt'}`));
+    const pointLabel = question.type === 'open' && question.gradingMode === 'ungraded'
+      ? 'bez punktów' : `${question.points} pkt`;
+    heading.append(create('span', '', `Pytanie ${index + 1}`), create('span', '', pointLabel));
     const legend = create('legend', '', question.prompt);
     fieldset.append(heading, legend);
     if (question.image.ref) {
@@ -146,7 +188,13 @@
       image.dataset.quizMediaRef = question.image.ref;
       fieldset.append(image);
     }
-    if (question.type === 'text') {
+    if (question.type === 'open') {
+      const input = create(question.multiline === false ? 'input' : 'textarea', 'quiz-player-text quiz-player-open-answer');
+      if (question.multiline !== false) input.rows = 7;
+      input.maxLength = 8000; input.autocomplete = 'off';
+      input.placeholder = 'Wpisz własną odpowiedź…'; input.dataset.answerText = '1';
+      fieldset.append(input);
+    } else if (question.type === 'text') {
       const input = create('input', 'quiz-player-text');
       input.type = 'text'; input.autocomplete = 'off'; input.placeholder = 'Wpisz odpowiedź'; input.dataset.answerText = '1';
       fieldset.append(input);
@@ -199,22 +247,31 @@
     document.title = `${quiz.metadata.title} — ChemDisk`;
     elements.questionCount.textContent = String(quiz.questions.length);
     elements.threshold.textContent = `${quiz.settings.passingScore}%`;
-    elements.points.textContent = String(quiz.questions.reduce((sum, question) => sum + question.points, 0));
+    elements.points.textContent = String(quiz.questions.reduce((sum, question) => (
+      sum + (question.type === 'open' && question.gradingMode === 'ungraded' ? 0 : question.points)
+    ), 0));
     if (quiz.metadata.cover.ref) void loadImage(elements.cover, quiz.metadata.cover.ref, true);
     state.questions = quiz.settings.shuffleQuestions ? shuffle(quiz.questions) : quiz.questions.slice();
     elements.form.replaceChildren(...state.questions.map(renderQuestion));
+    elements.check.textContent = checkButtonLabel();
     queueQuestionImages();
+  }
+
+  function checkButtonLabel() {
+    return state.quiz?.questions?.some((question) => question.type === 'open' && question.gradingMode === 'ai' && question.points > 0)
+      ? 'Sprawdź odpowiedzi za pomocą AI'
+      : 'Sprawdź odpowiedzi';
   }
 
   function answerFor(question) {
     const fieldset = elements.form.querySelector(`[data-question-id="${question.questionId}"]`);
     if (!fieldset) return [];
-    if (question.type === 'text') return fieldset.querySelector('[data-answer-text]')?.value || '';
+    if (['text', 'open'].includes(question.type)) return fieldset.querySelector('[data-answer-text]')?.value || '';
     return Array.from(fieldset.querySelectorAll('input:checked')).map((input) => input.value);
   }
 
   function isAnswered(question, answer) {
-    return question.type === 'text' ? Boolean(normalized(answer)) : Array.isArray(answer) && answer.length > 0;
+    return ['text', 'open'].includes(question.type) ? Boolean(normalized(answer)) : Array.isArray(answer) && answer.length > 0;
   }
 
   function correct(question, answer) {
@@ -228,12 +285,16 @@
   }
 
   function lockControls(locked) {
-    elements.form.querySelectorAll('input').forEach((input) => { input.disabled = locked; });
+    elements.form.querySelectorAll('input, textarea').forEach((input) => { input.disabled = locked; });
     elements.check.disabled = locked;
   }
 
-  async function saveResult(result) {
+  async function saveResult(result, alreadySaved = false) {
     if (!progressApi || preview) return;
+    if (alreadySaved) {
+      elements.save.textContent = 'Wynik zapisany';
+      return;
+    }
     elements.save.textContent = 'Zapisywanie wyniku…';
     try {
       await progressApi.update({
@@ -243,9 +304,11 @@
         details: {
           started: true,
           completed: true,
-          scorePercent: result.percent,
-          passed: result.passed,
-          attempts: state.attempts
+          scorePercent: result.percent ?? null,
+          passed: result.passed ?? null,
+          attempts: state.attempts,
+          gradingStatus: result.gradingStatus,
+          ...(result.attemptId ? { attemptId: result.attemptId } : {})
         }
       }, { immediate: true, throwOnError: true });
       elements.save.textContent = 'Wynik zapisany';
@@ -254,20 +317,74 @@
     }
   }
 
-  function showResult(earned, maximum, percent, passed) {
-    elements.result.className = `quiz-player-result${passed ? ' is-passed' : ''}`;
+  function showResult(result) {
+    const { earned, maximum, percent, passed } = result;
+    const pending = result.gradingStatus === 'pending_review';
+    const unscored = result.gradingStatus === 'not_scored';
+    const aiDeferred = pending && Number(result.aiDeferredCount) > 0;
+    elements.result.className = `quiz-player-result${passed ? ' is-passed' : ''}${pending || unscored ? ' is-pending' : ''}`;
     elements.result.hidden = false;
-    const score = create('strong', '', `${percent}%`);
+    const score = create('strong', '', pending ? '…' : unscored ? '—' : `${percent}%`);
     const copy = create('div');
     copy.append(
-      create('h2', '', passed ? 'Quiz zaliczony' : 'Quiz ukończony'),
-      create('p', '', `${earned}/${maximum} pkt. Próg zaliczenia wynosi ${state.quiz.settings.passingScore}%.`)
+      create('h2', '', pending ? 'Quiz czeka na ocenę' : unscored ? 'Odpowiedzi zapisane' : passed ? 'Quiz zaliczony' : 'Quiz ukończony'),
+      create('p', '', unscored
+        ? 'Ten quiz nie ma punktowanych pytań, dlatego nie wyznacza wyniku ani statusu zaliczenia.'
+        : pending
+        ? aiDeferred
+          ? `AI nie mogło teraz ocenić ${result.aiDeferredCount === 1 ? 'jednej odpowiedzi' : `${result.aiDeferredCount} odpowiedzi`}. Wszystko zostało zapisane — autor może przyznać punkty ręcznie. Później kliknij „Odśwież wynik”.`
+          : `Sprawdzający musi ocenić ${result.pendingQuestionCount || 1} ${result.pendingQuestionCount === 1 ? 'pytanie otwarte' : 'pytań otwartych'}. Po sprawdzeniu kliknij „Odśwież wynik”.`
+        : `${earned}/${maximum} pkt. Próg zaliczenia wynosi ${state.quiz.settings.passingScore}%.`)
     );
+    if (pending && result.attemptId) {
+      const refresh = create('button', 'quiz-player-button is-secondary', 'Odśwież wynik');
+      refresh.type = 'button';
+      refresh.addEventListener('click', async () => {
+        refresh.disabled = true;
+        refresh.textContent = 'Odświeżanie…';
+        try {
+          const updated = await requestStoredResult(result.attemptId);
+          updated.attemptId = result.attemptId;
+          renderQuestionResults(updated);
+          showResult(updated);
+          elements.save.textContent = updated.gradingStatus === 'pending_review'
+            ? 'Odpowiedzi zapisane — oczekują na ocenę' : 'Wynik zapisany';
+        } catch (error) {
+          elements.validation.textContent = error.message;
+          refresh.disabled = false;
+          refresh.textContent = 'Odśwież wynik';
+        }
+      });
+      copy.append(refresh);
+    }
     elements.result.replaceChildren(score, copy);
     elements.result.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
   }
 
   function showSavedResult(record) {
+    if (record?.details?.gradingStatus === 'pending_review') {
+      showResult({
+        earned: 0,
+        maximum: 0,
+        percent: null,
+        passed: null,
+        gradingStatus: 'pending_review',
+        pendingQuestionCount: 1
+      });
+      elements.save.textContent = 'Odpowiedzi zapisane — oczekują na ocenę';
+      elements.retry.hidden = true;
+      state.lockedAfterAttempt = true;
+      lockControls(true);
+      return;
+    }
+    if (record?.details?.gradingStatus === 'not_scored') {
+      showResult({ earned: 0, maximum: 0, percent: null, passed: null, gradingStatus: 'not_scored', pendingQuestionCount: 0 });
+      elements.save.textContent = 'Odpowiedzi zapisane';
+      elements.retry.hidden = true;
+      state.lockedAfterAttempt = true;
+      lockControls(true);
+      return;
+    }
     const percent = Math.max(0, Math.min(100, Number(record?.details?.scorePercent) || 0));
     const passed = record?.details?.passed === true;
     elements.result.className = `quiz-player-result${passed ? ' is-passed' : ''}`;
@@ -285,6 +402,28 @@
     lockControls(true);
   }
 
+  function renderQuestionResults(result) {
+    (result.results || []).forEach((entry) => {
+      const fieldset = elements.form.querySelector(`[data-question-id="${entry.questionId}"]`);
+      const feedback = fieldset?.querySelector('.quiz-player-feedback');
+      const pending = entry.reviewStatus === 'pending';
+      const ungraded = entry.reviewStatus === 'not_scored';
+      if (!pending && !ungraded) {
+        fieldset?.classList.toggle('is-correct', entry.correct === true);
+        fieldset?.classList.toggle('is-wrong', entry.correct === false);
+      }
+      if (feedback) {
+        feedback.hidden = false;
+        feedback.className = `quiz-player-feedback ${pending || ungraded ? '' : entry.correct ? 'is-correct' : 'is-wrong'}`;
+        feedback.textContent = pending
+          ? 'Odpowiedź zapisana — oczekuje na ocenę.'
+          : ungraded
+            ? 'Odpowiedź zapisana — to pytanie nie wpływa na wynik.'
+            : `${entry.correct ? 'Poprawnie' : 'Ocena częściowa lub niepoprawna'} · ${entry.points}/${entry.maximum} pkt${entry.feedback ? ` — ${entry.feedback}` : entry.explanation ? ` — ${entry.explanation}` : ''}`;
+      }
+    });
+  }
+
   async function checkAnswers() {
     if (state.lockedAfterAttempt) return;
     const answers = Object.fromEntries(state.quiz.questions.map((question) => [question.questionId, answerFor(question)]));
@@ -295,6 +434,28 @@
       return;
     }
     elements.validation.textContent = '';
+    if (state.quiz.questions.some((question) => question.type === 'open')) {
+      elements.check.disabled = true;
+      elements.check.textContent = 'Ocenianie odpowiedzi…';
+      try {
+        const payload = await submitForServerGrading(answers);
+        const result = payload.result;
+        result.attemptId = payload.attemptId || '';
+        renderQuestionResults(result);
+        state.attempts = Number(payload.attemptNumber) || state.attempts + 1;
+        showResult(result);
+        state.lockedAfterAttempt = true;
+        lockControls(true);
+        elements.retry.hidden = !state.quiz.settings.allowRetry;
+        await saveResult(result, payload.progressSaved === true);
+      } catch (error) {
+        elements.validation.textContent = error.message;
+        elements.check.disabled = false;
+      } finally {
+        elements.check.textContent = checkButtonLabel();
+      }
+      return;
+    }
     let earned = 0;
     const maximum = state.quiz.questions.reduce((sum, question) => sum + question.points, 0);
     state.quiz.questions.forEach((question) => {
@@ -310,20 +471,21 @@
         feedback.textContent = `${ok ? 'Poprawnie' : 'Niepoprawnie'}${state.quiz.settings.showFeedback && question.explanation ? ` — ${question.explanation}` : ''}`;
       }
     });
-    const percent = maximum ? Math.round((earned / maximum) * 100) : 0;
-    const passed = percent >= state.quiz.settings.passingScore;
+    const percent = maximum ? Math.round((earned / maximum) * 100) : null;
+    const passed = percent == null ? null : percent >= state.quiz.settings.passingScore;
+    const gradingStatus = maximum > 0 ? 'graded' : 'not_scored';
     state.attempts += 1;
-    showResult(earned, maximum, percent, passed);
+    showResult({ earned, maximum, percent, passed, gradingStatus, pendingQuestionCount: 0 });
     state.lockedAfterAttempt = true;
     lockControls(true);
     elements.retry.hidden = !state.quiz.settings.allowRetry;
-    await saveResult({ percent, passed });
+    await saveResult({ percent, passed, gradingStatus });
   }
 
   function retry() {
     if (!state.quiz.settings.allowRetry) return;
     state.lockedAfterAttempt = false;
-    elements.form.querySelectorAll('input').forEach((input) => {
+    elements.form.querySelectorAll('input, textarea').forEach((input) => {
       input.disabled = false;
       if (['checkbox', 'radio'].includes(input.type)) input.checked = false;
       else input.value = '';
@@ -340,12 +502,32 @@
   try {
     state.materialId = progressApi?.materialId('quiz', `${repositoryId}:${quizId}`, params.get('material') || '') || '';
     await beginProgress();
-    state.quiz = await requestQuiz();
+    const quizPayload = await requestQuiz();
+    state.quiz = quizPayload.quiz;
+    state.latestAttempt = quizPayload.latestAttempt || null;
+    state.attempts = Math.max(state.attempts, Number(state.latestAttempt?.number) || 0);
     renderQuiz();
     elements.loading.hidden = true;
     elements.player.hidden = false;
-    if (!preview && !state.quiz.settings.allowRetry && state.savedRecord?.status === 'completed' && state.attempts > 0) {
-      showSavedResult(state.savedRecord);
+    if (!preview && state.attempts > 0) {
+      const attemptId = state.latestAttempt?.status === 'submitted'
+        ? state.latestAttempt.attemptId : state.savedRecord?.status === 'completed' ? state.savedRecord?.details?.attemptId : '';
+      if (attemptId && state.quiz.questions.some((question) => question.type === 'open')) {
+        try {
+          const result = await requestStoredResult(attemptId);
+          result.attemptId = attemptId;
+          renderQuestionResults(result);
+          showResult(result);
+          elements.save.textContent = result.gradingStatus === 'pending_review'
+            ? 'Odpowiedzi zapisane — oczekują na ocenę'
+            : 'Wynik zapisany';
+          state.lockedAfterAttempt = true;
+          lockControls(true);
+          elements.retry.hidden = !state.quiz.settings.allowRetry;
+        } catch (_) {
+          if (!state.quiz.settings.allowRetry && state.latestAttempt?.status !== 'active') showSavedResult(state.savedRecord);
+        }
+      } else if (!state.quiz.settings.allowRetry && state.latestAttempt?.status !== 'active') showSavedResult(state.savedRecord);
     }
   } catch (error) {
     showError(error.message);

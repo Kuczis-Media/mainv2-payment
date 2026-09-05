@@ -919,6 +919,26 @@ button {
   background: color-mix(in srgb, var(--chem-danger) 8%, transparent);
 }
 
+.quiz-report-panel { display: grid; margin-top: 18px; padding: clamp(16px, 2.5vw, 26px); gap: 14px; background: var(--chem-surface); border: 1px solid var(--chem-line); border-radius: 18px; }
+.quiz-report-panel > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.quiz-report-panel h2 { margin: 3px 0 0; font-size: 1.1rem; }
+.quiz-report-panel header small, .quiz-report-panel > p { margin: 0; color: var(--chem-muted); font-size: .7rem; }
+.quiz-report-panel > div { display: grid; gap: 13px; }
+.quiz-report-metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.quiz-report-metrics article { display: grid; padding: 12px; gap: 4px; background: var(--chem-surface-soft); border-radius: 11px; }
+.quiz-report-metrics small { color: var(--chem-muted); font-size: .62rem; }
+.quiz-report-attempts { display: grid; gap: 6px; }
+.quiz-report-attempts > button { display: flex; width: 100%; padding: 11px 12px; justify-content: space-between; gap: 14px; color: var(--chem-text); background: var(--chem-surface-soft); border: 1px solid transparent; border-radius: 10px; text-align: left; cursor: pointer; }
+.quiz-report-attempts > button:hover { border-color: var(--chem-primary); }
+.quiz-attempt-report { display: grid; padding: 14px; gap: 8px; border: 1px solid color-mix(in srgb, var(--chem-primary) 35%, var(--chem-line)); border-radius: 14px; }
+.quiz-attempt-report h3 { margin: 0 0 5px; }
+.quiz-attempt-report details { border: 1px solid var(--chem-line); border-radius: 10px; background: var(--chem-surface-soft); }
+.quiz-attempt-report summary { display: flex; padding: 11px; justify-content: space-between; gap: 14px; cursor: pointer; }
+.quiz-attempt-report pre { margin: 0 11px 11px; padding: 10px; overflow: auto; white-space: pre-wrap; background: var(--chem-surface); border-radius: 8px; }
+.quiz-grade-editor { display: grid; margin: 0 11px 11px; grid-template-columns: minmax(150px, .35fr) minmax(0, 1fr); gap: 10px; }
+.quiz-grade-editor label { display: grid; gap: 5px; font-size: .68rem; font-weight: 750; }
+.quiz-grade-editor input, .quiz-grade-editor textarea { width: 100%; padding: 10px; color: var(--chem-text); background: var(--chem-surface); border: 1px solid var(--chem-line); border-radius: 9px; }
+
 @media (max-width: 1180px) {
   .quiz-builder-shell {
     grid-template-columns: 230px minmax(480px, 1fr);
@@ -950,6 +970,10 @@ button {
   .quiz-question-controls {
     grid-template-columns: 1fr;
   }
+
+  .quiz-report-panel > header { align-items: stretch; flex-direction: column; }
+  .quiz-report-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .quiz-grade-editor { grid-template-columns: 1fr; }
 
   .quiz-wide-field { grid-column: auto; }
   .quiz-cover-field,
@@ -1171,6 +1195,8 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
 .exam-attempt-alerts summary strong { color: var(--chem-muted); }
 .exam-attempt-alerts.has-alerts summary strong { color: var(--chem-danger); }
 .exam-attempt-question pre { margin: 0 12px 12px; padding: 12px; overflow: auto; white-space: pre-wrap; background: var(--chem-surface); border-radius: 9px; font-size: .7rem; }
+.exam-manual-grade { display: grid; margin: 0 12px 12px; grid-template-columns: minmax(150px, .35fr) minmax(0, 1fr); align-items: start; gap: 10px; }
+.exam-manual-grade .exam-field { margin: 0; }
 .exam-attempt-question > p,
 .exam-attempt-events > p,
 .exam-attempt-alerts > p { margin: 0; padding: 8px 13px; color: var(--chem-muted); font-size: .7rem; }
@@ -5985,6 +6011,7 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
   .exam-report-metrics { grid-template-columns: 1fr; }
   .exam-question-analysis { grid-template-columns: 1fr; }
   .exam-attempt-report > header { align-items: stretch; flex-direction: column; }
+  .exam-manual-grade { grid-template-columns: 1fr; }
   .exam-question-card { grid-template-columns: 1fr; }
   .exam-question-actions { padding: 0 12px 12px; }
   .exam-media-heading { align-items: stretch; flex-direction: column; }
