@@ -3,6 +3,7 @@
 const { json, mutationGuard, parseJsonBody, requireAdmin, responseForFailure } = require('../admin-common.js');
 const landing = require('../landing-content.js');
 const siteAssets = require('../site-assets.js');
+const deliveryModel = require('../../public/assets/js/landing-delivery-model.js');
 
 exports.handler = async (event = {}, context = {}) => {
   const method = String(event.httpMethod || '').toUpperCase();
@@ -14,7 +15,9 @@ exports.handler = async (event = {}, context = {}) => {
     if (method === 'GET') {
       const [stored, remote] = await Promise.allSettled([
         Promise.resolve().then(() => landing.readEditorState(landing.getLandingStore())),
-        siteAssets.readLandingConfig()
+        siteAssets.readLandingRoute().then(async (route) => ({
+          ...await siteAssets.readLandingConfig(process.env, { target: route.settings.target }), route
+        }))
       ]);
       const published = remote.status === 'fulfilled' ? remote.value.model : null;
       const draft = stored.status === 'fulfilled' && stored.value.draftExists
@@ -24,16 +27,16 @@ exports.handler = async (event = {}, context = {}) => {
         published,
         storage: stored.status === 'fulfilled' ? { available: true } : { available: false, error: 'LANDING_STORAGE_UNAVAILABLE' },
         publication: remote.status === 'fulfilled'
-          ? { available: true, mode: 'static-github', sha: remote.value.sha }
+          ? { available: true, mode: 'static-github', sha: remote.value.sha, routeSha: remote.value.route.sha }
           : { available: false, mode: 'static-github', sha: null, error: remote.reason?.code || 'LANDING_STATIC_PUBLISH_FAILED' },
-        staticConfigUrl: siteAssets.publicConfiguration().landingConfigUrl
+        staticConfigUrl: remote.status === 'fulfilled' ? deliveryModel.rawUrl(remote.value.route.settings.target) : siteAssets.publicConfiguration().landingConfigUrl
       });
     }
     const guard = mutationGuard(event, { maxBodyBytes: 64_000 });
     if (!guard.ok) return responseForFailure(guard);
     const parsed = parseJsonBody(event);
     if (!parsed.ok) return responseForFailure(parsed);
-    const allowed = method === 'PUT' ? ['model'] : ['action', 'model', 'expectedPublishedSha'];
+    const allowed = method === 'PUT' ? ['model'] : ['action', 'model', 'expectedPublishedSha', 'expectedRouteSha'];
     if (Object.keys(parsed.value).some((key) => !allowed.includes(key))) return json({ error: 'UNEXPECTED_FIELDS' }, 400);
     if (!parsed.value.model || typeof parsed.value.model !== 'object' || Array.isArray(parsed.value.model)) {
       return json({ error: 'INVALID_LANDING_MODEL' }, 400);
@@ -45,6 +48,8 @@ exports.handler = async (event = {}, context = {}) => {
       return json({ error: 'LANDING_PUBLICATION_REQUIRED' }, 400);
     }
     const input = landing.normalizeModel(parsed.value.model, true);
+    const route = await siteAssets.readLandingRoute();
+    if ((parsed.value.expectedRouteSha ?? null) !== route.sha) return json({ error: 'LANDING_DESTINATION_CHANGED' }, 409);
     let store = null;
     let currentDraft = null;
     try {
@@ -57,7 +62,7 @@ exports.handler = async (event = {}, context = {}) => {
     }
     // GitHub is the publication source. A failure must never be reported as a
     // successful Blob publish which an older public GitHub artifact would hide.
-    const result = await siteAssets.publishLandingConfig(input, process.env, { expectedSha: parsed.value.expectedPublishedSha });
+    const result = await siteAssets.publishLandingConfig(input, process.env, { expectedSha: parsed.value.expectedPublishedSha, target: route.settings.target });
     const { model: published, ...delivery } = result;
     let draft = published;
     let draftWarning = '';
@@ -73,7 +78,7 @@ exports.handler = async (event = {}, context = {}) => {
       published,
       draft,
       delivery: { ...delivery, static: true },
-      publication: { available: true, mode: 'static-github', sha: delivery.sha },
+      publication: { available: true, mode: 'static-github', sha: delivery.sha, routeSha: route.sha },
       draftWarning,
       storage: { available: Boolean(store) && !draftWarning }
     });

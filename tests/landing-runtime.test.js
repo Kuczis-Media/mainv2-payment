@@ -39,6 +39,90 @@ function runtimeModel(revision, prefix = 'Model') {
   };
 }
 
+function routedRuntime({ route, payload, cache, hash = '', hostname = 'course.example' } = {}) {
+  const delivery = require('../public/assets/js/landing-delivery-model.js');
+  const dom = landingDom({ staticConfigUrl: STATIC_CONFIG_URL });
+  dom.document.documentElement.dataset.landingLoading = 'true';
+  const calls = [], redirects = [];
+  const storage = new Map(cache ? [['chem.landing.public.v3', JSON.stringify(cache)]] : []);
+  const context = {
+    document: dom.document, URL, AbortController, setTimeout, clearTimeout, CustomEvent: class {},
+    NextMedLandingSource: { ready: Promise.resolve(route || delivery.normalize()) }, NextMedLandingDelivery: delivery,
+    location: { search: '?private=query', hash, hostname, replace: (url) => redirects.push(url) },
+    localStorage: { getItem: (key) => storage.get(key), setItem: (key, value) => storage.set(key, value), removeItem: (key) => storage.delete(key) },
+    fetch: async (url, options) => { calls.push({ url, options }); return { ok: true, json: async () => payload }; }
+  };
+  context.window = context; context.parent = context;
+  vm.runInNewContext(fs.readFileSync(require.resolve('../public/assets/js/landing-runtime.js'), 'utf8'), context);
+  return { ...dom, calls, redirects, storage, settled: () => new Promise((resolve) => setImmediate(resolve)) };
+}
+
+test('landing waits for the selected JSON before rendering and isolates cache from another repository', async () => {
+  const delivery = require('../public/assets/js/landing-delivery-model.js');
+  const route = delivery.normalize({ target: { repository: 'NextMed/web', path: 'start.json', ref: 'main' } });
+  let resolveSource, resolvePayload;
+  const source = new Promise((resolve) => { resolveSource = resolve; });
+  const payload = new Promise((resolve) => { resolvePayload = resolve; });
+  const result = routedRuntime({ route: source, payload, cache: { model: runtimeModel(99, 'Wrong repository'), checkedAt: Date.now(), configUrl: STATIC_CONFIG_URL } });
+  await result.settled();
+  assert.equal(result.calls.length, 0);
+  assert.equal(result.document.title, 'Tytuł statyczny');
+  resolveSource(route);
+  await result.settled();
+  assert.equal(result.calls[0].url, delivery.rawUrl(route.target));
+  assert.equal(result.calls[0].options.credentials, 'omit');
+  assert.equal(result.document.documentElement.dataset.landingLoading, 'true');
+  assert.equal(result.document.title, 'Tytuł statyczny');
+  resolvePayload({ active: true, model: runtimeModel(1, 'Selected') });
+  await result.settled();
+  assert.equal(result.document.title, 'Selected — NextMed');
+  assert.equal(result.document.documentElement.dataset.landingLoading, undefined);
+  assert.equal(result.calls.length, 1);
+  assert.equal(JSON.parse(result.storage.get('chem.landing.public.v3')).configUrl, delivery.rawUrl(route.target));
+});
+
+test('fresh cache from the selected file renders without another config request', async () => {
+  const result = routedRuntime({ cache: { model: runtimeModel(5, 'Cached'), checkedAt: Date.now(), configUrl: STATIC_CONFIG_URL } });
+  await result.settled();
+  assert.equal(result.document.title, 'Cached — NextMed');
+  assert.equal(result.calls.length, 0);
+  assert.equal(result.document.documentElement.dataset.landingLoading, undefined);
+});
+
+test('an inactive publication clears an expired cache without reapplying it', async () => {
+  const result = routedRuntime({ payload: { active: false }, cache: { model: runtimeModel(5, 'Retired'), checkedAt: 1, configUrl: STATIC_CONFIG_URL } });
+  await result.settled();
+  assert.equal(result.document.title, 'Tytuł statyczny');
+  assert.equal(result.storage.has('chem.landing.public.v3'), false);
+  assert.equal(result.document.documentElement.dataset.landingLoading, undefined);
+});
+
+test('an older CDN response for the same destination cannot roll back a newer cached publication', async () => {
+  const result = routedRuntime({ payload: { active: true, model: runtimeModel(3, 'Old CDN') }, cache: { model: runtimeModel(9, 'Latest'), checkedAt: 1, configUrl: STATIC_CONFIG_URL } });
+  await result.settled();
+  assert.equal(result.document.title, 'Latest — NextMed');
+  assert.equal(JSON.parse(result.storage.get('chem.landing.public.v3')).model.revision, 9);
+});
+
+test('external landing redirect does not forward the incoming query or fragment and does not fetch content', async () => {
+  const delivery = require('../public/assets/js/landing-delivery-model.js');
+  const result = routedRuntime({ route: delivery.normalize({ externalEnabled: true, externalUrl: 'https://start.netlify.app/welcome' }), hash: '#private-fragment' });
+  await result.settled();
+  assert.deepEqual(result.redirects, ['https://start.netlify.app/welcome']);
+  assert.equal(result.calls.length, 0);
+});
+
+test('external redirect skips login tokens and the destination domain itself', async () => {
+  const delivery = require('../public/assets/js/landing-delivery-model.js');
+  const route = delivery.normalize({ externalEnabled: true, externalUrl: 'https://start.netlify.app/' });
+  for (const options of [{ hash: '#access_token=private' }, { hostname: 'start.netlify.app' }]) {
+    const result = routedRuntime({ ...options, route, payload: { active: true, model: runtimeModel(1, 'Local') } });
+    await result.settled();
+    assert.equal(result.redirects.length, 0);
+    assert.equal(result.document.title, 'Local — NextMed');
+  }
+});
+
 class FakeClassList {
   constructor() { this.values = new Set(); }
   add(name) { this.values.add(name); }

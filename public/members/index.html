@@ -25,7 +25,10 @@
   </script>
 
   <title data-brand-title="Panel kursanta">Panel kursanta — NextMed</title>
+  <script defer src="/assets/js/landing-delivery-model.js"></script>
+  <script defer src="/assets/js/landing-source.js"></script>
   <script defer src="/assets/js/site-brand.js"></script>
+  <script defer src="/assets/js/admin-landing-settings.js"></script>
 
   <link rel="icon" href="https://cdn.jsdelivr.net/gh/Kuczis-Media/logo@main/benzene-ring.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="/members/dashboard.css" />
@@ -331,7 +334,30 @@
         <button class="admin-tab" id="admin-tab-payments" type="button" role="tab" aria-selected="false" aria-controls="admin-panel-payments" tabindex="-1" data-admin-tab="payments">
           <span aria-hidden="true">zł</span> Płatności
         </button>
+        <button class="admin-tab" id="admin-tab-landing" type="button" role="tab" aria-selected="false" aria-controls="admin-panel-landing" tabindex="-1" data-admin-tab="landing">
+          <span aria-hidden="true">↗</span> Landing
+        </button>
       </div>
+
+      <section class="admin-tab-panel" id="admin-panel-landing" role="tabpanel" aria-labelledby="admin-tab-landing" data-admin-panel="landing" hidden>
+        <div class="admin-guidance"><span aria-hidden="true">i</span><p>Ustaw stronę powitalną i miejsce publikacji JSON. Dotyczy tylko wejścia na stronę główną — logowanie, panel i kurs pozostają w tej aplikacji. Odsłony korzystają ze statycznych plików GitHuba, bez Functions.</p></div>
+        <form id="landing-delivery-form" class="landing-delivery-form">
+          <fieldset id="landing-delivery-fields" disabled>
+            <legend>Strona powitalna</legend>
+            <label class="landing-delivery-toggle"><input id="landing-external-enabled" type="checkbox" role="switch"> Używaj landingu z innej domeny</label>
+            <label>Adres zewnętrznego landingu<input class="text-field" id="landing-external-url" type="text" placeholder="start.netlify.app" maxlength="1000" aria-describedby="landing-external-hint"></label>
+            <p class="field-hint" id="landing-external-hint">Włączone: strona główna przekieruje na podany adres HTTPS. Wyłączone: działa lokalny landing NextMed. Nie osadzamy obcej strony w ramce.</p>
+            <label>Plik JSON — właściciel/repozytorium/ścieżka<input class="text-field" id="landing-config-location" type="text" placeholder="Kuczis-Media/repo/landing.json" maxlength="360" spellcheck="false"></label>
+            <label>Gałąź GitHuba<input class="text-field" id="landing-config-ref" type="text" value="main" maxlength="100" spellcheck="false"></label>
+            <p class="field-hint">Repozytorium musi być publiczne. Token GITHUB_SITE_ASSETS_TOKEN potrzebuje uprawnień do docelowego repozytorium i Kuczis-Media/logo (stały plik ustawień). Jeśli plik nie istnieje, skopiujemy aktualną publikację; istniejącego landingu nie nadpiszemy.</p>
+            <label>Publiczny adres JSON<input class="text-field" id="landing-config-url" type="url" readonly aria-label="Publiczny adres konfiguracji JSON"></label>
+            <div class="admin-editor-actions"><button class="button button-primary" type="submit">Zapisz ustawienia landingu</button><button class="button button-secondary" id="landing-config-copy" type="button">Kopiuj adres JSON</button><a class="button button-secondary" href="/members/module/studio/landing/">Otwórz edytor landingu</a></div>
+          </fieldset>
+          <button class="button button-secondary" id="landing-settings-reload" type="button">Wczytaj aktualne ustawienia</button>
+          <p class="admin-status" id="landing-settings-status" role="status" aria-live="polite"></p>
+          <p class="field-hint">Zmiana jest widoczna po odświeżeniu cache GitHuba i przeglądarki. Zewnętrzna strona jest niezależna — aby czytała ten JSON, musi mieć odpowiedni kod odczytu (np. tę samą aplikację NextMed).</p>
+        </form>
+      </section>
 
       <section class="admin-tab-panel" id="admin-panel-users" role="tabpanel" aria-labelledby="admin-tab-users" data-admin-panel="users">
         <div class="admin-guidance">

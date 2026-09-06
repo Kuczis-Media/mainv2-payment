@@ -105,6 +105,11 @@
       elements.publish.title = publication.available ? '' : 'Publikacja wymaga dostępu do publicznego repozytorium. Możesz pobrać gotową stronę HTML.';
       const previewUrl = document.getElementById('preview-url');
       if (previewUrl) previewUrl.textContent = location.host || 'twoja-strona.pl';
+      const publicationLocation = document.getElementById('landing-publication-location');
+      if (publicationLocation) {
+        publicationLocation.textContent = staticConfigUrl || 'Brak połączenia z repozytorium';
+        if (staticConfigUrl) publicationLocation.href = staticConfigUrl;
+      }
       syncRecoveryButton();
       elements.restore.hidden = !publishedModel;
       setStatus(bootstrapWarning || (!publication.available ? 'Możesz edytować i pobrać gotową stronę HTML. Publikacja online wymaga skonfigurowanego dostępu do repozytorium GitHub.' : publishedModel
@@ -572,7 +577,7 @@
     setBusy(true);
     setStatus('Publikowanie strony…', '');
     try {
-      const payload = await requestLanding('POST', { action: 'publish', model, expectedPublishedSha: publication.sha });
+      const payload = await requestLanding('POST', { action: 'publish', model, expectedPublishedSha: publication.sha, expectedRouteSha: publication.routeSha ?? null });
       if (!isLocalModel(payload?.published) || payload?.delivery?.static !== true || !payload?.publication?.sha) throw new Error('Serwer nie potwierdził publikacji. Zachowano bieżące zmiany.');
       publication = payload.publication;
       // Draft and publication revisions are independent (the static page may
@@ -649,7 +654,7 @@
 
   function cachePublishedLocally(published) {
     try {
-      localStorage.setItem('chem.landing.public.v3', JSON.stringify({ model: published, checkedAt: Date.now(), source: 'builder' }));
+      localStorage.setItem('chem.landing.public.v3', JSON.stringify({ model: published, checkedAt: Date.now(), source: 'builder', configUrl: staticConfigUrl }));
       localStorage.removeItem('chem.landing.public.v2');
     } catch {}
   }
@@ -1081,7 +1086,8 @@
       INVALID_LANDING_EMAIL: 'Wpisz poprawny adres e-mail albo zostaw pole puste.',
       INVALID_LANDING_PHONE: 'Numer telefonu może zawierać cyfry, spacje, nawiasy, myślnik i znak +.',
       LANDING_STORAGE_UNAVAILABLE: 'Brakuje NETLIFY_API_TOKEN lub SITE_ID. Zmiany nadal są zachowane lokalnie.',
-      SITE_ASSETS_NOT_CONFIGURED: 'Do publikacji statycznej dodaj GITHUB_SITE_ASSETS_TOKEN. Bez niego potrzebne są NETLIFY_API_TOKEN i SITE_ID.',
+      SITE_ASSETS_NOT_CONFIGURED: 'Do publikacji statycznej dodaj GITHUB_SITE_ASSETS_TOKEN z dostępem do repozytorium ustawień i docelowego JSON.',
+      LANDING_DESTINATION_CHANGED: 'Miejsce publikacji zmieniono w panelu admina. Zachowaj kopię JSON, odśwież Studio i sprawdź aktualną ścieżkę.',
       SITE_ASSETS_TOKEN_REJECTED: 'Token GitHub nie ma dostępu do publicznego repozytorium landingu.',
       SITE_ASSETS_WRITE_REJECTED: 'Token GitHub wymaga uprawnienia Contents: Read and write.',
       LANDING_STATIC_PUBLISH_FAILED: 'GitHub odrzucił publikację statycznego pliku. Spróbuj ponownie.',

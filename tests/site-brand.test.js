@@ -11,7 +11,7 @@ function model(branding = {}) {
   return { version: 3, revision: 2, branding: { brandName: 'TestMed', companyName: 'Test Company', primaryColor: '#112233', faviconUrl: 'https://example.com/favicon.png', ...branding }, sections: ids.map((id) => ({ id })) };
 }
 
-async function run({ cache, response = null } = {}) {
+async function run({ cache, response = null, route } = {}) {
   const storage = new Map(Object.entries(cache || {}));
   const names = [{ textContent: 'NextMed' }];
   const company = [{ textContent: 'NextMed' }];
@@ -29,7 +29,7 @@ async function run({ cache, response = null } = {}) {
   };
   vm.runInNewContext(script, {
     document, URL, AbortController, Date,
-    window: { setTimeout, clearTimeout },
+    window: { setTimeout, clearTimeout, ...(route ? { NextMedLandingSource: { ready: Promise.resolve(route) }, NextMedLandingDelivery: require('../public/assets/js/landing-delivery-model.js') } : {}) },
     localStorage: { getItem: (key) => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
     fetch: async (url, options) => { calls.push({ url, options }); return { ok: true, json: async () => response }; }
   });
@@ -45,6 +45,19 @@ test('shared public cache updates shell names, title and favicon without another
   assert.equal(result.icon.href, 'https://example.com/favicon.png');
   assert.equal(result.icon.type, undefined);
   assert.equal(result.calls.length, 0);
+});
+
+test('branding follows the custom JSON source, ignoring a fresh cache from another repository', async () => {
+  const delivery = require('../public/assets/js/landing-delivery-model.js');
+  const route = delivery.normalize({ externalEnabled: true, externalUrl: 'start.netlify.app', target: { repository: 'NextMed/site', ref: 'main', path: 'custom.json' } });
+  const result = await run({ route,
+    cache: { 'chem.landing.public.v3': JSON.stringify({ model: model({ brandName: 'Wrong repository' }), checkedAt: Date.now() }) },
+    response: { active: true, model: model({ brandName: 'Selected repository' }) }
+  });
+  assert.equal(result.names[0].textContent, 'Selected repository');
+  assert.equal(result.calls[0].url, delivery.rawUrl(route.target));
+  assert.equal(result.calls[0].options.credentials, 'omit');
+  assert.equal(JSON.parse(result.storage.get('nextmed.site-brand.v1')).configUrl, delivery.rawUrl(route.target));
 });
 
 test('expired shell cache refreshes only public GitHub data without credentials', async () => {

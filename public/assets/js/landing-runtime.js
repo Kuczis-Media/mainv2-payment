@@ -5,7 +5,7 @@
   const CACHE_KEY = 'chem.landing.public.v3';
   const LEGACY_CACHE_KEY = 'chem.landing.public.v2';
   const CACHE_TTL_MS = 15 * 60 * 1000;
-  const REQUEST_TIMEOUT_MS = 5_000;
+  const REQUEST_TIMEOUT_MS = 3_000;
   const COPY_TARGETS = {
     home: { title: '.text-2', subtitle: '.text-1', body: '.text-3', image: 'background', cta: '#login-cta' },
     about: { title: '.title', subtitle: '.column.right .text', body: '.column.right p', image: '.column.left img', cta: '.column.right a' },
@@ -17,6 +17,7 @@
   const SECTION_IDS = Object.keys(COPY_TARGETS);
   let brandingRequestId = 0;
   let currentModel = null;
+  let resolvedConfigUrl = '';
   const previewMode = /(?:^|[?&])landing-preview=1(?:&|$)/.test(window.location?.search || '') && window.parent !== window;
   const exportMode = Boolean(document.querySelector('meta[name="nextmed-landing-export"]'));
   const exportOrigin = exportMode ? document.querySelector('meta[name="nextmed-landing-origin"]')?.content || '' : '';
@@ -31,11 +32,34 @@
     return;
   }
 
-  const cached = readCache();
-  if (cached?.model) safelyApply(cached.model);
-  if (!cached || Date.now() - cached.checkedAt >= CACHE_TTL_MS) void refresh();
+  if (window.NextMedLandingSource) void initializeFromSource();
+  else {
+    const cached = readCache();
+    if (cached?.model) safelyApply(cached.model);
+    if (!cached || Date.now() - cached.checkedAt >= CACHE_TTL_MS) void refresh();
+  }
 
-  async function refresh() {
+  async function initializeFromSource() {
+    try {
+      const route = await window.NextMedLandingSource.ready;
+      resolvedConfigUrl = window.NextMedLandingDelivery.rawUrl(route.target);
+      if (route.externalEnabled && route.externalUrl) {
+        const target = new URL(route.externalUrl);
+        // Never forward login tokens, query strings or fragments to another domain.
+        const authHash = /(?:^|[#&])(?:invite_token|recovery_token|confirmation_token|email_change_token|access_token|token|error|error_description|type)=/i.test(location.hash || '');
+        if (target.hostname !== location.hostname && !authHash) { location.replace(target.href); return; }
+      }
+      const cached = readCache();
+      if (cached?.model && Date.now() - cached.checkedAt < CACHE_TTL_MS) safelyApply(cached.model);
+      else {
+        const inactive = await refresh(cached?.model);
+        if (!inactive && !currentModel && cached?.model) safelyApply(cached.model);
+      }
+    } catch { /* Leave the checked-in page available if configuration is unavailable. */ }
+    finally { delete document.documentElement.dataset.landingLoading; }
+  }
+
+  async function refresh(cachedModel = null) {
     const staticUrl = staticConfigUrl();
     let payload = staticUrl ? await fetchPayload(staticUrl, 'no-cache') : null;
     let source = 'static';
@@ -48,12 +72,14 @@
     if (!payload) return;
     if (payload.active === false) {
       clearPublishedCache();
-      return;
+      return true;
     }
     if (!usablePayload(payload)) return;
     const incoming = payload.model;
-    if (currentModel && modelRevision(incoming) < modelRevision(currentModel)) {
-      writeCache(currentModel, source);
+    const previous = currentModel || cachedModel;
+    if (previous && modelRevision(incoming) < modelRevision(previous)) {
+      if (!currentModel) safelyApply(previous);
+      writeCache(previous, source);
       return;
     }
     if (safelyApply(incoming)) writeCache(incoming, source);
@@ -86,6 +112,7 @@
     try {
       const response = await fetch(url, {
         cache: cacheMode,
+        credentials: 'omit',
         headers: { Accept: 'application/json' },
         signal: controller.signal
       });
@@ -99,6 +126,7 @@
   }
 
   function staticConfigUrl() {
+    if (resolvedConfigUrl) return resolvedConfigUrl;
     const value = document.querySelector('meta[name="nextmed-landing-config"]')?.content;
     return safeImageUrl(value);
   }
@@ -385,9 +413,12 @@
     for (const key of [CACHE_KEY, LEGACY_CACHE_KEY]) {
       try {
         const parsed = JSON.parse(localStorage.getItem(key) || 'null');
+        const defaultUrl = document.querySelector('meta[name="nextmed-landing-config"]')?.content || '';
+        if (resolvedConfigUrl && (parsed?.configUrl || defaultUrl) !== resolvedConfigUrl) continue;
         const model = parsed?.model || parsed;
         if (!validModel(model)) continue;
-        return { model, checkedAt: Number(parsed?.checkedAt) || 0, source: parsed?.source || 'legacy' };
+        const checkedAt = Number(parsed?.checkedAt) || 0;
+        return { model, checkedAt: checkedAt > 0 && checkedAt <= Date.now() ? checkedAt : 0, source: parsed?.source || 'legacy' };
       } catch {}
     }
     return null;
@@ -395,17 +426,16 @@
 
   function writeCache(model, source) {
     try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ model, checkedAt: Date.now(), source }));
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ model, checkedAt: Date.now(), source, configUrl: staticConfigUrl() }));
       localStorage.removeItem(LEGACY_CACHE_KEY);
     } catch {}
   }
 
   function clearPublishedCache() {
-    if (!currentModel) return;
     try {
       localStorage.removeItem(CACHE_KEY);
       localStorage.removeItem(LEGACY_CACHE_KEY);
-      if (!readCache() && typeof window.location?.reload === 'function') window.location.reload();
+      if (currentModel && !readCache() && typeof window.location?.reload === 'function') window.location.reload();
     } catch {}
   }
 })();

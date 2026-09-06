@@ -2,6 +2,7 @@
 
 const { decodeMediaUpload, GITHUB_API_VERSION } = require('./content-repository.js');
 const landing = require('./landing-content.js');
+const deliveryModel = require('../public/assets/js/landing-delivery-model.js');
 
 const GITHUB_API_BASE = 'https://api.github.com';
 const DEFAULT_REPOSITORY = 'Kuczis-Media/logo';
@@ -253,9 +254,10 @@ async function uploadAsset(input = {}, env = process.env, options = {}) {
 }
 
 async function readLandingConfig(env = process.env, options = {}) {
-  const config = configuration(env);
+  const selected = deliveryModel.target(options.target || deliveryModel.DEFAULT_TARGET);
+  const config = { ...configuration(env), repository: selected.repository, ref: selected.ref, directory: '' };
   await ensurePublic(config, options);
-  const response = await githubFetch(apiPathUrl(config, LANDING_CONFIG_PATH), config, options);
+  const response = await githubFetch(apiPathUrl(config, selected.path), config, options);
   if (response.status === 404) return { exists: false, model: null, sha: null };
   if (!response.ok) throw new SiteAssetsError('SITE_ASSETS_UNAVAILABLE', 503);
   try {
@@ -279,7 +281,8 @@ async function publishLandingConfig(raw, env = process.env, options = {}) {
   if (!Object.hasOwn(options, 'expectedSha') || (options.expectedSha !== null && !SAFE_SHA.test(options.expectedSha))) {
     throw new SiteAssetsError('LANDING_PUBLICATION_REQUIRED', 400);
   }
-  const config = configuration(env);
+  const selected = deliveryModel.target(options.target || deliveryModel.DEFAULT_TARGET);
+  const config = { ...configuration(env), repository: selected.repository, ref: selected.ref, directory: '', landingPath: selected.path };
   // Re-read the actual file; a caller may only replace the version they opened.
   // GitHub's file SHA condition then protects the read-to-write race as well.
   const current = await readLandingConfig(env, { ...options, forcePublicCheck: true });
@@ -300,7 +303,7 @@ async function publishLandingConfig(raw, env = process.env, options = {}) {
   const artifact = JSON.stringify({ active: true, model });
   if (Buffer.byteLength(artifact, 'utf8') > 64_000) throw new SiteAssetsError('LANDING_CONFIG_TOO_LARGE', 413);
 
-  const response = await githubFetch(apiPathUrl(config, LANDING_CONFIG_PATH, false), config, {
+  const response = await githubFetch(apiPathUrl(config, selected.path, false), config, {
     ...options,
     method: 'PUT',
     write: true,
@@ -326,10 +329,10 @@ async function publishLandingConfig(raw, env = process.env, options = {}) {
 function landingDelivery(config, sha, commitSha = '') {
   return {
     mode: 'static-github',
-    path: LANDING_CONFIG_PATH,
+    path: config.landingPath || LANDING_CONFIG_PATH,
     sha,
-    rawUrl: rawUrl(config, LANDING_CONFIG_PATH),
-    cdnUrl: cdnUrl({ ...config, directory: '' }, LANDING_CONFIG_PATH, commitSha || config.ref),
+    rawUrl: rawUrl(config, config.landingPath || LANDING_CONFIG_PATH),
+    cdnUrl: cdnUrl({ ...config, directory: '' }, config.landingPath || LANDING_CONFIG_PATH, commitSha || config.ref),
     ...(commitSha ? { commitSha, commitUrl: `https://github.com/${config.repository}/commit/${commitSha}` } : {})
   };
 }
@@ -458,7 +461,54 @@ function mimeType(filename) {
 
 function clean(value) { return typeof value === 'string' ? value.trim() : ''; }
 
+async function readLandingRoute(env = process.env, options = {}) {
+  const config = configuration(env);
+  await ensurePublic(config, options);
+  const response = await githubFetch(apiPathUrl(config, deliveryModel.ROUTE_PATH), config, options);
+  if (response.status === 404) return { settings: deliveryModel.normalize(), sha: null };
+  if (!response.ok) throw new SiteAssetsError('SITE_ASSETS_UNAVAILABLE');
+  try {
+    const entry = await response.json();
+    if (!SAFE_SHA.test(entry?.sha) || entry.encoding !== 'base64' || typeof entry.content !== 'string'
+      || entry.content.length > 12000 || (entry.type && entry.type !== 'file')) throw new Error('Invalid route');
+    const encoded = entry.content.replace(/\s/g, '');
+    const bytes = Buffer.from(encoded, 'base64');
+    if (bytes.length > 8000 || bytes.toString('base64') !== encoded) throw new Error('Invalid route encoding');
+    return { settings: deliveryModel.normalize(JSON.parse(bytes.toString('utf8'))), sha: entry.sha };
+  } catch { throw new SiteAssetsError('INVALID_LANDING_DELIVERY'); }
+}
+
+async function saveLandingRoute(raw, env = process.env, options = {}) {
+  const settings = deliveryModel.normalize(raw, options.origin || '');
+  if (!Object.hasOwn(options, 'expectedSha') || (options.expectedSha !== null && !SAFE_SHA.test(options.expectedSha))) throw new SiteAssetsError('LANDING_PUBLICATION_REQUIRED', 400);
+  const current = await readLandingRoute(env, { ...options, forcePublicCheck: true });
+  if (current.sha !== options.expectedSha) throw new SiteAssetsError('LANDING_CONFLICT', 409);
+  // Never point visitors at an empty or unrelated file. Reuse a valid landing at
+  // the destination; create a copy only if that exact path does not exist.
+  const destination = await readLandingConfig(env, { ...options, target: settings.target });
+  if (!destination.exists) {
+    const source = await readLandingConfig(env, { ...options, target: current.settings.target });
+    await publishLandingConfig(source.model || landing.defaultModel(), env, { ...options, target: settings.target, expectedSha: null });
+  }
+  const config = configuration(env);
+  const response = await githubFetch(apiPathUrl(config, deliveryModel.ROUTE_PATH, false), config, {
+    ...options, method: 'PUT', write: true,
+    body: {
+      message: 'Update landing source and redirect settings from NextMed admin',
+      content: Buffer.from(JSON.stringify(settings), 'utf8').toString('base64'), branch: config.ref,
+      ...(current.sha ? { sha: current.sha } : {})
+    }
+  });
+  if ([409, 422].includes(response.status)) throw new SiteAssetsError('LANDING_CONFLICT', 409);
+  if (!response.ok) throw new SiteAssetsError('LANDING_STATIC_PUBLISH_FAILED');
+  const saved = await response.json();
+  if (!SAFE_SHA.test(saved?.content?.sha)) throw new SiteAssetsError('SITE_ASSETS_RESPONSE_INVALID');
+  return { settings, sha: saved.content.sha, configUrl: deliveryModel.rawUrl(settings.target) };
+}
+
 module.exports = {
+  readLandingRoute,
+  saveLandingRoute,
   LANDING_CONFIG_PATH,
   SiteAssetsError,
   configuration,

@@ -234,6 +234,9 @@ section[data-landing-managed="true"] { --landing-accent: var(--brand-primary); }
 /* Lightweight editorial layout. All movement is scroll-driven, never an idle loop. */
 .max-width { width: min(1320px, calc(100% - 80px)); }
 .reading-progress { position: fixed; z-index: 1100; inset: 0 0 auto; height: 3px; pointer-events: none; }
+.landing-loading-state { display: none; }
+html[data-landing-loading="true"] .landing-loading-state { display: grid; position: fixed; inset: 0; place-items: center; z-index: 1200; background: var(--brand-background); color: var(--brand-muted); font-size: 14px; }
+html[data-landing-loading="true"] main, html[data-landing-loading="true"] footer, html[data-landing-loading="true"] .navbar { visibility: hidden; }
 .reading-progress span { display: block; height: 100%; background: var(--brand-accent); transform: scaleX(0); transform-origin: left; }
 section { color: var(--landing-text, var(--brand-text)); }
 .home { flex-direction: column; justify-content: center; min-height: 850px; min-height: min(980px, 110svh); padding: 172px 0 30px; background: var(--brand-background); }

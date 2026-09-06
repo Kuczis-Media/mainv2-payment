@@ -5525,7 +5525,7 @@
   }
 
   function activateAdminTab(name, focusTab) {
-    const allowed = new Set(['users', 'forms', 'dashboard', 'content', 'progress', 'ai', 'ai-usage', 'payments']);
+    const allowed = new Set(['users', 'forms', 'dashboard', 'content', 'progress', 'ai', 'ai-usage', 'payments', 'landing']);
     const activeName = allowed.has(name) ? name : 'users';
     elements.adminTabs.forEach((tab) => {
       const active = tab.dataset.adminTab === activeName;
@@ -5545,6 +5545,7 @@
     if (activeName === 'ai' && !adminAiLoaded) loadAdminAi(false);
     if (activeName === 'ai-usage' && !adminAiUsageLoaded) loadAdminAiUsage(false);
     if (activeName === 'payments' && !adminPricesLoaded) loadAdminPrices();
+    if (activeName === 'landing') void window.NextMedAdminLanding?.load();
     return activeName;
   }
 

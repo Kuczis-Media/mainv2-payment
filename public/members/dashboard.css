@@ -4675,6 +4675,15 @@ html[data-theme="dark"] .admin-content-config-grid input {
   }
 }
 
+.landing-delivery-form { display: grid; gap: 18px; max-width: 880px; margin: 22px auto; }
+.landing-delivery-form fieldset { display: grid; gap: 18px; padding: 24px; border: 1px solid var(--line, #d8e2e9); border-radius: 16px; }
+.landing-delivery-form legend { padding: 0 8px; font-weight: 750; }
+.landing-delivery-form label { display: grid; gap: 8px; font-size: 13px; font-weight: 650; }
+.landing-delivery-form .text-field { width: 100%; }
+.landing-delivery-form .landing-delivery-toggle { display: flex; align-items: center; gap: 12px; }
+.landing-delivery-toggle input { width: 22px; height: 22px; accent-color: var(--primary, #176b54); }
+.landing-delivery-form .admin-editor-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

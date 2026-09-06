@@ -2,7 +2,8 @@
   'use strict';
 
   // Public branding only. Never send a session token or call a Function here.
-  const CONFIG_URL = 'https://raw.githubusercontent.com/Kuczis-Media/logo/main/landing/config.json';
+  const DEFAULT_CONFIG_URL = 'https://raw.githubusercontent.com/Kuczis-Media/logo/main/landing/config.json';
+  let CONFIG_URL = DEFAULT_CONFIG_URL;
   const CACHE_KEY = 'nextmed.site-brand.v1';
   const LANDING_CACHE_KEY = 'chem.landing.public.v3';
   const TTL = 15 * 60 * 1000;
@@ -19,9 +20,17 @@
   const titleNode = document.querySelector('title[data-brand-title]');
   let logoGeneration = 0;
   let currentRevision = -1;
-  const cached = readCache();
-  if (cached) apply(cached.model);
-  if (!cached || Date.now() - cached.checkedAt >= TTL) void refresh();
+  function initialize() {
+    const cached = readCache();
+    if (cached) apply(cached.model);
+    if (!cached || Date.now() - cached.checkedAt >= TTL) void refresh();
+  }
+  if (window.NextMedLandingSource) {
+    window.NextMedLandingSource.ready.then((route) => {
+      CONFIG_URL = window.NextMedLandingDelivery.rawUrl(route.target);
+      initialize();
+    }).catch(initialize);
+  } else initialize();
 
   function validModel(model) {
     if (!plainObject(model) || !plainObject(model.branding) || !Array.isArray(model.sections)) return false;
@@ -36,6 +45,7 @@
     for (const key of [CACHE_KEY, LANDING_CACHE_KEY]) {
       try {
         const entry = JSON.parse(localStorage.getItem(key) || 'null');
+        if ((entry?.configUrl || DEFAULT_CONFIG_URL) !== CONFIG_URL) continue;
         if (validModel(entry?.model) && Number.isFinite(entry.checkedAt) && entry.checkedAt > 0 && entry.checkedAt <= Date.now()) candidates.push(entry);
       } catch (_) { /* Storage is optional, including in private browsing. */ }
     }
@@ -51,7 +61,7 @@
       const payload = await response.json();
       if (payload?.active !== true || !validModel(payload.model) || payload.model.revision < currentRevision) return;
       apply(payload.model);
-      try { localStorage.setItem(CACHE_KEY, JSON.stringify({ model: payload.model, checkedAt: Date.now() })); } catch (_) { /* Optional cache. */ }
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify({ model: payload.model, checkedAt: Date.now(), configUrl: CONFIG_URL })); } catch (_) { /* Optional cache. */ }
     } catch (_) { /* Keep the checked-in or cached brand when GitHub is unavailable. */ }
     finally { window.clearTimeout(timer); }
   }

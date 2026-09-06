@@ -28,6 +28,7 @@ test.afterEach(() => landing._test.resetStoreFactory());
 
 test('publication failure leaves the public page untouched and draft/public revisions stay independent', async (t) => {
   const siteAssets = require('../netlify/site-assets.js');
+  t.mock.method(siteAssets, 'readLandingRoute', async () => ({ settings: require('../public/assets/js/landing-delivery-model.js').normalize(), sha: null }));
   const store = new MemoryStore();
   landing._test.setStoreFactory(() => store);
   const user = { id: 'admin-1', app_metadata: { roles: ['admin'] } };

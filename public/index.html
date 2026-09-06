@@ -6,6 +6,14 @@
   <meta name="description" content="Nowoczesne kursy maturalne, materiały, ćwiczenia i wsparcie prowadzącego w jednym miejscu.">
   <meta name="theme-color" content="#176b54">
   <meta name="nextmed-landing-config" content="https://raw.githubusercontent.com/Kuczis-Media/logo/main/landing/config.json">
+  <script>
+    if (!(new URLSearchParams(location.search).get('landing-preview') === '1' && parent !== window)) {
+      document.documentElement.dataset.landingLoading = 'true';
+      window.setTimeout(function () { delete document.documentElement.dataset.landingLoading; }, 6500);
+    }
+  </script>
+  <script defer src="/assets/js/landing-delivery-model.js"></script>
+  <script defer src="/assets/js/landing-source.js"></script>
   <title>NextMed — kursy maturalne online</title>
   <link rel="preconnect" href="https://raw.githubusercontent.com" crossorigin>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -26,6 +34,7 @@
   </script>
 </head>
 <body>
+  <div class="landing-loading-state" role="status" aria-live="polite"><span>Wczytuję stronę…</span></div>
   <div class="reading-progress" aria-hidden="true"><span></span></div>
   <a class="skip-link" href="#home">Przejdź do treści</a>
   <button class="scroll-up-btn" type="button" aria-label="Wróć na początek strony">

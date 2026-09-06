@@ -9,6 +9,7 @@
   const STUDIO_LAYOUT_KEY = 'chemdisk.studio.layout.v1';
   const THEME_KEY = 'chem.theme';
   const HISTORY_LIMIT = 60;
+  const fullPreviewMedia = new WeakMap();
   const MAX_IMPORT_BYTES = 512 * 1024;
   const ADMIN_PROGRESS_URL = '/.netlify/functions/admin-progress';
   const dashboardModelApi = window.ChemDashboardStudioModel;
@@ -5315,11 +5316,17 @@
     syncFullPreview('lesson');
   }
 
-  async function hydrateStudioLessonMedia(root) {
+  async function hydrateStudioLessonMedia(root, objectUrls = state.lesson.mediaObjectUrls) {
     const library = window.ChemContentLibrary;
+    const mediaDocument = root.ownerDocument || document;
+    const isVisiblePreview = (figure) => figure.isConnected && !mediaDocument.defaultView?.closed;
+    const mediaContext = {
+      filename: state.lesson.remoteFilename || state.lesson.model.filename,
+      repositoryId: state.lesson.remoteRepositoryId || state.contentLibrary.selectedRepositoryId
+    };
     const figures = all('[data-lesson-media-ref]', root);
     const showError = (figure, error) => {
-      if (!figure.isConnected) return;
+      if (!isVisiblePreview(figure)) return;
       figure.classList.add('is-error');
       const placeholder = create('div', 'lesson-managed-image-placeholder');
       const message = create(
@@ -5341,38 +5348,45 @@
     };
     const loadFigure = async (figure, bypassCache = false, position = 0) => {
       const shared = figure.dataset.lessonMediaScope === 'shared';
+      let timer;
       try {
-        const blob = await library.readMediaBlob({
+        const read = library.readMediaBlob({
           scope: shared ? 'shared' : 'local',
           materialKind: shared ? '' : 'lesson',
           materialId: shared
             ? ''
-            : (figure.dataset.lessonMediaOwner || state.lesson.remoteFilename || state.lesson.model.filename),
+            : (figure.dataset.lessonMediaOwner || mediaContext.filename),
           reference: figure.dataset.lessonMediaRef,
           repositoryId: figure.dataset.lessonMediaRepository
-            || state.lesson.remoteRepositoryId
-            || state.contentLibrary.selectedRepositoryId
+            || mediaContext.repositoryId
         }, { bypassCache });
-        if (!figure.isConnected) return;
+        const blob = await Promise.race([read, new Promise((_, reject) => {
+          timer = window.setTimeout(() => reject(new Error('MEDIA_TIMEOUT')), 20_000);
+        })]);
+        if (!isVisiblePreview(figure)) return;
         const objectUrl = URL.createObjectURL(blob);
-        const image = document.createElement('img');
+        const image = mediaDocument.createElement('img');
+        image.addEventListener('error', () => {
+          URL.revokeObjectURL(objectUrl);
+          if (figure.contains(image)) showError(figure, new Error('IMAGE_DECODE_FAILED'));
+        }, { once: true });
         image.src = objectUrl;
         image.alt = figure.dataset.lessonMediaAlt || 'Ilustracja';
         image.loading = position < 2 ? 'eager' : 'lazy';
         image.decoding = 'async';
         image.fetchPriority = position === 0 ? 'high' : 'auto';
         try { void image.decode?.().catch(() => undefined); } catch { /* dekodowanie dokończy się przy malowaniu */ }
-        if (!figure.isConnected) {
+        if (!isVisiblePreview(figure)) {
           URL.revokeObjectURL(objectUrl);
           return;
         }
-        state.lesson.mediaObjectUrls.push(objectUrl);
+        objectUrls.push(objectUrl);
         figure.classList.remove('is-error');
         figure.replaceChildren(image);
         if (bypassCache) bindLessonPreviewImageResize(root);
       } catch (error) {
         showError(figure, error);
-      }
+      } finally { window.clearTimeout(timer); }
     };
     if (!library?.readMediaBlob) {
       figures.forEach((figure) => showError(figure, { code: 'MEDIA_CLIENT_UNAVAILABLE' }));
@@ -5383,7 +5397,7 @@
       while (nextFigure < figures.length) {
         const position = nextFigure;
         nextFigure += 1;
-        if (!figures[position].isConnected) continue;
+        if (!isVisiblePreview(figures[position])) continue;
         await loadFigure(figures[position], false, position);
       }
     };
@@ -5582,6 +5596,14 @@
   function renderFullPreviewWindow(mode, popup) {
     if (!popup || popup.closed) return;
     const doc = popup.document;
+    const previousMedia = fullPreviewMedia.get(doc);
+    if (!previousMedia) popup.addEventListener('pagehide', () => {
+      fullPreviewMedia.get(doc)?.forEach((url) => URL.revokeObjectURL(url));
+      fullPreviewMedia.delete(doc);
+    }, { once: true });
+    previousMedia?.forEach((url) => URL.revokeObjectURL(url));
+    const previewUrls = [];
+    fullPreviewMedia.set(doc, previewUrls);
     const previousScroll = popup.scrollY;
     clearTypesetMath(doc.body, popup);
     addFullPreviewHead(doc, mode);
@@ -5641,6 +5663,7 @@
     }
     doc.body.replaceChildren(header, main);
     if (mode === 'lesson') {
+      void hydrateStudioLessonMedia(main, previewUrls);
       preparePreviewYouTube(main);
       bindPreviewFlashcards(main);
       bindPreviewAtonom(main);
@@ -5667,6 +5690,10 @@
     const previewUrl = new URL('/members/module/studio/', window.location.origin);
     previewUrl.searchParams.set('preview', mode);
     previewUrl.searchParams.set('draft', String(Date.now()));
+    if (mode === 'lesson') {
+      previewUrl.searchParams.set('previewRepo', state.lesson.remoteRepositoryId || state.contentLibrary.selectedRepositoryId || '');
+      previewUrl.searchParams.set('previewOwner', state.lesson.remoteFilename || state.lesson.model.filename);
+    }
     const popup = window.open(
       previewUrl.toString(),
       `chemdisk-${mode}-preview`,
@@ -5694,7 +5721,16 @@
   }
 
   function startStandalonePreview(mode) {
+    const parameters = new URLSearchParams(window.location.search);
+    const repository = parameters.get('previewRepo') || '';
+    const owner = parameters.get('previewOwner') || '';
+    if (/^[a-z0-9][a-z0-9-]{0,39}$/.test(repository)) state.lesson.remoteRepositoryId = repository;
+    if (/^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.md$/i.test(owner)) state.lesson.remoteFilename = owner;
     renderFullPreviewWindow(mode, window);
+    window.addEventListener('pagehide', () => {
+      fullPreviewMedia.get(document)?.forEach((url) => URL.revokeObjectURL(url));
+      fullPreviewMedia.delete(document);
+    }, { once: true });
     window.addEventListener('storage', (event) => {
       const expectedKey = mode === 'dashboard' ? DASHBOARD_DRAFT_KEY : LESSON_DRAFT_KEY;
       if (event.key !== expectedKey || !event.newValue) return;
