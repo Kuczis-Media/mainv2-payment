@@ -4370,6 +4370,7 @@
     controls.className = 'admin-progress-manual-controls';
     const skip = document.createElement('select');
     skip.className = 'text-field';
+    skip.setAttribute('aria-label', 'Pomijanie kroków przez tego ucznia');
     [['DEFAULT', 'Według lekcji'], ['ALLOW', 'Pomijanie dozwolone'], ['DENY', 'Pomijanie zabronione']].forEach(([value, label]) => {
       const option = document.createElement('option'); option.value = value; option.textContent = label; skip.append(option);
     });
@@ -4386,7 +4387,9 @@
       }
     });
     controls.append(skip, saveSkip, resetCourse);
-    accountSettings.append(accountSummary, controls);
+    const skipHelp = document.createElement('p');
+    skipHelp.textContent = '„Według lekcji” korzysta z przełącznika w Studio → Lesson Builder. Indywidualne zezwolenie lub zakaz ma pierwszeństwo dla tego ucznia. Ręczna blokada konkretnego kroku nadal obowiązuje. Administrator może pomijać; pominięcie nie zalicza zadania.';
+    accountSettings.append(accountSummary, skipHelp, controls);
     host.append(accountSettings);
 
     const list = document.createElement('div');

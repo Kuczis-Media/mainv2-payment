@@ -615,14 +615,13 @@
   }
 
   function renderQuestionEditor(question, scope) {
-    const editor = section('Edytuj pytanie', `Stable questionId: ${question.questionId}`);
+    const editor = section('Konfigurator pytania', 'Wpisz treść, wybierz sposób odpowiedzi i ustaw punktację. Identyfikatory są obsługiwane automatycznie.');
     editor.classList.add('exam-question-editor');
     editor.dataset.questionScope = scope;
     editor.dataset.questionId = question.questionId;
     editor.append(
       row(
-        field('Typ pytania', select('@type', question.type, Object.entries(TYPE_LABELS).map(([value, label]) => ({ value, label })))),
-        field('questionId', input('@questionId', question.questionId, { maxLength: 128 }))
+        field('Typ pytania', select('@type', question.type, Object.entries(TYPE_LABELS).map(([value, label]) => ({ value, label }))))
       ),
       field('Treść pytania', textarea('@prompt', question.prompt, { rows: 5 })),
       row(
@@ -636,39 +635,32 @@
       scope === 'exam'
         ? mediaPanel('question', question)
         : field('Obrazy', textarea('@images', imagesToText(question.images), { rows: 3, placeholder: 'photos/schemat.png | Opis ALT' }), 'Jedna stabilna referencja i ALT w wierszu.'),
-      ...questionTypeFields(question),
+      ...questionTypeFields(question, scope),
       field('Wyjaśnienie po wyniku', textarea('@explanation', question.explanation, { rows: 4 }))
     );
+    const advanced = create('details', 'answer-advanced');
+    advanced.append(create('summary', '', 'Zaawansowane: identyfikator pytania'), field('ID pytania', input('@questionId', question.questionId, { maxLength: 128 }), 'Nie zmieniaj po rozpoczęciu egzaminu przez uczniów.'));
+    editor.append(advanced);
     return editor;
   }
 
-  function questionTypeFields(question) {
-    if (Array.isArray(question.options)) {
-      return [
-        field(
-          'Odpowiedzi',
-          textarea('@options', question.options.map((option) => (
-            `${option.answerId} | ${option.text} | ${answerImagesToText(option.images)}`
-          )).join('\n'), { rows: 7 }),
-          'Format: answerId | treść | photos/obraz.png :: ALT; photos/drugi.webp :: ALT. Obrazy są opcjonalne, ID pozostaje stabilne.'
-        ),
-        field(question.type === 'multiple_choice' ? 'Poprawne answerId' : 'Poprawne answerId', input('@correctAnswerIds', question.correctAnswerIds.join(', ')), 'Dla wielu odpowiedzi rozdziel przecinkami.')
-      ];
+  function questionTypeFields(question, scope) {
+    const changed = (structural) => {
+      if (scope === 'bank') state.bankDirty = true;
+      saveDrafts(); renderSummary(); elements.badge.textContent = 'Niezapisane zmiany';
+      if (structural) render();
+    };
+    if (Array.isArray(question.options) || ['matching', 'ordering', 'fill_blanks'].includes(question.type)) {
+      return [window.ChemAnswerFields.exam(question, changed)];
     }
     if (question.type === 'short_text') return [
-      field('Akceptowane odpowiedzi', textarea('@acceptedAnswers', question.acceptedAnswers.join('\n'), { rows: 5 })),
+      window.ChemAnswerFields.textList(question.acceptedAnswers, (values) => { question.acceptedAnswers = values; changed(); }),
       checkbox('@caseInsensitive', question.caseInsensitive, 'Ignoruj wielkość liter')
     ];
     if (question.type === 'number') return [row(
       field('Poprawna liczba', input('@correctNumber', question.correctNumber, { type: 'number', step: 'any' })),
       field('Tolerancja ±', input('@tolerance', question.tolerance, { type: 'number', min: 0, step: 'any' }))
     )];
-    if (question.type === 'matching') return [field('Pary', textarea('@pairs', question.pairs.map((pair) => `${pair.left} => ${pair.right}`).join('\n'), { rows: 8 }), 'Jedna para w wierszu: lewa => prawa.')];
-    if (question.type === 'ordering') return [field('Poprawna kolejność', textarea('@items', question.items.map((item) => item.text).join('\n'), { rows: 8 }), 'Kolejność w edytorze jest kluczem; klient otrzymuje pozycje przetasowane.')];
-    if (question.type === 'fill_blanks') return [
-      field('Tekst z lukami', textarea('@template', question.template, { rows: 5 }), 'Użyj znaczników {{luka}}.'),
-      field('Odpowiedzi do luk', textarea('@blanks', question.blanks.map((blank) => `${blank.blankId} | ${blank.acceptedAnswers.join('; ')}`).join('\n'), { rows: 6 }), 'Format: blankId | odpowiedź; alias')
-    ];
     return [
       field('Sposób oceniania', select('@gradingMode', question.gradingMode, [
         { value: 'ai', label: 'Autor uruchamia ocenę AI w raporcie' },

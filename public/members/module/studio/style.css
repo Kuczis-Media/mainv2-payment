@@ -6287,3 +6287,38 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
   .answer-key-builder-actions { grid-template-columns: 1fr; }
   .stable-question-id-row .button { width: 100%; }
 }
+
+.lesson-document-settings .lesson-navigation-setting { grid-column: 1 / -1; padding: 16px; border: 1px solid var(--chem-line); border-radius: 12px; background: var(--chem-surface-soft); }
+.lesson-navigation-setting > span { display: flex; align-items: center; gap: 12px; }
+.lesson-navigation-setting input[type="checkbox"] { appearance: auto; width: 20px; height: 20px; flex: 0 0 20px; accent-color: var(--chem-primary, #176b54); }
+.lesson-navigation-setting small { display: block; margin-top: 9px; color: var(--chem-muted); line-height: 1.6; font-size: 11px; }
+.answer-configurator { display: grid; gap: 12px; margin: 14px 0; padding: 18px; border: 1px solid var(--chem-line); border-radius: 14px; background: var(--chem-surface); min-width: 0; }
+.answer-configurator h4 { margin: 0; color: var(--chem-text, inherit); font-size: 15px; letter-spacing: -.02em; }
+.answer-help, .answer-attached { margin: 0; color: var(--chem-muted); font-size: 11px; line-height: 1.6; }
+.answer-row-list { display: grid; gap: 10px; }
+.answer-field { display: grid !important; min-width: 0; gap: 6px; margin: 0; }
+.answer-field > span { font-size: 11px; font-weight: 650; color: var(--chem-muted); }
+.answer-field input, .answer-field textarea { width: 100%; min-width: 0; padding: 10px 12px; background: var(--chem-surface); border: 1px solid var(--chem-line); border-radius: 8px; color: inherit; font: inherit; font-size: 13px; }
+.answer-field textarea { resize: vertical; min-height: 64px; }
+.answer-field input:focus, .answer-field textarea:focus { outline: 2px solid var(--chem-primary, #176b54); outline-offset: 1px; }
+.answer-list-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 10px; }
+.answer-choice-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 13px; padding: 14px; border: 1px solid var(--chem-line); border-radius: 11px; background: var(--chem-surface-soft); }
+.answer-choice-row.is-correct { border-color: color-mix(in srgb, #176b54 60%, var(--chem-line)); box-shadow: inset 3px 0 #176b54; }
+.answer-choice-row > input, .answer-case-toggle > input { appearance: auto; width: 18px; height: 18px; accent-color: #176b54; }
+.answer-choice-row .answer-attached { grid-column: 2 / -1; }
+.answer-pair-row { display: grid; grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr) auto; gap: 10px; align-items: end; padding: 12px 0; border-bottom: 1px solid var(--chem-line); }
+.answer-connector { align-self: center; padding-top: 20px; color: var(--chem-muted); }
+.answer-inline-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.answer-warning { color: #b45309; font-size: 12px; }
+.answer-case-toggle { display: flex; align-items: center; gap: 9px; font-size: 12px; }
+.answer-advanced { margin-top: 20px; border-top: 1px solid var(--chem-line); padding-top: 16px; }
+.answer-advanced summary { color: var(--chem-muted); cursor: pointer; font-size: 11px; margin-bottom: 12px; }
+.answer-configurator .mini-button { width: fit-content; min-height: 36px; }
+@media (max-width: 680px) {
+  .answer-configurator { padding: 12px; }
+  .answer-choice-row { grid-template-columns: 20px minmax(0, 1fr); padding: 10px; gap: 9px; }
+  .answer-choice-row > button { grid-column: 2; }
+  .answer-pair-row { grid-template-columns: minmax(0, 1fr); }
+  .answer-connector { display: none; }
+  .answer-list-row { grid-template-columns: 1fr; }
+}

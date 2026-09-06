@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="x-members" content="1">
   <meta name="referrer" content="no-referrer">
-  <title>Landing Page Builder — ChemDisk Studio</title>
-  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <title>Landing Page Builder — NextMed Studio</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="icon" href="https://cdn.jsdelivr.net/gh/Kuczis-Media/logo@main/benzene-ring.svg" type="image/svg+xml">
   <script src="/members/module/theme.js"></script>
   <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
@@ -17,11 +17,16 @@
 <body>
   <header class="landing-header">
     <a href="/members/module/studio/" class="back-link">← Studio</a>
-    <div><span>Landing Page Builder</span><small>Draft · podgląd · publikacja</small></div>
+    <div class="header-title"><span>Landing Builder</span><small>NextMed · edycja bez kodu</small></div>
     <div class="header-actions">
+      <button id="share-page" type="button" title="Skopiuj publiczny adres strony">Udostępnij</button>
+      <button id="export-config" type="button">Pobierz JSON</button>
+      <button id="export-html" type="button" title="Gotowa strona do hostowania statycznego">Pobierz stronę HTML</button>
+      <button id="import-config" type="button">Wczytaj JSON</button>
+      <input id="import-file" type="file" accept="application/json,.json" hidden>
       <button id="recover-local" type="button" hidden>Odzyskaj kopię</button>
       <button id="restore-published" type="button" hidden>Przywróć opublikowaną</button>
-      <button id="save-draft" type="button">Zapisz draft</button>
+      <button id="save-draft" type="button">Zapisz szkic</button>
       <button id="publish" class="primary" type="button">Opublikuj</button>
     </div>
   </header>
@@ -30,61 +35,98 @@
     <aside class="section-panel">
       <div class="panel-heading"><div><span class="eyebrow">Struktura</span><h1>Sekcje strony</h1></div><small>Przeciągnij lub użyj strzałek.</small></div>
       <div id="section-list" class="section-list"></div>
+      <div class="cost-note"><strong>Tworzysz po swojemu</strong><span>Wybierz sekcję, zmień treść i zobacz efekt obok. Podgląd niczego nie publikuje. Gotową stronę możesz też pobrać jako HTML.</span></div>
       <p id="status" class="status" role="status" aria-live="polite"></p>
     </aside>
 
     <section class="editor-panel" aria-labelledby="editor-title">
       <details class="branding-card" open>
-        <summary><span><span class="eyebrow">Branding i SEO</span><strong>Logo strony</strong></span><small>Publiczny GitHub → jsDelivr</small></summary>
-        <div class="form-grid branding-grid">
-          <div class="wide asset-url-field">
-            <label for="branding-logo"><span>Adres logo (GitHub, jsDelivr albo HTTPS)</span></label>
-            <div><input id="branding-logo" maxlength="1000" placeholder="https://…"><button type="button" data-open-assets="logo">Wybierz / wgraj</button><button id="copy-logo-url" type="button">Kopiuj URL</button></div>
-            <small>Link typu github.com/…/blob/… zostanie automatycznie zamieniony na adres CDN.</small>
-          </div>
-          <label><span>Tekst ALT logo</span><input id="branding-logo-alt" maxlength="120"></label>
-          <label><span>Tytuł karty / SEO</span><input id="branding-site-title" maxlength="160"></label>
-          <label class="wide"><span>Opis strony dla wyszukiwarki</span><textarea id="branding-site-description" rows="3" maxlength="320"></textarea></label>
+        <summary><span><span class="eyebrow">Cała firma w jednym miejscu</span><strong>Marka i kolory</strong></span><small>Zmiany dotyczą całego landingu</small></summary>
+        <div class="brand-presets" role="group" aria-label="Gotowe palety kolorów">
+          <button type="button" data-palette="nextmed"><i class="palette-nextmed"></i> NextMed</button>
+          <button type="button" data-palette="ocean"><i class="palette-ocean"></i> Ocean</button>
+          <button type="button" data-palette="violet"><i class="palette-violet"></i> Violet</button>
+          <button type="button" data-palette="graphite"><i class="palette-graphite"></i> Graphite</button>
         </div>
-        <div id="logo-preview" class="logo-preview" hidden><img alt="Podgląd logo"></div>
+        <div class="form-grid branding-grid">
+          <label><span>Nazwa marki</span><input id="branding-name" maxlength="120" placeholder="NextMed"></label>
+          <label><span>Hasło marki</span><input id="branding-tagline" maxlength="180" placeholder="Nauka, która prowadzi do wyniku"></label>
+        </div>
+        <fieldset class="theme-fieldset">
+          <legend>Paleta globalna</legend>
+          <div class="color-grid global-colors">
+            <label><span>Główny</span><input id="branding-primary" type="color" value="#0f766e"></label>
+            <label><span>Dodatkowy</span><input id="branding-secondary" type="color" value="#2563eb"></label>
+            <label><span>Akcent</span><input id="branding-accent" type="color" value="#f59e0b"></label>
+            <label><span>Tło</span><input id="branding-background" type="color" value="#f6f8fc"></label>
+            <label><span>Karty</span><input id="branding-surface" type="color" value="#ffffff"></label>
+            <label><span>Tekst</span><input id="branding-text" type="color" value="#0f172a"></label>
+            <label><span>Tekst pomocniczy</span><input id="branding-muted" type="color" value="#5f6b7c"></label>
+          </div>
+        </fieldset>
+        <label class="motion-toggle"><input id="branding-motion" type="checkbox" checked><span>Animacje przy przewijaniu<small>Delikatny ruch elementów. Preferencje ograniczenia ruchu odwiedzającego są zawsze respektowane.</small></span></label>
+        <details class="brand-advanced">
+          <summary>Logo, favicon, kontakt i SEO</summary>
+          <div class="form-grid branding-grid">
+            <div class="wide asset-url-field">
+              <label for="branding-logo"><span>Adres logo (GitHub, jsDelivr albo HTTPS)</span></label>
+              <div><input id="branding-logo" maxlength="1000" placeholder="https://…"><button type="button" data-open-assets="logo">Wybierz / wgraj</button><button id="copy-logo-url" type="button">Kopiuj URL</button></div>
+              <small>Link GitHub zostanie zmieniony na szybki adres CDN. Duże zdjęcia są zmniejszane przed wysłaniem.</small>
+            </div>
+            <label><span>Tekst ALT logo</span><input id="branding-logo-alt" maxlength="120"></label>
+            <label><span>Adres faviconu</span><input id="branding-favicon" maxlength="1000" placeholder="https://…"></label>
+            <label><span>Nazwa firmy</span><input id="branding-company" maxlength="160"></label>
+            <label><span>E-mail</span><input id="branding-email" type="email" maxlength="254"></label>
+            <label><span>Telefon (opcjonalnie)</span><input id="branding-phone" type="tel" maxlength="40"></label>
+            <label><span>Adres</span><input id="branding-address" maxlength="240"></label>
+            <label class="wide"><span>Tekst stopki</span><input id="branding-footer" maxlength="240"></label>
+            <label><span>Tytuł karty / SEO</span><input id="branding-site-title" maxlength="160"></label>
+            <label class="wide"><span>Opis strony dla wyszukiwarki</span><textarea id="branding-site-description" rows="3" maxlength="320"></textarea></label>
+          </div>
+          <div id="logo-preview" class="logo-preview" hidden><img alt="Podgląd logo"></div>
+        </details>
       </details>
-      <div class="panel-heading"><div><span class="eyebrow">Edycja</span><h2 id="editor-title">Sekcja</h2></div><label class="toggle"><input id="section-enabled" type="checkbox"><span>Widoczna</span></label></div>
+
+      <div class="panel-heading section-editor-heading"><div><span class="eyebrow">Wybrana sekcja</span><h2 id="editor-title">Sekcja</h2></div><label class="toggle"><input id="section-enabled" type="checkbox"><span>Widoczna</span></label></div>
       <div class="form-grid">
         <label><span>Tytuł</span><input id="section-title" maxlength="120"></label>
         <label><span>Podtytuł</span><input id="section-subtitle" maxlength="180"></label>
         <label class="wide"><span>Opis</span><textarea id="section-body" rows="5" maxlength="2000"></textarea></label>
         <div class="wide asset-url-field">
-          <label for="section-image"><span>Adres obrazu (GitHub, jsDelivr, HTTPS albo /assets/...)</span></label>
-          <div><input id="section-image" maxlength="1000" placeholder="https://…"><button type="button" data-open-assets="section">Wybierz / wgraj</button></div>
+          <label for="section-image"><span>Obraz sekcji (opcjonalnie)</span></label>
+          <div><input id="section-image" maxlength="1000" placeholder="GitHub, jsDelivr, HTTPS albo /assets/…"><button type="button" data-open-assets="section">Wybierz / wgraj</button></div>
         </div>
         <label class="wide"><span>Opis ALT obrazu</span><input id="section-image-alt" maxlength="180" placeholder="Co przedstawia obraz?"></label>
         <label><span>Tekst przycisku</span><input id="section-cta-label" maxlength="80"></label>
         <label><span>Link przycisku</span><input id="section-cta-href" maxlength="1000" placeholder="#pricing lub /members/"></label>
       </div>
-      <fieldset>
-        <legend>Styl sekcji</legend>
-        <div class="color-grid">
-          <label><span>Tło</span><input id="section-background" type="color" value="#ffffff"><button type="button" data-clear-color="backgroundColor">Wyczyść</button></label>
-          <label><span>Tekst</span><input id="section-text" type="color" value="#172033"><button type="button" data-clear-color="textColor">Wyczyść</button></label>
-          <label><span>Akcent</span><input id="section-accent" type="color" value="#0e665a"><button type="button" data-clear-color="accentColor">Wyczyść</button></label>
-        </div>
-      </fieldset>
+      <details class="section-style-card">
+        <summary>Zaawansowane kolory tej sekcji</summary>
+        <fieldset>
+          <legend>Puste pole oznacza użycie palety globalnej</legend>
+          <div class="color-grid">
+            <label><span>Tło</span><input id="section-background" type="color" value="#ffffff"><button type="button" data-clear-color="backgroundColor">Użyj globalnego</button></label>
+            <label><span>Tekst</span><input id="section-text" type="color" value="#0f172a"><button type="button" data-clear-color="textColor">Użyj globalnego</button></label>
+            <label><span>Akcent</span><input id="section-accent" type="color" value="#0f766e"><button type="button" data-clear-color="accentColor">Użyj globalnego</button></label>
+          </div>
+        </fieldset>
+      </details>
       <div id="image-preview" class="image-preview" hidden><img alt="Podgląd obrazu sekcji"></div>
     </section>
 
     <section class="preview-panel" aria-labelledby="preview-title">
-      <div class="panel-heading"><div><span class="eyebrow">Bezpieczny podgląd</span><h2 id="preview-title">Strona główna</h2></div><div class="preview-actions"><div class="preview-size" role="group" aria-label="Szerokość podglądu"><button type="button" data-preview-size="desktop" aria-pressed="true">Desktop</button><button type="button" data-preview-size="mobile" aria-pressed="false">Telefon</button></div><a href="/" target="_blank" rel="noopener">Otwórz stronę ↗</a></div></div>
-      <div id="preview-brand" class="preview-brand"><strong>Chem<span>Disk</span></strong></div>
-      <div id="landing-preview" class="landing-preview"></div>
+      <div class="panel-heading"><div><span class="eyebrow">Podgląd na żywo</span><h2 id="preview-title">Twoja strona</h2></div><div class="preview-actions"><div class="preview-size" role="group" aria-label="Szerokość podglądu"><button type="button" data-preview-size="desktop" aria-pressed="true">Desktop</button><button type="button" data-preview-size="mobile" aria-pressed="false">Telefon</button></div><a href="/" target="_blank" rel="noopener">Otwórz stronę ↗</a></div></div>
+      <p class="preview-note">To rzeczywista strona z Twoimi zmianami. Linki zewnętrzne, logowanie i zakup są wyłączone tylko w tym podglądzie.</p>
+      <div class="preview-browser"><div class="preview-browser-bar"><i></i><i></i><i></i><span id="preview-url">twoja-strona.pl</span></div><div id="preview-viewport" class="preview-viewport"><iframe id="landing-preview" class="landing-preview" title="Rzeczywisty podgląd strony" referrerpolicy="same-origin"></iframe></div></div>
     </section>
   </main>
 
   <dialog id="asset-dialog" class="asset-dialog" aria-labelledby="asset-dialog-title">
     <div class="asset-shell">
-      <header><div><span class="eyebrow">Publiczne repozytorium GitHub</span><h2 id="asset-dialog-title">Logo i obrazy strony</h2><p>Plik zapisze się jako odwracalny commit, a Studio zwróci gotowy adres jsDelivr.</p></div><button id="asset-close" type="button" aria-label="Zamknij">×</button></header>
+      <header><div><span class="eyebrow">Publiczne repozytorium GitHub</span><h2 id="asset-dialog-title">Logo i obrazy strony</h2><p>Plik zapisze się jako commit, a Studio zwróci gotowy adres CDN.</p></div><button id="asset-close" type="button" aria-label="Zamknij">×</button></header>
       <section id="asset-drop" class="asset-drop" tabindex="0">
         <input id="asset-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" multiple hidden>
-        <span aria-hidden="true">＋</span><div><strong>Przeciągnij, wklej lub wybierz plik</strong><small>PNG, JPG, WebP, GIF lub bezpieczny SVG · maks. 4 MB</small></div><button id="asset-file-button" type="button">Wybierz pliki</button>
+        <span aria-hidden="true">＋</span><div><strong>Przeciągnij, wklej lub wybierz plik</strong><small>PNG, JPG i WebP zostaną automatycznie zoptymalizowane · maks. 4 MB</small></div><button id="asset-file-button" type="button">Wybierz pliki</button>
       </section>
       <div class="asset-toolbar"><label><span class="sr-only">Szukaj pliku</span><input id="asset-search" type="search" placeholder="Szukaj po nazwie…"></label><button id="asset-refresh" type="button">↻ Odśwież</button></div>
       <p id="asset-status" class="asset-status" role="status" aria-live="polite"></p>

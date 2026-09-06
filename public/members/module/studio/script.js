@@ -66,6 +66,7 @@
     lessonPreview: byId('lesson-preview'),
     lessonFilename: byId('lesson-filename-input'),
     lessonTitle: byId('lesson-title-input'),
+    lessonAllowSkip: byId('lesson-allow-skip'),
     lessonSlideCount: byId('lesson-slide-count'),
     lessonPaletteSearch: byId('lesson-palette-search'),
     lessonRepository: byId('lesson-repository-select'),
@@ -3511,14 +3512,12 @@
     } else if (task.type === 'choice' || task.type === 'abcd') {
       form.append(taskOptionsEditor(task, true));
     } else {
-      form.append(field(
-        task.type === 'number' ? 'Poprawny wynik' : 'Poprawne odpowiedzi / aliasy',
-        lessonTextarea(task.answers.join('\n'), 'answers', {
-          rows: 3,
-          placeholder: task.type === 'number' ? '7' : 'atom\nAtom węgla'
-        }),
-        'Każdą akceptowaną odpowiedź wpisz w osobnym wierszu.'
-      ));
+      form.append(window.ChemAnswerFields.textList(task.answers, (values) => {
+        beginEdit('lesson');
+        task.answers = values;
+        updateLessonNodeSummary();
+        scheduleDraftSave('lesson');
+      }, { title: task.type === 'number' ? 'Poprawny wynik / równoważne zapisy' : 'Poprawne odpowiedzi / aliasy' }));
       if (task.type === 'text') {
         const check = create('label', 'check-field');
         const input = lessonInput('', 'caseSensitive', { type: 'checkbox', checked: task.caseSensitive });
@@ -5740,6 +5739,7 @@
     if (!state.lesson.model) return;
     elements.lessonFilename.value = state.lesson.model.filename;
     elements.lessonTitle.value = state.lesson.model.title;
+    elements.lessonAllowSkip.checked = state.lesson.model.navigation === 'free';
     renderLessonCanvas();
     renderLessonInspector();
     renderLessonPreview();
@@ -6135,6 +6135,7 @@
     if (found.kind === 'slide' && fieldName === 'lessonNavigation') {
       state.lesson.model.navigation = raw === 'free' ? 'free' : 'sequential';
       state.lesson.model.navigationConfigured = true;
+      elements.lessonAllowSkip.checked = state.lesson.model.navigation === 'free';
     } else if (found.kind === 'slide' && fieldName === 'slideTitle') {
       setSlideTitle(found.node, raw);
     } else if (found.kind === 'slide' && fieldName === 'slideLayout') {
@@ -8356,6 +8357,12 @@
       elements.dashboardFile.value = '';
     });
 
+    elements.lessonAllowSkip.addEventListener('change', () => {
+      commitMutation('lesson', () => {
+        state.lesson.model.navigation = elements.lessonAllowSkip.checked ? 'free' : 'sequential';
+        state.lesson.model.navigationConfigured = true;
+      });
+    });
     elements.lessonNew.addEventListener('click', createNewLessonDraft);
     elements.lessonSource.addEventListener('click', () => openSourceDialog('lesson'));
     elements.lessonImport.addEventListener('click', () => elements.lessonFile.click());

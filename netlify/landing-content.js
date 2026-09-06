@@ -2,28 +2,15 @@
 
 const { getStore } = require('@netlify/blobs');
 const { storageConfig } = require('./progress-storage.js');
+const DEFAULT_MODEL = require('../public/assets/data/landing-default.json');
 
 const STORE_NAME = 'chemdisk-landing';
 const DRAFT_KEY = 'draft.json';
 const PUBLISHED_KEY = 'published.json';
 const MAX_RETRIES = 8;
-const MODEL_VERSION = 2;
+const MODEL_VERSION = 3;
 const SECTION_IDS = Object.freeze(['home', 'about', 'services', 'pricing', 'skills', 'contact']);
-const DEFAULT_HERO_IMAGE_URL = 'https://cdn.jsdelivr.net/gh/Kuczis-Media/landing-page-assets@main/images/banner-chemical.png';
-const DEFAULT_BRANDING = Object.freeze({
-  logoUrl: '',
-  logoAlt: 'ChemDisk',
-  siteTitle: 'ChemDisk — kursy maturalne online',
-  siteDescription: 'Kursy maturalne, materiały, ćwiczenia i wsparcie prowadzącego w jednym miejscu.'
-});
-const DEFAULT_COPY = Object.freeze({
-  home: ['Twoja matura, dobrze zaplanowana', 'Witaj w ChemDisk', 'Ucz się skutecznie'],
-  about: ['O nas', 'Jesteśmy zespołem wspierającym maturzystów', 'Pomagamy uczniom zdać maturę pewnie i wysoko. Oferujemy kursy z matematyki, języka polskiego, języka angielskiego, chemii i biologii. Pracujemy na sprawdzonych metodach, arkuszach CKE i autorskich materiałach. Uczymy skutecznych strategii, powtarzamy kluczowe zagadnienia i trenujemy rozwiązywanie zadań pod presją czasu.'],
-  services: ['Nasze Moduły', 'Wszystko w jednym miejscu', 'Materiały, ćwiczenia, narzędzia i wsparcie prowadzącego.'],
-  pricing: ['Wybierz dostęp', 'Pakiety kursu', 'Jednorazowa płatność kartą przez Stripe. Dostępne pakiety i zasady ich przedłużania są zawsze widoczne przy aktualnej ofercie.'],
-  skills: ['Jak zacząć', 'Jak się zapisać?', 'Utwórz konto, wybierz pakiet i po opłaceniu rozpocznij naukę.'],
-  contact: ['Kontakt', 'Napisz do nas', 'Masz pytania o kursy, terminy lub poziomy? Wyślij wiadomość — odpowiemy.']
-});
+const DEFAULT_BRANDING = Object.freeze(DEFAULT_MODEL.branding);
 let injectedStoreFactory = null;
 
 function getLandingStore() {
@@ -34,36 +21,16 @@ function getLandingStore() {
 }
 
 function defaultModel() {
-  return {
-    version: MODEL_VERSION,
-    revision: 0,
-    branding: { ...DEFAULT_BRANDING },
-    sections: SECTION_IDS.map((id, index) => ({
-      id,
-      order: index,
-      enabled: true,
-      title: DEFAULT_COPY[id][0],
-      subtitle: DEFAULT_COPY[id][1],
-      body: DEFAULT_COPY[id][2],
-      imageUrl: ['home', 'about'].includes(id) ? DEFAULT_HERO_IMAGE_URL : '',
-      imageAlt: id === 'about' ? 'Ilustracja związana z nauką chemii' : '',
-      backgroundColor: '',
-      textColor: '',
-      accentColor: '',
-      ctaLabel: id === 'home' ? 'Zaloguj się' : id === 'about' ? 'Poznaj moduły' : id === 'skills' ? 'Wybierz pakiet' : '',
-      ctaHref: id === 'home' ? '/members/' : id === 'about' ? '#services' : id === 'skills' ? '#pricing' : ''
-    })),
-    createdAt: null,
-    updatedAt: null,
-    updatedBy: null,
-    publishedAt: null
-  };
+  return structuredClone(DEFAULT_MODEL);
 }
 
 function normalizeModel(raw, strict = false) {
+  if (strict && !plainObject(raw)) throw landingError('INVALID_LANDING_MODEL', 400);
   const source = plainObject(raw) ? raw : {};
+  if (strict) validateModelShape(source);
   const defaults = defaultModel();
   const legacy = !Number.isSafeInteger(source.version) || source.version < MODEL_VERSION;
+  const legacyBlanks = !Number.isSafeInteger(source.version) || source.version < 2;
   const byId = new Map((Array.isArray(source.sections) ? source.sections : []).filter(plainObject).map((section) => [String(section.id || ''), section]));
   const sections = SECTION_IDS.map((id, fallbackOrder) => {
     const value = byId.get(id) || {};
@@ -72,34 +39,52 @@ function normalizeModel(raw, strict = false) {
       id,
       order: Number.isSafeInteger(value.order) && value.order >= 0 ? value.order : fallbackOrder,
       enabled: value.enabled !== false,
-      title: textField(value, 'title', fallback.title, 120, legacy),
-      subtitle: textField(value, 'subtitle', fallback.subtitle, 180, legacy),
-      body: textField(value, 'body', fallback.body, 2_000, legacy),
-      imageUrl: urlField(value, 'imageUrl', fallback.imageUrl, 'image', strict, legacy),
+      title: textField(value, 'title', fallback.title, 120, legacyBlanks),
+      subtitle: migratedSectionText(id, value, 'subtitle', fallback.subtitle, 180, legacy, legacyBlanks),
+      body: textField(value, 'body', fallback.body, 2_000, legacyBlanks),
+      imageUrl: urlField(value, 'imageUrl', fallback.imageUrl, 'image', strict, legacyBlanks),
       imageAlt: textField(value, 'imageAlt', fallback.imageAlt, 180),
       backgroundColor: safeColor(value.backgroundColor, strict),
       textColor: safeColor(value.textColor, strict),
       accentColor: safeColor(value.accentColor, strict),
-      ctaLabel: textField(value, 'ctaLabel', fallback.ctaLabel, 80, legacy),
-      ctaHref: urlField(value, 'ctaHref', fallback.ctaHref, 'link', strict, legacy)
+      ctaLabel: textField(value, 'ctaLabel', fallback.ctaLabel, 80, legacyBlanks),
+      ctaHref: urlField(value, 'ctaHref', fallback.ctaHref, 'link', strict, legacyBlanks)
     };
   }).sort((left, right) => left.order - right.order).map((section, order) => ({ ...section, order }));
   if (strict) {
     const enabledIds = new Set(sections.filter((section) => section.enabled !== false).map((section) => section.id));
     for (const section of sections) {
       const target = /^#([A-Za-z][A-Za-z0-9_-]{0,79})$/.exec(section.ctaHref);
-      if (section.ctaLabel && target && !enabledIds.has(target[1])) throw landingError('INVALID_LANDING_LINK_TARGET', 400);
+      if (section.enabled && section.ctaLabel && target && !enabledIds.has(target[1])) throw landingError('INVALID_LANDING_LINK_TARGET', 400);
     }
   }
   const branding = plainObject(source.branding) ? source.branding : {};
+  const brandName = migratedBrandText(branding, 'brandName', DEFAULT_BRANDING.brandName, 120, legacy);
+  if (strict && !brandName) throw landingError('INVALID_LANDING_BRAND_NAME', 400);
   return {
     version: MODEL_VERSION,
     revision: Number.isSafeInteger(source.revision) && source.revision >= 0 ? source.revision : 0,
     branding: {
+      brandName,
+      tagline: textField(branding, 'tagline', DEFAULT_BRANDING.tagline, 180),
       logoUrl: urlField(branding, 'logoUrl', DEFAULT_BRANDING.logoUrl, 'image', strict),
-      logoAlt: textField(branding, 'logoAlt', DEFAULT_BRANDING.logoAlt, 120),
-      siteTitle: textField(branding, 'siteTitle', DEFAULT_BRANDING.siteTitle, 160),
-      siteDescription: textField(branding, 'siteDescription', DEFAULT_BRANDING.siteDescription, 320)
+      logoAlt: migratedBrandText(branding, 'logoAlt', DEFAULT_BRANDING.logoAlt, 120, legacy),
+      faviconUrl: urlField(branding, 'faviconUrl', DEFAULT_BRANDING.faviconUrl, 'image', strict),
+      siteTitle: migratedBrandText(branding, 'siteTitle', DEFAULT_BRANDING.siteTitle, 160, legacy),
+      siteDescription: textField(branding, 'siteDescription', DEFAULT_BRANDING.siteDescription, 320),
+      primaryColor: colorField(branding, 'primaryColor', DEFAULT_BRANDING.primaryColor, strict),
+      secondaryColor: colorField(branding, 'secondaryColor', DEFAULT_BRANDING.secondaryColor, strict),
+      accentColor: colorField(branding, 'accentColor', DEFAULT_BRANDING.accentColor, strict),
+      backgroundColor: colorField(branding, 'backgroundColor', DEFAULT_BRANDING.backgroundColor, strict),
+      surfaceColor: colorField(branding, 'surfaceColor', DEFAULT_BRANDING.surfaceColor, strict),
+      textColor: colorField(branding, 'textColor', DEFAULT_BRANDING.textColor, strict),
+      mutedColor: colorField(branding, 'mutedColor', DEFAULT_BRANDING.mutedColor, strict),
+      motionEnabled: branding.motionEnabled !== false,
+      companyName: migratedBrandText(branding, 'companyName', DEFAULT_BRANDING.companyName, 160, legacy),
+      contactEmail: emailField(branding, 'contactEmail', DEFAULT_BRANDING.contactEmail, strict),
+      contactPhone: phoneField(branding, 'contactPhone', DEFAULT_BRANDING.contactPhone, strict),
+      contactAddress: textField(branding, 'contactAddress', DEFAULT_BRANDING.contactAddress, 240),
+      footerText: migratedBrandText(branding, 'footerText', DEFAULT_BRANDING.footerText, 240, legacy)
     },
     sections,
     createdAt: isoOrNull(source.createdAt),
@@ -107,6 +92,30 @@ function normalizeModel(raw, strict = false) {
     updatedBy: cleanText(source.updatedBy, 160) || null,
     publishedAt: isoOrNull(source.publishedAt)
   };
+}
+
+function validateModelShape(source) {
+  if (!plainObject(source.branding) || !Array.isArray(source.sections)
+    || !Number.isSafeInteger(source.version) || source.version < 1 || source.version > MODEL_VERSION
+    || !Number.isSafeInteger(source.revision) || source.revision < 0 || source.revision >= Number.MAX_SAFE_INTEGER - 1) {
+    throw landingError('INVALID_LANDING_MODEL', 400);
+  }
+  for (const [key, value] of Object.entries(source.branding)) {
+    if (Object.hasOwn(DEFAULT_BRANDING, key) && typeof value !== typeof DEFAULT_BRANDING[key]) throw landingError('INVALID_LANDING_MODEL', 400);
+  }
+  const ids = new Set();
+  for (const section of source.sections) {
+    if (!plainObject(section) || !SECTION_IDS.includes(section.id) || ids.has(section.id)
+      || (Object.prototype.hasOwnProperty.call(section, 'enabled') && typeof section.enabled !== 'boolean')
+      || (Object.prototype.hasOwnProperty.call(section, 'order') && (!Number.isSafeInteger(section.order) || section.order < 0))) {
+      throw landingError('INVALID_LANDING_MODEL', 400);
+    }
+    ids.add(section.id);
+    for (const [key, value] of Object.entries(section)) {
+      if (Object.hasOwn(DEFAULT_MODEL.sections[0], key) && typeof value !== typeof DEFAULT_MODEL.sections[0][key]) throw landingError('INVALID_LANDING_MODEL', 400);
+    }
+  }
+  if (ids.size !== SECTION_IDS.length) throw landingError('INVALID_LANDING_MODEL', 400);
 }
 
 async function readModel(store, key) {
@@ -118,6 +127,7 @@ async function readEditorState(store) {
   const [draft, published] = await Promise.all([readModel(store, DRAFT_KEY), readModel(store, PUBLISHED_KEY)]);
   return {
     draft: draft.exists ? draft.model : published.exists ? published.model : defaultModel(),
+    draftExists: draft.exists,
     published: published.exists ? published.model : null
   };
 }
@@ -145,8 +155,18 @@ async function saveDraft(store, raw, adminId) {
 }
 
 async function publish(store, raw, adminId) {
-  const draft = await saveDraft(store, raw, adminId);
+  const input = normalizeModel(raw, true);
+  const current = await readModel(store, DRAFT_KEY);
+  const retryDraft = current.exists
+    && current.model.revision === input.revision + 1
+    && comparableModel(current.model) === comparableModel(input);
+  const draft = retryDraft ? current.model : await saveDraft(store, input, adminId);
   return writePublishedModel(store, draft, adminId);
+}
+
+function comparableModel(model) {
+  const normalized = normalizeModel(model);
+  return JSON.stringify({ branding: normalized.branding, sections: normalized.sections });
 }
 
 async function writePublishedModel(store, input, adminId) {
@@ -181,13 +201,17 @@ async function readEntry(store, key) {
 }
 
 function safeUrl(value, kind, strict) {
+  if (typeof value === 'string' && /[\\\u0000-\u001f\u007f]/.test(value)) {
+    if (strict) throw landingError(kind === 'image' ? 'INVALID_LANDING_IMAGE_URL' : 'INVALID_LANDING_LINK', 400);
+    return '';
+  }
   const raw = cleanText(value, 1_000);
   if (!raw) return '';
   if (kind === 'link' && /^#[A-Za-z][A-Za-z0-9_-]{0,79}$/.test(raw)) return raw;
-  if (/^\/(?!\/)[^\s]*$/.test(raw)) return raw;
+  if (/^\/(?!\/)[^\s\\]*$/.test(raw)) return raw;
   try {
     const url = new URL(raw);
-    if (url.protocol === 'https:') return kind === 'image' ? normalizeGitHubImageUrl(url) : url.toString();
+    if (url.protocol === 'https:' && !url.username && !url.password) return kind === 'image' ? normalizeGitHubImageUrl(url) : url.toString();
   } catch {}
   if (strict) throw landingError(kind === 'image' ? 'INVALID_LANDING_IMAGE_URL' : 'INVALID_LANDING_LINK', 400);
   return '';
@@ -216,6 +240,25 @@ function textField(source, key, fallback, max, legacyFallback = false) {
   return legacyFallback && !value ? fallback : value;
 }
 
+function migratedBrandText(source, key, fallback, max, legacy) {
+  const value = textField(source, key, fallback, max);
+  if (!legacy) return value;
+  const oldDefaults = {
+    brandName: 'ChemDisk',
+    logoAlt: 'ChemDisk',
+    siteTitle: 'ChemDisk — kursy maturalne online',
+    companyName: 'Kursy Maturalne',
+    footerText: 'Kursy Maturalne · kursy maturalne'
+  };
+  return !Object.prototype.hasOwnProperty.call(source, key) || value === oldDefaults[key] ? fallback : value;
+}
+
+function migratedSectionText(sectionId, source, key, fallback, max, legacy, legacyBlanks) {
+  const value = textField(source, key, fallback, max, legacyBlanks);
+  if (legacy && sectionId === 'home' && key === 'subtitle' && value === 'Witaj w ChemDisk') return fallback;
+  return value;
+}
+
 function urlField(source, key, fallback, kind, strict, legacyFallback = false) {
   if (!Object.prototype.hasOwnProperty.call(source, key)) return fallback;
   const value = safeUrl(source[key], kind, strict);
@@ -230,6 +273,27 @@ function safeColor(value, strict) {
   return '';
 }
 
+function colorField(source, key, fallback, strict) {
+  if (!Object.prototype.hasOwnProperty.call(source, key)) return fallback;
+  return safeColor(source[key], strict) || fallback;
+}
+
+function emailField(source, key, fallback, strict) {
+  if (!Object.prototype.hasOwnProperty.call(source, key)) return fallback;
+  const email = cleanText(source[key], 254);
+  if (!email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return email;
+  if (strict) throw landingError('INVALID_LANDING_EMAIL', 400);
+  return fallback;
+}
+
+function phoneField(source, key, fallback, strict) {
+  if (!Object.prototype.hasOwnProperty.call(source, key)) return fallback;
+  const phone = cleanText(source[key], 40);
+  if (!phone || /^\+?[0-9 ()-]{5,40}$/.test(phone)) return phone;
+  if (strict) throw landingError('INVALID_LANDING_PHONE', 400);
+  return fallback;
+}
+
 function cleanText(value, max) {
   return typeof value === 'string' ? value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim().slice(0, max) : '';
 }
@@ -239,6 +303,11 @@ function isoOrNull(value) {
 }
 
 function plainObject(value) { return Boolean(value) && typeof value === 'object' && !Array.isArray(value); }
+
+function publicModel(raw) {
+  const model = normalizeModel(raw);
+  return { version: model.version, revision: model.revision, branding: model.branding, sections: model.sections, publishedAt: model.publishedAt };
+}
 
 function landingError(code, status) {
   const error = new Error(code);
@@ -254,9 +323,11 @@ module.exports = {
   SECTION_IDS,
   STORE_NAME,
   defaultModel,
+  comparableModel,
   getLandingStore,
   normalizeModel,
   publish,
+  publicModel,
   readEditorState,
   readModel,
   saveDraft,

@@ -49,6 +49,7 @@ function merge(existing, event, options = {}) {
     effective: node ? resolved.effective.get(node.id) : { tracking: true, showProgress: true },
     global: options.global || normalizedCatalog.global,
     preferences: options.preferences || {},
+    isAdmin: options.isAdmin === true,
     records: options.records || {},
     isLeaf: options.isLeaf,
     now: options.now || '2026-08-15T10:00:00.000Z'
@@ -370,6 +371,11 @@ test('server lesson navigation blocks jumps and honors per-user allow/deny/lock 
     materialId: 'lesson', action: 'lesson_step', details: { currentStepId: 'b', completedStepIds: ['a'] }
   }, { node, preferences: { skipMode: 'ALLOW', lockedStepIds: ['b'] } });
   assert.equal(locked.code, 'STEP_LOCKED');
+  const adminJump = merge(null, {
+    materialId: 'lesson', action: 'lesson_step', details: { currentStepId: 'c' }
+  }, { node, isAdmin: true, preferences: { skipMode: 'DENY', lockedStepIds: ['c'] } });
+  assert.equal(adminJump.ok, true);
+  assert.equal(adminJump.record.progressPercent, 0, 'Skipping does not complete the task');
 
   const bypass = merge(null, {
     materialId: 'lesson', action: 'complete', details: { currentStepId: 'c', completedStepIds: ['c'] }
@@ -733,6 +739,62 @@ function eventFor(method, body, query = {}) {
 function responseJson(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 }
+
+test('lesson manifests survive Dashboard publication and protect lessons opened directly', async (t) => {
+  const navigation = require('../public/assets/js/lesson-navigation.js');
+  const store = new MemoryStore();
+  progressFunction._test.setStoreFactory(() => store);
+  adminProgressFunction._test.setStoreFactory(() => store);
+  const originalFetch = global.fetch;
+  let canonical = { id: ADMIN, email: 'admin@example.com', app_metadata: { roles: ['admin'] } };
+  global.fetch = async () => responseJson(canonical);
+  t.after(() => {
+    global.fetch = originalFetch;
+    progressFunction._test.setStoreFactory(null);
+    adminProgressFunction._test.setStoreFactory(null);
+  });
+  const manifest = { navigation: 'sequential', steps: [{ id: 'start' }, { id: 'task' }, { id: 'end' }] };
+  const saved = await adminProgressFunction.handler(eventFor('PUT', {
+    action: 'lesson_manifest', filename: 'test.md', repositoryId: 'biology', manifest
+  }), contextFor(canonical));
+  assert.equal(saved.statusCode, 200);
+  const id = navigation.materialId('biology', 'test.md');
+  let stored = JSON.parse(store.entries.get(CATALOG_KEY).data);
+  assert.equal(stored.lessonManifests[id].settings.navigation, 'sequential');
+  const published = await adminProgressFunction.handler(eventFor('PUT', {
+    action: 'catalog', catalog: { nodes: [{
+      id: 'dashboard-lesson', type: 'lesson', settings: { contentFile: 'test.md', repositoryId: 'biology', navigation: 'free' }
+    }] }
+  }), contextFor(canonical));
+  assert.equal(published.statusCode, 200);
+  stored = JSON.parse(store.entries.get(CATALOG_KEY).data);
+  assert.equal(stored.nodes[0].settings.navigation, 'sequential');
+  assert.equal(stored.nodes[0].settings.steps.length, 3);
+  assert.ok(stored.lessonManifests[id]);
+
+  const jump = { materialId: id, materialType: 'lesson', action: 'lesson_step', details: { currentStepId: 'end' } };
+  const admin = await progressFunction.handler(eventFor('POST', jump), contextFor(canonical));
+  assert.equal(admin.statusCode, 200);
+  canonical = { id: USER_ONE, email: 'student@example.com', app_metadata: { roles: ['active'] } };
+  const student = await progressFunction.handler(eventFor('POST', jump), contextFor(canonical));
+  assert.equal(student.statusCode, 409);
+  assert.equal(JSON.parse(student.body).error, 'STEP_NOT_UNLOCKED');
+  const spoof = await progressFunction.handler(eventFor('POST', { ...jump, isAdmin: true }), contextFor(canonical));
+  assert.equal(spoof.statusCode, 400);
+});
+
+test('shared player/server policy gives individual preferences priority and never restricts admins', () => {
+  const navigation = require('../public/assets/js/lesson-navigation.js');
+  for (const mode of ['free', 'sequential']) {
+    assert.equal(navigation.policy(mode, { skipMode: 'ALLOW' }).sequential, false);
+    assert.equal(navigation.policy(mode, { skipMode: 'DENY' }).sequential, true);
+    assert.equal(navigation.policy(mode, { skipMode: 'DENY' }, true).sequential, false);
+  }
+  assert.equal(navigation.policy('free', { skipMode: 'DEFAULT' }).sequential, false);
+  assert.equal(navigation.policy('sequential', { skipMode: 'DEFAULT' }).sequential, true);
+  assert.equal(navigation.stepOverride('step', { skipMode: 'ALLOW', lockedStepIds: ['step'] }), 'deny');
+  assert.equal(navigation.stepOverride('step', { lockedStepIds: ['step'] }, true), 'allow');
+});
 
 test('progress endpoints derive the learner from Identity, deny privilege escalation, reset and audit admin changes', async (t) => {
   const store = new MemoryStore();

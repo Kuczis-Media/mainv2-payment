@@ -6,6 +6,39 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
+const STATIC_CONFIG_URL = 'https://raw.githubusercontent.com/Kuczis-Media/logo/main/landing/config.json';
+const SECTION_IDS = ['home', 'about', 'services', 'pricing', 'skills', 'contact'];
+
+function runtimeModel(revision, prefix = 'Model') {
+  return {
+    version: 3,
+    revision,
+    branding: {
+      brandName: 'NextMed',
+      logoUrl: '',
+      logoAlt: 'NextMed',
+      siteTitle: `${prefix} — NextMed`,
+      siteDescription: `${prefix} opis`,
+      primaryColor: '#0f766e'
+    },
+    sections: SECTION_IDS.map((id, order) => ({
+      id,
+      order,
+      enabled: true,
+      title: `${prefix} ${id}`,
+      subtitle: '',
+      body: '',
+      imageUrl: '',
+      imageAlt: '',
+      backgroundColor: '',
+      textColor: '',
+      accentColor: '',
+      ctaLabel: '',
+      ctaHref: ''
+    }))
+  };
+}
+
 class FakeClassList {
   constructor() { this.values = new Set(); }
   add(name) { this.values.add(name); }
@@ -91,8 +124,9 @@ class FakeElement {
   closest(selector) { return selector === 'li' ? this.listItem || null : null; }
 }
 
-function landingDom() {
-  const ids = ['home', 'about', 'services', 'pricing', 'skills', 'contact'];
+function landingDom(options = {}) {
+  const main = new FakeElement('main');
+  const ids = SECTION_IDS;
   const targetSelectors = {
     home: ['.text-2', '.text-1', '.text-3', '#login-cta'],
     about: ['.title', '.column.right .text', '.column.right p', '.column.left img', '.column.right a'],
@@ -129,6 +163,9 @@ function landingDom() {
   const menu = new FakeElement('ul');
   const brand = new FakeElement('a');
   const description = { content: 'opis statyczny' };
+  const staticConfig = { content: options.staticConfigUrl || '' };
+  const themeColor = { content: '#ffffff' };
+  const head = new FakeElement('head');
   const links = Object.fromEntries(ids.map((id) => {
     const link = new FakeElement('a');
     link.listItem = new FakeElement('li');
@@ -142,31 +179,82 @@ function landingDom() {
   menu.append(fixedMenuItem);
   const document = {
     title: 'Tytuł statyczny',
-    documentElement: { dataset: {} },
+    documentElement: { dataset: {}, style: new FakeStyle() },
+    head,
     events: [],
-    getElementById: (id) => sections[id] || null,
+    getElementById: (id) => id === 'nextmed-landing-model' && options.embeddedModel ? { textContent: JSON.stringify(options.embeddedModel) } : sections[id] || null,
     createElement: (tag) => new FakeElement(tag),
     createTextNode: (value) => ({ nodeType: 3, textContent: String(value) }),
     dispatchEvent(event) { this.events.push(event); },
+    addEventListener() {},
     querySelector(selector) {
+      if (selector === 'main') return main;
+      if (selector === 'meta[name="nextmed-landing-export"]' && options.embeddedModel) return { content: '1' };
+      if (selector === 'meta[name="nextmed-landing-origin"]' && options.embeddedModel) return { content: 'https://course.example' };
       if (selector === 'footer') return footer;
       if (selector === '.navbar') return navbar;
       if (selector === '.navbar .menu') return menu;
       if (selector === '.navbar .logo a') return brand;
       if (selector === 'meta[name="description"]') return description;
+      if (selector === 'meta[name="theme-color"]') return themeColor;
+      if (selector === 'meta[name="nextmed-landing-config"]') return staticConfig;
       const match = /^\.navbar \.menu a\[href="#([a-z]+)"\]$/.exec(selector);
       return match ? links[match[1]] || null : null;
-    }
+    },
+    querySelectorAll() { return []; }
   };
-  return { document, sections, footer, navbar, menu, brand, description, links };
+  return { document, main, sections, footer, navbar, menu, brand, description, staticConfig, themeColor, links };
 }
 
-test('published landing runtime clears fields, reorders sections and applies the local cache without waiting for a Function', () => {
+test('live preview accepts only a matching parent, origin and handshake token without network calls', () => {
+  const dom = landingDom();
+  const messages = []; const handlers = {};
+  const parent = { postMessage: (message) => messages.push(message) };
+  let requests = 0;
+  const context = {
+    document: dom.document, parent, location: { origin: 'https://course.example', search: '?landing-preview=1' },
+    URL, CustomEvent: class { constructor(type) { this.type = type; } },
+    addEventListener: (type, callback) => { handlers[type] = callback; },
+    fetch: () => { requests++; throw new Error('Preview must stay local'); }
+  };
+  context.window = context;
+  vm.runInNewContext(fs.readFileSync(require.resolve('../public/assets/js/landing-runtime.js'), 'utf8'), context);
+  const token = '12345678-12345678';
+  const send = (data, source = parent, origin = 'https://course.example') => handlers.message({ source, origin, data });
+  send({ type: 'nextmed:landing-preview:init', token }, {}, 'https://attacker.example');
+  assert.equal(messages.length, 0);
+  send({ type: 'nextmed:landing-preview:init', token });
+  assert.equal(messages[0].type, 'nextmed:landing-preview:ready');
+  send({ type: 'nextmed:landing-preview:model', token: 'wrong-token', model: runtimeModel(1) });
+  assert.equal(dom.main.children.length, 0);
+  send({ type: 'nextmed:landing-preview:model', token, model: runtimeModel(1, 'Preview') });
+  assert.equal(dom.document.title, 'Preview — NextMed');
+  assert.equal(dom.main.children.length, 6);
+  assert.equal(requests, 0);
+});
+
+test('standalone HTML uses only its embedded model, not the live GitHub or Function configuration', () => {
+  const model = runtimeModel(2, 'Offline');
+  model.branding.motionEnabled = false;
+  const dom = landingDom({ embeddedModel: model });
+  let requests = 0;
+  const context = { document: dom.document, URL, location: { search: '' }, CustomEvent: class {}, fetch: () => { requests++; } };
+  context.window = context; context.parent = context;
+  vm.runInNewContext(fs.readFileSync(require.resolve('../public/assets/js/landing-runtime.js'), 'utf8'), context);
+  assert.equal(dom.document.title, 'Offline — NextMed');
+  assert.equal(dom.document.documentElement.dataset.motion, 'off');
+  assert.equal(dom.main.children.length, 6);
+  assert.equal(requests, 0);
+});
+
+test('published landing runtime applies a fresh v3 cache without any network request', () => {
   const dom = landingDom();
   const model = {
-    version: 2,
+    version: 3,
     revision: 7,
-    branding: { logoUrl: '', logoAlt: '', siteTitle: '', siteDescription: '' },
+    branding: {
+      brandName: 'NextMed', logoUrl: '', logoAlt: 'NextMed', siteTitle: 'NextMed — test', siteDescription: 'Opis NextMed', primaryColor: '#0f766e'
+    },
     sections: [
       { id: 'home', order: 2, enabled: false, title: '', subtitle: '', body: '', imageUrl: '', imageAlt: '', backgroundColor: '', textColor: '', accentColor: '', ctaLabel: '', ctaHref: '' },
       { id: 'about', order: 1, enabled: true, title: '', subtitle: '', body: '', imageUrl: '', imageAlt: '', backgroundColor: '', textColor: '', accentColor: '', ctaLabel: 'Bez linku', ctaHref: '' },
@@ -176,7 +264,8 @@ test('published landing runtime clears fields, reorders sections and applies the
       { id: 'contact', order: 5, enabled: true, title: 'Kontakt', subtitle: '', body: '', imageUrl: '', imageAlt: '', backgroundColor: '', textColor: '', accentColor: '', ctaLabel: '', ctaHref: '' }
     ]
   };
-  const storage = new Map([['chem.landing.public.v2', JSON.stringify(model)]]);
+  const storage = new Map([['chem.landing.public.v3', JSON.stringify({ model, checkedAt: Date.now(), source: 'static' })]]);
+  let fetchCalls = 0;
   const context = {
     console,
     document: dom.document,
@@ -185,7 +274,7 @@ test('published landing runtime clears fields, reorders sections and applies the
       setItem: (key, value) => storage.set(key, value),
       removeItem: (key) => storage.delete(key)
     },
-    fetch: async () => ({ ok: false }),
+    fetch: async () => { fetchCalls += 1; return { ok: false }; },
     AbortController,
     CustomEvent: class CustomEvent { constructor(type, options) { this.type = type; this.detail = options?.detail; } },
     URL
@@ -198,7 +287,7 @@ test('published landing runtime clears fields, reorders sections and applies the
   vm.runInNewContext(script, context, { filename: 'landing-runtime.js' });
 
   assert.equal(dom.sections.home.hidden, true);
-  assert.equal(dom.sections.home.style.backgroundImage, 'none');
+  assert.equal(dom.sections.home.style.backgroundImage, undefined);
   assert.equal(dom.sections.about.selectors.get('.title').textContent, '');
   assert.equal(dom.sections.about.selectors.get('.title').hidden, true);
   assert.equal(dom.sections.about.selectors.get('.column.left img').hidden, true);
@@ -215,12 +304,15 @@ test('published landing runtime clears fields, reorders sections and applies the
   assert.equal(dom.links.about.listItem.hidden, false);
   assert.equal(dom.navbar.classList.contains('landing-solid'), true);
   assert.deepEqual(dom.menu.children.map((item) => item.id), ['nav-services', 'nav-about', 'nav-home', 'nav-pricing', 'nav-skills', 'nav-contact', 'nav-login']);
-  assert.deepEqual(dom.footer.beforeCalls.map((section) => section.id), ['services', 'about', 'home', 'pricing', 'skills', 'contact']);
-  assert.equal(dom.document.title, '');
-  assert.equal(dom.description.content, '');
+  assert.deepEqual(dom.main.children.map((section) => section.id), ['services', 'about', 'home', 'pricing', 'skills', 'contact']);
+  assert.equal(dom.document.title, 'NextMed — test');
+  assert.equal(dom.description.content, 'Opis NextMed');
+  assert.equal(dom.document.documentElement.style.values['--brand-primary'], '#0f766e');
   assert.equal(dom.brand.classList.contains('has-brand-image'), false);
+  assert.equal(dom.brand.children[0].textContent, 'NextMed');
   assert.equal(dom.document.documentElement.dataset.landingPublished, 'true');
   assert.equal(dom.document.events[0].detail.revision, 7);
+  assert.equal(fetchCalls, 0);
 });
 
 test('landing runtime uses a solid navbar over a light hero without an image', () => {

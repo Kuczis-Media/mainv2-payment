@@ -1,10 +1,11 @@
 (function applyPublishedLanding() {
   'use strict';
 
-  const ENDPOINT = '/.netlify/functions/landing';
-  const CACHE_KEY = 'chem.landing.public.v2';
+  const FUNCTION_ENDPOINT = '/.netlify/functions/landing';
+  const CACHE_KEY = 'chem.landing.public.v3';
+  const LEGACY_CACHE_KEY = 'chem.landing.public.v2';
+  const CACHE_TTL_MS = 15 * 60 * 1000;
   const REQUEST_TIMEOUT_MS = 5_000;
-  let brandingRequestId = 0;
   const COPY_TARGETS = {
     home: { title: '.text-2', subtitle: '.text-1', body: '.text-3', image: 'background', cta: '#login-cta' },
     about: { title: '.title', subtitle: '.column.right .text', body: '.column.right p', image: '.column.left img', cta: '.column.right a' },
@@ -13,124 +14,274 @@
     skills: { title: '.title', subtitle: '.column.left .text', body: '.column.left p', image: 'managed', cta: '.column.left a' },
     contact: { title: '.title', subtitle: '.column.left .text', body: '.column.left > p', image: 'managed', cta: '.landing-section-cta' }
   };
+  const SECTION_IDS = Object.keys(COPY_TARGETS);
+  let brandingRequestId = 0;
+  let currentModel = null;
+  const previewMode = /(?:^|[?&])landing-preview=1(?:&|$)/.test(window.location?.search || '') && window.parent !== window;
+  const exportMode = Boolean(document.querySelector('meta[name="nextmed-landing-export"]'));
+  const exportOrigin = exportMode ? document.querySelector('meta[name="nextmed-landing-origin"]')?.content || '' : '';
+  window.NextMedLanding = Object.freeze({ applyModel: safelyApply });
+
+  if (previewMode) {
+    initializePreview();
+    return;
+  }
+  if (exportMode) {
+    try { safelyApply(JSON.parse(document.getElementById('nextmed-landing-model')?.textContent || 'null')); } catch {}
+    return;
+  }
 
   const cached = readCache();
-  if (cached) applyModel(cached);
-  void refresh();
+  if (cached?.model) safelyApply(cached.model);
+  if (!cached || Date.now() - cached.checkedAt >= CACHE_TTL_MS) void refresh();
 
   async function refresh() {
+    const staticUrl = staticConfigUrl();
+    let payload = staticUrl ? await fetchPayload(staticUrl, 'no-cache') : null;
+    let source = 'static';
+    // A configured public JSON is authoritative. A temporary CDN failure must
+    // not roll back to a different Blob version or trigger a Function per view.
+    if (!staticUrl) {
+      payload = await fetchPayload(FUNCTION_ENDPOINT, 'default');
+      source = 'function';
+    }
+    if (!payload) return;
+    if (payload.active === false) {
+      clearPublishedCache();
+      return;
+    }
+    if (!usablePayload(payload)) return;
+    const incoming = payload.model;
+    if (currentModel && modelRevision(incoming) < modelRevision(currentModel)) {
+      writeCache(currentModel, source);
+      return;
+    }
+    if (safelyApply(incoming)) writeCache(incoming, source);
+  }
+
+  function initializePreview() {
+    let token = '';
+    window.addEventListener('message', (event) => {
+      if (event.source !== window.parent || event.origin !== window.location.origin) return;
+      const data = event.data;
+      if (!data || typeof data !== 'object') return;
+      if (data.type === 'nextmed:landing-preview:init' && typeof data.token === 'string' && data.token.length >= 16) {
+        token = data.token;
+        window.parent.postMessage({ type: 'nextmed:landing-preview:ready', token }, event.origin);
+      } else if (token && data.token === token && data.type === 'nextmed:landing-preview:model') {
+        if (!safelyApply(data.model)) return;
+        if (SECTION_IDS.includes(data.selectedId) && data.scroll === true) document.getElementById(data.selectedId)?.scrollIntoView?.({ block: 'start', behavior: 'auto' });
+      }
+    });
+    document.addEventListener('click', (event) => {
+      const anchor = event.target?.closest?.('a');
+      if (anchor && !String(anchor.getAttribute('href') || '').startsWith('#')) event.preventDefault();
+    }, true);
+    document.addEventListener('submit', (event) => event.preventDefault(), true);
+  }
+
+  async function fetchPayload(url, cacheMode) {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
-      const response = await fetch(ENDPOINT, {
-        cache: 'default',
+      const response = await fetch(url, {
+        cache: cacheMode,
         headers: { Accept: 'application/json' },
         signal: controller.signal
       });
-      if (!response.ok) return;
-      const payload = await response.json();
-      if (payload?.active === false) {
-        let cacheRemoved = false;
-        try {
-          localStorage.removeItem(CACHE_KEY);
-          cacheRemoved = !readCache();
-        } catch {}
-        if (cached && cacheRemoved && typeof window.location?.reload === 'function') window.location.reload();
-        return;
-      }
-      if (payload?.active !== true || !Array.isArray(payload.model?.sections)) return;
-      applyModel(payload.model);
-      writeCache(payload.model);
+      if (!response.ok) return null;
+      return await response.json();
     } catch {
-      // The checked-in HTML and the last local copy remain a fast fallback.
+      return null;
     } finally {
       window.clearTimeout(timeout);
     }
   }
 
+  function staticConfigUrl() {
+    const value = document.querySelector('meta[name="nextmed-landing-config"]')?.content;
+    return safeImageUrl(value);
+  }
+
+  function usablePayload(payload) {
+    return payload?.active === true && validModel(payload.model);
+  }
+
+  function validModel(model) {
+    if (!model || typeof model !== 'object' || Array.isArray(model) || !Array.isArray(model.sections)) return false;
+    const ids = new Set();
+    for (const section of model.sections) {
+      if (!section || typeof section !== 'object' || Array.isArray(section) || !SECTION_IDS.includes(section.id) || ids.has(section.id)) return false;
+      ids.add(section.id);
+    }
+    return ids.size === SECTION_IDS.length;
+  }
+
+  function safelyApply(model) {
+    if (!validModel(model)) return false;
+    try {
+      applyModel(model);
+      currentModel = model;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   function applyModel(model) {
     applyBranding(model.branding || {});
-    const footer = document.querySelector('footer');
-    const ordered = [...model.sections].sort((left, right) => (left.order || 0) - (right.order || 0));
+    const main = document.querySelector('main');
+    const ordered = [...model.sections].sort((left, right) => safeOrder(left.order) - safeOrder(right.order));
     const enabledSectionIds = new Set(ordered.filter((section) => section.enabled !== false).map((section) => section.id));
     ordered.forEach((config) => {
       const section = document.getElementById(config.id);
       if (!section) return;
       section.hidden = config.enabled === false;
       section.dataset.landingManaged = 'true';
-      setStyle(section, 'background-color', config.backgroundColor);
-      setStyle(section, 'color', config.textColor);
-      setStyle(section, '--landing-accent', config.accentColor);
-      const targets = COPY_TARGETS[config.id] || {};
+      setStyle(section, 'background-color', safeColor(config.backgroundColor));
+      setStyle(section, 'color', safeColor(config.textColor));
+      setStyle(section, '--landing-text', safeColor(config.textColor));
+      setStyle(section, '--landing-background', safeColor(config.backgroundColor));
+      setStyle(section, '--landing-accent', safeColor(config.accentColor));
+      const targets = COPY_TARGETS[config.id];
       setText(section, targets.title, config.title);
       setText(section, targets.subtitle, config.subtitle);
       setText(section, targets.body, config.body);
       applyImage(section, targets.image, config);
       applyCta(section, targets.cta, config, enabledSectionIds);
       syncNavigation(config);
-      if (footer) footer.before(section);
+      if (main) main.append(section);
     });
     reorderNavigation(ordered);
     const firstVisible = ordered.find((section) => section.enabled !== false);
-    document.querySelector('.navbar')?.classList.toggle('landing-solid', needsSolidNavbar(firstVisible));
+    const navbar = document.querySelector('.navbar');
+    navbar?.classList.toggle('landing-solid', needsSolidNavbar(firstVisible));
+    navbar?.classList.toggle('over-hero-image', firstVisible?.id === 'home' && Boolean(safeImageUrl(firstVisible.imageUrl)));
     document.documentElement.dataset.landingPublished = 'true';
-    document.dispatchEvent(new CustomEvent('chemdisk-landing-applied', { detail: { revision: model.revision || 0 } }));
+    document.dispatchEvent(new CustomEvent('chemdisk-landing-applied', { detail: { revision: modelRevision(model) } }));
   }
 
   function applyBranding(branding) {
     const requestId = ++brandingRequestId;
-    if (typeof branding.siteTitle === 'string') document.title = branding.siteTitle;
+    const brandName = cleanText(branding.brandName) || 'NextMed';
+    if (typeof branding.siteTitle === 'string' && branding.siteTitle.trim()) document.title = branding.siteTitle.trim();
     const description = document.querySelector('meta[name="description"]');
-    if (description && typeof branding.siteDescription === 'string') description.content = branding.siteDescription;
+    if (description && typeof branding.siteDescription === 'string' && branding.siteDescription.trim()) description.content = branding.siteDescription.trim();
+    applyTheme(branding);
+    applyFavicon(branding.faviconUrl);
+    setAllText('[data-brand-name]', brandName);
+    setAllText('[data-brand-tagline]', cleanText(branding.tagline));
+    setAllText('[data-company-name]', cleanText(branding.companyName) || brandName);
+    setAllText('[data-contact-address]', cleanText(branding.contactAddress));
+    setAllText('[data-footer-text]', cleanText(branding.footerText) || `${brandName} · kursy maturalne`);
+    applyContact(branding);
+
     const anchor = document.querySelector('.navbar .logo a');
     if (!anchor) return;
     const logoUrl = safeImageUrl(branding.logoUrl);
     if (!logoUrl) {
-      anchor.classList.remove('has-brand-image');
-      const accent = document.createElement('span');
-      accent.textContent = 'Disk';
-      anchor.replaceChildren(document.createTextNode('Chem'), accent);
+      renderTextBrand(anchor, brandName);
       return;
     }
     const image = document.createElement('img');
     image.src = logoUrl;
-    image.alt = String(branding.logoAlt || 'ChemDisk');
+    image.alt = cleanText(branding.logoAlt) || brandName;
     image.decoding = 'async';
     image.fetchPriority = 'high';
     image.addEventListener('error', () => {
-      if (requestId !== brandingRequestId) return;
-      anchor.classList.remove('has-brand-image');
-      const accent = document.createElement('span');
-      accent.textContent = 'Disk';
-      anchor.replaceChildren(document.createTextNode('Chem'), accent);
+      if (requestId === brandingRequestId) renderTextBrand(anchor, brandName);
     }, { once: true });
     anchor.classList.add('has-brand-image');
     anchor.replaceChildren(image);
   }
 
+  function renderTextBrand(anchor, brandName) {
+    anchor.classList.remove('has-brand-image');
+    const name = document.createElement('span');
+    const dot = document.createElement('i');
+    name.textContent = brandName;
+    name.dataset.brandName = '';
+    dot.textContent = '.';
+    dot.setAttribute('aria-hidden', 'true');
+    anchor.replaceChildren(name, dot);
+  }
+
+  function applyTheme(branding) {
+    const root = document.documentElement;
+    if (!root?.style) return;
+    root.dataset.motion = branding.motionEnabled === false ? 'off' : 'on';
+    const fields = {
+      primaryColor: '--brand-primary', secondaryColor: '--brand-secondary', accentColor: '--brand-accent',
+      backgroundColor: '--brand-background', surfaceColor: '--brand-surface', textColor: '--brand-text', mutedColor: '--brand-muted'
+    };
+    Object.entries(fields).forEach(([field, variable]) => setStyle(root, variable, safeColor(branding[field])));
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    if (themeColor && safeColor(branding.primaryColor)) themeColor.content = safeColor(branding.primaryColor);
+  }
+
+  function applyFavicon(value) {
+    const url = safeImageUrl(value);
+    if (!url) return;
+    let link = document.querySelector('link[rel~="icon"]');
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head?.append?.(link);
+    }
+    link.href = url;
+  }
+
+  function applyContact(branding) {
+    const email = cleanText(branding.contactEmail);
+    const emailNode = document.querySelector('[data-contact-email]');
+    if (emailNode) {
+      emailNode.textContent = email;
+      emailNode.hidden = !email;
+      if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) emailNode.setAttribute('href', `mailto:${email}`);
+      else emailNode.removeAttribute('href');
+    }
+    const phone = cleanText(branding.contactPhone);
+    const phoneNode = document.querySelector('[data-contact-phone]');
+    const phoneRow = document.querySelector('[data-phone-row]');
+    if (phoneNode) {
+      phoneNode.textContent = phone;
+      if (phone) phoneNode.setAttribute('href', `tel:${phone.replace(/[^+\d]/g, '')}`);
+      else phoneNode.removeAttribute('href');
+    }
+    if (phoneRow) phoneRow.hidden = !phone;
+    const addressRow = document.querySelector('[data-address-row]');
+    if (addressRow) addressRow.hidden = !cleanText(branding.contactAddress);
+    const contactAction = document.querySelector('[data-contact-action]');
+    if (contactAction) {
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        contactAction.setAttribute('href', `mailto:${email}`);
+        contactAction.hidden = false;
+      } else {
+        contactAction.hidden = !exportMode;
+        if (exportMode && exportOrigin) contactAction.setAttribute('href', `${exportOrigin}/#contact`);
+      }
+    }
+  }
+
   function applyImage(section, target, config) {
     const url = safeImageUrl(config.imageUrl);
     if (target === 'background') {
-      section.style.backgroundImage = url
-        ? `linear-gradient(rgba(0,0,0,.46), rgba(0,0,0,.46)), url("${url.replace(/["\\]/g, '')}")`
-        : 'none';
+      if (url) section.style.backgroundImage = `linear-gradient(100deg, rgba(5,15,30,.72), rgba(5,15,30,.3)), url("${url.replace(/["\\]/g, '')}")`;
+      else section.style.removeProperty('background-image');
+      section.classList.toggle('has-hero-image', Boolean(url));
       return;
     }
-    const image = target === 'managed'
-      ? ensureManagedImage(section)
-      : target ? section.querySelector(target) : null;
+    const image = target === 'managed' ? ensureManagedImage(section) : target ? section.querySelector(target) : null;
     if (!image) return;
     if (target === '.column.left img') section.classList.toggle('landing-no-image', !url);
     image.hidden = !url;
-    image.alt = String(config.imageAlt || '');
+    image.alt = cleanText(config.imageAlt);
     if (url) {
       image.src = url;
-      image.loading = 'lazy';
+      image.loading = section.id === 'home' ? 'eager' : 'lazy';
       image.decoding = 'async';
-      image.fetchPriority = 'low';
-    } else {
-      image.removeAttribute('src');
-    }
+      image.fetchPriority = section.id === 'home' ? 'high' : 'low';
+    } else image.removeAttribute('src');
   }
 
   function ensureManagedImage(section) {
@@ -140,6 +291,8 @@
     image = document.createElement('img');
     image.className = 'landing-section-image';
     image.hidden = true;
+    image.width = 1200;
+    image.height = 675;
     const lead = container.querySelector('.landing-section-body, .pricing-intro, .title');
     if (lead) lead.after(image);
     else container.prepend(image);
@@ -147,10 +300,9 @@
   }
 
   function applyCta(section, selector, config, enabledSectionIds) {
-    if (!selector) return;
-    const cta = section.querySelector(selector);
+    const cta = selector ? section.querySelector(selector) : null;
     if (!cta) return;
-    const label = String(config.ctaLabel || '');
+    const label = cleanText(config.ctaLabel);
     const href = safeHref(config.ctaHref, enabledSectionIds);
     cta.textContent = label;
     cta.hidden = !label || !href;
@@ -160,15 +312,20 @@
   }
 
   function setText(root, selector, value) {
-    if (!selector) return;
-    const element = root.querySelector(selector);
+    const element = selector ? root.querySelector(selector) : null;
     if (!element) return;
     const text = typeof value === 'string' ? value : '';
     element.textContent = text;
     element.hidden = !text;
   }
 
+  function setAllText(selector, value) {
+    if (!document.querySelectorAll) return;
+    document.querySelectorAll(selector).forEach((node) => { node.textContent = value; node.hidden = !value; });
+  }
+
   function setStyle(element, property, value) {
+    if (!element?.style) return;
     if (value) element.style.setProperty(property, value);
     else element.style.removeProperty(property);
   }
@@ -189,21 +346,21 @@
 
   function needsSolidNavbar(firstVisible) {
     if (!firstVisible || firstVisible.id !== 'home') return true;
-    if (safeImageUrl(firstVisible.imageUrl) || !firstVisible.backgroundColor) return false;
-    const match = /^#([0-9a-f]{6})$/i.exec(firstVisible.backgroundColor);
-    if (!match) return true;
-    const value = Number.parseInt(match[1], 16);
+    if (safeImageUrl(firstVisible.imageUrl)) return false;
+    const background = safeColor(firstVisible.backgroundColor);
+    if (!background) return true;
+    const value = Number.parseInt(background.slice(1), 16);
     const red = (value >> 16) & 255;
     const green = (value >> 8) & 255;
     const blue = value & 255;
-    return (red * 299 + green * 587 + blue * 114) / 255000 > 0.56;
+    return (red * 299 + green * 587 + blue * 114) / 255000 > .56;
   }
 
   function safeHref(value, enabledSectionIds) {
-    const raw = String(value || '').trim();
+    const raw = cleanText(value);
     const hash = /^#([A-Za-z][A-Za-z0-9_-]{0,79})$/.exec(raw);
     if (hash) return !enabledSectionIds || enabledSectionIds.has(hash[1]) ? raw : '';
-    if (/^\/(?!\/)[^\s]*$/.test(raw)) return raw;
+    if (/^\/(?!\/)[^\s\\]*$/.test(raw)) return exportOrigin ? new URL(raw, exportOrigin).toString() : raw;
     try {
       const url = new URL(raw);
       return url.protocol === 'https:' && url.hostname ? url.toString() : '';
@@ -211,18 +368,44 @@
   }
 
   function safeImageUrl(value) {
-    const raw = String(value || '');
-    return /^(?:https:\/\/|\/(?!\/))/.test(raw) ? raw : '';
+    const raw = cleanText(value);
+    if (/^\/(?!\/)[^\s\\]*$/.test(raw)) return exportOrigin ? new URL(raw, exportOrigin).toString() : raw;
+    try {
+      const url = new URL(raw);
+      return url.protocol === 'https:' && url.hostname ? url.toString() : '';
+    } catch { return ''; }
   }
+
+  function safeColor(value) { return /^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value).toLowerCase() : ''; }
+  function safeOrder(value) { return Number.isSafeInteger(value) && value >= 0 ? value : Number.MAX_SAFE_INTEGER; }
+  function modelRevision(model) { return Number.isSafeInteger(model?.revision) && model.revision >= 0 ? model.revision : 0; }
+  function cleanText(value) { return typeof value === 'string' ? value.trim() : ''; }
 
   function readCache() {
-    try {
-      const parsed = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
-      return parsed && Array.isArray(parsed.sections) ? parsed : null;
-    } catch { return null; }
+    for (const key of [CACHE_KEY, LEGACY_CACHE_KEY]) {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(key) || 'null');
+        const model = parsed?.model || parsed;
+        if (!validModel(model)) continue;
+        return { model, checkedAt: Number(parsed?.checkedAt) || 0, source: parsed?.source || 'legacy' };
+      } catch {}
+    }
+    return null;
   }
 
-  function writeCache(model) {
-    try { localStorage.setItem(CACHE_KEY, JSON.stringify(model)); } catch {}
+  function writeCache(model, source) {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ model, checkedAt: Date.now(), source }));
+      localStorage.removeItem(LEGACY_CACHE_KEY);
+    } catch {}
+  }
+
+  function clearPublishedCache() {
+    if (!currentModel) return;
+    try {
+      localStorage.removeItem(CACHE_KEY);
+      localStorage.removeItem(LEGACY_CACHE_KEY);
+      if (!readCache() && typeof window.location?.reload === 'function') window.location.reload();
+    } catch {}
   }
 })();

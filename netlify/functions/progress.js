@@ -74,7 +74,7 @@ async function handleGet(event, store, auth) {
   if (materialId && !validMaterialId(materialId)) return json({ error: 'INVALID_MATERIAL_ID' }, 400);
   const user = activeUserDocument(stored.document, catalog);
   const aggregate = aggregateUser(user, catalog);
-  const access = sequenceAccessMap(catalog, aggregate, user.preferences);
+  const access = isAdminAccount(auth) ? {} : sequenceAccessMap(catalog, aggregate, user.preferences);
   return json({
     version: 1,
     userId: auth.userId,
@@ -95,7 +95,7 @@ async function handleEvent(event, store, auth) {
   const progressEvent = validation.value;
   const catalog = await readCatalog(store);
   const resolved = effectiveSettings(catalog);
-  const node = resolved.byId.get(progressEvent.materialId) || null;
+  const node = resolved.byId.get(progressEvent.materialId) || catalog.lessonManifests[progressEvent.materialId] || null;
   if (!node && catalog.invalidatedAt[progressEvent.materialId]) {
     return json({
       saved: false,
@@ -103,7 +103,7 @@ async function handleEvent(event, store, auth) {
       effective: { tracking: false, showProgress: false, recordOpens: catalog.global.recordOpens }
     });
   }
-  const effective = node ? resolved.effective.get(node.id) : { tracking: true, showProgress: true };
+  const effective = resolved.effective.get(node?.id) || { tracking: true, showProgress: true };
   const isLeaf = !node || !catalog.nodes.some((candidate) => candidate.parentId === node.id);
   let rejected = null;
   const outcome = await updateUser(store, auth.userId, profileFrom(auth.user), (document) => {
@@ -113,12 +113,13 @@ async function handleEvent(event, store, auth) {
     const access = node
       ? sequenceAccessMap(catalog, aggregateUser(active, catalog), active.preferences)[node.id]
       : null;
-    if (access?.allowed === false) {
+    if (access?.allowed === false && !isAdminAccount(auth)) {
       rejected = { ok: false, code: 'SEQUENCE_LOCKED', status: 409 };
       return { abort: true, result: rejected };
     }
     const merged = mergeProgressEvent(document.records[progressEvent.materialId] || null, progressEvent, {
       userId: auth.userId,
+      isAdmin: isAdminAccount(auth),
       node,
       effective,
       global: catalog.global,
@@ -189,6 +190,10 @@ function validateEvent(body) {
   if (body.lastPosition != null && !plainObject(body.lastPosition)) return { ok: false, code: 'INVALID_POSITION' };
   if (body.details != null && !plainObject(body.details)) return { ok: false, code: 'INVALID_DETAILS' };
   return { ok: true, value: body };
+}
+
+function isAdminAccount(auth) {
+  return Array.isArray(auth.user?.app_metadata?.roles) && auth.user.app_metadata.roles.includes('admin');
 }
 
 function profileFrom(user) {

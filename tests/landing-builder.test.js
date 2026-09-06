@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const landing = require('../netlify/landing-content.js');
+const adminEndpoint = require('../netlify/functions/admin-landing.js');
 const publicEndpoint = require('../netlify/functions/landing.js');
 
 class MemoryStore {
@@ -25,11 +26,51 @@ class MemoryStore {
 
 test.afterEach(() => landing._test.resetStoreFactory());
 
+test('publication failure leaves the public page untouched and draft/public revisions stay independent', async (t) => {
+  const siteAssets = require('../netlify/site-assets.js');
+  const store = new MemoryStore();
+  landing._test.setStoreFactory(() => store);
+  const user = { id: 'admin-1', app_metadata: { roles: ['admin'] } };
+  const context = { clientContext: { user, identity: { url: 'https://course.example/.netlify/identity' } } };
+  const headers = {
+    authorization: 'Bearer test', 'content-type': 'application/json', origin: 'https://course.example',
+    host: 'course.example', 'x-forwarded-proto': 'https'
+  };
+  t.mock.method(global, 'fetch', async () => new Response(JSON.stringify(user), { status: 200 }));
+  const draft = await landing.saveDraft(store, landing.defaultModel(), user.id);
+  const publishBody = { action: 'publish', model: draft, expectedPublishedSha: null };
+  const event = { httpMethod: 'POST', headers, body: JSON.stringify(publishBody) };
+  const publisher = t.mock.method(siteAssets, 'publishLandingConfig', async () => {
+    const error = new Error('Failed'); error.code = 'LANDING_STATIC_PUBLISH_FAILED'; error.status = 503; throw error;
+  });
+  const failure = await adminEndpoint.handler(event, context);
+  assert.equal(failure.statusCode, 503);
+  assert.equal(store.entries.has(landing.PUBLISHED_KEY), false);
+  assert.equal((await landing.readModel(store, landing.DRAFT_KEY)).model.revision, draft.revision);
+
+  publisher.mock.mockImplementation(async (input) => ({
+    model: { ...landing.publicModel(input), revision: 12, publishedAt: new Date().toISOString() }, sha: 'a'.repeat(40), mode: 'static-github'
+  }));
+  const success = await adminEndpoint.handler(event, context);
+  assert.equal(success.statusCode, 200);
+  const payload = JSON.parse(success.body);
+  assert.equal(payload.published.revision, 12);
+  assert.equal(payload.draft.revision, draft.revision + 1);
+  assert.equal(payload.delivery.static, true);
+  payload.draft.sections[0].title = 'Edit after publish';
+  const nextSave = await adminEndpoint.handler({ httpMethod: 'PUT', headers, body: JSON.stringify({ model: payload.draft }) }, context);
+  assert.equal(nextSave.statusCode, 200);
+  assert.match(fs.readFileSync(path.join(__dirname, '../public/members/module/studio/landing/script.js'), 'utf8'), /normalizeLocalModel\(payload.draft \|\| payload.published\)/);
+});
+
 test('landing model has stable sections and rejects unsafe URLs and styles', () => {
   const model = landing.defaultModel();
-  assert.equal(model.version, 2);
-  assert.equal(model.branding.logoAlt, 'ChemDisk');
-  assert.match(model.sections[0].imageUrl, /^https:\/\/cdn\.jsdelivr\.net\/gh\/Kuczis-Media\/landing-page-assets@main\/images\/banner-chemical\.png$/);
+  assert.equal(model.version, 3);
+  assert.equal(model.branding.brandName, 'NextMed');
+  assert.equal(model.branding.logoAlt, 'NextMed');
+  assert.equal(model.branding.companyName, 'NextMed');
+  assert.equal(model.branding.primaryColor, '#176b54');
+  assert.equal(model.sections.find((section) => section.id === 'about').imageUrl, '/assets/start_site/learning-map.svg');
   assert.equal(model.sections.find((section) => section.id === 'about').ctaHref, '#services');
   assert.equal(model.sections.find((section) => section.id === 'skills').ctaHref, '#pricing');
   assert.deepEqual(model.sections.map((section) => section.id), landing.SECTION_IDS);
@@ -42,6 +83,22 @@ test('landing model has stable sections and rejects unsafe URLs and styles', () 
   unsafe.sections[0].ctaHref = '#pricing';
   unsafe.sections[0].backgroundColor = 'expression(alert(1))';
   assert.throws(() => landing.normalizeModel(unsafe, true), /INVALID_LANDING_COLOR/);
+});
+
+test('landing rejects backslash paths that browsers can reinterpret as a remote host', () => {
+  const unsafeImage = landing.defaultModel();
+  unsafeImage.sections[0].imageUrl = '/\\evil.example/hero.png';
+  assert.throws(
+    () => landing.normalizeModel(unsafeImage, true),
+    (error) => error.code === 'INVALID_LANDING_IMAGE_URL' && error.status === 400
+  );
+
+  const unsafeLink = landing.defaultModel();
+  unsafeLink.sections[0].ctaHref = '/\\evil.example/checkout';
+  assert.throws(
+    () => landing.normalizeModel(unsafeLink, true),
+    (error) => error.code === 'INVALID_LANDING_LINK' && error.status === 400
+  );
 });
 
 test('landing rejects a CTA targeting a disabled section', () => {
@@ -68,7 +125,7 @@ test('landing model preserves intentional blanks and converts GitHub image links
 test('landing v1 migration preserves the page that was actually visible before empty fields became editable', () => {
   const legacy = landing.defaultModel();
   legacy.version = 1;
-  legacy.sections[0].imageUrl = '';
+  legacy.sections.find((section) => section.id === 'about').imageUrl = '';
   legacy.sections.find((section) => section.id === 'about').body = '';
   legacy.sections.find((section) => section.id === 'about').ctaLabel = '';
   legacy.sections.find((section) => section.id === 'about').ctaHref = '';
@@ -76,10 +133,48 @@ test('landing v1 migration preserves the page that was actually visible before e
   legacy.sections.find((section) => section.id === 'skills').ctaHref = '';
 
   const migrated = landing.normalizeModel(legacy);
-  assert.match(migrated.sections[0].imageUrl, /banner-chemical\.png$/);
-  assert.equal(migrated.sections.find((section) => section.id === 'about').body, 'Pomagamy uczniom zdać maturę pewnie i wysoko. Oferujemy kursy z matematyki, języka polskiego, języka angielskiego, chemii i biologii. Pracujemy na sprawdzonych metodach, arkuszach CKE i autorskich materiałach. Uczymy skutecznych strategii, powtarzamy kluczowe zagadnienia i trenujemy rozwiązywanie zadań pod presją czasu.');
+  const defaults = landing.defaultModel();
+  assert.equal(migrated.sections.find((section) => section.id === 'about').imageUrl, '/assets/start_site/learning-map.svg');
+  assert.equal(migrated.sections.find((section) => section.id === 'about').body, defaults.sections.find((section) => section.id === 'about').body);
   assert.equal(migrated.sections.find((section) => section.id === 'about').ctaHref, '#services');
   assert.equal(migrated.sections.find((section) => section.id === 'skills').ctaHref, '#pricing');
+});
+
+test('landing v2 migrates former ChemDisk defaults to NextMed without replacing custom branding', () => {
+  const legacy = landing.defaultModel();
+  legacy.version = 2;
+  legacy.branding = {
+    brandName: 'ChemDisk',
+    logoUrl: '',
+    logoAlt: 'ChemDisk',
+    siteTitle: 'ChemDisk — kursy maturalne online',
+    siteDescription: 'Własny opis SEO',
+    companyName: 'Kursy Maturalne',
+    footerText: 'Kursy Maturalne · kursy maturalne'
+  };
+  legacy.sections.find((section) => section.id === 'home').subtitle = 'Witaj w ChemDisk';
+
+  const migrated = landing.normalizeModel(legacy);
+  assert.equal(migrated.version, 3);
+  assert.equal(migrated.branding.brandName, 'NextMed');
+  assert.equal(migrated.branding.logoAlt, 'NextMed');
+  assert.equal(migrated.branding.siteTitle, 'NextMed — kursy maturalne online');
+  assert.equal(migrated.branding.companyName, 'NextMed');
+  assert.equal(migrated.branding.footerText, 'NextMed · kursy maturalne');
+  assert.equal(migrated.branding.siteDescription, 'Własny opis SEO');
+  assert.equal(migrated.sections.find((section) => section.id === 'home').subtitle, 'Twój kierunek: więcej możliwości');
+
+  legacy.branding.brandName = 'MedNova';
+  legacy.branding.logoAlt = 'Logo MedNova';
+  legacy.branding.siteTitle = 'MedNova — indywidualny kurs';
+  legacy.branding.companyName = 'MedNova sp. z o.o.';
+  legacy.branding.footerText = '© MedNova';
+  const custom = landing.normalizeModel(legacy);
+  assert.equal(custom.branding.brandName, 'MedNova');
+  assert.equal(custom.branding.logoAlt, 'Logo MedNova');
+  assert.equal(custom.branding.siteTitle, 'MedNova — indywidualny kurs');
+  assert.equal(custom.branding.companyName, 'MedNova sp. z o.o.');
+  assert.equal(custom.branding.footerText, '© MedNova');
 });
 
 test('landing draft is separate from published content and public endpoint never returns draft', async () => {
@@ -91,7 +186,7 @@ test('landing draft is separate from published content and public endpoint never
   let response = await publicEndpoint.handler({ httpMethod: 'GET' });
   assert.deepEqual(JSON.parse(response.body), { active: false });
   assert.match(response.headers['Netlify-CDN-Cache-Control'], /durable/);
-  assert.match(response.headers['Cache-Control'], /max-age=30/);
+  assert.match(response.headers['Cache-Control'], /max-age=60/);
   draft.sections[0].title = 'Wersja publiczna';
   await landing.publish(store, draft, 'admin-1');
   response = await publicEndpoint.handler({ httpMethod: 'GET' });
@@ -100,7 +195,47 @@ test('landing draft is separate from published content and public endpoint never
   assert.equal(payload.model.sections[0].title, 'Wersja publiczna');
   assert.equal(payload.model.updatedBy, undefined);
   assert.ok(payload.model.publishedAt);
-  assert.equal(payload.model.branding.logoAlt, 'ChemDisk');
+  assert.equal(payload.model.branding.logoAlt, 'NextMed');
+});
+
+test('admin landing handler rejects a missing model instead of saving or publishing defaults', async (t) => {
+  const originalFetch = global.fetch;
+  t.after(() => { global.fetch = originalFetch; });
+  let identityCalls = 0;
+  global.fetch = async () => {
+    identityCalls += 1;
+    return new Response(JSON.stringify({ id: 'admin-1', app_metadata: { roles: ['admin'] } }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    });
+  };
+  landing._test.setStoreFactory(() => { throw new Error('storage must not be opened'); });
+  const context = {
+    clientContext: {
+      user: { id: 'admin-1', app_metadata: { roles: ['admin'] } },
+      identity: { url: 'https://course.example/.netlify/identity' }
+    }
+  };
+  const headers = {
+    authorization: 'Bearer verified-admin-token',
+    'content-type': 'application/json; charset=utf-8',
+    origin: 'https://course.example',
+    host: 'course.example',
+    'x-forwarded-proto': 'https'
+  };
+
+  const put = await adminEndpoint.handler({ httpMethod: 'PUT', headers, body: '{}' }, context);
+  assert.equal(put.statusCode, 400);
+  assert.deepEqual(JSON.parse(put.body), { error: 'INVALID_LANDING_MODEL' });
+
+  const post = await adminEndpoint.handler({
+    httpMethod: 'POST',
+    headers,
+    body: JSON.stringify({ action: 'publish' })
+  }, context);
+  assert.equal(post.statusCode, 400);
+  assert.deepEqual(JSON.parse(post.body), { error: 'INVALID_LANDING_MODEL' });
+  assert.equal(identityCalls, 2);
 });
 
 test('landing draft rejects a stale editor revision instead of overwriting newer changes', async () => {
@@ -142,15 +277,16 @@ test('landing builder uses textContent and server normalization instead of arbit
   assert.match(builder, /schedulePreview\(350\)/);
   assert.match(builder, /imagePreviewRequestId/);
   assert.match(builder, /image\.dataset\.previewUrl === url/);
-  assert.match(builder, /previewSectionNodes\.get\(section\.id\)/);
-  assert.match(builder, /image\.dataset\.previewUrl !== imageUrl/);
-  assert.match(builder, /current\?\.tagName === 'IMG'/);
+  assert.match(builder, /nextmed:landing-preview:model/);
+  assert.match(builder, /expectedPublishedSha: publication.sha/);
+  assert.match(html, /<iframe[^>]*id="landing-preview"/);
   assert.match(builder, /fetchPriority = 'low'/);
   assert.match(html, /rel="preconnect" href="https:\/\/cdn\.jsdelivr\.net"/);
   assert.match(studio, /rel="preconnect" href="https:\/\/cdn\.jsdelivr\.net"/);
   assert.doesNotMatch(builder, /innerHTML\s*=/);
   assert.match(runtime, /textContent\s*=/);
-  assert.match(runtime, /cache:\s*'default'/);
+  assert.match(runtime, /fetchPayload\(FUNCTION_ENDPOINT,\s*'default'\)/);
+  assert.match(runtime, /nextmed-landing-config/);
   assert.match(runtime, /branding/);
   assert.doesNotMatch(runtime, /innerHTML\s*=/);
   assert.match(studio, /Landing Page Builder/);

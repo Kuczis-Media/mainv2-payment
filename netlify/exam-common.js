@@ -332,6 +332,12 @@ function validateQuestion(question, path, errors) {
   if (question.type === 'fill_blanks' && (!question.template || !question.blanks.length)) {
     errors.push({ code: 'QUESTION_BLANKS_REQUIRED', path });
   }
+  if (question.type === 'fill_blanks' && (question.template.match(/\{\{[^{}]*\}\}/g) || []).length !== question.blanks.length) {
+    errors.push({ code: 'QUESTION_BLANK_COUNT', path });
+  }
+  if (question.type === 'fill_blanks' && question.blanks.some((blank) => !blank.acceptedAnswers.length)) {
+    errors.push({ code: 'QUESTION_BLANK_ANSWER_REQUIRED', path });
+  }
   if (question.type === 'open_answer' && question.gradingMode === 'ai' && !question.answerKey) {
     errors.push({ code: 'QUESTION_ANSWER_KEY_REQUIRED', path });
   }

@@ -17,6 +17,49 @@ function response(body, status = 200) {
 
 test.afterEach(() => siteAssets._test.resetPublicCheck());
 
+test('landing publication uses an exact GitHub SHA, strips editor identity and does not depend on Blob writes', async () => {
+  const model = require('../netlify/landing-content.js').defaultModel();
+  model.updatedBy = 'private-admin-id';
+  const sha = 'a'.repeat(40); const commit = 'b'.repeat(40);
+  let write;
+  const result = await siteAssets.publishLandingConfig(model, env, {
+    expectedSha: null,
+    fetchImpl: async (url, options) => {
+      if (options.method === 'PUT') { write = JSON.parse(options.body); return response({ content: { sha }, commit: { sha: commit } }); }
+      if (String(url).includes('/contents/')) return response({ message: 'Not Found' }, 404);
+      if (String(url).includes('/branches/')) return response({ commit: { sha: commit } });
+      return response({ private: false });
+    }
+  });
+  assert.equal(result.sha, sha);
+  assert.equal(result.model.revision, 1);
+  assert.equal(write.branch, 'main');
+  assert.equal(write.sha, undefined);
+  const decoded = Buffer.from(write.content, 'base64').toString('utf8');
+  assert.equal(JSON.parse(decoded).model.branding.brandName, 'NextMed');
+  assert.doesNotMatch(decoded, /private-admin-id|github_pat/);
+});
+
+test('a stale landing publisher cannot overwrite newer content, but a timed-out identical publish is idempotent', async () => {
+  const landing = require('../netlify/landing-content.js');
+  const current = landing.defaultModel(); current.revision = 5;
+  const sha = 'a'.repeat(40); let writes = 0;
+  const options = {
+    expectedSha: 'b'.repeat(40),
+    fetchImpl: async (url, request) => {
+      if (request.method === 'PUT') writes++;
+      if (String(url).includes('/branches/')) return response({ commit: { sha } });
+      if (!String(url).includes('/contents/')) return response({ private: false });
+      return response({ sha, encoding: 'base64', type: 'file', content: Buffer.from(JSON.stringify({ active: true, model: landing.publicModel(current) })).toString('base64') });
+    }
+  };
+  const retry = await siteAssets.publishLandingConfig(current, env, options);
+  assert.equal(retry.unchanged, true); assert.equal(writes, 0);
+  const stale = landing.defaultModel(); stale.sections[0].title = 'A stale editor';
+  await assert.rejects(() => siteAssets.publishLandingConfig(stale, env, options), { code: 'LANDING_CONFLICT' });
+  assert.equal(writes, 0);
+});
+
 test('site assets configuration exposes no token and builds a jsDelivr base', () => {
   const visible = siteAssets.publicConfiguration(env);
   assert.equal(visible.configured, true);

@@ -187,12 +187,10 @@
       return section;
     }
     if (question.type === 'text') {
-      const accepted = create('textarea');
-      accepted.rows = 3;
-      accepted.value = question.acceptedAnswers.join('\n');
-      accepted.placeholder = 'Każda akceptowana odpowiedź w osobnym wierszu';
-      accepted.dataset.quizField = 'acceptedAnswers';
-      section.append(fieldLabel('Akceptowane odpowiedzi', accepted));
+      section.append(root.ChemAnswerFields.textList(question.acceptedAnswers, (values) => {
+        question.acceptedAnswers = values;
+        markChanged(); renderPreview();
+      }));
       return section;
     }
     section.append(create('small', 'quiz-options-hint', question.type === 'multiple'
@@ -211,6 +209,8 @@
       copy.type = 'text';
       copy.maxLength = 500;
       copy.value = option.text;
+      copy.placeholder = `Wpisz odpowiedź ${String.fromCharCode(65 + optionIndex)}`;
+      copy.setAttribute('aria-label', `Treść odpowiedzi ${optionIndex + 1} w pytaniu ${index + 1}`);
       copy.dataset.quizField = 'optionText';
       copy.dataset.optionId = option.optionId;
       const remove = create('button', 'mini-button is-danger', '×');

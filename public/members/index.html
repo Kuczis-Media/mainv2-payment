@@ -24,7 +24,8 @@
     })();
   </script>
 
-  <title>Panel kursanta — ChemDisk</title>
+  <title data-brand-title="Panel kursanta">Panel kursanta — NextMed</title>
+  <script defer src="/assets/js/site-brand.js"></script>
 
   <link rel="icon" href="https://cdn.jsdelivr.net/gh/Kuczis-Media/logo@main/benzene-ring.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="/members/dashboard.css" />
@@ -42,8 +43,8 @@
 
   <div class="app-shell">
     <aside class="sidebar" id="sidebar" aria-label="Menu panelu">
-      <a class="brand" href="/members/" aria-label="ChemDisk — panel kursanta">
-        <span class="brand-mark" aria-hidden="true">
+      <a class="brand" href="/members/" aria-label="NextMed — panel kursanta" data-brand-home>
+        <span class="brand-mark" aria-hidden="true" data-brand-logo-slot>
           <svg viewBox="0 0 48 48" focusable="false">
             <path d="M17 7v10L8.5 32.1A6 6 0 0 0 13.7 41h20.6a6 6 0 0 0 5.2-8.9L31 17V7" />
             <path d="M14.5 27h19" />
@@ -53,7 +54,7 @@
           </svg>
         </span>
         <span>
-          <strong>ChemDisk</strong>
+          <strong data-brand-name>NextMed</strong>
           <small>Kursy maturalne</small>
         </span>
       </a>
@@ -203,7 +204,7 @@
         </div>
 
         <footer class="page-footer">
-          <span>ChemDisk · kursy maturalne</span>
+          <span data-footer-text>NextMed · kursy maturalne</span>
           <a href="/members/module/contact/?internal=Pomoc%20z%20panelu%20kursanta">Potrzebujesz pomocy?</a>
         </footer>
       </div>
@@ -548,7 +549,7 @@ GITHUB_CONTENT_ROOT=</pre>
           <p><strong>Postęp jest zapisywany po stronie serwera w Netlify Blobs.</strong> Wyłączenie śledzenia lub pasków nie usuwa historii. Pozycja PDF oznacza nawigację, nie dowód przeczytania.</p>
         </div>
         <div class="admin-progress-settings">
-          <label><span class="field-label">Śledzenie postępu ChemDisk</span><select class="text-field" id="admin-progress-global-tracking"><option value="ON">Włączone</option><option value="OFF">Wyłączone</option></select></label>
+          <label><span class="field-label">Śledzenie postępu kursu</span><select class="text-field" id="admin-progress-global-tracking"><option value="ON">Włączone</option><option value="OFF">Wyłączone</option></select></label>
           <label><span class="field-label">Paski postępu ucznia</span><select class="text-field" id="admin-progress-global-show"><option value="ON">Widoczne</option><option value="OFF">Ukryte</option></select></label>
           <label class="admin-payment-switch"><input id="admin-progress-record-opens" type="checkbox" /><span><strong>Rejestruj otwarcia materiałów</strong><small>Działa niezależnie od liczenia procentów.</small></span></label>
           <button class="button button-primary" id="admin-progress-save-settings" type="button">Zapisz ustawienia</button>

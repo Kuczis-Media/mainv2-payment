@@ -3,7 +3,10 @@
 
   const CONFIG_URL = '/.netlify/functions/payment-config';
   const CHECKOUT_URL = '/.netlify/functions/create-checkout';
+  const CONFIG_CACHE_KEY = 'nextmed.payments.public-config.v1';
+  const CONFIG_CACHE_TTL_MS = 60_000;
   const VALID_PLANS = new Set(['hour', 'day', 'week', 'month', 'halfyear', 'year']);
+  const VALID_CURRENCIES = new Set(['pln', 'eur', 'usd', 'gbp', 'chf', 'czk', 'cad', 'aud']);
   const ERROR_MESSAGES = Object.freeze({
     ACTIVE_ACCESS_EXISTS: 'Masz już aktywny dostęp. Kolejny pakiet kupisz po jego wygaśnięciu.',
     AUTH_EXPIRED: 'Sesja wygasła. Zaloguj się ponownie.',
@@ -21,28 +24,94 @@
   });
 
   let configPromise = null;
+  let configLoadedAt = 0;
   let checkoutInFlight = false;
 
   function loadConfig(force) {
-    if (!configPromise || force) {
-      configPromise = fetch(CONFIG_URL, {
-        method: 'GET',
-        cache: 'no-store',
-        credentials: 'same-origin',
-        headers: { Accept: 'application/json' }
-      }).then(async (response) => {
-        let payload = null;
-        try { payload = await response.json(); } catch (_) {}
-        if (!response.ok || !payload || !Array.isArray(payload.plans)) {
-          throw new Error('Nie udało się wczytać aktualnych cen.');
-        }
-        return payload;
-      }).catch((error) => {
-        configPromise = null;
-        throw error;
-      });
+    const memoryAge = Date.now() - configLoadedAt;
+    if (!force && configPromise && (configLoadedAt === 0 || (memoryAge >= 0 && memoryAge <= CONFIG_CACHE_TTL_MS))) {
+      return configPromise;
     }
+    const cached = force ? null : readCachedConfig();
+    if (cached) {
+      configLoadedAt = cached.savedAt;
+      configPromise = Promise.resolve(cached.config);
+      return configPromise;
+    }
+    configLoadedAt = 0;
+    configPromise = fetch(CONFIG_URL, {
+      method: 'GET',
+      cache: force ? 'no-store' : 'default',
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' }
+    }).then(async (response) => {
+      let payload = null;
+      try { payload = await response.json(); } catch (_) {}
+      if (!response.ok || !validPublicConfig(payload)) {
+        throw new Error('Nie udało się wczytać aktualnych cen.');
+      }
+      configLoadedAt = Date.now();
+      writeCachedConfig(payload, configLoadedAt);
+      return payload;
+    }).catch((error) => {
+      configPromise = null;
+      configLoadedAt = 0;
+      throw error;
+    });
     return configPromise;
+  }
+
+  function readCachedConfig() {
+    try {
+      const entry = JSON.parse(window.sessionStorage.getItem(CONFIG_CACHE_KEY) || 'null');
+      const savedAt = entry?.savedAt;
+      const age = Date.now() - savedAt;
+      if (!Number.isSafeInteger(savedAt) || age < 0 || age > CONFIG_CACHE_TTL_MS || !validPublicConfig(entry?.config)) {
+        window.sessionStorage.removeItem(CONFIG_CACHE_KEY);
+        return null;
+      }
+      return { config: entry.config, savedAt };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function writeCachedConfig(config, savedAt = Date.now()) {
+    if (!validPublicConfig(config)) return;
+    try {
+      window.sessionStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify({ savedAt, config }));
+    } catch (_) {}
+  }
+
+  function validPublicConfig(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)
+      || !VALID_CURRENCIES.has(value.currency)
+      || !Array.isArray(value.enabledPlans)
+      || !Array.isArray(value.plans)
+      || value.plans.length !== VALID_PLANS.size
+      || typeof value.paymentsEnabled !== 'boolean'
+      || typeof value.stackingEnabled !== 'boolean'
+      || typeof value.checkoutAvailable !== 'boolean'
+      || typeof value.testMode !== 'boolean') return false;
+
+    const enabled = new Set();
+    for (const id of value.enabledPlans) {
+      if (typeof id !== 'string' || !VALID_PLANS.has(id) || enabled.has(id)) return false;
+      enabled.add(id);
+    }
+    const seen = new Set();
+    for (const plan of value.plans) {
+      if (!plan || typeof plan !== 'object' || Array.isArray(plan)
+        || typeof plan.id !== 'string' || !VALID_PLANS.has(plan.id) || seen.has(plan.id)
+        || typeof plan.label !== 'string' || !plan.label || plan.label.length > 120
+        || typeof plan.durationLabel !== 'string' || !plan.durationLabel || plan.durationLabel.length > 160
+        || !Number.isFinite(plan.durationDays) || plan.durationDays <= 0 || plan.durationDays > 366
+        || !Number.isSafeInteger(plan.amount) || plan.amount < 100 || plan.amount > 1_000_000
+        || typeof plan.enabled !== 'boolean' || plan.enabled !== enabled.has(plan.id)
+        || typeof plan.featured !== 'boolean') return false;
+      seen.add(plan.id);
+    }
+    return seen.size === VALID_PLANS.size;
   }
 
   function formatMoney(amount, currency) {

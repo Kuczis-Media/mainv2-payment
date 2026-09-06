@@ -3,8 +3,9 @@
 
   const API_URL = '/.netlify/functions/admin-landing';
   const ASSET_API_URL = '/.netlify/functions/admin-site-assets';
-  const LOCAL_DRAFT_KEY = 'chem.landing.builder.recovery.v2';
-  const REQUEST_TIMEOUT_MS = 12_000;
+  const LOCAL_DRAFT_KEY = 'chem.landing.builder.recovery.v3';
+  const LEGACY_LOCAL_DRAFT_KEY = 'chem.landing.builder.recovery.v2';
+  const REQUEST_TIMEOUT_MS = 30_000;
   const MAX_ASSET_BYTES = 4 * 1024 * 1024;
   const ACCEPTED_ASSETS = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml']);
   const SECTION_LABELS = { home: 'Start / Hero', about: 'O nas', services: 'Kursy i moduły', pricing: 'Cennik', skills: 'Jak zacząć', contact: 'Kontakt' };
@@ -13,11 +14,16 @@
   Object.assign(elements, {
     builder: document.getElementById('builder'), access: document.getElementById('access-state'), list: document.getElementById('section-list'),
     status: document.getElementById('status'), editorTitle: document.getElementById('editor-title'), preview: document.getElementById('landing-preview'),
-    previewPanel: document.querySelector('.preview-panel'), previewBrand: document.getElementById('preview-brand'),
+    previewPanel: document.querySelector('.preview-panel'), motion: document.getElementById('branding-motion'),
     imagePreview: document.getElementById('image-preview'), logoPreview: document.getElementById('logo-preview'),
-    logo: document.getElementById('branding-logo'), logoAlt: document.getElementById('branding-logo-alt'), siteTitle: document.getElementById('branding-site-title'),
+    brandName: document.getElementById('branding-name'), tagline: document.getElementById('branding-tagline'),
+    primary: document.getElementById('branding-primary'), secondary: document.getElementById('branding-secondary'), brandAccent: document.getElementById('branding-accent'),
+    brandBackground: document.getElementById('branding-background'), surface: document.getElementById('branding-surface'), brandText: document.getElementById('branding-text'), muted: document.getElementById('branding-muted'),
+    logo: document.getElementById('branding-logo'), logoAlt: document.getElementById('branding-logo-alt'), favicon: document.getElementById('branding-favicon'), siteTitle: document.getElementById('branding-site-title'),
+    company: document.getElementById('branding-company'), email: document.getElementById('branding-email'), phone: document.getElementById('branding-phone'), address: document.getElementById('branding-address'), footerText: document.getElementById('branding-footer'),
     siteDescription: document.getElementById('branding-site-description'), copyLogo: document.getElementById('copy-logo-url'),
     save: document.getElementById('save-draft'), publish: document.getElementById('publish'), restore: document.getElementById('restore-published'),
+    share: document.getElementById('share-page'), exportHtml: document.getElementById('export-html'), exportConfig: document.getElementById('export-config'), importConfig: document.getElementById('import-config'), importFile: document.getElementById('import-file'),
     recover: document.getElementById('recover-local'), assetDialog: document.getElementById('asset-dialog'), assetClose: document.getElementById('asset-close'),
     assetDrop: document.getElementById('asset-drop'), assetFile: document.getElementById('asset-file'), assetFileButton: document.getElementById('asset-file-button'),
     assetSearch: document.getElementById('asset-search'), assetRefresh: document.getElementById('asset-refresh'), assetStatus: document.getElementById('asset-status'),
@@ -35,6 +41,8 @@
   let assetsLoaded = false;
   let assetBusy = false;
   let dirty = false;
+  let serverStorageAvailable = true;
+  let staticConfigUrl = '';
   let renderFrame = 0;
   let previewTimer = 0;
   let localSaveTimer = 0;
@@ -42,7 +50,11 @@
   let logoPreviewTimer = 0;
   let imagePreviewRequestId = 0;
   let logoPreviewRequestId = 0;
-  const previewSectionNodes = new Map();
+  let defaultModel = null;
+  let previewReady = false;
+  const previewToken = crypto.randomUUID();
+  let publication = { available: false, sha: null };
+  let exportTemplatePromise = null;
 
   document.addEventListener('DOMContentLoaded', bootstrap, { once: true });
 
@@ -55,19 +67,49 @@
         throw new Error('Landing Builder jest dostępny tylko dla administratora.');
       }
       currentAdminId = String(user.id || '');
-      const payload = await requestLanding('GET');
-      model = payload.draft;
-      publishedModel = payload.published || null;
       recoveryDraft = readRecovery(currentAdminId);
+      const defaultResponse = await fetch('/assets/data/landing-default.json', { cache: 'no-cache' });
+      if (!defaultResponse.ok) throw new Error('Nie udało się wczytać szablonu strony. Odśwież Studio.');
+      defaultModel = await defaultResponse.json();
+      if (!isLocalModel(defaultModel)) throw new Error('Szablon strony jest niepoprawny.');
+      let payload = null;
+      let bootstrapWarning = '';
+      try {
+        payload = await requestLanding('GET');
+        publication = payload.publication || { available: false, sha: null };
+        serverStorageAvailable = payload.storage?.available !== false;
+        staticConfigUrl = safeHttpsUrl(payload.staticConfigUrl);
+        model = normalizeLocalModel(payload.draft);
+        publishedModel = payload.published ? normalizeLocalModel(payload.published) : null;
+        if (!model && staticConfigUrl) {
+          const staticModel = await loadStaticPublished(staticConfigUrl);
+          if (staticModel) {
+            model = staticModel;
+            publishedModel = clone(staticModel);
+          }
+        }
+        if (!serverStorageAvailable) {
+          bootstrapWarning = 'Draft zapisujesz na tym urządzeniu. Publikacja przez GitHub i eksport HTML są dostępne osobno.';
+        }
+      } catch (error) {
+        serverStorageAvailable = false;
+        model = recoveryDraft?.model ? normalizeLocalModel(recoveryDraft.model) : createDefaultModel();
+        bootstrapWarning = `${error.message} Edytor działa lokalnie — możesz pobrać JSON i nie stracisz zmian.`;
+      }
       elements.access.hidden = true;
       elements.builder.hidden = false;
       bindEvents();
+      initializeLivePreview();
       renderAll();
+      elements.publish.disabled = !publication.available;
+      elements.publish.title = publication.available ? '' : 'Publikacja wymaga dostępu do publicznego repozytorium. Możesz pobrać gotową stronę HTML.';
+      const previewUrl = document.getElementById('preview-url');
+      if (previewUrl) previewUrl.textContent = location.host || 'twoja-strona.pl';
       syncRecoveryButton();
       elements.restore.hidden = !publishedModel;
-      setStatus(payload.published
+      setStatus(bootstrapWarning || (!publication.available ? 'Możesz edytować i pobrać gotową stronę HTML. Publikacja online wymaga skonfigurowanego dostępu do repozytorium GitHub.' : publishedModel
         ? 'Wczytano draft. Opublikowana strona pozostaje aktywna do kolejnej publikacji.'
-        : 'Wczytano wersję startową. Zapisz draft lub opublikuj.', 'success');
+        : 'Wczytano wersję startową. Zapisz draft lub opublikuj.'), bootstrapWarning ? 'warning' : 'success');
       if (new URLSearchParams(location.search).get('assets') === '1') void openAssetLibrary('logo');
     } catch (error) {
       elements.access.querySelector('h1').textContent = 'Nie udało się otworzyć buildera';
@@ -81,11 +123,17 @@
       ctaLabel: 'ctaLabel', ctaHref: 'ctaHref', background: 'backgroundColor', text: 'textColor', accent: 'accentColor'
     };
     elements.enabled.addEventListener('change', () => updateSelected('enabled', elements.enabled.checked));
+    elements.motion.addEventListener('change', () => updateBranding('motionEnabled', elements.motion.checked));
     Object.entries(mapping).forEach(([elementName, field]) => {
       elements[elementName].addEventListener('input', () => updateSelected(field, elements[elementName].value));
     });
-    [elements.image, elements.logo].forEach((input) => input.addEventListener('blur', () => normalizeUrlInput(input)));
-    const brandingMapping = { logo: 'logoUrl', logoAlt: 'logoAlt', siteTitle: 'siteTitle', siteDescription: 'siteDescription' };
+    [elements.image, elements.logo, elements.favicon].forEach((input) => input.addEventListener('blur', () => normalizeUrlInput(input)));
+    const brandingMapping = {
+      brandName: 'brandName', tagline: 'tagline', logo: 'logoUrl', logoAlt: 'logoAlt', favicon: 'faviconUrl',
+      primary: 'primaryColor', secondary: 'secondaryColor', brandAccent: 'accentColor', brandBackground: 'backgroundColor', surface: 'surfaceColor', brandText: 'textColor', muted: 'mutedColor',
+      company: 'companyName', email: 'contactEmail', phone: 'contactPhone', address: 'contactAddress', footerText: 'footerText',
+      siteTitle: 'siteTitle', siteDescription: 'siteDescription'
+    };
     Object.entries(brandingMapping).forEach(([elementName, field]) => {
       elements[elementName].addEventListener('input', () => updateBranding(field, elements[elementName].value));
     });
@@ -97,13 +145,20 @@
     }));
     document.querySelectorAll('[data-open-assets]').forEach((button) => button.addEventListener('click', () => void openAssetLibrary(button.dataset.openAssets)));
     document.querySelectorAll('[data-preview-size]').forEach((button) => button.addEventListener('click', () => setPreviewSize(button.dataset.previewSize)));
+    document.querySelectorAll('[data-palette]').forEach((button) => button.addEventListener('click', () => applyPalette(button.dataset.palette)));
     elements.copyLogo.addEventListener('click', () => void copyText(model.branding?.logoUrl || '', 'Skopiowano URL logo.'));
+    elements.share.addEventListener('click', () => void copyText(new URL('/', location.origin).toString(), 'Skopiowano publiczny adres landingu.'));
+    elements.exportConfig.addEventListener('click', exportConfiguration);
+    elements.exportHtml.addEventListener('click', () => void exportStandalonePage());
+    elements.importConfig.addEventListener('click', () => elements.importFile.click());
+    elements.importFile.addEventListener('change', () => { void importConfiguration(elements.importFile.files?.[0]); elements.importFile.value = ''; });
     elements.save.addEventListener('click', saveDraft);
     elements.publish.addEventListener('click', publish);
     elements.restore.addEventListener('click', restorePublished);
     elements.recover.addEventListener('click', recoverLocalDraft);
     window.addEventListener('beforeunload', (event) => {
       if (!dirty) return;
+      writeRecoveryNow();
       event.preventDefault();
       event.returnValue = '';
     });
@@ -164,14 +219,26 @@
 
   function updateBranding(field, value) {
     model.branding = model.branding || {};
+    const previous = model.branding[field];
     model.branding[field] = value;
+    if (field === 'brandName') {
+      const next = String(value || '').trim();
+      if (!model.branding.logoAlt || model.branding.logoAlt === previous) model.branding.logoAlt = next;
+      if (!model.branding.companyName || model.branding.companyName === previous) model.branding.companyName = next;
+      if (!model.branding.footerText || String(model.branding.footerText).startsWith(`${previous} ·`)) model.branding.footerText = `${next} · kursy maturalne`;
+      if (!model.branding.siteTitle || String(model.branding.siteTitle).startsWith(`${previous} —`)) model.branding.siteTitle = `${next} — kursy maturalne online`;
+      elements.logoAlt.value = model.branding.logoAlt;
+      elements.company.value = model.branding.companyName;
+      elements.footerText.value = model.branding.footerText;
+      elements.siteTitle.value = model.branding.siteTitle;
+    }
     if (field === 'logoUrl') {
       scheduleBrandingPreview();
       schedulePreview(350);
     } else if (field === 'logoAlt') {
       renderBrandingPreview();
       schedulePreview();
-    }
+    } else schedulePreview();
     markDirty('Branding zmieniony — zapisz draft albo opublikuj.');
   }
 
@@ -179,6 +246,20 @@
     dirty = true;
     scheduleRecoveryWrite();
     setStatus(message, '');
+  }
+
+  function applyPalette(name) {
+    const palettes = {
+      nextmed: { primaryColor: '#0f766e', secondaryColor: '#2563eb', accentColor: '#f59e0b', backgroundColor: '#f6f8fc', surfaceColor: '#ffffff', textColor: '#0f172a', mutedColor: '#5f6b7c' },
+      ocean: { primaryColor: '#0369a1', secondaryColor: '#0891b2', accentColor: '#f59e0b', backgroundColor: '#f4f9fc', surfaceColor: '#ffffff', textColor: '#0c2133', mutedColor: '#52697a' },
+      violet: { primaryColor: '#6d28d9', secondaryColor: '#db2777', accentColor: '#f59e0b', backgroundColor: '#f8f6fc', surfaceColor: '#ffffff', textColor: '#1f1633', mutedColor: '#6b617c' },
+      graphite: { primaryColor: '#1f2937', secondaryColor: '#475569', accentColor: '#f97316', backgroundColor: '#f5f6f8', surfaceColor: '#ffffff', textColor: '#111827', mutedColor: '#64748b' }
+    };
+    if (!palettes[name]) return;
+    Object.assign(model.branding, palettes[name]);
+    renderEditor();
+    renderPreview();
+    markDirty('Zastosowano gotową paletę. Zapisz draft albo opublikuj.');
   }
 
   function renderAll() {
@@ -206,7 +287,7 @@
         Object.assign(document.createElement('strong'), { textContent: SECTION_LABELS[section.id] || section.id }),
         Object.assign(document.createElement('small'), { textContent: section.title || 'Bez tytułu' })
       );
-      select.addEventListener('click', () => { selectedId = section.id; renderAll(); });
+      select.addEventListener('click', () => { selectedId = section.id; renderAll(); renderPreview(true); });
       const controls = document.createElement('span');
       controls.className = 'section-order';
       [['↑', index - 1], ['↓', index + 1]].forEach(([label, target]) => {
@@ -233,11 +314,27 @@
     elements.ctaLabel.value = section.ctaLabel || '';
     elements.ctaHref.value = section.ctaHref || '';
     elements.background.value = section.backgroundColor || '#ffffff';
-    elements.text.value = section.textColor || '#172033';
-    elements.accent.value = section.accentColor || '#0e665a';
+    elements.text.value = section.textColor || model.branding?.textColor || '#0f172a';
+    elements.accent.value = section.accentColor || model.branding?.primaryColor || '#0f766e';
     model.branding = model.branding || {};
+    elements.motion.checked = model.branding.motionEnabled !== false;
+    elements.brandName.value = model.branding.brandName || '';
+    elements.tagline.value = model.branding.tagline || '';
+    elements.primary.value = model.branding.primaryColor || '#0f766e';
+    elements.secondary.value = model.branding.secondaryColor || '#2563eb';
+    elements.brandAccent.value = model.branding.accentColor || '#f59e0b';
+    elements.brandBackground.value = model.branding.backgroundColor || '#f6f8fc';
+    elements.surface.value = model.branding.surfaceColor || '#ffffff';
+    elements.brandText.value = model.branding.textColor || '#0f172a';
+    elements.muted.value = model.branding.mutedColor || '#5f6b7c';
     elements.logo.value = model.branding.logoUrl || '';
     elements.logoAlt.value = model.branding.logoAlt || '';
+    elements.favicon.value = model.branding.faviconUrl || '';
+    elements.company.value = model.branding.companyName || '';
+    elements.email.value = model.branding.contactEmail || '';
+    elements.phone.value = model.branding.contactPhone || '';
+    elements.address.value = model.branding.contactAddress || '';
+    elements.footerText.value = model.branding.footerText || '';
     elements.siteTitle.value = model.branding.siteTitle || '';
     elements.siteDescription.value = model.branding.siteDescription || '';
     renderImagePreview();
@@ -308,110 +405,49 @@
     image.src = url;
   }
 
-  function renderPreviewBrand() {
-    const url = safeImageUrl(model.branding?.logoUrl);
-    if (url) {
-      const current = elements.previewBrand.firstElementChild;
-      const image = current?.tagName === 'IMG' ? current : document.createElement('img');
-      image.alt = model.branding?.logoAlt || 'ChemDisk';
-      image.decoding = 'async';
-      image.fetchPriority = 'high';
-      if (image.dataset.previewUrl !== url) {
-        image.dataset.previewUrl = url;
-        image.src = url;
-      }
-      if (current !== image) elements.previewBrand.replaceChildren(image);
-      return;
-    }
-    if (elements.previewBrand.firstElementChild?.tagName === 'STRONG') return;
-    const strong = document.createElement('strong');
-    const accent = document.createElement('span');
-    accent.textContent = 'Disk';
-    strong.append(document.createTextNode('Chem'), accent);
-    elements.previewBrand.replaceChildren(strong);
-  }
-
-  function previewSectionNode(section) {
-    let card = previewSectionNodes.get(section.id);
-    if (!card) {
-      card = document.createElement('article');
-      card.className = 'preview-section';
-      card.dataset.previewSectionId = section.id;
-      ['label', 'title', 'subtitle', 'body'].forEach((field) => {
-        const tag = field === 'label' ? 'span' : field === 'title' ? 'h3' : field === 'subtitle' ? 'strong' : 'p';
-        const node = document.createElement(tag);
-        node.dataset.previewField = field;
-        card.append(node);
-      });
-      previewSectionNodes.set(section.id, card);
-    }
-    card.style.setProperty('--preview-bg', section.backgroundColor || '#ffffff');
-    card.style.setProperty('--preview-accent', section.accentColor || '#0e665a');
-    card.style.backgroundColor = section.backgroundColor || '';
-    card.style.color = section.textColor || '';
-
-    const imageUrl = safeImageUrl(section.imageUrl);
-    let image = card.querySelector('[data-preview-image]');
-    if (imageUrl) {
-      if (!image) {
-        image = document.createElement('img');
-        image.dataset.previewImage = '';
-        image.loading = 'lazy';
-        image.decoding = 'async';
-        image.fetchPriority = 'low';
-        card.prepend(image);
-      }
-      image.alt = section.imageAlt || '';
-      if (image.dataset.previewUrl !== imageUrl) {
-        image.dataset.previewUrl = imageUrl;
-        image.src = imageUrl;
-      }
-    } else if (image) {
-      image.remove();
-    }
-
-    card.querySelector('[data-preview-field="label"]').textContent = SECTION_LABELS[section.id] || section.id;
-    card.querySelector('[data-preview-field="title"]').textContent = section.title || '';
-    card.querySelector('[data-preview-field="subtitle"]').textContent = section.subtitle || '';
-    card.querySelector('[data-preview-field="body"]').textContent = section.body || '';
-    card.querySelectorAll('[data-preview-action]').forEach((node) => node.remove());
-    const ctaHref = safePreviewHref(section.ctaHref);
-    if (section.ctaLabel && ctaHref) {
-      const cta = Object.assign(document.createElement('a'), {
-        textContent: section.ctaLabel,
-        href: ctaHref
-      });
-      cta.dataset.previewAction = '';
-      cta.title = 'Link jest wyłączony w bezpiecznym podglądzie';
-      cta.addEventListener('click', (event) => event.preventDefault());
-      card.append(cta);
-    } else if (section.ctaLabel) {
-      const warning = Object.assign(document.createElement('small'), {
-        className: 'preview-cta-warning',
-        textContent: 'CTA bez poprawnego linku nie pojawi się na stronie.'
-      });
-      warning.dataset.previewAction = '';
-      card.append(warning);
-    }
-    return card;
-  }
-
-  function renderPreview() {
-    renderPreviewBrand();
-    const activeIds = new Set(model.sections.map((section) => section.id));
-    previewSectionNodes.forEach((_, id) => {
-      if (!activeIds.has(id)) previewSectionNodes.delete(id);
+  function initializeLivePreview() {
+    const frame = elements.preview;
+    frame.addEventListener('load', () => {
+      previewReady = false;
+      frame.contentWindow?.postMessage({ type: 'nextmed:landing-preview:init', token: previewToken }, location.origin);
     });
-    const sections = model.sections
-      .filter((section) => section.enabled !== false)
-      .map(previewSectionNode);
-    elements.preview.replaceChildren(...sections);
+    window.addEventListener('message', (event) => {
+      if (event.origin !== location.origin || event.source !== frame.contentWindow || event.data?.token !== previewToken) return;
+      if (event.data.type !== 'nextmed:landing-preview:ready') return;
+      previewReady = true;
+      renderPreview();
+    });
+    if (typeof ResizeObserver === 'function') {
+      new ResizeObserver(resizePreview).observe(document.getElementById('preview-viewport'));
+    }
+    frame.src = '/?landing-preview=1';
+    resizePreview();
+  }
+
+  function renderPreview(scroll = false) {
+    if (!previewReady || !model) return;
+    elements.preview.contentWindow?.postMessage({
+      type: 'nextmed:landing-preview:model', token: previewToken,
+      model: normalizeLocalModel(model), selectedId, scroll
+    }, location.origin);
+  }
+
+  function resizePreview() {
+    const viewport = document.getElementById('preview-viewport');
+    const available = viewport.clientWidth || 600;
+    const width = elements.previewPanel.dataset.previewSize === 'mobile' ? 390 : 1280;
+    const scale = Math.min(1, available / width);
+    const height = Math.min(780, Math.max(440, window.innerHeight - 240));
+    elements.preview.style.width = `${width}px`;
+    elements.preview.style.height = `${height / scale}px`;
+    elements.preview.style.transform = `scale(${scale})`;
+    viewport.style.height = `${height}px`;
   }
 
   function schedulePreview(delay = 0) {
     window.clearTimeout(previewTimer);
     cancelAnimationFrame(renderFrame);
-    const render = () => { renderFrame = requestAnimationFrame(renderPreview); };
+    const render = () => { renderFrame = requestAnimationFrame(() => renderPreview()); };
     if (delay) previewTimer = window.setTimeout(render, delay);
     else render();
   }
@@ -420,13 +456,14 @@
     const selected = size === 'mobile' ? 'mobile' : 'desktop';
     elements.previewPanel.dataset.previewSize = selected;
     document.querySelectorAll('[data-preview-size]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.previewSize === selected)));
+    resizePreview();
   }
 
   function safePreviewHref(value) {
     const raw = String(value || '').trim();
     const hash = /^#([A-Za-z][A-Za-z0-9_-]{0,79})$/.exec(raw);
     if (hash) return model.sections.some((section) => section.id === hash[1] && section.enabled !== false) ? raw : '';
-    if (/^\/(?!\/)[^\s]*$/.test(raw)) return raw;
+    if (/^\/(?!\/)[^\s\\]*$/.test(raw)) return raw;
     try {
       const url = new URL(raw);
       return url.protocol === 'https:' && url.hostname ? url.toString() : '';
@@ -434,9 +471,16 @@
   }
   function safeImageUrl(value) {
     const raw = normalizeGitHubUrl(value);
-    if (/^\/(?!\/)[^\s]*$/.test(raw)) return raw;
+    if (/^\/(?!\/)[^\s\\]*$/.test(raw)) return raw;
     try {
       const url = new URL(raw);
+      return url.protocol === 'https:' && url.hostname ? url.toString() : '';
+    } catch { return ''; }
+  }
+
+  function safeHttpsUrl(value) {
+    try {
+      const url = new URL(String(value || '').trim());
       return url.protocol === 'https:' && url.hostname ? url.toString() : '';
     } catch { return ''; }
   }
@@ -466,6 +510,7 @@
     if (!normalized || normalized === input.value) return;
     input.value = normalized;
     if (input === elements.logo) updateBranding('logoUrl', normalized);
+    else if (input === elements.favicon) updateBranding('faviconUrl', normalized);
     else updateSelected('imageUrl', normalized);
     setStatus('Link GitHub został zamieniony na szybki adres jsDelivr.', 'success');
   }
@@ -489,32 +534,58 @@
   }
 
   async function saveDraft() {
+    if (!validateModelForSave()) return;
+    if (!dirty) {
+      setStatus('Nie ma nowych zmian do zapisania.', 'success');
+      return;
+    }
+    if (!serverStorageAvailable) {
+      const saved = writeRecoveryNow();
+      if (saved) dirty = false;
+      setStatus(saved ? 'Draft zapisany na tym urządzeniu. Pobierz JSON, aby mieć dodatkową kopię.' : 'Przeglądarka nie pozwala zapisać kopii. Pobierz JSON, aby zachować zmiany.', saved ? 'success' : 'error');
+      return;
+    }
     setBusy(true);
     setStatus('Zapisywanie draftu…', '');
     try {
       const payload = await requestLanding('PUT', { model });
-      model = payload.draft;
+      if (!isLocalModel(payload?.draft)) throw new Error('Serwer nie potwierdził zapisu poprawnego draftu. Zmiany pozostały w edytorze.');
+      model = normalizeLocalModel(payload.draft);
       dirty = false;
       clearRecovery();
       renderAll();
+      serverStorageAvailable = true;
       setStatus('Draft zapisany po stronie serwera.', 'success');
-    } catch (error) { setStatus(error.message, 'error'); }
+    } catch (error) {
+      if (error.code === 'LANDING_STORAGE_UNAVAILABLE') {
+        writeRecoveryNow();
+        setStatus('Magazyn Netlify nie jest skonfigurowany. Kopia została zachowana lokalnie; nadal możesz opublikować statycznie przez GitHub.', 'warning');
+      } else setStatus(error.message, 'error');
+    }
     finally { setBusy(false); }
   }
 
   async function publish() {
+    if (!validateModelForSave()) return;
+    if (!publication.available) { setStatus('Publikacja wymaga połączenia z repozytorium. Odśwież Studio po konfiguracji GitHuba lub pobierz gotową stronę HTML.', 'error'); return; }
     if (!window.confirm('Opublikować ten układ i treść na stronie głównej?')) return;
     setBusy(true);
     setStatus('Publikowanie strony…', '');
     try {
-      const payload = await requestLanding('POST', { action: 'publish', model });
-      model = payload.published;
+      const payload = await requestLanding('POST', { action: 'publish', model, expectedPublishedSha: publication.sha });
+      if (!isLocalModel(payload?.published) || payload?.delivery?.static !== true || !payload?.publication?.sha) throw new Error('Serwer nie potwierdził publikacji. Zachowano bieżące zmiany.');
+      publication = payload.publication;
+      // Draft and publication revisions are independent (the static page may
+      // have been published from another device without Blob storage).
+      model = normalizeLocalModel(payload.draft || payload.published);
       publishedModel = clone(payload.published);
       elements.restore.hidden = false;
       dirty = false;
+      cachePublishedLocally(publishedModel);
       clearRecovery();
       renderAll();
-      setStatus(`Opublikowano ${new Date(model.publishedAt).toLocaleString('pl-PL')}. CDN zwykle rozpoczyna odświeżanie po około minucie; podczas odświeżania może krótko pokazać poprzednią wersję.`, 'success');
+      serverStorageAvailable = payload.storage?.available !== false;
+      setStatus(`Zapisano publikację w GitHubie ${new Date(publishedModel.publishedAt).toLocaleString('pl-PL')}. Publiczne cache mogą odświeżać treść do 15 minut. Odsłony treści nie uruchamiają Functions.${payload.draftWarning ? ' Nie udało się zsynchronizować szkicu na serwerze; kolejne zmiany zapiszesz lokalnie.' : ''}`, payload.draftWarning ? 'warning' : 'success');
     } catch (error) { setStatus(error.message, 'error'); }
     finally { setBusy(false); }
   }
@@ -534,49 +605,275 @@
     const serverRevision = model.revision;
     const recovered = clone(recoveryDraft.model);
     const revisionChanged = recovered.revision !== serverRevision;
-    model = recovered;
+    recovered.revision = serverRevision;
+    model = normalizeLocalModel(recovered);
     recoveryDraft = null;
     elements.recover.hidden = true;
     if (!model.sections.some((section) => section.id === selectedId)) selectedId = model.sections[0]?.id || 'home';
     renderAll();
     markDirty(revisionChanged
-      ? 'Odzyskano kopię opartą na starszej rewizji. Serwer nie pozwoli jej nadpisać bez odświeżenia i świadomego przeniesienia zmian.'
+      ? 'Odzyskano treść lokalnej kopii i przeniesiono ją na aktualną rewizję. Sprawdź podgląd i zapisz.'
       : 'Odzyskano lokalną kopię. Zapisz draft, aby zachować ją na serwerze.');
   }
 
   function scheduleRecoveryWrite() {
     window.clearTimeout(localSaveTimer);
-    localSaveTimer = window.setTimeout(() => {
-      try {
-        localStorage.setItem(LOCAL_DRAFT_KEY, JSON.stringify({
-          savedAt: new Date().toISOString(),
-          userId: currentAdminId,
-          origin: location.origin,
-          model
-        }));
-      } catch {}
-    }, 350);
+    localSaveTimer = window.setTimeout(writeRecoveryNow, 350);
+  }
+
+  function writeRecoveryNow() {
+    try {
+      localStorage.setItem(LOCAL_DRAFT_KEY, JSON.stringify({ savedAt: new Date().toISOString(), userId: currentAdminId, origin: location.origin, model }));
+      return true;
+    } catch { return false; }
   }
 
   function readRecovery(userId) {
-    try {
-      const parsed = JSON.parse(localStorage.getItem(LOCAL_DRAFT_KEY) || 'null');
-      if (!parsed?.model || !Array.isArray(parsed.model.sections)) return null;
-      if (!userId || parsed.userId !== userId || parsed.origin !== location.origin) return null;
-      return parsed;
-    } catch { return null; }
+    for (const key of [LOCAL_DRAFT_KEY, LEGACY_LOCAL_DRAFT_KEY]) {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(key) || 'null');
+        if (!isLocalModel(parsed?.model)) continue;
+        if (!userId || parsed.userId !== userId || parsed.origin !== location.origin) continue;
+        return parsed;
+      } catch {}
+    }
+    return null;
   }
 
   function clearRecovery() {
     window.clearTimeout(localSaveTimer);
     recoveryDraft = null;
     elements.recover.hidden = true;
-    try { localStorage.removeItem(LOCAL_DRAFT_KEY); } catch {}
+    try { localStorage.removeItem(LOCAL_DRAFT_KEY); localStorage.removeItem(LEGACY_LOCAL_DRAFT_KEY); } catch {}
+  }
+
+  function cachePublishedLocally(published) {
+    try {
+      localStorage.setItem('chem.landing.public.v3', JSON.stringify({ model: published, checkedAt: Date.now(), source: 'builder' }));
+      localStorage.removeItem('chem.landing.public.v2');
+    } catch {}
   }
 
   function syncRecoveryButton() {
     elements.recover.hidden = !recoveryDraft;
     if (recoveryDraft?.savedAt) elements.recover.title = `Kopia z ${new Date(recoveryDraft.savedAt).toLocaleString('pl-PL')}`;
+  }
+
+  function exportConfiguration() {
+    if (!validateModelForSave()) return;
+    const artifact = JSON.stringify({ active: true, model: normalizeLocalModel(model) }, null, 2);
+    const blob = new Blob([artifact], { type: 'application/json;charset=utf-8' });
+    const link = document.createElement('a');
+    const name = String(model.branding?.brandName || 'landing').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'landing';
+    link.href = URL.createObjectURL(blob);
+    link.download = `${name}-landing.json`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(link.href), 0);
+    setStatus('Pobrano kopię ustawień JSON. Aby hostować gotową stronę, wybierz „Pobierz stronę HTML”.', 'success');
+  }
+
+  async function importConfiguration(file) {
+    if (!file) return;
+    if (file.size > 128 * 1024) {
+      setStatus('Plik konfiguracji jest zbyt duży.', 'error');
+      return;
+    }
+    try {
+      const parsed = JSON.parse(await file.text());
+      const imported = parsed?.model || parsed;
+      if (!isLocalModel(imported)) throw new Error('Nie rozpoznano poprawnego modelu landingu.');
+      const revision = model.revision;
+      model = normalizeLocalModel(imported);
+      model.revision = revision;
+      selectedId = model.sections.some((section) => section.id === selectedId) ? selectedId : 'home';
+      renderAll();
+      markDirty('Wczytano konfigurację. Sprawdź podgląd, a następnie zapisz albo opublikuj.');
+    } catch (error) {
+      setStatus(error.message || 'Nie udało się odczytać pliku JSON.', 'error');
+    }
+  }
+
+  async function loadStaticPublished(url) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 5_000);
+    try {
+      const response = await fetch(url, { cache: 'no-cache', headers: { Accept: 'application/json' }, signal: controller.signal });
+      if (!response.ok) return null;
+      const payload = await response.json();
+      return payload?.active === true && isLocalModel(payload.model) ? normalizeLocalModel(payload.model) : null;
+    } catch { return null; }
+    finally { window.clearTimeout(timeout); }
+  }
+
+  function isLocalModel(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value) || !Array.isArray(value.sections)) return false;
+    const ids = new Set();
+    for (const section of value.sections) {
+      if (!section || typeof section !== 'object' || Array.isArray(section) || !SECTION_LABELS[section.id] || ids.has(section.id)) return false;
+      ids.add(section.id);
+    }
+    return ids.size === Object.keys(SECTION_LABELS).length;
+  }
+
+  function normalizeLocalModel(value) {
+    const defaults = createDefaultModel();
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return defaults;
+    const sourceBranding = value.branding && typeof value.branding === 'object' && !Array.isArray(value.branding) ? value.branding : {};
+    const branding = { ...defaults.branding };
+    Object.keys(branding).forEach((key) => {
+      if (typeof sourceBranding[key] === 'string') branding[key] = sourceBranding[key].slice(0, key.includes('Description') ? 320 : 1_000);
+    });
+    branding.motionEnabled = sourceBranding.motionEnabled !== false;
+    const sourceSections = new Map((Array.isArray(value.sections) ? value.sections : []).filter((section) => section && typeof section === 'object' && SECTION_LABELS[section.id]).map((section) => [section.id, section]));
+    const sections = defaults.sections.map((fallback) => {
+      const source = sourceSections.get(fallback.id) || {};
+      const section = { ...fallback };
+      ['title', 'subtitle', 'body', 'imageUrl', 'imageAlt', 'backgroundColor', 'textColor', 'accentColor', 'ctaLabel', 'ctaHref'].forEach((key) => {
+        if (typeof source[key] === 'string') section[key] = source[key];
+      });
+      section.enabled = source.enabled !== false;
+      section.order = Number.isSafeInteger(source.order) && source.order >= 0 ? source.order : fallback.order;
+      return section;
+    }).sort((left, right) => left.order - right.order).map((section, order) => ({ ...section, order }));
+    return {
+      version: 3,
+      revision: Number.isSafeInteger(value.revision) && value.revision >= 0 ? value.revision : 0,
+      branding,
+      sections,
+      createdAt: typeof value.createdAt === 'string' ? value.createdAt : null,
+      updatedAt: typeof value.updatedAt === 'string' ? value.updatedAt : null,
+      updatedBy: null,
+      publishedAt: typeof value.publishedAt === 'string' ? value.publishedAt : null
+    };
+  }
+
+  function createDefaultModel() {
+    return clone(defaultModel);
+  }
+
+  function validationIssue(value) {
+    if (!isLocalModel(value)) return 'Konfiguracja musi zawierać wszystkie sześć sekcji strony.';
+    const branding = value.branding || {};
+    if (!String(branding.brandName || '').trim()) return 'Wpisz nazwę marki.';
+    if (branding.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(branding.contactEmail.trim())) return 'Wpisz poprawny adres e-mail.';
+    if (branding.contactPhone && !/^\+?[0-9 ()-]{5,40}$/.test(branding.contactPhone.trim())) return 'Wpisz poprawny numer telefonu.';
+    for (const key of ['logoUrl', 'faviconUrl']) {
+      if (branding[key] && !safeImageUrl(branding[key])) return 'Logo i favicon wymagają adresu HTTPS albo ścieżki /assets/…';
+    }
+    for (const key of ['primaryColor', 'secondaryColor', 'accentColor', 'backgroundColor', 'surfaceColor', 'textColor', 'mutedColor']) {
+      if (branding[key] && !/^#[0-9a-f]{6}$/i.test(branding[key])) return 'Kolory muszą mieć format #RRGGBB.';
+    }
+    const active = new Set(value.sections.filter((section) => section.enabled !== false).map((section) => section.id));
+    if (!active.size) return 'Pozostaw co najmniej jedną widoczną sekcję.';
+    for (const section of value.sections) {
+      if (section.imageUrl && !safeImageUrl(section.imageUrl)) return `${SECTION_LABELS[section.id]}: obraz wymaga adresu HTTPS albo ścieżki /assets/…`;
+      for (const key of ['backgroundColor', 'textColor', 'accentColor']) {
+        if (section[key] && !/^#[0-9a-f]{6}$/i.test(section[key])) return `${SECTION_LABELS[section.id]}: niepoprawny kolor.`;
+      }
+      if (section.ctaHref) {
+        const hash = /^#([A-Za-z][A-Za-z0-9_-]{0,79})$/.exec(section.ctaHref.trim());
+        if (hash && section.enabled !== false && !active.has(hash[1])) return `${SECTION_LABELS[section.id]}: przycisk prowadzi do wyłączonej sekcji. Zmień link lub włącz sekcję.`;
+        if (!hash && !/^\/(?!\/)[^\s\\]*$/.test(section.ctaHref) && !safeHttpsUrl(section.ctaHref)) return `${SECTION_LABELS[section.id]}: wpisz poprawny link przycisku.`;
+      }
+      if (section.enabled !== false && section.ctaLabel && !section.ctaHref) return `${SECTION_LABELS[section.id]}: uzupełnij link przycisku lub usuń jego tekst.`;
+    }
+    return '';
+  }
+
+  function validateModelForSave() {
+    const issue = validationIssue(model);
+    if (issue) { setStatus(issue, 'error'); return false; }
+    model = normalizeLocalModel(model);
+    return true;
+  }
+
+  function serializeEmbeddedModel(value) {
+    return JSON.stringify(value).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026').replace(/\\u2028/g, '\\u2028').replace(/\\u2029/g, '\\u2029');
+  }
+
+  async function fetchStaticText(path) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 10000);
+    try {
+      const response = await fetch(path, { cache: 'no-cache', signal: controller.signal });
+      if (!response.ok) throw new Error('Nie udało się wczytać plików strony. Spróbuj ponownie.');
+      return await response.text();
+    } finally { window.clearTimeout(timeout); }
+  }
+
+  function loadExportTemplate() {
+    if (!exportTemplatePromise) {
+      exportTemplatePromise = Promise.all([
+        fetchStaticText('/index.html'), fetchStaticText('/assets/start_site/style.css'),
+        fetchStaticText('/assets/payments/payments.css'), fetchStaticText('/assets/start_site/script.js'),
+        fetchStaticText('/assets/js/landing-runtime.js')
+      ]).catch((error) => { exportTemplatePromise = null; throw error; });
+    }
+    return exportTemplatePromise;
+  }
+
+  async function exportStandalonePage() {
+    if (!validateModelForSave()) return;
+    setBusy(true);
+    setStatus('Przygotowuję samodzielną stronę HTML…', '');
+    try {
+      const [html, css, paymentCss, motionJs, runtimeJs] = await loadExportTemplate();
+      const page = new DOMParser().parseFromString(html, 'text/html');
+      page.querySelectorAll('script, link[rel="stylesheet"], meta[name="nextmed-landing-config"], base').forEach((node) => node.remove());
+      page.title = model.branding.siteTitle || model.branding.brandName;
+      const description = page.querySelector('meta[name="description"]');
+      if (description) description.content = model.branding.siteDescription || '';
+      const marker = page.createElement('meta');
+      marker.name = 'nextmed-landing-export'; marker.content = '1'; page.head.prepend(marker);
+      const origin = page.createElement('meta');
+      origin.name = 'nextmed-landing-origin'; origin.content = location.origin; page.head.append(origin);
+      for (const source of [css, paymentCss]) {
+        const style = page.createElement('style');
+        style.textContent = source.replace(/url\(\s*(['"]?)(\/[^)'"\s]+)\1\s*\)/g, (_, quote, path) => `url("${new URL(path, location.origin).href}")`);
+        page.head.append(style);
+      }
+      page.querySelectorAll('[href], [src], [poster]').forEach((node) => {
+        for (const attr of ['href', 'src', 'poster']) {
+          const value = node.getAttribute(attr);
+          if (value?.startsWith('/') && !value.startsWith('//')) node.setAttribute(attr, new URL(value, location.origin).href);
+        }
+      });
+      page.querySelectorAll('form').forEach((form) => {
+        const action = page.createElement('a');
+        action.className = 'landing-section-cta';
+        action.dataset.contactAction = '';
+        action.href = model.branding.contactEmail ? `mailto:${model.branding.contactEmail}` : `${location.origin}/#contact`;
+        action.textContent = model.branding.contactEmail ? 'Napisz do nas' : 'Przejdź do kontaktu';
+        form.replaceWith(action);
+      });
+      page.querySelectorAll('[data-pricing]').forEach((pricing) => {
+        const action = page.createElement('a');
+        action.className = 'landing-section-cta';
+        action.href = `${location.origin}/#pricing`;
+        action.textContent = 'Zobacz aktualną ofertę i ceny ↗';
+        pricing.replaceChildren(action);
+        pricing.removeAttribute('data-pricing');
+      });
+      const data = page.createElement('script');
+      data.type = 'application/json'; data.id = 'nextmed-landing-model';
+      data.textContent = serializeEmbeddedModel(normalizeLocalModel(model));
+      page.body.append(data);
+      for (const source of [motionJs, runtimeJs]) {
+        const script = page.createElement('script');
+        script.textContent = source.replace(/<\/script/gi, '<\\/script');
+        page.body.append(script);
+      }
+      const blob = new Blob(['<!doctype html>\n', page.documentElement.outerHTML], { type: 'text/html;charset=utf-8' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob); link.download = 'index.html';
+      document.body.append(link); link.click(); link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+      setStatus('Pobrano gotową stronę index.html. Możesz ją hostować statycznie; obrazy pozostają pod swoimi adresami, a kurs i płatności otwierają Twoją obecną platformę.', 'success');
+    } catch (error) {
+      setStatus(error.message || 'Nie udało się przygotować strony HTML.', 'error');
+    } finally { setBusy(false); }
   }
 
   async function openAssetLibrary(target) {
@@ -681,8 +978,10 @@
     try {
       let last = null;
       for (let index = 0; index < files.length; index += 1) {
-        const file = files[index];
-        setAssetStatus(`Zapisywanie ${index + 1}/${files.length}: ${file.name}…`);
+        const original = files[index];
+        setAssetStatus(`Optymalizacja ${index + 1}/${files.length}: ${original.name}…`);
+        const file = await optimizeAsset(original, assetTarget);
+        setAssetStatus(`Zapisywanie ${index + 1}/${files.length}: ${file.name}${file !== original ? ` (${formatSize(original.size)} → ${formatSize(file.size)})` : ''}…`);
         const payload = await requestAssets('PUT', {
           filename: safeFilename(file, assetTarget),
           contentBase64: await fileBase64(file),
@@ -726,6 +1025,29 @@
     });
   }
 
+  async function optimizeAsset(file, target) {
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size < 280 * 1024 || typeof createImageBitmap !== 'function') return file;
+    let bitmap;
+    try {
+      bitmap = await createImageBitmap(file);
+      const maximum = target === 'logo' ? 1_000 : 1_920;
+      const scale = Math.min(1, maximum / Math.max(bitmap.width, bitmap.height));
+      const width = Math.max(1, Math.round(bitmap.width * scale));
+      const height = Math.max(1, Math.round(bitmap.height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d', { alpha: true });
+      if (!context) return file;
+      context.drawImage(bitmap, 0, 0, width, height);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', target === 'logo' ? .88 : .82));
+      if (!blob || blob.size >= file.size * .94) return file;
+      const stem = file.name.replace(/\.[^.]+$/, '') || (target === 'logo' ? 'logo' : 'obraz');
+      return new File([blob], `${stem}.webp`, { type: 'image/webp', lastModified: file.lastModified });
+    } catch { return file; }
+    finally { bitmap?.close?.(); }
+  }
+
   async function copyText(value, successMessage) {
     if (!value) {
       setStatus('Najpierw wybierz albo wklej adres pliku.', 'error');
@@ -750,10 +1072,19 @@
 
   async function requestLanding(method, body) {
     return authenticatedRequest(API_URL, method, body, {
+      INVALID_LANDING_MODEL: 'Konfiguracja landingu jest niepełna albo uszkodzona. Wczytaj poprawny JSON lub odśwież edytor.',
+      INVALID_LANDING_BRAND_NAME: 'Nazwa marki nie może być pusta.',
       INVALID_LANDING_IMAGE_URL: 'Adres obrazu musi być ścieżką lokalną albo adresem HTTPS.',
       INVALID_LANDING_LINK: 'Link przycisku musi być kotwicą, ścieżką lokalną albo adresem HTTPS.',
       INVALID_LANDING_LINK_TARGET: 'Link CTA prowadzi do wyłączonej lub nieistniejącej sekcji. Włącz sekcję albo zmień link.',
       INVALID_LANDING_COLOR: 'Kolor musi mieć format #RRGGBB.',
+      INVALID_LANDING_EMAIL: 'Wpisz poprawny adres e-mail albo zostaw pole puste.',
+      INVALID_LANDING_PHONE: 'Numer telefonu może zawierać cyfry, spacje, nawiasy, myślnik i znak +.',
+      LANDING_STORAGE_UNAVAILABLE: 'Brakuje NETLIFY_API_TOKEN lub SITE_ID. Zmiany nadal są zachowane lokalnie.',
+      SITE_ASSETS_NOT_CONFIGURED: 'Do publikacji statycznej dodaj GITHUB_SITE_ASSETS_TOKEN. Bez niego potrzebne są NETLIFY_API_TOKEN i SITE_ID.',
+      SITE_ASSETS_TOKEN_REJECTED: 'Token GitHub nie ma dostępu do publicznego repozytorium landingu.',
+      SITE_ASSETS_WRITE_REJECTED: 'Token GitHub wymaga uprawnienia Contents: Read and write.',
+      LANDING_STATIC_PUBLISH_FAILED: 'GitHub odrzucił publikację statycznego pliku. Spróbuj ponownie.',
       LANDING_CONFLICT: 'Landing został zmieniony w innej karcie. Odśwież stronę, sprawdź treść i spróbuj ponownie.'
     });
   }
@@ -810,9 +1141,12 @@
     elements.builder.inert = busy;
     elements.builder.setAttribute('aria-busy', String(busy));
     elements.save.disabled = busy;
-    elements.publish.disabled = busy;
+    elements.publish.disabled = busy || !publication.available;
     elements.restore.disabled = busy;
     elements.recover.disabled = busy;
+    elements.exportHtml.disabled = busy;
+    elements.exportConfig.disabled = busy;
+    elements.importConfig.disabled = busy;
   }
 
   function setStatus(message, state) {

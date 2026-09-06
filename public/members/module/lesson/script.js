@@ -6,6 +6,7 @@
 
   const parser = window.ChemLesson;
   const progressApi = window.ChemProgress;
+  const navigationApi = window.ChemLessonNavigation;
   const elements = {
     app: document.getElementById('app'),
     lessonTitle: document.getElementById('lesson-title'),
@@ -318,7 +319,7 @@
         mergeStudentAnswers(saved.lessonAnswers);
       }
     } catch {}
-    state.sequential = state.lesson?.navigation !== 'free';
+    applyNavigationPolicy();
     if (!progressApi) return isCurrentLessonLoad(requestId);
     try {
       await progressApi.load();
@@ -336,13 +337,30 @@
         .map((slide, index) => slide.task && state.completedStepIds.has(slide.id) ? index : -1)
         .filter((index) => index >= 0));
       state.completed = record?.status === 'completed';
-      const skipMode = progressApi.state?.preferences?.skipMode || 'DEFAULT';
-      if (skipMode === 'ALLOW') state.sequential = false;
-      if (skipMode === 'DENY') state.sequential = true;
+      applyNavigationPolicy();
     } catch (_) {
       // sessionStorage pozostaje wyłącznie awaryjnym cache'em interfejsu.
     }
     return isCurrentLessonLoad(requestId);
+  }
+
+  function applyNavigationPolicy() {
+    const catalog = progressApi?.state?.catalog;
+    const published = catalog?.nodes?.find((node) => node.id === lessonMaterialId())
+      || catalog?.lessonManifests?.[navigationApi.materialId(state.repositoryId, state.filename)];
+    const navigation = published?.settings?.steps?.length ? published.settings.navigation : state.lesson?.navigation;
+    const result = navigationApi.policy(navigation, progressApi?.state?.preferences, state.isAdmin);
+    state.sequential = result.sequential;
+    state.navigationSource = result.source;
+  }
+
+  function stepAccess(index) {
+    return navigationApi.stepOverride(state.lesson?.slides[index]?.id, progressApi?.state?.preferences, state.isAdmin);
+  }
+
+  function maySkipCurrent() {
+    return !state.sequential || state.lesson?.slides[state.index]?.requiredToAdvance === false
+      || stepAccess(state.index + 1) === 'allow';
   }
 
   function trackedSlides() {
@@ -647,15 +665,16 @@
       button.dataset.slideIndex = String(index);
       button.append(marker, label);
       button.addEventListener('click', () => {
-        if ((state.sequential && index > state.maxReached) || state.completed) return;
+        if (stepAccess(index) === 'deny' || (stepAccess(index) !== 'allow' && state.sequential && index > state.maxReached) || state.completed) return;
         if (index === state.index) return;
         const answerCommit = commitCurrentStudentAnswers({ focusInvalid: index > state.index });
-        if (index > state.index && !answerCommit.valid) {
+        if (index > state.index && !answerCommit.valid && state.sequential && stepAccess(index) !== 'allow') {
           const current = state.lesson.slides[state.index];
           updateNavigationAccess(current, state.solved.has(state.index));
           return;
         }
-        if (!completeCurrentStepForNavigation() && index > state.index) return;
+        const completed = completeCurrentStepForNavigation();
+        if (!completed && index > state.index && state.sequential && stepAccess(index) !== 'allow' && !maySkipCurrent()) return;
         state.index = index;
         state.maxReached = Math.max(state.maxReached, index);
         renderSlide();
@@ -668,7 +687,7 @@
   function updateOutline() {
     elements.outlineList.querySelectorAll('button').forEach((button, index) => {
       const slide = state.lesson.slides[index];
-      const accessible = (!state.sequential || index <= state.maxReached) && !state.completed;
+      const accessible = stepAccess(index) !== 'deny' && (stepAccess(index) === 'allow' || !state.sequential || index <= state.maxReached) && !state.completed;
       const current = index === state.index && !state.completed;
       const complete = state.completedStepIds.has(slide.id) || state.solved.has(index);
       button.disabled = !accessible;
@@ -684,9 +703,9 @@
   function updateSequenceControl() {
     elements.sequenceToggle.checked = state.sequential;
     elements.sequenceToggle.disabled = !state.isAdmin;
-    elements.sequenceToggleHint.textContent = state.sequential
-      ? (state.isAdmin ? 'Tryb ustawiony w Lesson Builderze; administrator może go podglądowo zmienić.' : 'Kroki są odblokowywane po kolei.')
-      : 'Wszystkie kroki są dostępne.';
+    elements.sequenceToggleHint.textContent = state.isAdmin
+      ? 'Administrator może pomijać kroki. Przełącznik służy tylko do podglądu trybu nauki.'
+      : `${state.sequential ? 'Kroki odblokowują się po kolei.' : 'Możesz pomijać kroki; pominięcie nie zalicza zadania.'} ${state.navigationSource === 'user' ? 'Obowiązuje indywidualne ustawienie z panelu Postępy.' : 'Obowiązuje ustawienie autora lekcji.'}`;
     elements.outlineTipCopy.textContent = state.sequential
       ? 'Zadanie trzeba rozwiązać, aby odblokować kolejny krok.'
       : 'Możesz przejść dalej i wrócić do trudnego zadania później.';
@@ -696,14 +715,15 @@
     const examGate = currentExamGate();
     const answerGate = studentAnswerGate();
     const taskBlocked = Boolean(slide.task && !isSolved);
-    const blocked = !answerGate.satisfied || (state.sequential && (taskBlocked || !examGate.satisfied));
+    const nextLocked = state.index < state.lesson.slides.length - 1 && stepAccess(state.index + 1) === 'deny';
+    const blocked = nextLocked || (!maySkipCurrent() && (!answerGate.satisfied || (state.sequential && (taskBlocked || !examGate.satisfied))));
     elements.next.disabled = blocked;
     elements.navigationHint.textContent = blocked
-      ? (!answerGate.satisfied
+      ? (nextLocked ? 'Następny krok jest zablokowany przez administratora.' : !answerGate.satisfied
         ? answerGate.message
         : (!examGate.satisfied
           ? examGate.message
-          : 'Najpierw podaj poprawną odpowiedź albo wyłącz tryb „Nauka po kolei”.'))
+          : 'Najpierw rozwiąż zadanie, aby odblokować następny krok.'))
       : slide.task && !isSolved
         ? 'Możesz pominąć to zadanie i wrócić do niego później.'
         : '';
@@ -718,6 +738,7 @@
   }
 
   function toggleSequentialLearning() {
+    if (!state.isAdmin) { updateSequenceControl(); return; }
     state.sequential = elements.sequenceToggle.checked;
     if (state.sequential) state.maxReached = Math.max(state.maxReached, state.index);
     updateSequenceControl();
@@ -731,7 +752,7 @@
     if (!slide) return false;
     if (!studentAnswerGate().satisfied) return false;
     if (!currentExamGate().satisfied) return false;
-    if (state.sequential && slide.task && !state.solved.has(state.index)) return false;
+    if (slide.task && !state.solved.has(state.index)) return false;
     state.completedStepIds.add(slide.id);
     return true;
   }
@@ -1883,12 +1904,13 @@
 
   async function goNext() {
     const slide = state.lesson.slides[state.index];
-    const answerCommit = commitCurrentStudentAnswers({ focusInvalid: true });
-    if (!answerCommit.valid) {
+    if (state.index < state.lesson.slides.length - 1 && stepAccess(state.index + 1) === 'deny') return;
+    const answerCommit = commitCurrentStudentAnswers({ focusInvalid: !maySkipCurrent() });
+    if (!answerCommit.valid && !maySkipCurrent()) {
       updateNavigationAccess(slide, state.solved.has(state.index));
       return;
     }
-    if (state.sequential) {
+    if (!maySkipCurrent()) {
       await refreshExamProgress(true);
       if ((slide.task && !state.solved.has(state.index)) || !currentExamGate().satisfied) return;
     }
@@ -1950,7 +1972,7 @@
   }
 
   function goPrevious() {
-    if (state.index === 0) return;
+    if (state.index === 0 || stepAccess(state.index - 1) === 'deny') return;
     commitCurrentStudentAnswers();
     completeCurrentStepForNavigation();
     state.index -= 1;
@@ -1983,7 +2005,7 @@
     state.solved = new Set();
     state.completedStepIds = new Set();
     state.completed = false;
-    state.sequential = true;
+    applyNavigationPolicy();
     state.attempts = new Map();
     state.studentAnswers = new Map();
     elements.restart.disabled = true;
@@ -2026,6 +2048,13 @@
     if (event.target === elements.libraryDialog) closeLessonLibrary();
   });
   window.addEventListener('popstate', loadLesson);
+  window.addEventListener('chemdisk-progress-ready', () => {
+    if (!state.lesson) return;
+    applyNavigationPolicy();
+    updateSequenceControl();
+    const slide = state.lesson.slides[state.index];
+    if (slide) updateNavigationAccess(slide, state.solved.has(state.index));
+  });
   window.addEventListener('focus', () => { void refreshExamProgress(true); });
   elements.retry.addEventListener('click', loadLesson);
   elements.previous.addEventListener('click', goPrevious);

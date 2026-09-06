@@ -19,6 +19,13 @@ const {
   writePriceConfig
 } = require('../payment-common.js');
 
+const PUBLIC_CACHE_HEADERS = Object.freeze({
+  'Cache-Control': 'public, max-age=60, stale-while-revalidate=300',
+  'Netlify-CDN-Cache-Control': 'public, durable, max-age=300, stale-while-revalidate=1800',
+  'Netlify-Cache-Tag': 'nextmed-payment-config',
+  Vary: 'Accept-Encoding'
+});
+
 exports.handler = async (event = {}, context = {}) => {
   const method = String(event.httpMethod || '').toUpperCase();
   if (method === 'OPTIONS') {
@@ -58,7 +65,7 @@ exports.handler = async (event = {}, context = {}) => {
       return json(publicPriceConfig(defaultPriceConfig(), {
         checkoutAvailable: false,
         testMode: environment.testMode
-      }));
+      }), 200, PUBLIC_CACHE_HEADERS);
     }
     return json({ error: error.code || 'PAYMENT_STORAGE_UNAVAILABLE' }, error.status || 503);
   }
@@ -76,7 +83,7 @@ exports.handler = async (event = {}, context = {}) => {
           source: current.source,
           stripeConfigured: environment.configured
         } : {})
-      });
+      }, 200, adminView ? {} : PUBLIC_CACHE_HEADERS);
     }
 
     const parsed = parseJsonBody(event);
@@ -184,6 +191,7 @@ function safeErrorName(error) {
 }
 
 exports._test = {
+  PUBLIC_CACHE_HEADERS,
   validateUpdate,
   paymentStoreConfig
 };

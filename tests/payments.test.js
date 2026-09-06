@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const payments = require('../netlify/payment-common.js');
 const paymentConfig = require('../netlify/functions/payment-config.js');
@@ -13,6 +14,57 @@ const createCheckout = require('../netlify/functions/create-checkout.js');
 const USER_ID = '22222222-2222-4222-8222-222222222222';
 const ADMIN_ID = '11111111-1111-4111-8111-111111111111';
 const NOW = Date.parse('2026-07-17T10:00:00.000Z');
+
+function publicOffer(overrides = {}) {
+  return {
+    ...payments.publicPriceConfig(payments.defaultPriceConfig(), {
+      checkoutAvailable: true,
+      testMode: false
+    }),
+    ...overrides
+  };
+}
+
+function loadPaymentsClient({ storage = new Map(), fetchImpl }) {
+  const document = {
+    readyState: 'loading',
+    addEventListener() {},
+    querySelectorAll() { return []; }
+  };
+  const sessionStorage = {
+    getItem(key) { return storage.get(key) || null; },
+    setItem(key, value) { storage.set(key, String(value)); },
+    removeItem(key) { storage.delete(key); }
+  };
+  const window = {
+    document,
+    sessionStorage,
+    setTimeout,
+    dispatchEvent() {},
+    location: { assign() {} }
+  };
+  const context = {
+    AbortController,
+    console,
+    CustomEvent: class CustomEvent {},
+    Date,
+    document,
+    fetch: fetchImpl,
+    Intl,
+    location: { origin: 'https://nextmed.example', search: '' },
+    Promise,
+    sessionStorage,
+    setTimeout,
+    URL,
+    window
+  };
+  vm.runInNewContext(
+    fs.readFileSync(path.join(__dirname, '..', 'public', 'assets', 'payments', 'payments.js'), 'utf8'),
+    context,
+    { filename: 'payments.js' }
+  );
+  return { api: window.ChemPayments, storage };
+}
 
 function purchase(id, plan = 'month', amount = 5_000) {
   return {
@@ -42,6 +94,116 @@ test('default Stripe offer contains every timed role and keeps the original four
   assert.deepEqual(config.enabledPlans, ['week', 'month', 'halfyear', 'year']);
   assert.equal(config.paymentsEnabled, true);
   assert.equal(config.stackingEnabled, true);
+});
+
+test('public payment config is CDN-cacheable while authenticated admin reads stay private', async (t) => {
+  payments._test.setStoreFactory(() => ({
+    async getWithMetadata() { return null; }
+  }));
+  t.after(() => payments._test.setStoreFactory(null));
+
+  const publicResponse = await paymentConfig.handler({
+    httpMethod: 'GET',
+    queryStringParameters: {}
+  });
+  assert.equal(publicResponse.statusCode, 200);
+  assert.match(publicResponse.headers['Cache-Control'], /public, max-age=60/);
+  assert.match(publicResponse.headers['Netlify-CDN-Cache-Control'], /durable/);
+  assert.match(publicResponse.headers['Netlify-CDN-Cache-Control'], /max-age=300/);
+  assert.match(publicResponse.headers['Netlify-CDN-Cache-Control'], /stale-while-revalidate=1800/);
+  assert.equal(publicResponse.headers['Netlify-Cache-Tag'], 'nextmed-payment-config');
+
+  const admin = { id: ADMIN_ID, app_metadata: { roles: ['admin'] } };
+  t.mock.method(global, 'fetch', async () => new Response(JSON.stringify(admin), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' }
+  }));
+  const adminResponse = await paymentConfig.handler({
+    httpMethod: 'GET',
+    headers: { authorization: 'Bearer admin-token' },
+    queryStringParameters: { admin: '1' }
+  }, {
+    clientContext: {
+      user: admin,
+      identity: { url: 'https://identity.example' }
+    }
+  });
+  assert.equal(adminResponse.statusCode, 200);
+  assert.equal(adminResponse.headers['Cache-Control'], 'no-store');
+  assert.equal(adminResponse.headers['Netlify-CDN-Cache-Control'], undefined);
+  assert.equal(JSON.parse(adminResponse.body).source, 'default');
+});
+
+test('safe public fallback is cached briefly when payment storage is unavailable', async (t) => {
+  payments._test.setStoreFactory(() => { throw new Error('offline'); });
+  t.after(() => payments._test.setStoreFactory(null));
+  const response = await paymentConfig.handler({ httpMethod: 'GET', queryStringParameters: {} });
+  assert.equal(response.statusCode, 200);
+  assert.match(response.headers['Cache-Control'], /max-age=60/);
+  assert.match(response.headers['Netlify-CDN-Cache-Control'], /max-age=300/);
+  assert.equal(JSON.parse(response.body).checkoutAvailable, false);
+});
+
+test('browser payment config reuses only a fresh validated session cache and force bypasses it', async () => {
+  const storage = new Map();
+  const requests = [];
+  const firstOffer = publicOffer();
+  const refreshedOffer = publicOffer({ currency: 'eur' });
+  let responseOffer = firstOffer;
+  const fetchImpl = async (_url, options) => {
+    requests.push(options);
+    return { ok: true, json: async () => responseOffer };
+  };
+
+  const firstPage = loadPaymentsClient({ storage, fetchImpl });
+  const first = await firstPage.api.loadConfig(false);
+  assert.equal(first.currency, 'pln');
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].cache, 'default');
+
+  const secondPage = loadPaymentsClient({ storage, fetchImpl });
+  const cached = await secondPage.api.loadConfig(false);
+  assert.equal(cached.currency, 'pln');
+  assert.equal(requests.length, 1);
+
+  responseOffer = refreshedOffer;
+  const refreshed = await secondPage.api.loadConfig(true);
+  assert.equal(refreshed.currency, 'eur');
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].cache, 'no-store');
+});
+
+test('browser payment config rejects malformed or expired session cache entries', async () => {
+  const cacheKey = 'nextmed.payments.public-config.v1';
+  const malformedStorage = new Map([[cacheKey, JSON.stringify({
+    savedAt: Date.now(),
+    config: publicOffer({ plans: [{ id: 'month', amount: 'free' }] })
+  })]]);
+  let malformedFetches = 0;
+  const malformedPage = loadPaymentsClient({
+    storage: malformedStorage,
+    fetchImpl: async () => {
+      malformedFetches += 1;
+      return { ok: true, json: async () => publicOffer() };
+    }
+  });
+  await malformedPage.api.loadConfig(false);
+  assert.equal(malformedFetches, 1);
+
+  const expiredStorage = new Map([[cacheKey, JSON.stringify({
+    savedAt: Date.now() - 60_001,
+    config: publicOffer()
+  })]]);
+  let expiredFetches = 0;
+  const expiredPage = loadPaymentsClient({
+    storage: expiredStorage,
+    fetchImpl: async () => {
+      expiredFetches += 1;
+      return { ok: true, json: async () => publicOffer() };
+    }
+  });
+  await expiredPage.api.loadConfig(false);
+  assert.equal(expiredFetches, 1);
 });
 
 test('an existing four-price configuration migrates without changing its public offer', () => {

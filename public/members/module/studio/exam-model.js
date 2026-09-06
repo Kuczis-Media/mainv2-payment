@@ -77,10 +77,10 @@
         .map((option, index) => answerOption(option, index, questionId));
       const requested = Array.isArray(source.correctAnswerIds) ? source.correctAnswerIds : [];
       base.correctAnswerIds = requested.filter((answerId) => base.options.some((option) => option.answerId === answerId));
-      if (!base.correctAnswerIds.length && base.options[0]) base.correctAnswerIds = [base.options[0].answerId];
+      if (!Array.isArray(source.correctAnswerIds) && !base.correctAnswerIds.length && base.options[0]) base.correctAnswerIds = [base.options[0].answerId];
       if (type !== 'multiple_choice') base.correctAnswerIds = base.correctAnswerIds.slice(0, 1);
     } else if (type === 'short_text') {
-      base.acceptedAnswers = list(source.acceptedAnswers).length ? list(source.acceptedAnswers) : ['poprawna odpowiedź'];
+      base.acceptedAnswers = Array.isArray(source.acceptedAnswers) ? source.acceptedAnswers.map((answer) => line(answer, 2000)) : ['poprawna odpowiedź'];
       base.caseInsensitive = source.caseInsensitive !== false;
     } else if (type === 'number') {
       base.correctNumber = Number.isFinite(Number(source.correctNumber)) ? Number(source.correctNumber) : 0;
@@ -113,7 +113,7 @@
       base.blanks = (Array.isArray(source.blanks) && source.blanks.length ? source.blanks : [{ acceptedAnswers: ['odpowiedź'] }])
         .map((blank, index) => ({
           blankId: SAFE_ID.test(blank.blankId || '') ? blank.blankId : `${questionId}-blank-${index + 1}`,
-          acceptedAnswers: list(blank.acceptedAnswers).length ? list(blank.acceptedAnswers) : ['odpowiedź'],
+          acceptedAnswers: Array.isArray(blank.acceptedAnswers) ? blank.acceptedAnswers.map((answer) => line(answer, 1000)) : ['odpowiedź'],
           caseInsensitive: blank.caseInsensitive !== false
         }));
     } else if (type === 'open_answer') {
@@ -240,8 +240,17 @@
       seen.add(question.questionId);
       if (!question.prompt && question.type !== 'fill_blanks') errors.push({ code: 'QUESTION_PROMPT_REQUIRED', message: `Pytanie ${index + 1} wymaga treści.` });
       if (Array.isArray(question.options) && (question.options.length < 2 || !question.correctAnswerIds.length)) errors.push({ code: 'QUESTION_OPTIONS_REQUIRED', message: `Pytanie ${index + 1} wymaga odpowiedzi i klucza.` });
+      if (question.options?.some((option) => !option.text && !option.images.length)) errors.push({ code: 'QUESTION_OPTION_EMPTY', message: `Pytanie ${index + 1}: wpisz treść każdej odpowiedzi albo dodaj obraz.` });
+      if (question.type === 'short_text' && !question.acceptedAnswers.some((answer) => answer.trim())) errors.push({ code: 'QUESTION_ANSWER_REQUIRED', message: `Pytanie ${index + 1}: wpisz co najmniej jedną poprawną odpowiedź.` });
       if (question.type === 'matching' && question.pairs.length < 2) errors.push({ code: 'QUESTION_PAIRS_REQUIRED', message: `Pytanie ${index + 1} wymaga co najmniej dwóch par.` });
+      if (question.pairs?.some((pair) => (!pair.left && !pair.leftImages.length) || (!pair.right && !pair.rightImages.length))) errors.push({ code: 'QUESTION_PAIR_EMPTY', message: `Pytanie ${index + 1}: uzupełnij obie strony każdej pary.` });
       if (question.type === 'ordering' && question.items.length < 2) errors.push({ code: 'QUESTION_ITEMS_REQUIRED', message: `Pytanie ${index + 1} wymaga co najmniej dwóch elementów.` });
+      if (question.items?.some((item) => !item.text && !item.images.length)) errors.push({ code: 'QUESTION_ITEM_EMPTY', message: `Pytanie ${index + 1}: uzupełnij każdy element kolejności.` });
+      if (question.type === 'fill_blanks') {
+        const count = (question.template.match(/\{\{[^{}]*\}\}/g) || []).length;
+        if (!count || count !== question.blanks.length) errors.push({ code: 'QUESTION_BLANK_COUNT', message: `Pytanie ${index + 1}: liczba luk w zdaniu musi odpowiadać liczbie pól odpowiedzi.` });
+        if (question.blanks.some((blank) => !blank.acceptedAnswers.some((answer) => answer.trim()))) errors.push({ code: 'QUESTION_BLANK_ANSWER_REQUIRED', message: `Pytanie ${index + 1}: wpisz poprawną odpowiedź do każdej luki.` });
+      }
       if (question.type === 'open_answer' && question.gradingMode === 'ai' && !question.answerKey) {
         errors.push({ code: 'QUESTION_ANSWER_KEY_REQUIRED', message: `Pytanie ${index + 1}: dodaj klucz odpowiedzi dla oceny AI.` });
       }
@@ -256,7 +265,12 @@
   }
 
   function serializeQuestionBank(input) {
-    return `${JSON.stringify(createQuestionBank(input), null, 2)}\n`;
+    const bank = createQuestionBank(input);
+    if (bank.questions.length) {
+      const validation = validateExam({ examId: 'question-bank', questions: bank.questions });
+      if (!validation.valid) throw new Error(validation.errors[0].message);
+    }
+    return `${JSON.stringify(bank, null, 2)}\n`;
   }
 
   function canonicalMaterialId(repositoryId, examId) {

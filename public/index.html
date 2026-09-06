@@ -1,270 +1,202 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pl">
 <head>
-    <meta charset="UTF-8">
-    <link rel="preconnect" href="https://cdn.jsdelivr.net">
-    <link rel="icon" href="https://cdn.jsdelivr.net/gh/Kuczis-Media/logo@main/benzene-ring.svg" type="image/svg+xml">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Kursy maturalne, materiały, ćwiczenia i wsparcie prowadzącego w jednym miejscu.">
-    <title>ChemDisk — kursy maturalne online</title>
-    <link rel="stylesheet" href="assets/start_site/style.css">
-    <link rel="stylesheet" href="/assets/payments/payments.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"/>
-    <!-- Netlify Identity -->
-    <script>
-        (function () {
-            var hash = (location.hash || '').replace(/^#/, '');
-            var isIdentityCallback = /(^|&)(invite_token|recovery_token|confirmation_token|email_change_token|token|error|error_description|type)=/i.test(hash);
-            if (isIdentityCallback) {
-                try {
-                    const target = new URL('/login/', location.origin);
-                    const params = new URLSearchParams(location.search || '');
-                    params.forEach((value, key) => target.searchParams.set(key, value));
-                    target.hash = location.hash;
-                    location.replace(target.toString());
-                    return;
-                } catch (e) {
-                    location.replace('/login/');
-                }
-            }
-        })();
-    </script>
-    <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
-    <script defer src="/assets/js/auth.js"></script>
-    <script defer src="/assets/payments/payments.js"></script>
-
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Nowoczesne kursy maturalne, materiały, ćwiczenia i wsparcie prowadzącego w jednym miejscu.">
+  <meta name="theme-color" content="#176b54">
+  <meta name="nextmed-landing-config" content="https://raw.githubusercontent.com/Kuczis-Media/logo/main/landing/config.json">
+  <title>NextMed — kursy maturalne online</title>
+  <link rel="preconnect" href="https://raw.githubusercontent.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="icon" href="https://cdn.jsdelivr.net/gh/Kuczis-Media/logo@main/benzene-ring.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/start_site/style.css">
+  <link rel="stylesheet" href="/assets/payments/payments.css">
+  <script>
+    (function () {
+      var hash = (location.hash || '').replace(/^#/, '');
+      if (!/(^|&)(invite_token|recovery_token|confirmation_token|email_change_token|token|error|error_description|type)=/i.test(hash)) return;
+      try {
+        var target = new URL('/login/', location.origin);
+        new URLSearchParams(location.search || '').forEach(function (value, key) { target.searchParams.set(key, value); });
+        target.hash = location.hash;
+        location.replace(target.toString());
+      } catch (_) { location.replace('/login/'); }
+    })();
+  </script>
 </head>
 <body>
-    <button class="scroll-up-btn" type="button" aria-label="Wróć na początek strony">
-        <i class="fas fa-angle-up"></i>
-    </button>
-    <nav class="navbar">
-        <div class="max-width">
-            <div class="logo"><a href="/">Chem<span>Disk</span></a></div>
-            <ul class="menu">
-                <li><a href="#home" class="menu-btn">Start</a></li>
-                <li><a href="#about" class="menu-btn">O nas</a></li>
-                <li><a href="#services" class="menu-btn">Kursy</a></li>
-                <li><a href="#pricing" class="menu-btn">Cennik</a></li>
-                <li><a href="#skills" class="menu-btn">Jak zacząć</a></li>
-                <li><a href="#contact" class="menu-btn">Kontakt</a></li>
-                <li><a id="login-btn" href="/members/" class="menu-btn">Zaloguj</a></li>
-                <li><a href="https://atonom.netlify.app" class="menu-btn">Atonom</a></li>
-            </ul>
-            <button class="menu-btn" type="button" aria-label="Otwórz menu" aria-expanded="false">
-                <i class="fas fa-bars"></i>
-            </button>
-        </div>
-    </nav>
+  <div class="reading-progress" aria-hidden="true"><span></span></div>
+  <a class="skip-link" href="#home">Przejdź do treści</a>
+  <button class="scroll-up-btn" type="button" aria-label="Wróć na początek strony">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
+  </button>
 
-    <!-- home section start -->
+  <nav class="navbar" aria-label="Główna nawigacja">
+    <div class="max-width">
+      <div class="logo"><a href="/" aria-label="NextMed — strona główna"><span data-brand-name>NextMed</span><i aria-hidden="true">.</i></a><small data-brand-tagline>Nauka, która prowadzi do wyniku</small></div>
+      <ul class="menu" id="landing-menu">
+        <li id="nav-home"><a href="#home">Start</a></li>
+        <li id="nav-about"><a href="#about">O nas</a></li>
+        <li id="nav-services"><a href="#services">Platforma</a></li>
+        <li id="nav-pricing"><a href="#pricing">Cennik</a></li>
+        <li id="nav-skills"><a href="#skills">Jak zacząć</a></li>
+        <li id="nav-contact"><a href="#contact">Kontakt</a></li>
+        <li id="nav-login"><a id="login-btn" class="nav-login" href="/members/">Zaloguj się</a></li>
+      </ul>
+      <button class="menu-toggle" type="button" aria-label="Otwórz menu" aria-expanded="false" aria-controls="landing-menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </nav>
+
+  <main>
     <section class="home" id="home">
-        <div class="max-width">
-            <div class="home-content">
-                <div class="text-1">Witaj w ChemDisk</div>
-                <div class="text-2">Twoja matura, dobrze zaplanowana</div>
-                <div class="text-3">Ucz się <span class="typing"></span></div>
-                <a id="login-cta" href="/members/">Zaloguj się</a>
-            </div>
+      <div class="hero-orb hero-orb-one" data-parallax="-45" aria-hidden="true"></div>
+      <div class="hero-orb hero-orb-two" data-parallax="55" aria-hidden="true"></div>
+      <div class="max-width hero-layout">
+        <div class="home-content">
+          <div class="text-1">Twój kierunek: więcej możliwości</div>
+          <h1 class="text-2">Ta matura. Twój następny krok.</h1>
+          <p class="text-3">Zamień wielkie plany w małe, codzienne kroki. Ucz się, sprawdzaj wiedzę i wracaj do tego, co naprawdę wymaga powtórki.</p>
+          <div class="hero-actions">
+            <a id="login-cta" href="/members/">Zacznij naukę</a>
+            <a class="hero-secondary" href="#services">Zobacz platformę</a>
+          </div>
+          <ul class="hero-proof" aria-label="Najważniejsze zalety">
+            <li><span>✓</span> Materiały w jednym miejscu</li>
+            <li><span>✓</span> Postęp i powtórki</li>
+            <li><span>✓</span> Wsparcie prowadzącego</li>
+          </ul>
         </div>
+        <div class="hero-scene" aria-label="Przykładowy widok platformy">
+          <div class="scene-orbit" aria-hidden="true"></div>
+          <div class="scene-label"><span class="live-dot"></span> PRZESTRZEŃ DO NAUKI / 01</div>
+          <div class="hero-visual" data-parallax="-58">
+            <div class="visual-topbar"><span></span><span></span><span></span><small data-brand-name>NextMed</small></div>
+            <div class="visual-body">
+              <aside aria-hidden="true"><b>◫</b><b>▤</b><b>✓</b><b>↗</b></aside>
+              <div class="visual-main">
+                <div class="visual-welcome"><small>Twój plan na dziś</small><strong>Mały krok.<br>Wielka różnica.</strong><span><i></i> Lekcja 03</span></div>
+                <div class="visual-lesson"><span class="lesson-number">03</span><div><strong>Budowa komórki</strong><small>Biologia · lekcja + quiz</small></div><b>↗</b></div>
+                <div class="visual-grid"><article><em>Ucz się</em><span>W swoim tempie</span></article><article><em>Sprawdź</em><span>To, co już wiesz</span></article></div>
+                <div class="visual-chart" aria-hidden="true"><span style="--height:42%"></span><span style="--height:68%"></span><span style="--height:54%"></span><span style="--height:86%"></span><span style="--height:72%"></span><span style="--height:94%"></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="floating-note note-science" data-parallax="42"><small>CHEMIA / PRAKTYKA</small><svg viewBox="0 0 130 75" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2"><path d="m39 14 26 15v30L39 74 13 59V29Zm52 0 26 15v30L91 74 65 59M20 33v22m19 10 19-11m14-21 19-11" transform="translate(0 -7)"/></g><circle cx="117" cy="22" r="5" fill="currentColor"/></svg><strong>Zrozum. Nie zakuwaj.</strong></div>
+          <div class="floating-note note-check" data-parallax="-95"><span>✓</span><div><strong>Kolejny krok za Tobą</strong><small>Tak buduje się pewność.</small></div></div>
+          <p class="scene-caption">Przykładowy widok. Twój postęp zaczyna się od pierwszej lekcji.</p>
+        </div>
+      </div>
+      <div class="hero-bottom max-width"><span>LEKCJE / QUIZY / EGZAMINY</span><a href="#about">Przewiń i poznaj swój plan <span aria-hidden="true">↓</span></a></div>
     </section>
 
-    <!-- about section start -->
     <section class="about" id="about">
-        <div class="max-width">
-            <h2 class="title">O nas</h2>
-            <div class="about-content">
-                <div class="column left">
-                    <img src="https://cdn.jsdelivr.net/gh/Kuczis-Media/landing-page-assets@main/images/banner-chemical.png" alt="Ilustracja związana z nauką chemii" loading="lazy" decoding="async" fetchpriority="low">
-                </div>
-                <div class="column right">
-                    <div class="text">Jesteśmy <span class="typing-2"></span></div>
-                    <p>Pomagamy uczniom zdać maturę pewnie i wysoko. Oferujemy kursy z matematyki,
-                        języka polskiego, języka angielskiego, chemii i biologii. Pracujemy na sprawdzonych
-                        metodach, arkuszach CKE i autorskich materiałach. Uczymy skutecznych strategii,
-                        powtarzamy kluczowe zagadnienia i trenujemy rozwiązywanie zadań pod presją czasu.</p>
-                    <a href="#services">Poznaj moduły</a>
-                </div>
+      <div class="max-width">
+        <div class="section-heading" data-reveal><span>01 / Więcej jasności</span><h2 class="title">O nas</h2></div>
+        <div class="about-content">
+          <div class="column left">
+            <div class="image-shell" data-reveal>
+              <img src="/assets/start_site/learning-map.svg" width="760" height="760" alt="Mapa nauki łącząca lekcję, praktykę i powtórkę" loading="lazy" decoding="async" fetchpriority="low" data-parallax="-22">
+              <div class="image-note" data-parallax="36"><strong>Plan, praktyka, wynik</strong><span>Wiesz, co zrobić dalej.</span></div>
             </div>
+          </div>
+          <div class="column right" data-reveal>
+            <div class="text">Jesteśmy zespołem wspierającym maturzystów</div>
+            <p>Pomagamy uczniom zdać maturę pewnie i wysoko. Łączymy sprawdzone metody, arkusze CKE i autorskie materiały w przejrzysty plan nauki.</p>
+            <a href="#services">Poznaj platformę</a>
+          </div>
         </div>
+      </div>
     </section>
 
-    <!-- services section start -->
     <section class="services" id="services">
-        <div class="max-width">
-            <h2 class="title">Nasze Moduły</h2>
-            <p class="landing-section-subtitle">Wszystko w jednym miejscu</p>
-            <p class="landing-section-body">Materiały, ćwiczenia, narzędzia i wsparcie prowadzącego.</p>
-            <div class="serv-content">
-                <div class="card">
-                    <div class="box">
-                        <i class="fas fa-chalkboard"></i>
-                        <div class="text">Panel kursanta</div>
-                        <p>Materiały są podzielone na działy, dostępne z wyszukiwarki i uporządkowane w jednym czytelnym miejscu.</p>
-                    </div>
-                </div>
-                <div class="card">
-                    <div class="box">
-                        <i class="fas fa-chalkboard-teacher"></i>
-                        <div class="text">Tablice do zadań</div>
-                        <p>Rozpisuj obliczenia, szkicuj reakcje i zapisuj własne plansze podczas lekcji lub samodzielnej pracy.</p>
-                    </div>
-                </div>
-                <div class="card">
-                    <div class="box">
-                        <i class="fas fa-atom"></i>
-                        <div class="text">Atonom</div>
-                        <p>Autorska aplikacja do rysowania związków chemicznych zgodnie z nomenklaturą IUPAC.</p>
-                    </div>
-                </div>
-                <div class="card">
-                    <div class="box">
-                        <i class="fas fa-comments"></i>
-                        <div class="text">Kontakt z prowadzącym</div>
-                        <p>Wyślij pytanie z panelu kursanta, bez przepisywania danych konta i bez opuszczania platformy.</p>
-                    </div>
-                </div>
-                <div class="card">
-                    <div class="box">
-                        <i class="fas fa-photo-video"></i>
-                        <div class="text">PDF-y, slajdy i filmy</div>
-                        <p>Otwieraj dokumenty, prezentacje i nagrania bezpośrednio przy właściwym dziale kursu.</p>
-                    </div>
-                </div>
-                <div class="card">
-                    <div class="box">
-                        <i class="fas fa-calculator"></i>
-                        <div class="text">Kalkulatory</div>
-                        <p>Korzystaj z prostego kalkulatora albo rozbudowanego symulatora naukowego bez opuszczania kursu.</p>
-                    </div>
-                </div>
-                <div class="card">
-                    <div class="box">
-                        <i class="fas fa-robot"></i>
-                        <div class="text">Asystent AI</div>
-                        <p>Zadawaj pytania do przygotowanego promptu, analizuj zdjęcia zadań i proś o wyjaśnienie kolejnego kroku.</p>
-                    </div>
-                </div>
-                <div class="card">
-                    <div class="box">
-                        <i class="fas fa-question-circle"></i>
-                        <div class="text">Testy i powtórki</div>
-                        <p>Rozwiązuj przypisane formularze i wracaj do materiałów wskazanych przez prowadzącego.</p>
-                    </div>
-                </div>
-            </div>
-            <a class="landing-section-cta" href="#" hidden></a>
+      <div class="max-width">
+        <div class="section-heading" data-reveal><span>02 / Twoja przestrzeń</span><h2 class="title">Nasza platforma</h2></div>
+        <p class="landing-section-subtitle">Jedno spokojne miejsce do całej nauki</p>
+        <p class="landing-section-body">Materiały, ćwiczenia, postęp i kontakt z prowadzącym — bez przeskakiwania między kilkoma aplikacjami.</p>
+        <div class="platform-story">
+          <div class="platform-sticky" data-reveal><span class="mono-label">OD WIEDZY DO PEWNOŚCI</span><p>Wszystko się<br>ze sobą <em>łączy.</em></p><div class="platform-diagram" aria-hidden="true"><span>Lekcja</span><i>↓</i><span>Praktyka</span><i>↓</i><span>Powtórka</span><i>↺</i></div><small>Uczysz się. Sprawdzasz. Robisz kolejny krok.</small></div>
+          <div class="serv-content">
+            <article class="card" data-reveal><div class="box"><span class="card-index">01</span><span class="card-icon">▤</span><div class="text">Uporządkowane lekcje</div><p>Materiały podzielone na działy, z jasną kolejnością i wygodną wyszukiwarką.</p><div class="mini-lines" aria-hidden="true"><i></i><i></i><i></i></div></div></article>
+            <article class="card" data-reveal><div class="box"><span class="card-index">02</span><span class="card-icon">✓</span><div class="text">Quizy i egzaminy</div><p>Sprawdzaj wiedzę, wracaj do odpowiedzi i obserwuj realny postęp.</p><div class="mini-answers" aria-hidden="true"><span>○ A</span><span>✓ B</span><span>○ C</span></div></div></article>
+            <article class="card" data-reveal><div class="box"><span class="card-index">03</span><span class="card-icon">↗</span><div class="text">Inteligentne wsparcie</div><p>Proś o wyjaśnienie następnego kroku wtedy, kiedy naprawdę tego potrzebujesz.</p><div class="mini-conversation" aria-hidden="true"><i>Jak to rozwiązać?</i><i>Zacznijmy od pierwszego kroku.</i></div></div></article>
+            <article class="card" data-reveal><div class="box"><span class="card-index">04</span><span class="card-icon">◫</span><div class="text">PDF, slajdy i filmy</div><p>Wszystkie formaty otwierają się bezpośrednio przy właściwym dziale kursu.</p><div class="mini-files" aria-hidden="true"><span>PDF</span><span>▶</span><span>SLIDES</span></div></div></article>
+            <article class="card" data-reveal><div class="box"><span class="card-index">05</span><span class="card-icon">✎</span><div class="text">Tablice do zadań</div><p>Rozpisuj obliczenia, szkicuj i zachowuj własny tok rozumowania.</p><div class="mini-formula" aria-hidden="true">pomysł → rozwiązanie</div></div></article>
+            <article class="card" data-reveal><div class="box"><span class="card-index">06</span><span class="card-icon">◎</span><div class="text">Widoczny postęp</div><p>Wiesz, co już umiesz, do czego wrócić i jaki jest następny krok.</p><div class="mini-progress" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div></div></article>
+          </div>
         </div>
+        <a class="landing-section-cta" href="#" hidden></a>
+      </div>
     </section>
 
-    <!-- pricing section start -->
     <section class="pricing" id="pricing">
-        <div class="max-width">
-            <h2 class="title">Wybierz dostęp</h2>
-            <p class="landing-section-subtitle">Pakiety kursu</p>
-            <p class="pricing-intro">Jednorazowa płatność kartą przez Stripe. Dostępne pakiety i zasady ich przedłużania są zawsze widoczne przy aktualnej ofercie.</p>
-            <div class="chem-pricing" data-pricing data-pricing-mode="public" aria-live="polite"></div>
-            <a class="landing-section-cta" href="#" hidden></a>
-        </div>
+      <div class="max-width">
+        <div class="section-heading" data-reveal><span>03 / Zaczynamy?</span><h2 class="title">Wybierz dostęp</h2></div>
+        <p class="landing-section-subtitle">Pakiet dopasowany do Twojego planu</p>
+        <p class="pricing-intro">Aktualne ceny, zakres dostępu i zasady przedłużania zawsze zobaczysz poniżej przed płatnością.</p>
+        <div class="chem-pricing" data-pricing data-pricing-mode="public" aria-live="polite"><div class="offer-gate" data-reveal><span class="offer-symbol" aria-hidden="true">↗</span><div><h3>Twój plan. Twoje tempo.</h3><p>Zobacz dostępne pakiety i aktualne ceny. Wybierz dostęp, który pasuje do Ciebie.</p></div><button id="load-offer" type="button">Pokaż pakiety <span aria-hidden="true">→</span></button><a class="offer-fallback" href="/purchase/">Przejdź do oferty ↗</a></div></div>
+        <a class="landing-section-cta" href="#" hidden></a>
+      </div>
     </section>
 
-    <!-- skills section start -->
     <section class="skills" id="skills">
-        <div class="max-width">
-            <h2 class="title">Jak zacząć</h2>
-            <div class="skills-content">
-                <div class="column left">
-                    <div class="text">Jak się zapisać?</div>
-                    <p>Utwórz konto, wybierz pakiet i opłać go bezpiecznie przez Stripe. Po potwierdzeniu płatności dostęp zostanie dopisany automatycznie, a wszystkie materiały pojawią się w panelu kursanta.</p>
-                    <a href="#pricing">Wybierz pakiet</a>
-                    <a href="https://atonom.netlify.app">Atonom</a> 
-                </div>
-                <div class="column right">
-                    <ol class="steps-list">
-                        <li>
-                            <span class="step-number">1</span>
-                            <div><strong>Utwórz konto</strong><p>Podaj imię, nazwisko, e-mail i ustaw bezpieczne hasło.</p></div>
-                        </li>
-                        <li>
-                            <span class="step-number">2</span>
-                            <div><strong>Wybierz pakiet</strong><p>Zapłać kartą na bezpiecznej stronie Stripe Checkout.</p></div>
-                        </li>
-                        <li>
-                            <span class="step-number">3</span>
-                            <div><strong>Wejdź do panelu</strong><p>Po potwierdzeniu płatności od razu zobaczysz działy, materiały i narzędzia.</p></div>
-                        </li>
-                    </ol>
-                </div>
-            </div>
+      <div class="max-width">
+        <div class="section-heading" data-reveal><span>04 / Pierwszy krok</span><h2 class="title">Jak zacząć</h2></div>
+        <div class="skills-content">
+          <div class="column left">
+            <div class="text">Jak się zapisać?</div>
+            <p>Załóż konto, wybierz dostęp i zacznij realizować przygotowany plan. Po potwierdzeniu płatności materiały pojawią się automatycznie w panelu kursanta.</p>
+            <a href="#pricing">Wybierz pakiet</a>
+          </div>
+          <div class="column right">
+            <ol class="steps-list">
+              <li data-reveal><span class="step-number">1</span><div><strong>Utwórz konto</strong><p>Podaj e-mail i wybierz hasło.</p></div></li>
+              <li data-reveal><span class="step-number">2</span><div><strong>Wybierz pakiet</strong><p>Od razu widzisz cenę i zakres dostępu.</p></div></li>
+              <li data-reveal><span class="step-number">3</span><div><strong>Zacznij naukę</strong><p>Otwórz pierwszy dział i działaj według planu.</p></div></li>
+            </ol>
+          </div>
         </div>
+      </div>
     </section>
-    
-    <!-- contact section start -->
+
     <section class="contact" id="contact">
-        <div class="max-width">
-            <h2 class="title">Kontakt</h2>
-            <div class="contact-content">
-                <div class="column left">
-                    <div class="text">Napisz do nas</div>
-                    <p>Masz pytania o kursy, terminy lub poziomy? Wypełnij formularz — odezwiemy się.</p>
-                    <div class="icons">
-                        <div class="row">
-                            <i class="fas fa-user"></i>
-                            <div class="info">
-                                <div class="head">Firma</div>
-                                <div class="sub-title">Kursy Maturalne</div>
-                            </div>
-                        </div>
-                        <div class="row">
-                            <i class="fas fa-map-marker-alt"></i>
-                            <div class="info">
-                                <div class="head">Siedziba</div>
-                                <div class="sub-title">Pomorska 44, Gdańsk Żabianka</div>
-                            </div>
-                        </div>
-                        <div class="row">
-                            <i class="fas fa-envelope"></i>
-                            <div class="info">
-                                <div class="head">E-mail</div>
-                                <div class="sub-title">kochamchemie2023@gmail.com</div>
-                            </div>
-                        </div>
-                    </div>
-                    <a class="landing-section-cta" href="#" hidden></a>
-                </div>
-                <div class="column right">
-                    <div class="text">Napisz do nas</div>
-                    <form name="contact" method="POST" data-netlify="true" data-netlify-recaptcha="true">
-                        <div class="fields">
-                            <div class="field name">
-                                <input type="text" name="name" placeholder="Imię i nazwisko" aria-label="Imię i nazwisko" autocomplete="name" required>
-                            </div>
-                            <div class="field email">
-                                <input type="email" name="email" placeholder="E-mail" aria-label="E-mail" autocomplete="email" required>
-                            </div>
-                        </div>
-                        <div class="field">
-                            <input type="text" name="subject" placeholder="Przedmiot / poziom (np. Matematyka podstawowa)" aria-label="Przedmiot i poziom kursu" required>
-                        </div>
-                        <div class="field textarea">
-                            <textarea name="message" cols="30" rows="10" placeholder="Twoja wiadomość..." aria-label="Treść wiadomości" required></textarea>
-                        </div>
-                        <div data-netlify-recaptcha="true"></div>
-                        <div class="button-area">
-                            <button type="submit">Wyślij</button>
-                        </div>
-                    </form>
-                </div>
+      <div class="max-width">
+        <div class="section-heading" data-reveal><span>05 / Porozmawiajmy</span><h2 class="title">Kontakt</h2></div>
+        <div class="contact-content">
+          <div class="column left">
+            <div class="text">Napisz do nas</div>
+            <p>Masz pytania o kurs, terminy albo poziom? Zostaw wiadomość — odpowiemy konkretnie.</p>
+            <div class="contact-list">
+              <div><span>Firma</span><strong data-company-name>NextMed</strong></div>
+              <div><span>Adres</span><strong data-contact-address>Pomorska 44, Gdańsk Żabianka</strong></div>
+              <div><span>E-mail</span><a data-contact-email href="mailto:kochamchemie2023@gmail.com">kochamchemie2023@gmail.com</a></div>
+              <div data-phone-row hidden><span>Telefon</span><a data-contact-phone></a></div>
             </div>
+            <a class="landing-section-cta" href="#" hidden></a>
+          </div>
+          <div class="column right">
+            <form name="contact" method="post" data-netlify="true" data-netlify-recaptcha="true">
+              <input type="hidden" name="form-name" value="contact">
+              <div class="fields">
+                <label class="field name"><span>Imię i nazwisko</span><input type="text" name="name" autocomplete="name" required></label>
+                <label class="field email"><span>E-mail</span><input type="email" name="email" autocomplete="email" required></label>
+              </div>
+              <label class="field"><span>Temat</span><input type="text" name="subject" required></label>
+              <label class="field textarea"><span>Wiadomość</span><textarea name="message" rows="6" required></textarea></label>
+              <div data-netlify-recaptcha="true"></div>
+              <div class="button-area"><button type="submit">Wyślij wiadomość <span>→</span></button></div>
+            </form>
+          </div>
         </div>
+      </div>
     </section>
+  </main>
 
-    <!-- footer section start -->
-    <footer>
-        <span>© <span id="current-year">2026</span> Kursy Maturalne. Wszelkie prawa zastrzeżone.</span>
-    </footer>
+  <footer><div class="footer-wordmark max-width" aria-hidden="true" data-brand-name data-parallax="24">NextMed</div><div class="max-width footer-bottom"><a class="footer-brand" href="/"><span data-brand-name>NextMed</span><i>.</i></a><span>© <span id="current-year">2026</span> <span data-footer-text>NextMed · kursy maturalne</span></span><button type="button" id="motion-toggle" aria-pressed="false" hidden>Wyłącz animacje</button><a href="#home">Do góry ↑</a></div></footer>
 
-    <script src="assets/start_site/script.js"></script>
-    <script defer src="/assets/js/landing-runtime.js"></script>
+  <script src="/assets/start_site/script.js"></script>
+  <script defer src="/assets/js/landing-runtime.js"></script>
 </body>
 </html>

@@ -432,7 +432,7 @@ test('lesson authoring extensions are rendered through strict, non-HTML directiv
   assert.match(styles, /data-lesson-background=["']grid["']/);
   assert.match(styles, /data-lesson-decoration=["']molecules["']/);
   assert.match(player, /function completeCurrentStepForNavigation/);
-  assert.match(player, /if \(state\.sequential\) \{\s*await refreshExamProgress\(true\)/);
+  assert.match(player, /if \(!maySkipCurrent\(\)\) \{\s*await refreshExamProgress\(true\)/);
   assert.match(styles, /\.lesson-font-rounded/);
   assert.match(styles, /\.lesson-accordion\[open\]/);
   assert.match(styles, /\.lesson-flashcard/);

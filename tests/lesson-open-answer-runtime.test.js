@@ -53,8 +53,8 @@ test('lesson answer review payload and local state use the backend limits', () =
 
 test('required open answers gate navigation and reset removes answer state', () => {
   assert.match(player, /const answerGate = studentAnswerGate\(\)/);
-  assert.match(player, /const blocked = !answerGate\.satisfied/);
-  assert.match(player, /commitCurrentStudentAnswers\(\{\s*focusInvalid:\s*true\s*\}\)/);
+  assert.match(player, /!maySkipCurrent\(\) && \(!answerGate\.satisfied/);
+  assert.match(player, /commitCurrentStudentAnswers\(\{\s*focusInvalid:\s*!maySkipCurrent\(\)\s*\}\)/);
   assert.match(player, /sessionStorage\.removeItem\(progressKey\(\)\)/);
   assert.match(player, /state\.studentAnswers = new Map\(\)/);
   assert.match(styles, /\.lesson-answer-review-actions p\[data-state="loading"\]::before/);

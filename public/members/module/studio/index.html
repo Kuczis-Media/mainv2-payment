@@ -7,8 +7,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" id="theme-color" content="#edf2f7">
   <meta name="robots" content="noindex,nofollow">
-  <meta name="description" content="ChemDisk Studio — graficzny kreator dashboardu, lekcji, quizów, egzaminów i prezentacji.">
-  <title>Studio treści — ChemDisk</title>
+  <meta name="description" content="NextMed Studio — graficzny kreator dashboardu, lekcji, quizów, egzaminów i prezentacji.">
+  <title data-brand-title="Studio treści">Studio treści — NextMed</title>
+  <script defer src="/assets/js/site-brand.js"></script>
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link rel="icon" href="https://cdn.jsdelivr.net/gh/Kuczis-Media/logo@main/benzene-ring.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -29,6 +30,7 @@
   <script src="/members/module/lesson/lesson-parser.js"></script>
   <script src="dashboard-model.js"></script>
   <script src="lesson-model.js"></script>
+  <script src="answer-fields.js"></script>
   <script src="prompt-model.js"></script>
   <script src="exam-model.js"></script>
   <script src="presentation-model.js"></script>
@@ -43,8 +45,8 @@
   <div class="ambient ambient-two" aria-hidden="true"></div>
 
   <header class="studio-header">
-    <a class="brand" href="/members/" aria-label="Wróć do panelu ChemDisk">
-      <span class="brand-mark" aria-hidden="true">
+    <a class="brand" href="/members/" aria-label="NextMed — panel kursanta" data-brand-home>
+      <span class="brand-mark" aria-hidden="true" data-brand-logo-slot>
         <svg viewBox="0 0 48 48">
           <path d="M17 7v10L8.5 32.1A6 6 0 0 0 13.7 41h20.6a6 6 0 0 0 5.2-8.9L31 17V7"></path>
           <path d="M14.5 27h19M14 7h20"></path>
@@ -53,7 +55,7 @@
         </svg>
       </span>
       <span class="brand-copy">
-        <strong>ChemDisk Studio</strong>
+        <strong><span data-brand-name>NextMed</span> Studio</strong>
         <small>Dashboardy, lekcje i prompty bez ręcznej edycji plików</small>
       </span>
     </a>
@@ -369,7 +371,7 @@
                 <h2>Materiały</h2>
                 <div class="palette-grid">
                   <button class="palette-item" type="button" draggable="true" data-dashboard-add="presentation" data-search="prezentacja chemdisk natywna slajdy">
-                    <span class="palette-symbol is-blue">▥</span><span><strong>Prezentacja ChemDisk</strong><small>Presentation Studio</small></span>
+                    <span class="palette-symbol is-blue">▥</span><span><strong>Prezentacja</strong><small>Presentation Studio</small></span>
                   </button>
                   <button class="palette-item" type="button" draggable="true" data-dashboard-add="slides" data-search="prezentacja slides google">
                     <span class="palette-symbol is-amber">▤</span><span><strong>Prezentacja</strong><small>Google Slides</small></span>
@@ -390,7 +392,7 @@
                     <span class="palette-symbol is-blue">✓</span><span><strong>Google Forms</strong><small>Test lub ankieta</small></span>
                   </button>
                   <button class="palette-item" type="button" draggable="true" data-dashboard-add="quiz" data-search="quiz test sprawdzian chemdisk">
-                    <span class="palette-symbol is-violet">Q</span><span><strong>Quiz ChemDisk</strong><small>Quiz Builder</small></span>
+                    <span class="palette-symbol is-violet">Q</span><span><strong>Quiz</strong><small>Quiz Builder</small></span>
                   </button>
                   <button class="palette-item" type="button" draggable="true" data-dashboard-add="exam" data-search="egzamin exam test próba">
                     <span class="palette-symbol is-amber">E</span><span><strong>Egzamin</strong><small>Exam Engine</small></span>
@@ -588,10 +590,10 @@
                     <span class="palette-symbol is-amber">GS</span><span><strong>Google Slides</strong><small>Prezentacja wewnątrz lekcji</small></span>
                   </button>
                   <button class="palette-item" type="button" draggable="true" data-lesson-add="presentation" data-search="prezentacja chemdisk slajdy biblioteka">
-                    <span class="palette-symbol is-blue">S</span><span><strong>Prezentacja ChemDisk</strong><small>Wybór z biblioteki</small></span>
+                    <span class="palette-symbol is-blue">S</span><span><strong>Prezentacja</strong><small>Wybór z biblioteki</small></span>
                   </button>
                   <button class="palette-item" type="button" draggable="true" data-lesson-add="quiz" data-search="quiz chemdisk test biblioteka">
-                    <span class="palette-symbol is-violet">Q</span><span><strong>Quiz ChemDisk</strong><small>Wybór z biblioteki</small></span>
+                    <span class="palette-symbol is-violet">Q</span><span><strong>Quiz</strong><small>Wybór z biblioteki</small></span>
                   </button>
                   <button class="palette-item" type="button" draggable="true" data-lesson-add="pdf" data-search="pdf dokument drive plik materiał">
                     <span class="palette-symbol is-red">PDF</span><span><strong>Dokument PDF</strong><small>Dysk Google lub HTTPS</small></span>
@@ -665,6 +667,10 @@
               <label>
                 <span>Tytuł lekcji</span>
                 <input id="lesson-title-input" type="text" maxlength="120" placeholder="Nowa lekcja">
+              </label>
+              <label class="lesson-navigation-setting">
+                <span><input id="lesson-allow-skip" type="checkbox" role="switch" aria-describedby="lesson-allow-skip-help"> Pozwól uczestnikom pomijać kroki</span>
+                <small id="lesson-allow-skip-help">Wyłączone: nauka po kolei. Administrator może zawsze pomijać. Wyjątki dla ucznia: panel admina → Postępy → ustawienia ucznia. Zapisz lekcję w GitHubie, aby zastosować zmianę.</small>
               </label>
             </div>
             <div class="canvas-topline">

@@ -1,5 +1,7 @@
 'use strict';
 
+const lessonNavigation = require('../public/assets/js/lesson-navigation.js');
+
 const TRACKING_STATES = Object.freeze(['ON', 'OFF', 'INHERIT']);
 const MATERIAL_TYPES = Object.freeze([
   'lesson', 'lesson_step', 'presentation', 'video', 'pdf', 'quiz', 'exam',
@@ -163,6 +165,16 @@ function normalizeCatalog(input) {
       .slice(0, MAX_INVALIDATIONS)
       .forEach(([id, timestamp]) => { invalidatedAt[id] = timestamp; });
   }
+  const lessonManifests = {};
+  if (plainObject(source.lessonManifests)) {
+    Object.values(source.lessonManifests).slice(0, 1000).forEach((value) => {
+      const node = normalizeNode(value);
+      if (node?.type === 'lesson' && node.settings.contentFile && node.settings.repositoryId) {
+        const id = lessonNavigation.materialId(node.settings.repositoryId, node.settings.contentFile);
+        lessonManifests[id] = { ...node, id, parentId: null };
+      }
+    });
+  }
   return {
     version: 1,
     updatedAt: isoDate(source.updatedAt),
@@ -172,6 +184,7 @@ function normalizeCatalog(input) {
       showProgress: trackingState(global.showProgress, 'ON') === 'OFF' ? 'OFF' : 'ON'
     },
     invalidatedAt,
+    lessonManifests,
     nodes
   };
 }
@@ -474,7 +487,7 @@ function transitionConditionSatisfied(previous, completed, records) {
   return false;
 }
 
-function validateLessonNavigation(existing, event, node, preferences, records) {
+function validateLessonNavigation(existing, event, node, preferences, records, isAdmin = false) {
   if (!node || node.type !== 'lesson' || event.action !== 'lesson_step') return { ok: true };
   const steps = node.settings.steps;
   if (!steps.length) return { ok: true };
@@ -482,9 +495,10 @@ function validateLessonNavigation(existing, event, node, preferences, records) {
   const targetIndex = steps.findIndex((step) => step.id === targetId);
   if (targetIndex < 0) return { ok: false, code: 'UNKNOWN_STEP', status: 400 };
   const override = normalizePreferences(preferences);
-  if (override.lockedStepIds.includes(targetId)) return { ok: false, code: 'STEP_LOCKED', status: 409 };
-  if (override.unlockedStepIds.includes(targetId) || override.skipMode === 'ALLOW') return { ok: true };
-  const sequential = override.skipMode === 'DENY' || node.settings.navigation === 'sequential';
+  const stepAccess = lessonNavigation.stepOverride(targetId, override, isAdmin);
+  if (stepAccess === 'deny') return { ok: false, code: 'STEP_LOCKED', status: 409 };
+  if (stepAccess === 'allow') return { ok: true };
+  const { sequential } = lessonNavigation.policy(node.settings.navigation, override, isAdmin);
   if (!sequential || targetIndex === 0) return { ok: true };
   const completed = new Set(unionIds(
     existing?.details?.completedStepIds,
@@ -510,7 +524,7 @@ function mergeProgressEvent(existingInput, eventInput, context) {
   const global = context.global || defaultGlobalSettings();
   const id = event.materialId;
   const existing = existingInput ? normalizeRecord(existingInput, userId, id) : normalizeRecord({}, userId, id);
-  const navigation = validateLessonNavigation(existingInput, event, node, context.preferences, context.records);
+  const navigation = validateLessonNavigation(existingInput, event, node, context.preferences, context.records, context.isAdmin === true);
   if (!navigation.ok) return navigation;
 
   const allowedActions = new Set(['open', 'progress', 'complete', 'lesson_step', 'presentation', 'video', 'pdf', 'quiz', 'exam']);

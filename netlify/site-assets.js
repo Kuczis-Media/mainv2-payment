@@ -1,10 +1,12 @@
 'use strict';
 
 const { decodeMediaUpload, GITHUB_API_VERSION } = require('./content-repository.js');
+const landing = require('./landing-content.js');
 
 const GITHUB_API_BASE = 'https://api.github.com';
 const DEFAULT_REPOSITORY = 'Kuczis-Media/logo';
 const DEFAULT_REF = 'main';
+const LANDING_CONFIG_PATH = 'landing/config.json';
 const REQUEST_TIMEOUT_MS = 10_000;
 const PUBLIC_CHECK_TTL_MS = 5 * 60 * 1000;
 const MAX_IMAGE_DIMENSION = 8_192;
@@ -44,8 +46,15 @@ function publicConfiguration(env = process.env) {
     repository: config.repository,
     ref: config.ref,
     directory: !config.directory || SAFE_DIRECTORY.test(config.directory) ? config.directory : '',
-    cdnBaseUrl: config.cdnBaseUrl
+    cdnBaseUrl: config.cdnBaseUrl,
+    landingConfigUrl: rawUrl(config, LANDING_CONFIG_PATH)
   };
+}
+
+function rawUrl(config, pathname) {
+  const [owner, repository] = config.repository.split('/');
+  const path = String(pathname || '').split('/').filter(Boolean).map(encodeURIComponent).join('/');
+  return `https://raw.githubusercontent.com/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/${encodeURIComponent(config.ref)}/${path}`;
 }
 
 function contentPath(config, filename = '') {
@@ -64,6 +73,14 @@ function apiUrl(config, filename = '', includeRef = true) {
   return url;
 }
 
+function apiPathUrl(config, pathname, includeRef = true) {
+  const [owner, repository] = config.repository.split('/');
+  const suffix = String(pathname || '').split('/').filter(Boolean).map(encodeURIComponent).join('/');
+  const url = new URL(`${GITHUB_API_BASE}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/contents/${suffix}`);
+  if (includeRef) url.searchParams.set('ref', config.ref);
+  return url;
+}
+
 function repositoryUrl(config) {
   const [owner, repository] = config.repository.split('/');
   return new URL(`${GITHUB_API_BASE}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}`);
@@ -78,7 +95,7 @@ function headers(config, json = false) {
   return {
     Accept: 'application/vnd.github+json',
     Authorization: `Bearer ${config.token}`,
-    'User-Agent': 'ChemDisk-site-assets',
+    'User-Agent': 'NextMed-site-assets',
     'X-GitHub-Api-Version': GITHUB_API_VERSION,
     ...(json ? { 'Content-Type': 'application/json; charset=utf-8' } : {})
   };
@@ -196,7 +213,7 @@ async function uploadAsset(input = {}, env = process.env, options = {}) {
     method: 'PUT',
     write: true,
     body: {
-      message: `Add ${contentPath(config, media.filename)} from ChemDisk Studio`,
+      message: `Add ${contentPath(config, media.filename)} from NextMed Studio`,
       content: media.buffer.toString('base64'),
       branch: config.ref
     }
@@ -232,6 +249,88 @@ async function uploadAsset(input = {}, env = process.env, options = {}) {
     cdnUrl: cdnUrl(config, media.filename, commitSha),
     branchCdnUrl: cdnUrl(config, media.filename),
     configuration: publicConfiguration(env)
+  };
+}
+
+async function readLandingConfig(env = process.env, options = {}) {
+  const config = configuration(env);
+  await ensurePublic(config, options);
+  const response = await githubFetch(apiPathUrl(config, LANDING_CONFIG_PATH), config, options);
+  if (response.status === 404) return { exists: false, model: null, sha: null };
+  if (!response.ok) throw new SiteAssetsError('SITE_ASSETS_UNAVAILABLE', 503);
+  try {
+    const entry = await response.json();
+    if (!SAFE_SHA.test(entry?.sha) || entry.encoding !== 'base64' || typeof entry.content !== 'string'
+      || entry.content.length > 100_000 || (entry.type && entry.type !== 'file')) throw new Error('Invalid GitHub file');
+    const encoded = entry.content.replace(/\s/g, '');
+    const bytes = Buffer.from(encoded, 'base64');
+    if (bytes.length > 64_000 || bytes.toString('base64') !== encoded) throw new Error('Invalid file encoding');
+    const artifact = JSON.parse(bytes.toString('utf8'));
+    if (artifact?.active !== true) throw new Error('Invalid public landing');
+    const model = landing.normalizeModel(artifact.model, true);
+    return { exists: true, model: landing.publicModel(model), sha: entry.sha };
+  } catch {
+    throw new SiteAssetsError('LANDING_STATIC_CONFIG_INVALID', 503);
+  }
+}
+
+async function publishLandingConfig(raw, env = process.env, options = {}) {
+  const input = landing.normalizeModel(raw, true);
+  if (!Object.hasOwn(options, 'expectedSha') || (options.expectedSha !== null && !SAFE_SHA.test(options.expectedSha))) {
+    throw new SiteAssetsError('LANDING_PUBLICATION_REQUIRED', 400);
+  }
+  const config = configuration(env);
+  // Re-read the actual file; a caller may only replace the version they opened.
+  // GitHub's file SHA condition then protects the read-to-write race as well.
+  const current = await readLandingConfig(env, { ...options, forcePublicCheck: true });
+  if (current.sha !== options.expectedSha) {
+    // A timed-out PUT may already have committed. Retrying the same content is
+    // successful without another commit, but differing content never overwrites.
+    if (current.exists && landing.comparableModel(current.model) === landing.comparableModel(input)) {
+      return { ...landingDelivery(config, current.sha), model: current.model, unchanged: true };
+    }
+    throw new SiteAssetsError('LANDING_CONFLICT', 409);
+  }
+  const now = new Date().toISOString();
+  const model = landing.publicModel({
+    ...input,
+    revision: Math.max(input.revision, current.model?.revision || 0) + 1,
+    publishedAt: now
+  });
+  const artifact = JSON.stringify({ active: true, model });
+  if (Buffer.byteLength(artifact, 'utf8') > 64_000) throw new SiteAssetsError('LANDING_CONFIG_TOO_LARGE', 413);
+
+  const response = await githubFetch(apiPathUrl(config, LANDING_CONFIG_PATH, false), config, {
+    ...options,
+    method: 'PUT',
+    write: true,
+    body: {
+      message: `Publish landing page revision ${Number(model.revision) || 0} from NextMed Studio`,
+      content: Buffer.from(artifact, 'utf8').toString('base64'),
+      branch: config.ref,
+      ...(current.sha ? { sha: current.sha } : {})
+    }
+  });
+  if (response.status === 404) throw new SiteAssetsError('SITE_ASSETS_REPOSITORY_NOT_FOUND', 404);
+  if (response.status === 409 || response.status === 422) throw new SiteAssetsError('LANDING_CONFLICT', 409);
+  if (!response.ok) throw new SiteAssetsError('LANDING_STATIC_PUBLISH_FAILED', 503);
+  let payload;
+  try { payload = await response.json(); }
+  catch { throw new SiteAssetsError('SITE_ASSETS_RESPONSE_INVALID', 503); }
+  const commitSha = clean(payload?.commit?.sha);
+  const sha = clean(payload?.content?.sha);
+  if (!SAFE_SHA.test(commitSha) || !SAFE_SHA.test(sha)) throw new SiteAssetsError('SITE_ASSETS_RESPONSE_INVALID', 503);
+  return { ...landingDelivery(config, sha, commitSha), model };
+}
+
+function landingDelivery(config, sha, commitSha = '') {
+  return {
+    mode: 'static-github',
+    path: LANDING_CONFIG_PATH,
+    sha,
+    rawUrl: rawUrl(config, LANDING_CONFIG_PATH),
+    cdnUrl: cdnUrl({ ...config, directory: '' }, LANDING_CONFIG_PATH, commitSha || config.ref),
+    ...(commitSha ? { commitSha, commitUrl: `https://github.com/${config.repository}/commit/${commitSha}` } : {})
   };
 }
 
@@ -360,9 +459,12 @@ function mimeType(filename) {
 function clean(value) { return typeof value === 'string' ? value.trim() : ''; }
 
 module.exports = {
+  LANDING_CONFIG_PATH,
   SiteAssetsError,
   configuration,
   listAssets,
+  publishLandingConfig,
+  readLandingConfig,
   publicConfiguration,
   uploadAsset,
   _test: {
@@ -370,6 +472,8 @@ module.exports = {
     branchUrl,
     cdnUrl,
     contentPath,
+    apiPathUrl,
+    rawUrl,
     validatePublicImage,
     resetPublicCheck() { publicCheckCache = null; }
   }

@@ -1,5 +1,7 @@
 'use strict';
 
+const lessonNavigation = require('../../public/assets/js/lesson-navigation.js');
+
 const {
   activeUserDocument,
   aggregateUser,
@@ -149,7 +151,16 @@ async function updateLessonManifest(body, store, auth) {
     };
   });
   const changed = nodes.filter((node, index) => node !== previous.nodes[index]).length;
-  const catalog = normalizeCatalog({ ...previous, nodes });
+  // Keep a manifest even when a lesson has not been placed on the Dashboard yet.
+  const manifestId = lessonNavigation.materialId(repositoryId, filename);
+  const lessonManifests = {
+    ...previous.lessonManifests,
+    [manifestId]: {
+      id: manifestId, type: 'lesson', title: filename,
+      settings: { contentFile: filename, repositoryId, navigation: body.manifest.navigation === 'free' ? 'free' : 'sequential', steps }
+    }
+  };
+  const catalog = normalizeCatalog({ ...previous, nodes, lessonManifests });
   await writeCatalog(store, catalog, auth.userId);
   await appendAudit(store, {
     adminId: auth.userId,
@@ -166,6 +177,19 @@ async function updateCatalog(body, store, auth) {
   if (!plainObject(body.catalog)) return json({ error: 'INVALID_CATALOG' }, 400);
   const previous = await readCatalog(store);
   const incoming = normalizeCatalog(body.catalog);
+  // Dashboard editors do not own step-level lesson settings. Publishing the
+  // Dashboard must not silently reset an already published lesson to free mode.
+  incoming.lessonManifests = previous.lessonManifests;
+  incoming.nodes = incoming.nodes.map((node) => {
+    if (node.type !== 'lesson') return node;
+    const repositoryId = node.settings.repositoryId || 'default';
+    const filename = node.settings.contentFile;
+    const manifest = previous.lessonManifests[lessonNavigation.materialId(repositoryId, filename)]
+      || previous.nodes.find((entry) => entry.type === 'lesson' && entry.settings.contentFile === filename
+        && (entry.settings.repositoryId || 'default') === repositoryId && entry.settings.steps.length);
+    if (!manifest) return node;
+    return { ...node, settings: { ...node.settings, navigation: manifest.settings.navigation, steps: manifest.settings.steps } };
+  });
   const nextIds = new Set(incoming.nodes.map((node) => node.id));
   const removedIds = previous.nodes.map((node) => node.id).filter((id) => !nextIds.has(id));
   const invalidatedAt = { ...previous.invalidatedAt, ...incoming.invalidatedAt };
