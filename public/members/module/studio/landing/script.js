@@ -73,7 +73,7 @@
       const user = window.ChemAuth.getUser?.();
       const roles = user?.app_metadata?.roles || [];
       if (!authState?.authenticated || !authState.session?.ok || !roles.includes('admin')) {
-        throw new Error('Landing Builder jest dostępny tylko dla administratora.');
+        throw new Error('Edytor strony jest dostępny tylko dla administratora.');
       }
       currentAdminId = String(user.id || '');
       recoveryDraft = readRecovery(currentAdminId);
@@ -99,7 +99,7 @@
           }
         }
         if (!serverStorageAvailable) {
-          bootstrapWarning = 'Draft zapisujesz na tym urządzeniu. Publikacja przez GitHub i eksport HTML są dostępne osobno.';
+          bootstrapWarning = 'Szkic zapisujesz na tym urządzeniu. Nadal możesz opublikować stronę w wybranym repozytorium lub pobrać gotową stronę HTML.';
         }
       } catch (error) {
         serverStorageAvailable = false;
@@ -117,11 +117,11 @@
       syncRecoveryButton();
       elements.restore.hidden = !publishedModel;
       setStatus(bootstrapWarning || (!publication.available ? 'Możesz edytować i pobrać gotową stronę HTML. Publikacja online wymaga dostępu do Netlify Blobs lub repozytorium GitHub.' : publishedModel
-        ? 'Wczytano draft. Opublikowana strona pozostaje aktywna do kolejnej publikacji.'
-        : 'Wczytano wersję startową. Zapisz draft lub opublikuj.'), bootstrapWarning ? 'warning' : 'success');
+        ? 'Wczytano szkic. Odwiedzający zobaczą zmiany dopiero po publikacji.'
+        : 'Wczytano wersję startową. Zapisz szkic lub opublikuj.'), bootstrapWarning ? 'warning' : 'success');
       if (new URLSearchParams(location.search).get('assets') === '1') void openAssetLibrary('logo');
     } catch (error) {
-      elements.access.querySelector('h1').textContent = 'Nie udało się otworzyć buildera';
+      elements.access.querySelector('h1').textContent = 'Nie udało się otworzyć edytora';
       elements.access.querySelector('p').textContent = error.message;
     }
   }
@@ -158,7 +158,7 @@
       selectedSection()[button.dataset.clearColor] = '';
       renderEditor();
       schedulePreview();
-      markDirty('Kolor wyczyszczony — zapisz draft albo opublikuj.');
+      markDirty('Kolor przywrócony — zapisz szkic albo opublikuj.');
     }));
     document.querySelectorAll('[data-open-assets]').forEach((button) => button.addEventListener('click', () => void openAssetLibrary(button.dataset.openAssets)));
     document.querySelectorAll('[data-preview-size]').forEach((button) => button.addEventListener('click', () => setPreviewSize(button.dataset.previewSize)));
@@ -257,7 +257,7 @@
       renderBrandingPreview();
       schedulePreview();
     } else schedulePreview();
-    markDirty('Branding zmieniony — zapisz draft albo opublikuj.');
+    markDirty('Wygląd marki zmieniony — zapisz szkic albo opublikuj.');
   }
 
   function markDirty(message) {
@@ -532,7 +532,7 @@
     model.sections.forEach((section, index) => { section.order = index; });
     renderList();
     renderPreview();
-    markDirty('Kolejność zmieniona — zapisz draft albo opublikuj.');
+    markDirty('Kolejność zmieniona — zapisz szkic albo opublikuj.');
   }
 
   function normalizeUrlInput(input) {
@@ -542,7 +542,7 @@
     if (input === elements.logo) updateBranding('logoUrl', normalized);
     else if (input === elements.favicon) updateBranding('faviconUrl', normalized);
     else updateSelected('imageUrl', normalized);
-    setStatus('Link GitHub został zamieniony na szybki adres jsDelivr.', 'success');
+    setStatus('Link przygotowano do szybkiego wyświetlania obrazu.', 'success');
   }
 
   function normalizeGitHubUrl(value) {
@@ -572,20 +572,20 @@
     if (!serverStorageAvailable) {
       const saved = writeRecoveryNow();
       if (saved) dirty = false;
-      setStatus(saved ? 'Draft zapisany na tym urządzeniu. Pobierz JSON, aby mieć dodatkową kopię.' : 'Przeglądarka nie pozwala zapisać kopii. Pobierz JSON, aby zachować zmiany.', saved ? 'success' : 'error');
+      setStatus(saved ? 'Szkic zapisany na tym urządzeniu. Możesz też pobrać kopię ustawień.' : 'Przeglądarka nie pozwala zapisać kopii. Pobierz ustawienia, aby zachować zmiany.', saved ? 'success' : 'error');
       return;
     }
     setBusy(true);
-    setStatus('Zapisywanie draftu…', '');
+    setStatus('Zapisywanie szkicu…', '');
     try {
       const payload = await requestLanding('PUT', { model });
-      if (!isLocalModel(payload?.draft)) throw new Error('Serwer nie potwierdził zapisu poprawnego draftu. Zmiany pozostały w edytorze.');
+      if (!isLocalModel(payload?.draft)) throw new Error('Nie udało się potwierdzić zapisu szkicu. Zmiany pozostały w edytorze.');
       model = normalizeLocalModel(payload.draft);
       dirty = false;
       clearRecovery();
       renderAll();
       serverStorageAvailable = true;
-      setStatus('Draft zapisany po stronie serwera.', 'success');
+      setStatus('Szkic zapisano. Odwiedzający zobaczą zmiany dopiero po publikacji.', 'success');
     } catch (error) {
       if (error.code === 'LANDING_STORAGE_UNAVAILABLE') {
         writeRecoveryNow();
@@ -599,7 +599,7 @@
     if (!validateModelForSave()) return;
     const publishMode = elements.publishMode.value;
     if (!canPublish()) { setStatus('Wybrany magazyn jest niedostępny. Wybierz drugi sposób publikacji lub pobierz HTML.', 'error'); return; }
-    if (!window.confirm(`Opublikować ten układ i treść na stronie głównej przez ${publishMode === 'netlify-blobs' ? 'Netlify Blobs' : 'GitHub'}? Wybrana wersja stanie się aktywnym źródłem strony.`)) return;
+    if (!window.confirm('Opublikować te zmiany na stronie głównej? Zastąpią obecnie widoczną wersję strony.')) return;
     setBusy(true);
     setStatus('Publikowanie strony…', '');
     try {
@@ -618,7 +618,7 @@
       renderAll();
       serverStorageAvailable = payload.storage?.available !== false;
       updatePublicationControls();
-      setStatus(`Opublikowano przez ${publishMode === 'netlify-blobs' ? 'Netlify Blobs' : 'GitHub'} ${new Date(publishedModel.publishedAt).toLocaleString('pl-PL')}. ${publishMode === 'netlify-blobs' ? 'Odwiedzający zobaczą zmiany po odświeżeniu cache (zwykle do 2 minut). Odpowiedź jest współdzielona w CDN.' : 'JSON jest statyczny; publiczne cache mogą odświeżać treść do 15 minut. Tryb publikacji jest sprawdzany przez cache CDN.'}${payload.draftWarning ? ' Nie udało się zsynchronizować szkicu na serwerze; kolejne zmiany zapiszesz lokalnie.' : ''}`, payload.draftWarning ? 'warning' : 'success');
+      setStatus(`Opublikowano ${new Date(publishedModel.publishedAt).toLocaleString('pl-PL')}. ${publishMode === 'netlify-blobs' ? 'Odwiedzający zobaczą zmiany zwykle w ciągu 2 minut.' : 'Odświeżenie strony u wszystkich odwiedzających może potrwać do 15 minut.'}${payload.draftWarning ? ' Nie udało się zsynchronizować szkicu na serwerze; kolejne zmiany zapiszesz na tym urządzeniu.' : ''}`, payload.draftWarning ? 'warning' : 'success');
     } catch (error) { setStatus(error.message, 'error'); }
     finally { setBusy(false); }
   }
@@ -646,7 +646,7 @@
     renderAll();
     markDirty(revisionChanged
       ? 'Odzyskano treść lokalnej kopii i przeniesiono ją na aktualną rewizję. Sprawdź podgląd i zapisz.'
-      : 'Odzyskano lokalną kopię. Zapisz draft, aby zachować ją na serwerze.');
+      : 'Odzyskano kopię z tego urządzenia. Zapisz szkic, aby zachować ją na serwerze.');
   }
 
   function scheduleRecoveryWrite() {
@@ -928,7 +928,7 @@
   async function loadAssets(refresh) {
     if (assetBusy) return;
     assetBusy = true;
-    setAssetStatus(refresh ? 'Odświeżanie repozytorium…' : 'Łączenie z publicznym repozytorium GitHub…');
+    setAssetStatus(refresh ? 'Odświeżanie biblioteki obrazów…' : 'Otwieranie biblioteki obrazów…');
     renderAssets(true);
     try {
       const payload = await requestAssets('GET');
@@ -1002,7 +1002,7 @@
       renderImagePreview();
     }
     renderPreview();
-    markDirty(`Wybrano ${asset.filename}. Zapisz draft albo opublikuj.`);
+    markDirty(`Wybrano ${asset.filename}. Zapisz szkic albo opublikuj.`);
     elements.assetDialog.close();
   }
 
@@ -1035,7 +1035,7 @@
       renderAssets();
       if (files.length === 1 && last) {
         chooseAsset(last);
-        setStatus(`Plik ${last.filename} zapisano w GitHubie i ustawiono w edytorze.`, 'success');
+        setStatus(`Obraz ${last.filename} dodano do biblioteki i wybrano w edytorze.`, 'success');
       } else {
         setAssetStatus(`Zapisano ${files.length} plików. Wybierz ten, którego chcesz użyć.`);
       }

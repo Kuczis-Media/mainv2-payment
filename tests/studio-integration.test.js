@@ -208,9 +208,9 @@ test('Studio exposes dashboard, lesson, exam and prompt authoring workflows', ()
   assert.match(script, /window\.open\(/);
   assert.match(script, /data-full-preview/);
   assert.match(script, /state\.lesson\.model\.slides\.forEach/);
-  assert.match(script, /Ponów manifest postępu/);
+  assert.match(script, /Ponów synchronizację postępów/);
   assert.match(script, /syncLessonProgressManifest\(pendingManifest\)/);
-  assert.match(script, /Nie utworzono dodatkowego commitu w GitHubie/);
+  assert.match(script, /bez ponownej publikacji lekcji/);
   assert.match(script, /LESSON_MANIFEST_PENDING_KEY/);
   assert.match(script, /state\.lesson\.manifestPending = readPendingLessonManifest\(\)/);
   assert.match(script, /setPendingLessonManifest\(manifest\)/);

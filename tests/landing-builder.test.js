@@ -386,9 +386,9 @@ test('landing builder uses textContent and server normalization instead of arbit
   assert.match(runtime, /nextmed-landing-config/);
   assert.match(runtime, /branding/);
   assert.doesNotMatch(runtime, /innerHTML\s*=/);
-  assert.match(studio, /Landing Page Builder/);
-  assert.match(studio, /Logo i assety strony/);
-  assert.match(studio, /AI Limits \/ Usage/);
-  assert.match(studio, /Progress \/ Reports/);
+  assert.match(studio, /Edytor strony głównej/);
+  assert.match(studio, /Logo i obrazy strony/);
+  assert.match(studio, /Limity i użycie AI/);
+  assert.match(studio, /Postępy i raporty/);
   assert.match(netlifyConfig, /node_bundler\s*=\s*"esbuild"/);
 });

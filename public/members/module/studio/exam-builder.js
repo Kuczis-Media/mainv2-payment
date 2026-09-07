@@ -307,7 +307,7 @@
   }
 
   async function loadExam(examId, options = {}) {
-    if (options.confirm !== false && !window.confirm('Wczytać egzamin z GitHuba i zastąpić bieżący lokalny draft?')) return;
+    if (options.confirm !== false && !window.confirm('Otworzyć zapisany egzamin i zastąpić bieżący szkic na tym urządzeniu? Zapisz szkic najpierw, jeśli chcesz zachować zmiany.')) return;
     elements.status.textContent = `Pobieranie ${examId}…`;
     try {
       const result = await library.readExam(examId, { repositoryId: state.repositoryId });
@@ -347,7 +347,7 @@
   }
 
   function newExam() {
-    if (!window.confirm('Utworzyć nowy egzamin? Bieżący draft pozostanie tylko w historii przeglądarki.')) return;
+    if (!window.confirm('Utworzyć nowy egzamin? Bieżący szkic na tym urządzeniu zostanie zastąpiony. Zapisz go najpierw, jeśli chcesz zachować zmiany.')) return;
     state.exam = modelApi.createExam();
     state.remoteSha = '';
     state.remoteExamId = '';
@@ -368,10 +368,10 @@
       button.classList.toggle('is-active', active);
       button.setAttribute('aria-current', active ? 'page' : 'false');
     });
-    elements.editorTitle.textContent = TAB_LABELS[state.tab] || 'Exam Builder';
+    elements.editorTitle.textContent = TAB_LABELS[state.tab] || 'Edytor egzaminów';
     elements.badge.textContent = state.remoteSha
-      ? state.exam.status === 'published' ? 'Opublikowany' : 'Draft w GitHubie'
-      : 'Draft lokalny';
+      ? state.exam.status === 'published' ? 'Opublikowany' : 'Zapisany szkic'
+      : 'Szkic na tym urządzeniu';
     elements.badge.dataset.status = state.exam.status;
     elements.editor.replaceChildren();
     const renderer = {
@@ -483,7 +483,7 @@
       item.append(preview, copy, remove); list.append(item);
     });
     if (!entries.length) list.append(create('p', 'exam-media-empty', 'Nie dodano jeszcze obrazu.'));
-    panel.append(heading, inputNode, dropzone, list, create('p', 'exam-media-note', 'Usuń referencję tutaj albo otwórz Media Manager, aby zarządzać plikami w photos i assets/shared.'));
+    panel.append(heading, inputNode, dropzone, list, create('p', 'exam-media-note', 'Usunięcie obrazu z pytania nie usuwa pliku. Plikami zarządzisz w bibliotece obrazów.'));
     return panel;
   }
 
@@ -572,7 +572,7 @@
   }
 
   function renderQuestions() {
-    const header = section('Pytania egzaminu', 'Pytania własne są zapisane w exam.json. Referencje do banku pozostają współdzielone.');
+    const header = section('Pytania egzaminu', 'Dodawaj własne pytania lub korzystaj z banku. Zmiana pytania w banku może wpłynąć także na inne egzaminy, które go używają.');
     const actions = create('div', 'exam-inline-actions');
     const add = create('button', 'button button-primary', '＋ Dodaj pytanie');
     add.type = 'button'; add.dataset.examAction = 'add-question';
@@ -778,7 +778,7 @@
       checkbox('scoring.partialPoints', state.exam.scoring.partialPoints, 'Przyznawaj punkty częściowe'),
       checkbox('scoring.negativePointsEnabled', state.exam.scoring.negativePointsEnabled, 'Włącz punkty ujemne'),
       field('Domyślna kara', input('scoring.defaultNegativePoints', state.exam.scoring.defaultNegativePoints, { type: 'number', min: 0, step: .1 })),
-      field('Strategia multiple choice', select('scoring.multipleChoiceStrategy', state.exam.scoring.multipleChoiceStrategy, [
+      field('Punktacja pytań wielokrotnego wyboru', select('scoring.multipleChoiceStrategy', state.exam.scoring.multipleChoiceStrategy, [
         { value: 'all_or_nothing', label: 'Wszystko albo nic' },
         { value: 'per_option', label: 'Za każdą prawidłową decyzję' },
         { value: 'correct_minus_incorrect', label: 'Poprawne minus błędne zaznaczenia' }
@@ -788,14 +788,14 @@
   }
 
   function renderAttempts() {
-    const main = section('Próby', 'Limity i cooldown są egzekwowane atomowo w Netlify Blobs.');
+    const main = section('Próby', 'Ustal, ile razy uczestnik może podejść do egzaminu i jak długo musi odczekać przed kolejną próbą.');
     main.append(
       field('Liczba prób', select('attempts.mode', state.exam.attempts.mode, [
         { value: 'one', label: 'Jedna próba' }, { value: 'limited', label: 'Określona liczba' }, { value: 'unlimited', label: 'Bez limitu' }
       ])),
       row(
         field('Maksymalna liczba', input('attempts.maxAttempts', state.exam.attempts.maxAttempts, { type: 'number', min: 1, max: 1000 })),
-        field('Cooldown (sekundy)', input('attempts.cooldownSeconds', state.exam.attempts.cooldownSeconds, { type: 'number', min: 0 }))
+        field('Przerwa między próbami (sekundy)', input('attempts.cooldownSeconds', state.exam.attempts.cooldownSeconds, { type: 'number', min: 0 }))
       ),
       field('Wynik wielu prób', select('attempts.resultStrategy', state.exam.attempts.resultStrategy, [
         { value: 'best', label: 'Najlepszy' }, { value: 'first', label: 'Pierwszy' }, { value: 'last', label: 'Ostatni' }, { value: 'average', label: 'Średnia' }
@@ -846,7 +846,7 @@
     const search = document.createElement('input');
     search.type = 'search'; search.placeholder = 'Szukaj po imieniu, nazwisku, e-mailu lub ID…';
     search.autocomplete = 'off'; search.value = state.userQuery; search.dataset.audienceSearch = '1';
-    const searchField = field('Znajdź użytkownika', search, 'Lista pochodzi z Netlify Identity. W exam.json zapisywane jest wyłącznie stabilne ID konta.');
+    const searchField = field('Znajdź użytkownika', search, 'Wyszukaj uczestnika platformy i zaznacz osoby, które mają otrzymać dostęp do egzaminu.');
     const status = create('p', 'exam-audience-status'); status.dataset.audienceStatus = '1';
     status.textContent = audienceStatus();
     const results = create('div', 'exam-audience-results'); results.dataset.audienceResults = '1';
@@ -949,11 +949,11 @@
   }
 
   function renderReports() {
-    const main = section('Raport egzaminu', 'Dane są liczone z indeksu prób — bez skanowania całego magazynu Blobs.');
+    const main = section('Raport egzaminu', 'Sprawdź wyniki i odpowiedzi uczestników. Otwórz szczegóły próby, aby ocenić pytania otwarte.');
     const refresh = create('button', 'button button-soft', state.reportLoading ? 'Pobieranie…' : '↻ Odśwież raport');
     refresh.type = 'button'; refresh.dataset.examAction = 'refresh-report'; refresh.disabled = state.reportLoading || !state.remoteSha;
     main.append(refresh);
-    if (!state.remoteSha) main.append(create('p', 'exam-report-empty', 'Najpierw zapisz egzamin w GitHubie.'));
+    if (!state.remoteSha) main.append(create('p', 'exam-report-empty', 'Najpierw zapisz egzamin lub otwórz go z biblioteki.'));
     else if (!state.report) main.append(create('p', 'exam-report-empty', state.reportLoading ? 'Pobieram próby i analizę pytań…' : 'Kliknij „Odśwież raport”.'));
     else main.append(reportView(state.report));
     elements.editor.append(main);
@@ -1148,7 +1148,7 @@
     ), 0);
     elements.summary.replaceChildren();
     [
-      ['Status', state.exam.status === 'published' ? 'Opublikowany' : 'Draft'],
+      ['Status', state.exam.status === 'published' ? 'Opublikowany' : 'Szkic'],
       ['Pytania', `${inlineQuestions + refs} (${refs} z banku)`],
       ['Punkty własnych pytań', maxPoints],
       ['Próg', `${state.exam.metadata.passThreshold}%`],
@@ -1410,7 +1410,7 @@
     if (!panel || state.mediaUploading) return;
     if (!state.remoteSha || state.remoteExamId !== state.exam.examId) {
       elements.status.className = 'exam-builder-status is-error';
-      elements.status.textContent = 'Najpierw zapisz draft egzaminu. Dzięki temu obraz trafi do właściwego folderu photos.';
+      elements.status.textContent = 'Najpierw zapisz szkic egzaminu, aby móc dodać do niego obrazy.';
       return;
     }
     const allowed = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
@@ -1442,8 +1442,8 @@
         uploadedCount += 1;
       }
       elements.status.textContent = selected.length === 1
-        ? 'Obraz zapisano w GitHubie i dodano do egzaminu. Zapisz draft, aby utrwalić referencję.'
-        : `${selected.length} obrazów zapisano w GitHubie. Zapisz draft, aby utrwalić referencje.`;
+        ? 'Obraz dodano do egzaminu. Zapisz szkic, aby zachować zmianę.'
+        : `Dodano obrazy: ${selected.length}. Zapisz szkic, aby zachować zmiany.`;
     } catch (error) {
       elements.status.classList.add('is-error');
       elements.status.textContent = error.message || 'Nie udało się wysłać obrazu.';
@@ -1552,7 +1552,7 @@
   }
 
   function deleteQuestion(collection, questionId, bank) {
-    if (!window.confirm('Usunąć to pytanie? Operacja zostanie zapisana dopiero po zapisie w GitHubie.')) return;
+    if (!window.confirm('Usunąć to pytanie? Zmiana zostanie utrwalona, gdy zapiszesz szkic lub opublikujesz egzamin.')) return;
     const index = collection.findIndex((question) => question.questionId === questionId);
     if (index < 0) return;
     collection.splice(index, 1);
@@ -1600,7 +1600,7 @@
       state.remoteSha = saved.sha || '';
       state.remoteExamId = state.exam.examId;
       saveDrafts();
-      elements.status.textContent = status === 'published' ? 'Egzamin został opublikowany.' : 'Draft został zapisany w GitHubie.';
+      elements.status.textContent = status === 'published' ? 'Egzamin został opublikowany.' : 'Szkic egzaminu zapisano.';
       await loadAssets(true, { keepBank: true });
       window.document.dispatchEvent(new CustomEvent('chemdisk-content-changed', {
         detail: { kind: 'exam', repositoryId: state.repositoryId }
@@ -1626,11 +1626,11 @@
     if (!state.remoteSha) return;
     try {
       const warning = await examDeletionWarning(state.exam.examId, state.repositoryId);
-      if (!window.confirm(`${warning}Usunąć exam.json z GitHuba? Commit będzie możliwy do odzyskania z historii.`)) return;
+      if (!window.confirm(`${warning}Usunąć zapisany egzamin z biblioteki? Plik można odzyskać z historii repozytorium.`)) return;
       await library.remove('exam', { filename: state.exam.examId, expectedSha: state.remoteSha, repositoryId: state.repositoryId });
       state.remoteSha = '';
       state.remoteExamId = '';
-      elements.status.textContent = 'Egzamin usunięto z GitHuba. Lokalny draft pozostał w Builderze.';
+      elements.status.textContent = 'Egzamin usunięto z biblioteki. Szkic na tym urządzeniu pozostał w edytorze.';
       await loadAssets(true, { keepBank: true });
       window.document.dispatchEvent(new CustomEvent('chemdisk-content-changed', {
         detail: { kind: 'exam', repositoryId: state.repositoryId }
@@ -1663,7 +1663,7 @@
       state.remoteExamId = '';
       state.report = null;
       state.attemptReport = null;
-      elements.status.textContent = 'Egzamin usunięto z GitHuba. Lokalny draft pozostał w Builderze.';
+      elements.status.textContent = 'Egzamin usunięto z biblioteki. Szkic na tym urządzeniu pozostał w edytorze.';
     }
     renderLibrary();
     render();

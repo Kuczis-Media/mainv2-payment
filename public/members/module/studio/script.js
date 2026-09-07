@@ -339,7 +339,7 @@
 
   function scheduleDraftSave(mode) {
     if (state.saveTimers[mode]) window.clearTimeout(state.saveTimers[mode]);
-    setSaveIndicator('Zapisywanie draftu…', 'saving');
+    setSaveIndicator('Zapisywanie szkicu…', 'saving');
     state.saveTimers[mode] = window.setTimeout(() => {
       state.saveTimers[mode] = 0;
       const ok = mode === 'dashboard'
@@ -358,7 +358,7 @@
       }
       setSaveIndicator(
         ok
-          ? synchronized ? 'Zgodny z aktywną wersją' : 'Draft zapisany lokalnie'
+          ? synchronized ? 'Zgodny z aktywną wersją' : 'Szkic zapisany na tym urządzeniu'
           : 'Nie udało się zapisać',
         ok ? 'saved' : 'error'
       );
@@ -502,7 +502,7 @@
   }
 
   function createNewLessonDraft() {
-    if (!window.confirm('Rozpocząć nową lekcję? Bieżący szkic w builderze zostanie zastąpiony.')) {
+    if (!window.confirm('Rozpocząć nową lekcję? Bieżący szkic w edytorze zostanie zastąpiony. Zapisz go najpierw, jeśli chcesz zachować zmiany.')) {
       return;
     }
     finishEdit();
@@ -522,7 +522,7 @@
     updateHistoryButtons();
     toast(
       'Nowa lekcja jest gotowa',
-      'Nadaj nazwę pliku i kliknij „Utwórz plik w GitHubie”.'
+      'Nadaj nazwę pliku i kliknij „Opublikuj”, kiedy lekcja będzie gotowa.'
     );
     window.requestAnimationFrame(() => {
       elements.lessonFilename.focus();
@@ -647,14 +647,14 @@
 
   function dashboardModuleDefaults(type) {
     const defaults = {
-      presentation: ['Nowa prezentacja ChemDisk', 'Otwórz natywną prezentację z dokładnym postępem slajdów.'],
+      presentation: ['Nowa prezentacja', 'Otwórz prezentację i kontynuuj naukę od ostatniego slajdu.'],
       slides: ['Nowa prezentacja', 'Otwórz prezentację do tego działu.'],
       pdf: ['Dokument PDF', 'Materiał do czytania lub pobrania.'],
       film: ['Nagranie lekcji', 'Obejrzyj nagranie w odtwarzaczu kursowym.'],
       yt: ['Film YouTube', 'Nagranie z własnymi kontrolkami ChemDisk.'],
       lesson: ['Lekcja interaktywna', 'Przejdź przez prezentację i zadania.'],
       forms: ['Test wiedzy', 'Sprawdź swoją wiedzę w formularzu.'],
-      quiz: ['Quiz ChemDisk', 'Rozwiąż natywny quiz z zapisem wyniku i postępu.'],
+      quiz: ['Quiz', 'Sprawdź swoją wiedzę. Wynik i postępy zostaną zapisane.'],
       exam: ['Egzamin', 'Rozwiąż egzamin i zapisz wynik w ChemDisk.'],
       chat: ['Asystent AI', 'Skorzystaj z przygotowanej pomocy.'],
       kalkulator: ['Kalkulator naukowy', 'Wykonuj obliczenia potrzebne w zadaniach.'],
@@ -784,7 +784,7 @@
         repositoryId: asset.repositoryId,
         presentationId: asset.filename,
         title: asset.title || asset.filename,
-        description: asset.description || 'Natywna prezentacja ChemDisk z dokładnym śledzeniem slajdów.'
+        description: asset.description || 'Otwórz prezentację i kontynuuj naukę od ostatniego slajdu.'
       });
     } else if (asset.kind === 'quiz') {
       node = dashboardModelApi.createModule({
@@ -792,7 +792,7 @@
         repositoryId: asset.repositoryId,
         quizId: asset.filename,
         title: asset.title || asset.filename,
-        description: asset.description || 'Natywny quiz ChemDisk z zapisem wyniku i postępu.'
+        description: asset.description || 'Sprawdź swoją wiedzę. Wynik i postępy zostaną zapisane.'
       });
     } else {
       const isText = /\.txt$/i.test(asset.filename);
@@ -1680,7 +1680,7 @@
     elements.dashboardPublish.title = !state.dashboard.remoteLoaded
       ? 'Najpierw wczytaj aktywną wersję dashboardu'
       : state.dashboard.catalogPending ? 'Ponów synchronizację katalogu postępu'
-      : dirty ? 'Opublikuj zmiany w Netlify Blobs' : 'Brak zmian do opublikowania';
+      : dirty ? 'Udostępnij nowy układ uczestnikom kursu' : 'Brak zmian do opublikowania';
     if (state.dashboard.remoteLoaded && !dirty && !state.dashboard.publishing) {
       setSaveIndicator('Zgodny z aktywną wersją', 'saved');
     }
@@ -1858,11 +1858,11 @@
   function dashboardServerError(response, payload) {
     const code = payload && payload.error;
     if (response.status === 409 || code === 'DASHBOARD_CONFLICT') {
-      return 'Aktywna wersja zmieniła się w innej karcie. Draft został zachowany — wczytaj aktualny dashboard i porównaj zmiany.';
+      return 'Aktywna wersja zmieniła się w innej karcie. Szkic został zachowany — wczytaj aktualny układ panelu kursanta i porównaj zmiany.';
     }
     if (response.status === 401) return 'Sesja administratora wygasła. Zaloguj się ponownie.';
     if (response.status === 403) return 'Bieżące konto nie ma już uprawnień administratora.';
-    if (code === 'DASHBOARD_STORAGE_UNAVAILABLE') return 'Netlify Blobs jest chwilowo niedostępne.';
+    if (code === 'DASHBOARD_STORAGE_UNAVAILABLE') return 'Zapisywanie jest chwilowo niedostępne. Twoje zmiany pozostały w edytorze.';
     if (code === 'MARKDOWN_TOO_LARGE') return 'Dashboard przekracza limit 256 KiB.';
     return `Nie udało się wykonać operacji (${response.status}).`;
   }
@@ -1887,7 +1887,7 @@
           && state.editSession.mode === 'dashboard'
           && snapshot('dashboard') !== state.editSession.before
         );
-    if (localDirty && !window.confirm('Wczytanie aktywnej wersji zastąpi bieżący lokalny draft w builderze. Kontynuować?')) return;
+    if (localDirty && !window.confirm('Wczytanie aktywnej wersji zastąpi bieżący szkic na tym urządzeniu. Kontynuować?')) return;
     state.dashboard.loading = true;
     elements.dashboardLoad.disabled = true;
     elements.dashboardPublish.disabled = true;
@@ -1941,7 +1941,7 @@
       renderDashboard();
       toast(
         'Dashboard wczytany',
-        source === 'blob' ? 'Edytujesz aktywną wersję z Netlify Blobs.' : 'Edytujesz pełny dashboard.md z wdrożenia.'
+        source === 'blob' ? 'Edytujesz obecnie opublikowany układ.' : 'Edytujesz początkowy układ panelu kursanta.'
       );
     } catch (error) {
       setSaveIndicator('Błąd wczytywania', 'error');
@@ -1985,7 +1985,7 @@
     state.dashboard.publishing = true;
     elements.dashboardPublish.disabled = true;
     elements.dashboardLoad.disabled = true;
-    setSaveIndicator('Publikowanie w Blobs…', 'saving');
+    setSaveIndicator('Publikowanie…', 'saving');
     let retryCatalogOnly = false;
     let dashboardPublishedThisAttempt = false;
     try {
@@ -6617,7 +6617,7 @@
       const source = promptModelApi.serializePrompt(validation.prompt);
       const remote = state.prompt.remoteSha
         ? ` · repo: ${state.prompt.remoteFilename}`
-        : ' · draft lokalny';
+        : ' · szkic na tym urządzeniu';
       elements.promptValidationStatus.textContent =
         `Plik poprawny · ${source.length.toLocaleString('pl-PL')} znaków${remote}`;
       elements.promptSourcePreview.textContent = source;
@@ -6774,11 +6774,11 @@
         selectedRepositoryId
       );
       elements.lessonRepositorySave.textContent = retryManifestOnly
-        ? 'Ponów manifest postępu'
-        : updatesCurrentFile ? 'Zapisz zmiany w GitHubie' : 'Utwórz plik w GitHubie';
+        ? 'Ponów synchronizację postępów'
+        : updatesCurrentFile ? 'Opublikuj zmiany' : 'Opublikuj';
       elements.lessonRepositorySave.title = retryManifestOnly
-        ? 'Plik jest już w GitHubie — ponów tylko synchronizację postępu'
-        : updatesCurrentFile ? `Zaktualizuj ${state.lesson.remoteFilename}` : 'Utwórz nowy plik .md w wybranym repozytorium';
+        ? 'Lekcja jest już zapisana — ponów tylko aktualizację ustawień postępów'
+        : updatesCurrentFile ? `Opublikuj zmiany w lekcji ${state.lesson.remoteFilename}` : 'Zapisz lekcję i udostępnij ją w kursie';
       elements.lessonRepositoryDelete.disabled = state.lesson.saving
         || !state.lesson.remoteFilename
         || !state.lesson.remoteSha
@@ -6828,9 +6828,9 @@
       try {
         await syncLessonProgressManifest(pendingManifest);
         setPendingLessonManifest(null);
-        toast('Manifest postępu zsynchronizowany', 'Nie utworzono dodatkowego commitu w GitHubie.');
+        toast('Postępy zsynchronizowane', 'Ustawienia postępów zaktualizowano bez ponownej publikacji lekcji.');
       } catch (error) {
-        toast('Plik nadal jest w GitHubie', `Synchronizacja postępu nadal się nie udała (${error?.message || 'błąd synchronizacji'}).`, 'error');
+        toast('Lekcja pozostaje zapisana', `Synchronizacja postępów nadal się nie udała (${error?.message || 'błąd synchronizacji'}).`, 'error');
       } finally {
         state.lesson.saving = false;
         updateRepositoryButtons();
@@ -6868,8 +6868,8 @@
       state.lesson.model = lessonModelApi.createLesson(validation.lesson);
       writeStorage(LESSON_DRAFT_KEY, state.lesson.model);
       toast(
-        result.created ? 'Lekcja dodana do GitHuba' : 'Lekcja zaktualizowana',
-        result.commitSha ? `Commit ${result.commitSha.slice(0, 7)} został zapisany.` : filename
+        result.created ? 'Lekcja opublikowana' : 'Zmiany w lekcji opublikowane',
+        filename
       );
       const manifest = {
         filename,
@@ -6890,12 +6890,12 @@
         await syncLessonProgressManifest(manifest);
         setPendingLessonManifest(null);
       } catch (error) {
-        toast('Lekcja jest w GitHubie', `Nie udało się odświeżyć manifestu postępu (${error?.message || 'błąd synchronizacji'}). Kliknij „Ponów manifest postępu” — bez nowego commitu.`, 'warning');
+        toast('Lekcja jest zapisana', `Nie udało się zaktualizować ustawień postępów (${error?.message || 'błąd synchronizacji'}). Kliknij „Ponów synchronizację postępów” — nie musisz ponownie publikować lekcji.`, 'warning');
       }
       try {
         await loadRepositoryAssets(true);
       } catch (error) {
-        toast('Lekcja jest w GitHubie', `Nie udało się tylko odświeżyć listy plików (${error?.message || 'błąd odświeżania'}).`, 'warning');
+        toast('Lekcja jest zapisana', `Nie udało się tylko odświeżyć biblioteki (${error?.message || 'błąd odświeżania'}).`, 'warning');
       }
     } finally {
       state.lesson.saving = false;
@@ -6966,14 +6966,14 @@
       state.prompt.remoteSha = result.sha;
       state.prompt.remoteRepositoryId = result.repositoryId || repositoryId;
       toast(
-        result.created ? 'Prompt dodany do GitHuba' : 'Prompt zaktualizowany',
-        result.commitSha ? `Commit ${result.commitSha.slice(0, 7)} został zapisany.` : filename
+        result.created ? 'Instrukcja AI zapisana' : 'Instrukcja AI zaktualizowana',
+        filename
       );
       renderPromptPreview();
       try {
         await loadRepositoryAssets(true);
       } catch (error) {
-        toast('Prompt jest w GitHubie', `Nie udało się tylko odświeżyć listy plików (${error?.message || 'błąd odświeżania'}).`, 'warning');
+        toast('Instrukcja AI jest zapisana', `Nie udało się tylko odświeżyć biblioteki (${error?.message || 'błąd odświeżania'}).`, 'warning');
       }
     } finally {
       state.prompt.saving = false;
@@ -6988,11 +6988,11 @@
       !target.remoteSha ||
       target.remoteRepositoryId !== state.contentLibrary.selectedRepositoryId
     ) {
-      toast('Brak wersji repozytorium', 'Wczytaj plik z GitHuba przed próbą usunięcia.', 'error');
+      toast('Nie wybrano zapisanej wersji', 'Otwórz materiał z biblioteki przed próbą usunięcia.', 'error');
       return;
     }
     if (!window.confirm(
-      `Usunąć „${target.remoteFilename}” z repozytorium? GitHub utworzy commit usuwający plik, więc będzie można odzyskać go z historii.`
+      `Usunąć „${target.remoteFilename}” z biblioteki? Plik można odzyskać z historii repozytorium.`
     )) return;
     target.saving = true;
     updateRepositoryButtons();
@@ -7007,8 +7007,8 @@
       target.remoteSha = '';
       target.remoteRepositoryId = '';
       toast(
-        kind === 'lesson' ? 'Lekcja usunięta z GitHuba' : 'Prompt usunięty z GitHuba',
-        result.commitSha ? `Commit ${result.commitSha.slice(0, 7)} został zapisany. Lokalny draft pozostaje w builderze.` : deletedFilename
+        kind === 'lesson' ? 'Lekcja usunięta z biblioteki' : 'Instrukcja AI usunięta z biblioteki',
+        'Szkic na tym urządzeniu pozostaje w edytorze.'
       );
       await loadRepositoryAssets(true);
       if (kind === 'prompt') renderPromptPreview();
@@ -7286,8 +7286,8 @@
         remove.dataset.explorerKind = group.kind;
         remove.dataset.explorerFilename = asset.filename;
         remove.dataset.explorerRepository = asset.repositoryId || state.contentLibrary.selectedRepositoryId;
-        remove.setAttribute('aria-label', `Usuń ${asset.title || asset.filename} z GitHuba`);
-        remove.title = 'Usuń z prywatnego repozytorium GitHub';
+        remove.setAttribute('aria-label', `Usuń ${asset.title || asset.filename} z biblioteki`);
+        remove.title = 'Usuń zapisany materiał';
         const duplicate = create('button', 'content-explorer-duplicate', 'Duplikuj');
         duplicate.type = 'button';
         duplicate.dataset.explorerDuplicate = '1';
@@ -7734,9 +7734,9 @@
         ? `${asset.filename} był pusty — dodano edytowalny szablon.`
         : `Wczytano ${asset.filename}.`;
       toast(
-        sourceWasEmpty ? 'Pusty plik jest gotowy do edycji' : 'Lekcja wczytana z GitHuba',
+        sourceWasEmpty ? 'Pusty plik jest gotowy do edycji' : 'Lekcja otwarta do edycji',
         sourceWasEmpty
-          ? 'Uzupełnij szablon i kliknij „Zapisz zmiany w GitHubie”.'
+          ? 'Uzupełnij szablon i kliknij „Opublikuj zmiany”.'
           : 'Możesz ją edytować, podejrzeć i pobrać jako Markdown.'
       );
       switchMode('lesson');
@@ -7772,7 +7772,7 @@
       updateHistoryButtons();
       updateRepositoryButtons();
       elements.promptAssetStatus.textContent = `Wczytano ${asset.filename}.`;
-      toast('Prompt wczytany z GitHuba', 'Możesz go edytować, pobrać ręcznie albo zapisać jako kolejny commit.');
+      toast('Instrukcja AI otwarta do edycji', 'Możesz zmienić treść, zapisać ją lub pobrać kopię.');
       switchMode('prompt');
     } catch (error) {
       elements.promptAssetStatus.className = 'prompt-repository-status is-error';
@@ -7830,7 +7830,7 @@
     if (!button || button.disabled) return;
     const asset = contentExplorerAsset(button);
     if (!asset?.sha) {
-      toast('Nie można bezpiecznie usunąć pliku', 'Odśwież listę, aby pobrać aktualną wersję pliku z GitHuba.', 'error');
+      toast('Nie można bezpiecznie usunąć pliku', 'Odśwież bibliotekę, aby pobrać aktualną wersję pliku.', 'error');
       return;
     }
     const kind = button.dataset.explorerKind;
@@ -7865,7 +7865,7 @@
           : 'Nie udało się sprawdzić odwołań do egzaminu. Usunięcie exam.json nie usuwa jego kart ani kroków lekcji.\n\n';
       }
       const confirmed = window.confirm(
-        `${warning}${localMedia.length ? `Materiał ma ${localMedia.length} ${localMedia.length === 1 ? 'obraz lokalny' : 'obrazy lokalne'} w folderze photos.\n\n` : ''}Usunąć ${kindLabel} „${asset.title || asset.filename}” z GitHuba? GitHub utworzy odwracalny commit usuwający plik.`
+        `${warning}${localMedia.length ? `Materiał ma ${localMedia.length} ${localMedia.length === 1 ? 'przypisany obraz' : 'przypisanych obrazów'}.\n\n` : ''}Usunąć ${kindLabel} „${asset.title || asset.filename}” z biblioteki? Plik można odzyskać z historii repozytorium.`
       );
       if (!confirmed) {
         elements.contentExplorerStatus.textContent = 'Usuwanie anulowane.';
@@ -7916,14 +7916,14 @@
       if (kind === 'quiz') window.ChemQuizBuilder?.assetDeleted?.({ ...asset, repositoryId });
       updateRepositoryButtons();
       toast(
-        kind === 'lesson' ? 'Lekcja usunięta z GitHuba'
-          : kind === 'exam' ? 'Egzamin usunięty z GitHuba'
-            : kind === 'presentation' ? 'Prezentacja usunięta z GitHuba'
-              : kind === 'quiz' ? 'Quiz usunięty z GitHuba'
-                : 'Prompt usunięty z GitHuba',
+        kind === 'lesson' ? 'Lekcja usunięta z biblioteki'
+          : kind === 'exam' ? 'Egzamin usunięty z biblioteki'
+            : kind === 'presentation' ? 'Prezentacja usunięta z biblioteki'
+              : kind === 'quiz' ? 'Quiz usunięty z biblioteki'
+                : 'Instrukcja AI usunięta z biblioteki',
         mediaFailures.length
-          ? `Definicja została usunięta, ale ${mediaFailures.length} lokalnych obrazów pozostało w GitHubie: ${mediaFailures.join(', ')}.`
-          : result.commitSha ? `Commit ${result.commitSha.slice(0, 7)} został zapisany.` : `${asset.filename} usunięto. Lokalny draft pozostaje bez zmian.`
+          ? `Materiał został usunięty, ale nie udało się usunąć ${mediaFailures.length} obrazów: ${mediaFailures.join(', ')}.`
+          : `${asset.filename} usunięto. Szkic na tym urządzeniu pozostaje bez zmian.`
       );
       await loadRepositoryAssets(true);
     } catch (error) {
@@ -8034,7 +8034,7 @@
     const warning = asset.usageCount > 0
       ? `Ten obraz jest używany ${asset.usageCount}× w definicji materiału. Po usunięciu pojawi się brak obrazu.\n\n`
       : '';
-    if (!window.confirm(`${warning}Usunąć „${asset.filename}” z GitHuba? Commit będzie można odwrócić.`)) return;
+    if (!window.confirm(`${warning}Usunąć obraz „${asset.filename}” z biblioteki? Plik można odzyskać z historii repozytorium.`)) return;
     button.disabled = true;
     elements.contentExplorerStatus.textContent = `Usuwanie ${asset.filename}…`;
     try {
@@ -8048,7 +8048,7 @@
       });
       state.contentLibrary.mediaByOwner.set(key, media.filter((item) => item.reference !== reference));
       renderContentExplorer();
-      toast('Obraz usunięty', result.commitSha ? `Commit ${result.commitSha.slice(0, 7)} zapisano w GitHubie.` : asset.filename);
+      toast('Obraz usunięty', asset.filename);
     } catch (error) {
       button.disabled = false;
       elements.contentExplorerStatus.classList.add('is-error');
@@ -8526,7 +8526,7 @@
     elements.modeSwitch.hidden = false;
     switchMode('home');
     initializeContentExplorerLoader();
-    setSaveIndicator('Drafty gotowe', 'saved');
+    setSaveIndicator('Szkice gotowe', 'saved');
   }
 
   document.addEventListener('DOMContentLoaded', start);

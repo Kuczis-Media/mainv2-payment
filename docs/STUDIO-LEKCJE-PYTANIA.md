@@ -2,9 +2,9 @@
 
 ## Przełącznik lekcji
 
-W **Studio → Lesson Builder**, obok nazwy pliku i tytułu, znajduje się przełącznik **Pozwól uczestnikom pomijać kroki**. Wyłączony oznacza naukę po kolei; włączony pozwala przejść do innych kroków i wrócić do zadania później.
+W **Studio → Konfigurator lekcji**, obok nazwy pliku i tytułu, znajduje się przełącznik **Pozwól uczestnikom pomijać kroki**. Wyłączony oznacza naukę po kolei; włączony pozwala przejść do innych kroków i wrócić do zadania później.
 
-Zmiana dotyczy całej lekcji. Zapisz ją przyciskiem zapisu w GitHubie. Studio zapisuje również manifest postępu; jeśli synchronizacja się nie powiedzie, pokazuje ostrzeżenie i przycisk ponowienia bez dodatkowego commitu. Pobranie samego Markdown nie synchronizuje manifestu serwera.
+Zmiana dotyczy całej lekcji. Zastosuj ją przyciskiem **Opublikuj** lub **Opublikuj zmiany**. Studio zapisuje również manifest postępu; jeśli synchronizacja się nie powiedzie, pokazuje ostrzeżenie i przycisk **Ponów synchronizację postępów**, który nie publikuje lekcji ponownie. Pobranie samego Markdown nie synchronizuje manifestu serwera.
 
 W **panelu admina → Postępy → raport ucznia → Ustawienia ucznia** można ustawić wyjątek:
 
@@ -37,11 +37,13 @@ Ocena AI nie uruchamia się od edytowania. W egzaminie uruchamia ją autor w rap
 
 ## Formatowanie pytań egzaminacyjnych
 
-W **Studio → Exam Builder → Pytania** (także w banku pytań) edytor treści ma przyciski pogrubienia, kursywy, podkreślenia, indeksu dolnego i górnego dla zaznaczonego fragmentu. Poniżej wybierasz kolor, czcionkę, rozmiar i wyrównanie całego pytania, w tym justowanie. Próbka pokazuje rezultat, a przycisk **Kolor domyślny** usuwa własny kolor.
+W **Studio → Edytor egzaminów → Pytania** (także w banku pytań) edytor treści ma przyciski pogrubienia, kursywy, podkreślenia, indeksu dolnego i górnego dla zaznaczonego fragmentu. Poniżej wybierasz kolor, czcionkę, rozmiar i wyrównanie całego pytania, w tym justowanie. Próbka pokazuje rezultat, a przycisk **Kolor domyślny** usuwa własny kolor.
 
-Rozwiń **Kreator równań chemicznych i matematycznych**. Dla reakcji wpisz substraty, produkty, wybierz strzałkę i opcjonalny warunek; dla matematyki wybierz przykład (ułamek, pierwiastek, potęga, suma, wzór kwadratowy) i dostosuj LaTeX. **Wstaw równanie do pytania** wstawia je w miejscu kursora. Formatowanie zapisuje się razem z egzaminem i bankiem oraz trafia do odtwarzacza i raportu. Rozpoczęta już próba zachowuje wcześniejszą migawkę pytań.
+Rozwiń **Kreator równań** i wybierz **Chemia** lub **Matematyka**. Dla reakcji wpisz substraty, produkty, wybierz strzałkę i opcjonalny warunek. Możesz pisać zwyczajnie `H2O` — w podglądzie od razu pojawi się H₂O, bez zmiany współczynników przed wzorem. Kliknij pole substratów albo produktów, aby skierować do niego przyciski indeksów, ładunków jonów i stanów skupienia. Zaznaczony fragment możesz zmienić w indeks, a wstawioną domyślną cyfrę od razu nadpisać. **Zamień strony** zamienia również kierunek strzałki, zachowując sens reakcji. Przykłady obejmują wodę, zobojętnianie, równowagę, osad i spalanie; wybrany przykład zastępuje zapis dopiero po kliknięciu **Użyj przykładu**.
 
-Obsługiwane zapisy tekstowe: `**pogrubienie**`, `*kursywa*`, `__podkreślenie__`, `H~2~O`, `x^2^`; wzory mają delimitery `\(...\)` albo `\[...\]`. Renderer nie wykonuje HTML, JavaScript ani dowolnych poleceń TeX. Moduł równań jest statyczny i ładuje się dopiero, gdy jest potrzebny (Studio może już mieć wspólny MathJax). Nie korzysta z AI ani Functions.
+Dla matematyki wybierz przykład (ułamek, pierwiastek, potęga, suma, wzór kwadratowy) i dostosuj zapis, korzystając z przycisków. Przełączanie trybów zachowuje oba robocze wzory do czasu zamknięcia edytowanego pytania. Duży **Podgląd na żywo** pokazuje wygląd dla uczestnika. **Wstaw równanie do pytania** wstawia je w miejscu kursora lub zastępuje zaznaczony fragment. Niepełne nawiasy i puste strony reakcji wymagają poprawienia przed wstawieniem; kreator nie sprawdza bilansu chemicznego. Formatowanie zapisuje się razem z egzaminem i bankiem oraz trafia do odtwarzacza i raportu, także w odpowiedziach i objaśnieniach. Rozpoczęta już próba zachowuje wcześniejszą migawkę pytań.
+
+Obsługiwane zapisy tekstowe: `**pogrubienie**`, `*kursywa*`, `__podkreślenie__`, `H~2~O`, `x^2^`; wzory mają delimitery `\(...\)` albo `\[...\]`. Renderer nie wykonuje HTML, JavaScript ani dowolnych poleceń TeX. Typowe reakcje, indeksy, ułamki i pierwiastki mają natychmiastowy lokalny podgląd, działający również bez sieci. Pełny moduł równań jest statyczny i ładuje się dopiero, gdy jest potrzebny (Studio może już mieć wspólny MathJax); obsługuje też bardziej zaawansowany zapis. Błąd pobrania nie usuwa lokalnego podglądu i nie ponawia pobierania po każdym naciśnięciu klawisza. Kreator nie korzysta z AI ani Functions.
 
 ## Czytelny raport i ocena AI
 

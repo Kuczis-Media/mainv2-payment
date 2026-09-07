@@ -95,7 +95,7 @@
 
   function markChanged(message = 'Niezapisane zmiany zapisano lokalnie.') {
     saveLocal();
-    elements.badge.textContent = 'Draft lokalny';
+    elements.badge.textContent = 'Szkic na tym urządzeniu';
     setStatus(message);
   }
 
@@ -121,8 +121,8 @@
     elements.saveButton.disabled = state.busy;
     elements.publishButton.disabled = state.busy;
     elements.badge.textContent = state.remoteSha && state.remoteId === quiz.quizId
-      ? quiz.metadata.status === 'published' ? 'Opublikowany' : 'Draft w GitHubie'
-      : 'Draft lokalny';
+      ? quiz.metadata.status === 'published' ? 'Opublikowany' : 'Zapisany szkic'
+      : 'Szkic na tym urządzeniu';
   }
 
   function fieldLabel(label, control, className = '') {
@@ -266,7 +266,7 @@
       const mediaCopy = create('div');
       mediaCopy.append(create('small', '', 'Obraz do pytania'), create('code', '', question.image.ref || 'Brak obrazu'));
       const selectMedia = create('button', 'mini-button', 'Wybierz obraz'); selectMedia.type = 'button'; selectMedia.dataset.quizAction = 'select-media';
-      const removeMedia = create('button', 'mini-button is-danger', 'Usuń referencję'); removeMedia.type = 'button'; removeMedia.dataset.quizAction = 'remove-media'; removeMedia.disabled = !question.image.ref;
+      const removeMedia = create('button', 'mini-button is-danger', 'Usuń obraz z pytania'); removeMedia.type = 'button'; removeMedia.dataset.quizAction = 'remove-media'; removeMedia.disabled = !question.image.ref;
       media.append(mediaCopy, selectMedia, removeMedia);
 
       card.append(
@@ -493,7 +493,7 @@
     elements.reportRefresh.textContent = state.reportLoading ? 'Pobieranie…' : '↻ Odśwież raport';
     elements.reportBody.replaceChildren();
     if (!state.remoteSha || state.remoteId !== state.quiz.quizId) {
-      elements.reportStatus.textContent = 'Zapisz lub wczytaj quiz z GitHuba, aby otworzyć raport.';
+      elements.reportStatus.textContent = 'Zapisz quiz lub otwórz go z biblioteki, aby zobaczyć raport.';
       return;
     }
     if (!state.report) {
@@ -735,7 +735,7 @@
 
   function addQuestion(type) {
     state.quiz.questions.push(modelApi.createQuestion({ type, prompt: `Nowe pytanie ${state.quiz.questions.length + 1}` }));
-    markChanged('Pytanie dodano do lokalnego draftu.');
+    markChanged('Pytanie dodano do szkicu na tym urządzeniu.');
     render();
     elements.questions.lastElementChild?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   }
@@ -765,7 +765,7 @@
   }
 
   function newQuiz() {
-    if (!root.confirm('Utworzyć nowy quiz? Bieżący lokalny draft zostanie zastąpiony.')) return;
+    if (!root.confirm('Utworzyć nowy quiz? Bieżący szkic na tym urządzeniu zostanie zastąpiony. Zapisz go najpierw, jeśli chcesz zachować zmiany.')) return;
     state.quiz = modelApi.createQuiz();
     state.remoteId = '';
     state.remoteSha = '';
@@ -786,7 +786,7 @@
     }
     state.busy = true;
     renderSettings();
-    setStatus(publish ? 'Publikowanie quizu…' : 'Zapisywanie draftu…');
+    setStatus(publish ? 'Publikowanie quizu…' : 'Zapisywanie szkicu…');
     try {
       const result = await library.save('quiz', {
         filename: state.quiz.quizId,
@@ -797,7 +797,7 @@
       state.remoteId = state.quiz.quizId;
       state.remoteSha = result.sha;
       saveLocal();
-      setStatus(publish ? 'Quiz opublikowano w prywatnym repozytorium.' : 'Draft quizu zapisano w prywatnym repozytorium.');
+      setStatus(publish ? 'Quiz opublikowano.' : 'Szkic quizu zapisano.');
       await loadLibrary(true);
       root.document.dispatchEvent(new CustomEvent('chemdisk-content-changed', {
         detail: { kind: 'quiz', repositoryId: state.repositoryId }
@@ -812,7 +812,7 @@
 
   async function removeCurrent() {
     if (!state.remoteSha || state.remoteId !== state.quiz.quizId) return;
-    if (!root.confirm(`Usunąć quiz „${state.quiz.metadata.title}” z GitHuba? Lokalne obrazy pozostaną w folderze photos i można je usunąć w Media Managerze.`)) return;
+    if (!root.confirm(`Usunąć zapisany quiz „${state.quiz.metadata.title}”? Dodane obrazy pozostaną w bibliotece obrazów i można je usunąć osobno.`)) return;
     state.busy = true;
     renderSettings();
     try {
@@ -823,7 +823,7 @@
       });
       state.remoteId = '';
       state.remoteSha = '';
-      setStatus('Quiz usunięto z GitHuba. Lokalny draft pozostał w Studio.');
+      setStatus('Quiz usunięto z biblioteki. Szkic na tym urządzeniu pozostał w Studio.');
       await loadLibrary(true);
       root.document.dispatchEvent(new CustomEvent('chemdisk-content-changed', {
         detail: { kind: 'quiz', repositoryId: state.repositoryId }
@@ -847,7 +847,7 @@
     state.attemptReport = null;
     saveLocal();
     render();
-    setStatus('Quiz wczytano z GitHuba.');
+    setStatus('Quiz otwarto do edycji.');
   }
 
   function assetDeleted(asset) {
@@ -855,7 +855,7 @@
       state.remoteId = '';
       state.remoteSha = '';
       renderSettings();
-      setStatus('Plik zdalny usunięto. Lokalny draft pozostał w Studio.');
+      setStatus('Quiz usunięto z biblioteki. Szkic na tym urządzeniu pozostał w Studio.');
     }
   }
 

@@ -39,8 +39,8 @@ test('all Studio file explorers use the shared paginated list contract', () => {
   const media = fs.readFileSync(path.join(root, 'public/assets/js/media-manager.js'), 'utf8');
 
   assert.ok(html.indexOf('paged-list.js') < html.indexOf('media-manager.js'));
-  assert.match(html, /Gotowe egzaminy/);
-  assert.match(html, /Gotowe prezentacje/);
+  assert.match(html, /Zapisane egzaminy/);
+  assert.match(html, /Zapisane prezentacje/);
   assert.match(studio, /explorer-\$\{group\.kind\}/);
   assert.match(studio, /media-\$\{key\}/);
   [quiz, exam, presentation, media].forEach((script) => {
@@ -52,9 +52,9 @@ test('all Studio file explorers use the shared paginated list contract', () => {
 test('quiz, exam and presentation libraries use the same repository accordion as lessons', () => {
   const html = fs.readFileSync(path.join(root, 'public/members/module/studio/index.html'), 'utf8');
   const builders = [
-    ['quiz', 'Gotowe quizy z GitHuba'],
-    ['exam', 'Gotowe egzaminy z GitHuba'],
-    ['presentation', 'Gotowe prezentacje z GitHuba']
+    ['quiz', 'Zapisane quizy'],
+    ['exam', 'Zapisane egzaminy'],
+    ['presentation', 'Zapisane prezentacje']
   ];
 
   builders.forEach(([kind, title]) => {

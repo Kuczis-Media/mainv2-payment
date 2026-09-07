@@ -67,7 +67,7 @@ test('report answer displays use labels, ordered text and matching descriptions,
   assert.match(source, /answerCard\('Odpowiedź ucznia'/);
 });
 
-function editorFixture() {
+function editorFixture(value = 'H2O') {
   class Node {
     constructor(tag) { this.tagName = tag.toUpperCase(); this.children = []; this.style = {}; this.events = {}; this.attributes = {}; this.value = ''; this.classList = { add() {} }; }
     append(...nodes) { this.children.push(...nodes); }
@@ -75,7 +75,7 @@ function editorFixture() {
     dispatchEvent(event) { this.events[event.type]?.(event); }
     setAttribute(key, value) { this.attributes[key] = value; }
     querySelectorAll() { return []; }
-    focus() {}
+    focus() { this.events.focus?.(); }
     setSelectionRange(start, end) { this.selectionStart = start; this.selectionEnd = end; }
     setRangeText(value, start, end) { this.value = this.value.slice(0, start) + value + this.value.slice(end); this.selectionStart = this.selectionEnd = start + value.length; }
   }
@@ -83,7 +83,7 @@ function editorFixture() {
   context.window = context;
   vm.runInNewContext(fs.readFileSync(require.resolve('../public/members/module/studio/assessment-editor.js'), 'utf8'), context);
   const changes = [];
-  const editor = context.ChemAssessmentEditor.create('H2O', {}, (prompt, format) => changes.push({ prompt, format }));
+  const editor = context.ChemAssessmentEditor.create(value, {}, (prompt, format) => changes.push({ prompt, format }));
   const all = (node) => [node, ...node.children.flatMap(all)];
   return { editor, changes, nodes: all(editor) };
 }
@@ -100,6 +100,107 @@ test('editor toolbar wraps selected text, changes alignment and inserts chemistr
   input.setSelectionRange(input.value.length, input.value.length);
   nodes.find((node) => node.textContent === 'Wstaw równanie do pytania').events.click();
   assert.match(changes.at(-1).prompt, /\\\[\\ce\{2 H2 \+ O2 -> 2 H2O\}\\\]/);
+});
+
+test('chemistry composer previews indices live, inserts charges into the focused side and preserves the stored equation', () => {
+  const { nodes, changes } = editorFixture();
+  const get = (label) => nodes.find((node) => node.attributes['aria-label'] === label);
+  const builder = nodes.find((node) => node.className === 'assessment-formula-builder');
+  builder.open = true; builder.events.toggle();
+  const left = get('Substraty'), right = get('Produkty'), preview = get('Podgląd równania');
+  left.value = 'SO4'; left.events.input();
+  assert.match(preview.innerHTML, /SO<sub>4<\/sub>/);
+  left.focus(); left.setSelectionRange(left.value.length, left.value.length);
+  get('Ładunek dwa minus').events.click();
+  assert.equal(left.value, 'SO4^{2-}');
+  assert.match(preview.innerHTML, /SO<sub>4<\/sub><sup>2-<\/sup>/);
+  right.value = 'H2O'; right.focus(); right.setSelectionRange(1, 2);
+  get('Wstaw indeks dolny do wzoru').events.click();
+  assert.equal(right.value, 'H_{2}O');
+  assert.match(preview.innerHTML, /H<sub>2<\/sub>O/);
+  get('Wstaw równanie do pytania').events.click();
+  assert.match(changes.at(-1).prompt, /\\ce\{SO4\^\{2-\} -> H_\{2\}O\}/);
+  assert.match(rich.html(changes.at(-1).prompt), /SO<sub>4<\/sub><sup>2-<\/sup>/);
+});
+
+test('chemistry examples require an explicit click and swapping sides preserves reaction direction', () => {
+  const { nodes } = editorFixture();
+  const get = (label) => nodes.find((node) => node.attributes['aria-label'] === label);
+  const examples = nodes.find((node) => node.tagName === 'SELECT' && node.children.some((option) => option.value === 'ions'));
+  const arrow = nodes.find((node) => node.tagName === 'SELECT' && node.children.some((option) => option.value === '<=>'));
+  examples.value = 'ions';
+  assert.equal(get('Substraty').value, '2 H2 + O2');
+  get('Wstaw wybraną reakcję do kreatora').events.click();
+  assert.equal(get('Substraty').value, 'Ag^{+} + Cl^{-}');
+  assert.equal(get('Produkty').value, 'AgCl(s)');
+  get('Zamień substraty z produktami').events.click();
+  assert.equal(arrow.value, '<-');
+  assert.equal(get('Substraty').value, 'AgCl(s)');
+  get('Zamień substraty z produktami').events.click();
+  assert.equal(arrow.value, '->');
+  examples.value = 'equilibrium'; get('Wstaw wybraną reakcję do kreatora').events.click();
+  get('Zamień substraty z produktami').events.click();
+  assert.equal(arrow.value, '<=>');
+});
+
+test('composer switches chemistry and math without losing either draft and supports selected numerator insertion', () => {
+  const { nodes, changes } = editorFixture();
+  const get = (label) => nodes.find((node) => node.attributes['aria-label'] === label);
+  const buttons = nodes.filter((node) => node.tagName === 'BUTTON');
+  const mathMode = buttons.find((node) => node.textContent === 'Matematyka');
+  const chemMode = buttons.find((node) => node.textContent === 'Chemia');
+  const expression = nodes.find((node) => node.tagName === 'TEXTAREA' && node.attributes['aria-label'] === 'Wzór matematyczny');
+  get('Substraty').value = 'CH4'; get('Substraty').events.input();
+  mathMode.events.click();
+  assert.equal(mathMode.attributes['aria-pressed'], 'true');
+  assert.equal(nodes.find((node) => node.className === 'assessment-chemistry-fields').hidden, true);
+  expression.value = 'ab'; expression.setSelectionRange(0, 2);
+  get('Wstaw ułamek').events.click();
+  assert.equal(expression.value, '\\frac{ab}{b}');
+  get('Wstaw równanie do pytania').events.click();
+  assert.match(changes.at(-1).prompt, /\\\[\\frac\{ab\}\{b\}\\\]/);
+  chemMode.events.click();
+  assert.equal(get('Substraty').value, 'CH4');
+  assert.equal(expression.value, '\\frac{ab}{b}');
+});
+
+test('incomplete equations and unsafe commands cannot be inserted, even through direct event dispatch', () => {
+  const { nodes, changes } = editorFixture();
+  const get = (label) => nodes.find((node) => node.attributes['aria-label'] === label);
+  const left = get('Substraty'), button = get('Wstaw równanie do pytania');
+  for (const invalid of ['', 'Fe^{3+', 'Fe}', 'Ca(OH', 'Ca(OH]', 'H2 + ', 'Fe^{}', '2', '\\href{https://example.com}{Fe}']) {
+    left.value = invalid; left.events.input();
+    assert.equal(button.disabled, true, invalid);
+    button.events.click();
+    assert.equal(changes.length, 0);
+  }
+  left.value = 'Fe^{3+}'; left.events.input();
+  assert.equal(button.disabled, false);
+});
+
+test('formula insertion replaces the selection and programmatic tools respect field size limits', () => {
+  const first = editorFixture('Zastąp ten tekst');
+  const input = first.nodes.find((node) => node.attributes['aria-label'] === 'Treść pytania');
+  input.setSelectionRange(0, input.value.length);
+  first.nodes.find((node) => node.textContent === 'Wstaw równanie do pytania').events.click();
+  assert.doesNotMatch(first.changes.at(-1).prompt, /Zastąp/);
+  assert.match(first.changes.at(-1).prompt, /\\ce\{/);
+  const full = editorFixture('x'.repeat(10000));
+  const fullInput = full.nodes.find((node) => node.attributes['aria-label'] === 'Treść pytania');
+  fullInput.setSelectionRange(10000, 10000);
+  full.nodes.find((node) => node.textContent === 'Wstaw równanie do pytania').events.click();
+  assert.equal(full.changes.length, 0);
+  assert.equal(fullInput.value.length, 10000);
+  assert.match(full.nodes.find((node) => node.className === 'assessment-formula-note').textContent, /za długa/);
+});
+
+test('student result answers and explanations use the same safe equation renderer as question prompts', () => {
+  const source = fs.readFileSync(require.resolve('../public/members/module/exam/script.js'), 'utf8');
+  assert.match(source, /ChemAssessmentText\.render\(heading, question\.prompt/);
+  assert.match(source, /row\.append\(formattedAnswer\(/);
+  assert.match(source, /formattedAnswer\(question\.explanation/);
+  assert.match(source, /formattedAnswer\(question\.feedback/);
+  assert.match(source, /ChemAssessmentText\.render\(content, value/);
 });
 
 test('login keeps the existing photograph and assessment renderer is wired into both author and student pages', () => {

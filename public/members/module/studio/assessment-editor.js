@@ -20,13 +20,17 @@
     node.value = value;
     return node;
   }
-  function insert(input, before, after = '') {
+  function insert(input, before, after = '', placeholder = '') {
     const start = input.selectionStart ?? input.value.length;
     const end = input.selectionEnd ?? start;
-    input.setRangeText(before + input.value.slice(start, end) + after, start, end, 'end');
+    const selected = after ? input.value.slice(start, end) || placeholder : '';
+    const replacement = before + selected + after;
+    if (input.maxLength > 0 && input.value.length - (end - start) + replacement.length > input.maxLength) return false;
+    input.setRangeText(replacement, start, end, 'end');
     input.focus();
-    if (start === end && after) input.setSelectionRange(start + before.length, start + before.length);
+    if (after) input.setSelectionRange(start + before.length, start + before.length + selected.length);
     input.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
   }
 
   function create(value, format, onChange) {
@@ -64,45 +68,159 @@
     const resetColor = element('button', 'button button-soft', 'Kolor domyślny'); resetColor.type = 'button';
     resetColor.addEventListener('click', () => { style.color = ''; color.value = '#172033'; changed(); });
     controls.append(field('Czcionka całego pytania', font), field('Wyrównanie', align), field('Rozmiar', size), field('Kolor tekstu', color), field('Całe pytanie pogrubione', bold), resetColor);
-    box.append(element('strong', '', 'Treść pytania'), toolbar, text, controls, formulaBuilder((formula) => insert(text, `\n\\[${formula}\\]\n`)), preview);
+    const previewBox = element('section', 'assessment-question-preview');
+    previewBox.append(element('strong', 'assessment-preview-label', 'Tak zobaczy to uczestnik'), preview);
+    box.append(element('strong', '', 'Treść pytania'), toolbar, text, controls, formulaBuilder((formula) => insert(text, `\n\\[${formula}\\]\n`)), previewBox);
     rich.render(preview, text.value, style);
     return box;
   }
 
   function formulaBuilder(onInsert) {
     const box = element('details', 'assessment-formula-builder');
-    box.append(element('summary', '', '∑ Kreator równań chemicznych i matematycznych'));
-    const content = element('div');
-    const mode = select({ chemistry: 'Równanie chemiczne', math: 'Wzór matematyczny' }, 'chemistry');
-    const chemistry = element('div', 'assessment-format-controls');
-    const left = element('input'); left.value = '2 H2 + O2'; left.maxLength = 1000;
-    const right = element('input'); right.value = '2 H2O'; right.maxLength = 1000;
-    const arrow = select({ '->': '→ reakcja', '<=>': '⇌ równowaga', '<-': '← reakcja w lewo', '=': '= równość' }, '->');
-    const above = element('input'); above.placeholder = 'np. Δ, UV, katalizator'; above.maxLength = 200;
-    chemistry.append(field('Substraty', left), field('Strzałka', arrow), field('Produkty', right), field('Warunek nad strzałką', above));
-    const math = element('div'); math.hidden = true;
+    const summary = element('summary');
+    const summaryCopy = element('span');
+    summaryCopy.append(element('strong', '', 'Kreator równań'), element('small', '', 'Chemia i matematyka · podgląd na żywo'));
+    const icon = element('span', 'assessment-formula-icon', 'H₂'); icon.setAttribute('aria-hidden', 'true');
+    const expand = element('span', 'assessment-formula-expand', '+'); expand.setAttribute('aria-hidden', 'true');
+    summary.append(icon, summaryCopy, expand);
+    box.append(summary);
+    const content = element('div', 'assessment-formula-content');
+    let mode = 'chemistry';
+    const modes = element('div', 'assessment-formula-modes');
+    modes.setAttribute('role', 'group'); modes.setAttribute('aria-label', 'Rodzaj równania');
+    const chemistryButton = action('Chemia', 'Równanie chemiczne', () => changeMode('chemistry'));
+    const mathButton = action('Matematyka', 'Wzór matematyczny', () => changeMode('math'));
+    modes.append(chemistryButton, mathButton);
+    const chemistry = element('div', 'assessment-chemistry-fields');
+    const left = element('input'); left.value = '2 H2 + O2'; left.maxLength = 1000; left.setAttribute('aria-label', 'Substraty');
+    const right = element('input'); right.value = '2 H2O'; right.maxLength = 1000; right.setAttribute('aria-label', 'Produkty');
+    const arrow = select({ '->': '→ reakcja', '<=>': '⇌ równowaga', '<-': '← reakcja w lewo' }, '->');
+    const above = element('input'); above.placeholder = 'np. Δ, UV lub Pt'; above.maxLength = 200;
+    const leftPreview = element('span', 'assessment-field-preview');
+    const rightPreview = element('span', 'assessment-field-preview');
+    const leftField = field('Substraty', left); leftField.append(leftPreview);
+    const rightField = field('Produkty', right); rightField.append(rightPreview);
+    const reaction = element('div', 'assessment-reaction-fields');
+    reaction.append(leftField, field('Przebieg reakcji', arrow), rightField);
+    const conditions = element('div', 'assessment-reaction-conditions');
+    conditions.append(field('Warunek nad strzałką (opcjonalnie)', above));
+    const swap = action('⇄ Zamień strony', 'Zamień substraty z produktami', () => {
+      [left.value, right.value] = [right.value, left.value];
+      if (arrow.value === '->') arrow.value = '<-';
+      else if (arrow.value === '<-') arrow.value = '->';
+      refresh();
+    });
+    conditions.append(swap);
+    const chemPresets = select({ water: 'Powstawanie wody', neutralization: 'Zobojętnianie', equilibrium: 'Równowaga chemiczna', ions: 'Strącanie osadu', combustion: 'Spalanie metanu' }, 'water');
+    const reactions = {
+      water: ['2 H2 + O2', '->', '2 H2O'], neutralization: ['HCl + NaOH', '->', 'NaCl + H2O'],
+      equilibrium: ['N2 + 3 H2', '<=>', '2 NH3'], ions: ['Ag^{+} + Cl^{-}', '->', 'AgCl(s)'],
+      combustion: ['CH4 + 2 O2', '->', 'CO2 + 2 H2O']
+    };
+    const chemExamples = element('div', 'assessment-formula-examples');
+    chemExamples.append(field('Zacznij od przykładu', chemPresets), action('Użyj przykładu', 'Wstaw wybraną reakcję do kreatora', () => {
+      [left.value, arrow.value, right.value] = reactions[chemPresets.value]; above.value = ''; refresh();
+    }));
+    chemistry.append(element('p', 'assessment-formula-help', 'Wpisuj jak zwykle, np. H2O. Cyfry przy symbolach zamienią się w indeksy w podglądzie. Współczynniki przed wzorami pozostaną na swoim miejscu.'), reaction, conditions, chemExamples);
+    const math = element('div', 'assessment-math-fields'); math.hidden = true;
     const expression = element('textarea'); expression.rows = 3; expression.maxLength = 3000; expression.value = 'x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}';
+    expression.setAttribute('aria-label', 'Wzór matematyczny');
     const presets = select({ quadratic: 'Równanie kwadratowe', fraction: 'Ułamek', root: 'Pierwiastek', power: 'Potęga', sum: 'Suma' }, 'quadratic');
     const snippets = { quadratic: expression.value, fraction: '\\frac{a}{b}', root: '\\sqrt{x}', power: 'x^{2}', sum: '\\sum_{i=1}^{n} x_i' };
-    presets.addEventListener('change', () => { expression.value = snippets[presets.value]; refresh(); });
-    math.append(field('Gotowy przykład', presets), field('Wzór (LaTeX)', expression));
-    const preview = element('div', 'assessment-editor-preview');
-    const note = element('p');
-    const button = element('button', 'button button-soft', 'Wstaw równanie do pytania'); button.type = 'button';
-    const formula = () => mode.value === 'math' ? expression.value : `\\ce{${left.value} ${arrow.value}${above.value ? `[${above.value}]` : ''} ${right.value}}`;
-    let timer = 0;
-    function refresh() {
-      chemistry.hidden = mode.value !== 'chemistry'; math.hidden = mode.value !== 'math';
-      const value = formula();
-      button.disabled = !value.trim() || !rich.safeFormula(value);
-      note.textContent = button.disabled ? 'Wzór zawiera nieobsługiwaną komendę. Użyj zwykłego wzoru bez linków i kodu HTML.' : 'Indeksy: H2O, Fe^{3+}. Wzór zobaczysz także w egzaminie i raporcie. Bez AI.';
-      root.clearTimeout(timer);
-      timer = root.setTimeout(() => rich.render(preview, `\\[${value}\\]`), 180);
+    const mathExamples = element('div', 'assessment-formula-examples');
+    mathExamples.append(field('Zacznij od przykładu', presets), action('Użyj przykładu', 'Wstaw wybrany wzór do kreatora', () => { expression.value = snippets[presets.value]; refresh(); }));
+    math.append(element('p', 'assessment-formula-help', 'Wybierz przykład lub wpisz własny wzór. Przyciski poniżej pomogą dodać indeksy, potęgi i ułamki.'), field('Zapis wzoru', expression), mathExamples);
+    [left, right, above, expression].forEach((input) => { input.spellcheck = false; input.autocomplete = 'off'; input.setAttribute('autocapitalize', 'off'); });
+    let activeChemistry = left;
+    [left, right].forEach((input) => input.addEventListener('focus', () => { activeChemistry = input; updateTools(); }));
+    const tools = element('div', 'assessment-formula-tools');
+    const toolLabel = element('small', 'assessment-formula-help');
+    const commonTools = element('div', 'assessment-toolbar');
+    commonTools.setAttribute('role', 'group'); commonTools.setAttribute('aria-label', 'Indeksy we wzorze');
+    commonTools.append(
+      action('x₂ Indeks dolny', 'Wstaw indeks dolny do wzoru', () => insertAtCursor('_{', '}', '2')),
+      action('x² Indeks górny', 'Wstaw indeks górny do wzoru', () => insertAtCursor('^{', '}', '2'))
+    );
+    const chemTools = element('div', 'assessment-toolbar');
+    chemTools.setAttribute('role', 'group'); chemTools.setAttribute('aria-label', 'Symbole chemiczne');
+    for (const [label, title, value] of [['⁺', 'Ładunek dodatni', '^{+}'], ['⁻', 'Ładunek ujemny', '^{-}'], ['²⁺', 'Ładunek dwa plus', '^{2+}'], ['²⁻', 'Ładunek dwa minus', '^{2-}'], ['+', 'Dodaj składnik reakcji', ' + '], ['(aq)', 'Roztwór wodny', '(aq)'], ['(s)', 'Ciało stałe', '(s)'], ['(g)', 'Gaz', '(g)'], ['(l)', 'Ciecz', '(l)']]) {
+      chemTools.append(action(label, title, () => insertAtCursor(value)));
     }
-    [mode, left, right, arrow, above, expression].forEach((node) => node.addEventListener('input', refresh));
+    const mathTools = element('div', 'assessment-toolbar');
+    mathTools.setAttribute('role', 'group'); mathTools.setAttribute('aria-label', 'Symbole matematyczne');
+    for (const [label, title, before, after, placeholder] of [['a/b', 'Wstaw ułamek', '\\frac{', '}{b}', 'a'], ['√x', 'Wstaw pierwiastek', '\\sqrt{', '}', 'x'], ['±', 'Plus minus', ' \\pm '], ['×', 'Mnożenie', ' \\times '], ['·', 'Iloczyn', ' \\cdot '], ['π', 'Liczba pi', '\\pi '], ['≤', 'Mniejsze lub równe', ' \\leq ']]) {
+      mathTools.append(action(label, title, () => insertAtCursor(before, after, placeholder)));
+    }
+    tools.append(toolLabel, commonTools, chemTools, mathTools);
+    const canvas = element('section', 'assessment-formula-canvas');
+    const previewHeading = element('div', 'assessment-formula-preview-heading');
+    previewHeading.append(element('strong', '', 'Podgląd na żywo'), element('span', 'assessment-live-badge', 'Widok uczestnika'));
+    const preview = element('div'); preview.setAttribute('aria-label', 'Podgląd równania');
+    canvas.append(previewHeading, preview);
+    const note = element('p', 'assessment-formula-note'); note.setAttribute('role', 'status');
+    const button = action('Wstaw równanie do pytania', 'Wstaw równanie do pytania', () => {
+      const problem = validation();
+      if (problem) { note.textContent = problem; return; }
+      if (onInsert(formula()) === false) { note.textContent = 'Treść pytania jest za długa. Skróć ją przed dodaniem równania.'; return; }
+      note.textContent = 'Równanie dodane. Zobacz podgląd pytania poniżej.';
+    });
+    button.className = 'button assessment-formula-insert';
+    const formula = () => mode === 'math' ? expression.value.trim() : `\\ce{${left.value.trim()} ${arrow.value}${above.value.trim() ? `[${above.value.trim()}]` : ''} ${right.value.trim()}}`;
+    function action(label, title, callback) {
+      const node = element('button', 'button button-soft', label); node.type = 'button'; node.title = title; node.setAttribute('aria-label', title);
+      node.addEventListener('mousedown', (event) => event.preventDefault()); node.addEventListener('click', callback);
+      return node;
+    }
+    function changeMode(next) { mode = next; refresh(); }
+    function updateTools() {
+      toolLabel.textContent = mode === 'math' ? 'Wstaw w miejscu kursora we wzorze. Zaznacz fragment, aby zmienić go w indeks.' : `Wstaw w polu: ${activeChemistry === left ? 'substraty' : 'produkty'}. Kliknij pole, aby wybrać miejsce.`;
+    }
+    function insertAtCursor(before, after, placeholder) {
+      if (!insert(mode === 'math' ? expression : activeChemistry, before, after, placeholder)) note.textContent = 'To pole jest za długie. Skróć zapis, aby dodać symbol.';
+    }
+    function balanced(value) {
+      let depth = 0;
+      for (const char of value) {
+        if (char === '{') depth += 1;
+        if (char === '}' && --depth < 0) return false;
+      }
+      return depth === 0;
+    }
+    function completeCompound(value) {
+      const pairs = { '(': ')', '[': ']', '{': '}' }, stack = [];
+      for (const char of value) {
+        if (pairs[char]) stack.push(pairs[char]);
+        else if (')]}'.includes(char) && stack.pop() !== char) return false;
+      }
+      return !stack.length && !/(?:^|\s)\+\s*$|(?:->|<-|<=>)\s*$|\{\s*\}/.test(value) && /[A-Za-z]/.test(value);
+    }
+    function validation() {
+      if (mode === 'chemistry' && (!left.value.trim() || !right.value.trim())) return 'Uzupełnij substraty i produkty, aby dodać równanie.';
+      if (mode === 'math' && !expression.value.trim()) return 'Wpisz wzór lub wybierz gotowy przykład.';
+      if (mode === 'chemistry' && /[\[\]{}\\]/.test(above.value)) return 'W warunku wpisz sam symbol lub nazwę, np. Δ, UV albo Pt.';
+      if (!(mode === 'math' ? [expression.value] : [left.value, right.value]).every(balanced)) return 'Domknij nawiasy klamrowe w zapisie indeksu lub wzoru.';
+      if (mode === 'chemistry' && ![left.value, right.value].every(completeCompound)) return 'Sprawdź nawiasy i uzupełnij składniki po obu stronach reakcji.';
+      if (!rich.safeFormula(formula())) return 'Ten zapis nie jest obsługiwany. Użyj symboli z paska lub jednego z przykładów.';
+      return '';
+    }
+    function refresh() {
+      chemistry.hidden = chemTools.hidden = mode !== 'chemistry'; math.hidden = mathTools.hidden = mode !== 'math';
+      chemistryButton.setAttribute('aria-pressed', String(mode === 'chemistry')); mathButton.setAttribute('aria-pressed', String(mode === 'math'));
+      updateTools();
+      const problem = validation(); button.disabled = Boolean(problem);
+      const message = problem || 'Podgląd zmienia się podczas pisania. Wstawienie wzoru nie zmienia punktacji ani nie uruchamia oceniania.';
+      if (note.textContent !== message) note.textContent = message;
+      for (const [input, fieldPreview] of [[left, leftPreview], [right, rightPreview]]) {
+        const rendered = rich.formulaPreview?.(`\\ce{${input.value}}`);
+        if (rendered != null) fieldPreview.innerHTML = rendered;
+        else fieldPreview.textContent = input.value ? 'Pełny zapis zobaczysz w podglądzie poniżej.' : 'Tutaj pojawi się Twój wzór';
+      }
+      if (box.open) rich.render(preview, problem ? 'Uzupełnij zapis — tutaj pojawi się równanie.' : `\\[${formula()}\\]`, { size: 'xlarge', align: 'center' });
+    }
+    [left, right, arrow, above, expression].forEach((node) => node.addEventListener('input', refresh));
     box.addEventListener('toggle', () => { if (box.open) refresh(); });
-    button.addEventListener('click', () => { if (rich.safeFormula(formula())) onInsert(formula()); });
-    content.append(field('Rodzaj wzoru', mode), chemistry, math, preview, note, button); box.append(content);
+    content.append(modes, chemistry, math, tools, canvas, note, button); box.append(content);
+    refresh();
     return box;
   }
 

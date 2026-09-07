@@ -492,7 +492,7 @@
     } else {
       elements.propertiesTitle.textContent = 'Slajd i prezentacja';
       form.append(
-        field('ID prezentacji', input(state.presentation.presentationId, 'presentation.presentationId'), 'Stabilna nazwa folderu w GitHubie.'),
+        field('Identyfikator prezentacji', input(state.presentation.presentationId, 'presentation.presentationId'), 'Krótka, unikalna nazwa używana w linku do prezentacji.'),
         field('Opis', textarea(state.presentation.metadata.description, 'presentation.metadata.description')),
         field('Tagi', input(state.presentation.metadata.tags.join(', '), 'presentation.metadata.tags')),
         field('Proporcje', select(state.presentation.settings.aspectRatio, 'presentation.settings.aspectRatio', [['16:9', '16:9 — panoramiczne'], ['4:3', '4:3 — klasyczne']])),
@@ -601,7 +601,7 @@
             image.z = Math.max(0, ...selectedSlide().elements.map((item) => item.z)) + 1;
             selectedSlide().elements.push(image); state.selectedElementId = image.elementId;
           }
-        }, 'Obraz dodany. Zapisz draft, aby utrwalić referencję.');
+        }, 'Obraz dodano. Zapisz szkic, aby zachować zmianę.');
       }
     });
   }
@@ -639,7 +639,7 @@
   }
 
   function newPresentation() {
-    if (!root.confirm('Utworzyć nową prezentację? Bieżący lokalny draft zostanie zastąpiony.')) return;
+    if (!root.confirm('Utworzyć nową prezentację? Bieżący szkic na tym urządzeniu zostanie zastąpiony. Zapisz go najpierw, jeśli chcesz zachować zmiany.')) return;
     state.presentation = modelApi.createPresentation(); state.selectedSlideId = state.presentation.slides[0].slideId; state.selectedElementId = '';
     state.remoteId = ''; state.remoteSha = ''; state.undo = []; state.redo = []; saveLocal(); render(); setStatus('Nowa prezentacja jest gotowa.');
   }
@@ -649,7 +649,7 @@
     else if (!state.remoteSha) state.presentation.metadata.status = 'draft';
     const validation = modelApi.validate(state.presentation);
     if (!validation.valid) { setStatus(validation.errors[0].message, true); return; }
-    setStatus(publish ? 'Publikowanie prezentacji…' : 'Zapisywanie draftu…');
+    setStatus(publish ? 'Publikowanie prezentacji…' : 'Zapisywanie szkicu…');
     try {
       const result = await library.save('presentation', {
         filename: state.presentation.presentationId,
@@ -658,7 +658,7 @@
         repositoryId: state.repositoryId
       });
       state.remoteId = state.presentation.presentationId; state.remoteSha = result.sha; saveLocal();
-      setStatus(publish ? 'Prezentacja opublikowana. Uczniowie mogą ją otworzyć.' : 'Draft zapisany w prywatnym repozytorium.');
+      setStatus(publish ? 'Prezentacja opublikowana. Uczniowie mogą ją otworzyć.' : 'Szkic prezentacji zapisano.');
       await loadLibrary(true);
       root.document.dispatchEvent(new CustomEvent('chemdisk-content-changed', {
         detail: { kind: 'presentation', repositoryId: state.repositoryId }
@@ -673,11 +673,11 @@
     state.repositoryId = asset.repositoryId || result.repositoryId || state.repositoryId;
     state.remoteId = asset.filename; state.remoteSha = asset.sha || result.sha;
     state.selectedSlideId = state.presentation.slides[0].slideId; state.selectedElementId = ''; state.undo = []; state.redo = [];
-    saveLocal(); render(); setStatus('Prezentacja wczytana z GitHuba.');
+    saveLocal(); render(); setStatus('Prezentację otwarto do edycji.');
   }
 
   function preview() {
-    if (!state.remoteSha || state.remoteId !== state.presentation.presentationId) { setStatus('Najpierw zapisz draft w GitHubie.', true); return; }
+    if (!state.remoteSha || state.remoteId !== state.presentation.presentationId) { setStatus('Najpierw zapisz szkic prezentacji.', true); return; }
     const url = new URL(library.presentationUrl(state.presentation.presentationId, state.repositoryId), root.location.origin);
     url.searchParams.set('preview', '1');
     root.open(url.toString(), '_blank', 'noopener');
@@ -812,7 +812,7 @@
   }
 
   function assetDeleted(asset) {
-    if (state.remoteId === asset.filename && state.repositoryId === asset.repositoryId) { state.remoteId = ''; state.remoteSha = ''; setStatus('Plik zdalny usunięto. Lokalny draft pozostał w Studio.'); }
+    if (state.remoteId === asset.filename && state.repositoryId === asset.repositoryId) { state.remoteId = ''; state.remoteSha = ''; setStatus('Prezentację usunięto z biblioteki. Szkic na tym urządzeniu pozostał w Studio.'); }
   }
 
   bind();

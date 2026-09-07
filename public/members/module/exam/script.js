@@ -407,7 +407,7 @@
     card.className = `exam-immediate-feedback ${feedback.correct ? 'is-correct' : 'is-incorrect'}`;
     card.append(tag(feedback.correct ? 'Odpowiedź poprawna' : 'Odpowiedź niepoprawna', 'strong'));
     appendResultAnswer(card, 'Prawidłowa odpowiedź', feedback.correctAnswerDisplay);
-    if (feedback.explanation) card.append(tag(feedback.explanation, 'p'));
+    if (feedback.explanation) card.append(formattedAnswer(feedback.explanation, 'p'));
     return card;
   }
 
@@ -894,8 +894,8 @@
       if (question.points != null && question.maxPoints != null) item.append(tag(`${question.points}/${question.maxPoints} pkt`, 'small'));
       appendResultAnswer(item, 'Twoja odpowiedź', question.answerDisplay);
       appendResultAnswer(item, 'Prawidłowa odpowiedź', question.correctAnswerDisplay);
-      if (question.feedback) item.append(tag(question.feedback, 'small'));
-      if (question.explanation) item.append(tag(question.explanation, 'small'));
+      if (question.feedback) item.append(formattedAnswer(question.feedback, 'div'));
+      if (question.explanation) item.append(formattedAnswer(question.explanation, 'div'));
       elements.resultQuestions.append(item);
     });
     void reloadAttemptHistory();
@@ -928,8 +928,14 @@
     const row = document.createElement('div');
     row.className = 'exam-result-answer';
     row.append(tag(label, 'small'));
-    row.append(tag(values.length ? values.join(' · ') : 'Brak odpowiedzi', 'span'));
+    row.append(formattedAnswer(values.length ? values.join('\n') : 'Brak odpowiedzi', 'div'));
     item.append(row);
+  }
+
+  function formattedAnswer(value, tagName) {
+    const content = document.createElement(tagName);
+    window.ChemAssessmentText.render(content, value, { size: 'small' });
+    return content;
   }
 
   async function reloadAttemptHistory() {
