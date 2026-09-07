@@ -14,7 +14,9 @@ Zmiany palet są zapisywane w tym samym JSON i publikowane razem z konfiguracją
 
 ## Ruchomy model i kolory formularza
 
-W sekcji **Start / Hero → Grafika na początku strony** wybierz **Ruchomy model biomolekuły 3D** albo **Własny obraz / ilustracja platformy**. Domyślnie, także dla wcześniejszych konfiguracji bez tego ustawienia, używany jest model. Dotychczasowy adres obrazu pozostaje w konfiguracji; wybór trybu obrazu go przywraca. Przełącznik zapisuje się jako `heroVisual` w sekcji `home`.
+W sekcji **Start / Hero → Grafika na początku strony** wybierz **Model 3D — obok tekstu (obecny układ)**, **Model 3D — na cały baner** albo **Obraz — własne zdjęcie / ilustracja platformy**. Domyślnie, także dla wcześniejszych konfiguracji bez tego ustawienia, używany jest model obok tekstu. Dotychczasowy adres obrazu pozostaje w konfiguracji; wybór trybu obrazu go przywraca. Przełącznik zapisuje się jako `heroVisual` w sekcji `home` (`biomolecule`, `biomolecule-banner` lub `image`) i działa w podglądzie, publikacji oraz eksporcie.
+
+Tryb całego banera rozciąga tę samą scenę na tło sekcji Start. Tekst i przyciski pozostają nad modelem, z przyciemnieniem tła dla czytelności. Można nadal ustawić własny kolor tekstu sekcji; bez niego tekst jest jasny. Sterowanie modelem znajduje się w prawym dolnym rogu (na telefonie poniżej treści). Zmiana między układami 3D nie tworzy drugiej sceny i nie zmienia kamery, ruchu ani fizyki. Nie dodaje też wywołań Functions.
 
 Model to ta sama scena `https://prod.spline.design/1gCKLbyQZHQvxlYX/scene.splinecode` i ten sam Spline Viewer `1.10.31`, które wskazano w dostarczonym `generatebiomedicine/index.html`. Kod nie zmienia jej kamery, parametrów fizyki, zdarzeń ani materiałów. Nie przeniesiono analityki ani pozostałych skryptów referencyjnej witryny. Folder `generatebiomedicine` nie jest potrzebny do wdrożenia — strona pobiera scenę i odtwarzacz bezpośrednio z ich publicznych adresów. Ich dostępność zależy od zewnętrznego hostingu.
 

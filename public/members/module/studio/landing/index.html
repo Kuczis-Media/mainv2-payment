@@ -116,7 +116,7 @@
         <label><span>Tytuł</span><input id="section-title" maxlength="120"></label>
         <label><span>Podtytuł</span><input id="section-subtitle" maxlength="180"></label>
         <label class="wide"><span>Opis</span><textarea id="section-body" rows="5" maxlength="2000"></textarea></label>
-        <label class="wide" id="hero-visual-field"><span>Grafika na początku strony</span><select id="section-hero-visual"><option value="biomolecule">Ruchomy model biomolekuły 3D</option><option value="image">Własny obraz / ilustracja platformy</option></select><small>Model zachowuje oryginalny ruch i fizykę. Wczytuje się bezpośrednio z Spline, bez użycia AI i Functions. Obraz poniżej pozostaje zachowany na wypadek zmiany trybu.</small></label>
+        <label class="wide" id="hero-visual-field"><span>Grafika na początku strony</span><select id="section-hero-visual"><option value="biomolecule">Model 3D — obok tekstu (obecny układ)</option><option value="biomolecule-banner">Model 3D — na cały baner</option><option value="image">Obraz — własne zdjęcie / ilustracja platformy</option></select><small>Cały baner: ruchomy model w tle, a tekst i przyciski na pierwszym planie. Oba układy zachowują ten sam ruch i fizykę modelu. Zmiana układu nie usuwa zapisanego obrazu i nie dodaje wywołań serwera.</small></label>
         <div class="wide asset-url-field">
           <label for="section-image"><span>Obraz sekcji (opcjonalnie)</span></label>
           <div><input id="section-image" maxlength="1000" placeholder="Wklej link do obrazu…"><button type="button" data-open-assets="section">Wybierz / wgraj</button></div>

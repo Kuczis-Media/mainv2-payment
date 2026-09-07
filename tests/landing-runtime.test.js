@@ -92,6 +92,34 @@ test('3D hero replaces a previously configured background and image mode restore
   assert.equal(restored.navbar.classList.contains('over-hero-image'), true);
 });
 
+test('live preview switches banner, image and side-card on the same DOM, restoring classes and navigation', () => {
+  const dom = landingDom();
+  const context = { window: null, document: dom.document, URL, CustomEvent: class {}, location: { search: '?landing-preview=1' }, parent: {}, addEventListener() {} };
+  context.window = context;
+  vm.runInNewContext(fs.readFileSync(require.resolve('../public/assets/js/landing-runtime.js'), 'utf8'), context);
+  const model = runtimeModel(1);
+  const hero = model.sections[0];
+  Object.assign(hero, { imageUrl: 'https://images.example/hero.webp', backgroundColor: '#ffffff', textColor: '#ff0088' });
+  for (const mode of ['biomolecule', 'biomolecule-banner', 'image', 'biomolecule-banner', 'biomolecule', 'image']) {
+    hero.heroVisual = mode;
+    assert.equal(context.NextMedLanding.applyModel(model), true);
+    assert.equal(dom.sections.home.dataset.heroVisual, mode);
+    assert.equal(dom.sections.home.classList.contains('has-biomolecule-banner'), mode === 'biomolecule-banner');
+    assert.equal(dom.sections.home.classList.contains('has-biomolecule'), mode !== 'image');
+    assert.equal(dom.sections.home.classList.contains('has-hero-image'), mode === 'image');
+    assert.equal(dom.navbar.classList.contains('over-hero-image'), mode !== 'biomolecule');
+    assert.equal(dom.navbar.classList.contains('landing-solid'), mode === 'biomolecule');
+    assert.equal(dom.sections.home.style.values['--landing-text'], '#ff0088');
+    if (mode === 'image') assert.match(dom.sections.home.style.backgroundImage, /hero.webp/);
+    else assert.equal(dom.sections.home.style.backgroundImage, undefined);
+  }
+  hero.heroVisual = 'biomolecule-banner';
+  hero.enabled = false;
+  context.NextMedLanding.applyModel(model);
+  assert.equal(dom.navbar.classList.contains('over-hero-image'), false);
+  assert.equal(dom.navbar.classList.contains('landing-solid'), true);
+});
+
 test('landing waits for the selected JSON before rendering and isolates cache from another repository', async () => {
   const delivery = require('../public/assets/js/landing-delivery-model.js');
   const route = delivery.normalize({ target: { repository: 'NextMed/web', path: 'start.json', ref: 'main' } });
@@ -196,7 +224,10 @@ class FakeClassList {
 class FakeStyle {
   constructor() { this.values = {}; }
   setProperty(name, value) { this.values[name] = value; }
-  removeProperty(name) { delete this.values[name]; }
+  removeProperty(name) {
+    delete this.values[name];
+    delete this[name.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())];
+  }
 }
 
 class FakeElement {

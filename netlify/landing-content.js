@@ -50,7 +50,7 @@ function normalizeModel(raw, strict = false) {
       backgroundColor: safeColor(value.backgroundColor, strict),
       textColor: safeColor(value.textColor, strict),
       accentColor: safeColor(value.accentColor, strict),
-      ...(id === 'home' ? { heroVisual: value.heroVisual === 'image' ? 'image' : 'biomolecule' } : {}),
+      ...(id === 'home' ? { heroVisual: ['image', 'biomolecule-banner'].includes(value.heroVisual) ? value.heroVisual : 'biomolecule' } : {}),
       ...(id === 'contact' ? Object.fromEntries(['formBackgroundColor', 'fieldBackgroundColor', 'fieldTextColor', 'fieldBorderColor', 'fieldFocusColor', 'labelTextColor'].map((key) => [key, safeColor(value[key], strict)])) : {}),
       ctaLabel: textField(value, 'ctaLabel', fallback.ctaLabel, 80, legacyBlanks),
       ctaHref: urlField(value, 'ctaHref', fallback.ctaHref, 'link', strict, legacyBlanks)
@@ -117,7 +117,7 @@ function validateModelShape(source) {
       throw landingError('INVALID_LANDING_MODEL', 400);
     }
     ids.add(section.id);
-    if (section.id === 'home' && Object.hasOwn(section, 'heroVisual') && !['biomolecule', 'image'].includes(section.heroVisual)) throw landingError('INVALID_LANDING_MODEL', 400);
+    if (section.id === 'home' && Object.hasOwn(section, 'heroVisual') && !['biomolecule', 'biomolecule-banner', 'image'].includes(section.heroVisual)) throw landingError('INVALID_LANDING_MODEL', 400);
     if (section.id === 'contact') {
       for (const key of ['formBackgroundColor', 'fieldBackgroundColor', 'fieldTextColor', 'fieldBorderColor', 'fieldFocusColor', 'labelTextColor']) {
         if (Object.hasOwn(section, key) && typeof section[key] !== 'string') throw landingError('INVALID_LANDING_MODEL', 400);

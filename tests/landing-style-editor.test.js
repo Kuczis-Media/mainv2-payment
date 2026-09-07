@@ -17,6 +17,22 @@ function editor() {
   return context.editorTest;
 }
 
+test('all three hero layouts round-trip through the editor and standalone export without losing the image', () => {
+  const tools = editor();
+  const html = fs.readFileSync(require.resolve('../public/members/module/studio/landing/index.html'), 'utf8');
+  const input = structuredClone(defaults);
+  input.sections[0].imageUrl = 'https://images.example/hero.webp';
+  for (const choice of ['biomolecule', 'biomolecule-banner', 'image', 'biomolecule']) {
+    input.sections[0].heroVisual = choice;
+    const normalized = tools.normalizeLocalModel(input);
+    assert.equal(tools.validationIssue(normalized), '');
+    const exported = JSON.parse(tools.serializeEmbeddedModel(normalized));
+    assert.equal(exported.sections[0].heroVisual, choice);
+    assert.equal(exported.sections[0].imageUrl, input.sections[0].imageUrl);
+    assert.ok(html.includes(`<option value="${choice}">`));
+  }
+});
+
 test('editor keeps hero choice and independent form styles in imported JSON and standalone export model', () => {
   const tools = editor();
   const input = structuredClone(defaults);

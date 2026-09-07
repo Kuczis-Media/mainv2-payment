@@ -486,3 +486,34 @@ html.motion-enabled .card.is-visible .mini-lines i, html.motion-enabled .card.is
   .hero-typewriter.is-typing .typewriter-copy { opacity: 1; }
   .hero-typewriter.is-typing .typewriter-ink { display: none; }
 }
+
+/* One scene, two layouts: the banner is anchored to #home, not .max-width. */
+.home.has-biomolecule-banner { background: #000; padding-bottom: 112px; }
+.home.has-biomolecule-banner .hero-grid,
+.home.has-biomolecule-banner .hero-orb,
+.home.has-biomolecule-banner .hero-model-heading { display: none; }
+.home.has-biomolecule-banner .hero-layout { grid-template-columns: minmax(0, 720px); min-height: 510px; gap: 0; }
+.home.has-biomolecule-banner .hero-model { position: absolute; inset: 0; z-index: 0; width: 100%; border: 0; border-radius: 0; box-shadow: none; }
+.home.has-biomolecule-banner .hero-model-canvas { position: absolute; inset: 0; height: 100%; margin: 0; }
+.home.has-biomolecule-banner .hero-model::after { content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(90deg, #000d 0%, #0009 35%, #0001 75%), linear-gradient(0deg, #000e, transparent 25%, transparent 85%, #0007); }
+.home.has-biomolecule-banner .hero-model-fallback > * { visibility: hidden; }
+.home.has-biomolecule-banner .hero-model-controls { position: absolute; z-index: 2; right: max(40px, calc((100% - 1320px) / 2)); bottom: 20px; max-width: min(600px, calc(100% - 80px)); min-height: 0; padding: 12px 16px; border: 1px solid #ffffff30; border-radius: 12px; background: #030706e6; }
+.home.has-biomolecule-banner .hero-model-controls button { min-height: 44px; }
+.home.has-biomolecule-banner .text-1,
+.home.has-biomolecule-banner .text-2,
+.home.has-biomolecule-banner .text-3,
+.home.has-biomolecule-banner .hero-typewriter,
+.home.has-biomolecule-banner .hero-proof { color: var(--landing-text, #edfdf9); }
+.home.has-biomolecule-banner .text-2 { text-shadow: 0 4px 35px #0008; }
+.home.has-biomolecule-banner .hero-bottom { position: relative; z-index: 2; color: var(--landing-text, #edfdf9); border-color: #ffffff30; }
+@media (max-width: 1050px) {
+  .home.has-biomolecule-banner .hero-model-controls { right: 24px; max-width: calc(100% - 48px); }
+}
+@media (max-width: 860px) {
+  .home.has-biomolecule-banner { padding-bottom: 170px; }
+  .home.has-biomolecule-banner .hero-layout { min-height: 480px; }
+  .home.has-biomolecule-banner .hero-model::after { background: linear-gradient(90deg, #000b, #0005), linear-gradient(0deg, #000e, transparent 40%, #0005); }
+}
+@media (max-width: 600px) {
+  .home.has-biomolecule-banner .hero-model-controls { left: 18px; right: 18px; bottom: 18px; max-width: none; }
+}

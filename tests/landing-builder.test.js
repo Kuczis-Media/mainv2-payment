@@ -26,6 +26,25 @@ class MemoryStore {
 
 test.afterEach(() => landing._test.resetStoreFactory());
 
+test('full-banner scene layout survives draft saving, publication and reopening', async (t) => {
+  const fixture = adminFixture(t);
+  t.mock.method(require('../netlify/site-assets.js'), 'readLandingRoute', async () => { throw new Error('No GitHub configured'); });
+  const model = landing.defaultModel();
+  Object.assign(model.sections[0], { heroVisual: 'biomolecule-banner', imageUrl: 'https://images.example/hero.webp', textColor: '#ff0088' });
+  const saveResponse = await adminEndpoint.handler({ httpMethod: 'PUT', headers: fixture.headers, body: JSON.stringify({ model }) }, fixture.context);
+  assert.equal(saveResponse.statusCode, 200);
+  const saved = JSON.parse(saveResponse.body);
+  const published = await fixture.request({ publishMode: 'netlify-blobs', expectedPublicationVersion: null, model: saved.draft });
+  assert.equal(published.statusCode, 200);
+  const publicModel = JSON.parse((await publicEndpoint.handler({ httpMethod: 'GET' })).body).model;
+  const reopened = JSON.parse((await adminEndpoint.handler({ httpMethod: 'GET', headers: fixture.headers }, fixture.context)).body);
+  for (const value of [saved.draft, publicModel, reopened.draft]) {
+    assert.equal(value.sections[0].heroVisual, 'biomolecule-banner');
+    assert.equal(value.sections[0].imageUrl, model.sections[0].imageUrl);
+    assert.equal(value.sections[0].textColor, '#ff0088');
+  }
+});
+
 test('hero model selection and independent contact colors survive save, publication and reopening', async (t) => {
   const fixture = adminFixture(t);
   t.mock.method(require('../netlify/site-assets.js'), 'readLandingRoute', async () => { throw new Error('No GitHub configured'); });

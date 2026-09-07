@@ -75,6 +75,31 @@ test('image mode, reduced motion and global animation settings avoid loading the
   }
 });
 
+test('banner and side-card share one unchanged scene and script, including switching back from an image', async () => {
+  const env = setup(); env.visible(); await env.readyPlayer();
+  const viewer = env.stage.children[0]; viewer.events['load-complete']();
+  const originalAttributes = { ...viewer.attrs }, unloads = viewer.unloads;
+  for (const choice of ['biomolecule-banner', 'biomolecule', 'biomolecule-banner']) {
+    env.home.dataset.heroVisual = choice;
+    env.docEvents['chemdisk-landing-applied']();
+    viewer.events['load-complete']();
+    assert.equal(env.host.hidden, false);
+    assert.equal(env.host.dataset.modelState, 'ready');
+    assert.equal(viewer.unloads, unloads);
+    assert.deepEqual(viewer.attrs, originalAttributes);
+  }
+  env.home.dataset.heroVisual = 'image'; env.docEvents['chemdisk-landing-applied']();
+  assert.equal(env.host.hidden, true);
+  assert.ok(viewer.unloads > unloads);
+  env.home.dataset.heroVisual = 'biomolecule-banner'; env.docEvents['chemdisk-landing-applied']();
+  viewer.events['load-complete']();
+  assert.equal(env.host.hidden, false);
+  assert.equal(env.host.dataset.modelState, 'ready');
+  assert.equal(env.stage.children.length, 1);
+  assert.equal(env.stage.children[0], viewer);
+  assert.equal(env.nodes.filter((item) => item.tag === 'script').length, 1);
+});
+
 test('offscreen, hidden tab and pause release the scene; returning resumes it without reimporting the player', async () => {
   const env = setup(); env.visible(); await env.readyPlayer();
   const viewer = env.stage.children[0]; viewer.events['load-complete']();
@@ -136,4 +161,8 @@ test('standalone export keeps the model controller and the model does not overla
   assert.match(builder, /\[motionJs, runtimeJs, moleculeJs\]/);
   assert.match(css, /\.hero-model-canvas \{ position: relative/);
   assert.match(css, /\.hero-model-stage \{ position: absolute; inset: 0/);
+  assert.match(css, /\.home\.has-biomolecule-banner \.hero-model \{ position: absolute; inset: 0; z-index: 0;/);
+  assert.match(css, /\.home\.has-biomolecule-banner \.hero-model::after \{[^}]*pointer-events: none;/);
+  assert.match(css, /\.home-content \{ position: relative; z-index: 2;/);
+  assert.match(css, /\.home\.has-biomolecule-banner \.hero-bottom \{ position: relative; z-index: 2;/);
 });

@@ -346,7 +346,7 @@
   function renderEditor() {
     const section = selectedSection();
     document.getElementById('hero-visual-field').hidden = section.id !== 'home';
-    document.getElementById('section-hero-visual').value = section.heroVisual === 'image' ? 'image' : 'biomolecule';
+    document.getElementById('section-hero-visual').value = ['image', 'biomolecule-banner'].includes(section.heroVisual) ? section.heroVisual : 'biomolecule';
     document.getElementById('contact-colors').hidden = section.id !== 'contact';
     const contactDefaults = { formBackgroundColor: model.branding?.surfaceColor, fieldBackgroundColor: model.branding?.backgroundColor, fieldTextColor: model.branding?.textColor, fieldBorderColor: '#d5dee9', fieldFocusColor: model.branding?.primaryColor, labelTextColor: model.branding?.mutedColor };
     Object.entries(CONTACT_COLORS).forEach(([key, id]) => { document.getElementById(`contact-${id}`).value = section[key] || contactDefaults[key] || '#ffffff'; });
@@ -780,7 +780,7 @@
       ['title', 'subtitle', 'body', 'imageUrl', 'imageAlt', 'backgroundColor', 'textColor', 'accentColor', 'ctaLabel', 'ctaHref'].forEach((key) => {
         if (typeof source[key] === 'string') section[key] = source[key];
       });
-      if (section.id === 'home') section.heroVisual = source.heroVisual === 'image' ? 'image' : 'biomolecule';
+      if (section.id === 'home') section.heroVisual = ['image', 'biomolecule-banner'].includes(source.heroVisual) ? source.heroVisual : 'biomolecule';
       if (section.id === 'contact') Object.keys(CONTACT_COLORS).forEach((key) => { section[key] = typeof source[key] === 'string' ? source[key] : ''; });
       section.enabled = source.enabled !== false;
       section.order = Number.isSafeInteger(source.order) && source.order >= 0 ? source.order : fallback.order;
@@ -821,7 +821,7 @@
     const active = new Set(value.sections.filter((section) => section.enabled !== false).map((section) => section.id));
     if (!active.size) return 'Pozostaw co najmniej jedną widoczną sekcję.';
     for (const section of value.sections) {
-      if (section.id === 'home' && section.heroVisual != null && !['biomolecule', 'image'].includes(section.heroVisual)) return 'Start: wybierz model 3D albo obraz.';
+      if (section.id === 'home' && section.heroVisual != null && !['biomolecule', 'biomolecule-banner', 'image'].includes(section.heroVisual)) return 'Start: wybierz model 3D albo obraz.';
       if (section.imageUrl && !safeImageUrl(section.imageUrl)) return `${SECTION_LABELS[section.id]}: obraz wymaga adresu HTTPS albo ścieżki /assets/…`;
       for (const key of ['backgroundColor', 'textColor', 'accentColor', ...(section.id === 'contact' ? Object.keys(CONTACT_COLORS) : [])]) {
         if (section[key] && !/^#[0-9a-f]{6}$/i.test(section[key])) return `${SECTION_LABELS[section.id]}: niepoprawny kolor.`;
