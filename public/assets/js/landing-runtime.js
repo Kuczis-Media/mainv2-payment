@@ -179,6 +179,10 @@
       setStyle(section, '--landing-text', safeColor(config.textColor));
       setStyle(section, '--landing-background', safeColor(config.backgroundColor));
       setStyle(section, '--landing-accent', safeColor(config.accentColor));
+      if (config.id === 'contact') {
+        const fields = { formBackgroundColor: '--contact-form-background', fieldBackgroundColor: '--contact-field-background', fieldTextColor: '--contact-field-text', fieldBorderColor: '--contact-field-border', fieldFocusColor: '--contact-field-focus', labelTextColor: '--contact-label-text' };
+        Object.entries(fields).forEach(([key, variable]) => setStyle(section, variable, safeColor(config[key])));
+      }
       const targets = COPY_TARGETS[config.id];
       setText(section, targets.title, config.title);
       setText(section, targets.subtitle, config.subtitle);
@@ -192,7 +196,7 @@
     const firstVisible = ordered.find((section) => section.enabled !== false);
     const navbar = document.querySelector('.navbar');
     navbar?.classList.toggle('landing-solid', needsSolidNavbar(firstVisible));
-    navbar?.classList.toggle('over-hero-image', firstVisible?.id === 'home' && Boolean(safeImageUrl(firstVisible.imageUrl)));
+    navbar?.classList.toggle('over-hero-image', firstVisible?.id === 'home' && firstVisible.heroVisual === 'image' && Boolean(safeImageUrl(firstVisible.imageUrl)));
     document.documentElement.dataset.landingPublished = 'true';
     document.dispatchEvent(new CustomEvent('chemdisk-landing-applied', { detail: { revision: modelRevision(model) } }));
   }
@@ -300,8 +304,11 @@
   }
 
   function applyImage(section, target, config) {
-    const url = safeImageUrl(config.imageUrl);
+    const model = target === 'background' && config.heroVisual !== 'image';
+    const url = model ? '' : safeImageUrl(config.imageUrl);
     if (target === 'background') {
+      section.dataset.heroVisual = model ? 'biomolecule' : 'image';
+      section.classList.toggle('has-biomolecule', model);
       if (url) section.style.backgroundImage = `linear-gradient(100deg, rgba(5,15,30,.72), rgba(5,15,30,.3)), url("${url.replace(/["\\]/g, '')}")`;
       else section.style.removeProperty('background-image');
       section.classList.toggle('has-hero-image', Boolean(url));
@@ -382,7 +389,7 @@
 
   function needsSolidNavbar(firstVisible) {
     if (!firstVisible || firstVisible.id !== 'home') return true;
-    if (safeImageUrl(firstVisible.imageUrl)) return false;
+    if (firstVisible.heroVisual === 'image' && safeImageUrl(firstVisible.imageUrl)) return false;
     const background = safeColor(firstVisible.backgroundColor);
     if (!background) return true;
     const value = Number.parseInt(background.slice(1), 16);

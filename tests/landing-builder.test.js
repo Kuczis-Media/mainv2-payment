@@ -26,6 +26,40 @@ class MemoryStore {
 
 test.afterEach(() => landing._test.resetStoreFactory());
 
+test('hero model selection and independent contact colors survive save, publication and reopening', async (t) => {
+  const fixture = adminFixture(t);
+  t.mock.method(require('../netlify/site-assets.js'), 'readLandingRoute', async () => { throw new Error('No GitHub configured'); });
+  const model = landing.defaultModel();
+  model.sections.find((section) => section.id === 'home').heroVisual = 'image';
+  const colors = { formBackgroundColor: '#101820', fieldBackgroundColor: '#203040', fieldTextColor: '#abcdef', fieldBorderColor: '#123abc', fieldFocusColor: '#ff0000', labelTextColor: '#ddeeff' };
+  Object.assign(model.sections.find((section) => section.id === 'contact'), colors);
+  const saved = JSON.parse((await adminEndpoint.handler({ httpMethod: 'PUT', headers: fixture.headers, body: JSON.stringify({ model }) }, fixture.context)).body);
+  const published = await fixture.request({ publishMode: 'netlify-blobs', expectedPublicationVersion: null, model: saved.draft });
+  assert.equal(published.statusCode, 200);
+  const publicModel = JSON.parse((await publicEndpoint.handler({ httpMethod: 'GET' })).body).model;
+  assert.equal(publicModel.sections[0].heroVisual, 'image');
+  for (const [key, color] of Object.entries(colors)) assert.equal(publicModel.sections.find((section) => section.id === 'contact')[key], color);
+  assert.equal(publicModel.branding.backgroundColor, model.branding.backgroundColor);
+  assert.equal(publicModel.sections[1].fieldBackgroundColor, undefined);
+  const reopened = JSON.parse((await adminEndpoint.handler({ httpMethod: 'GET', headers: fixture.headers }, fixture.context)).body);
+  assert.equal(reopened.draft.sections[0].heroVisual, 'image');
+  assert.equal(reopened.draft.sections.find((section) => section.id === 'contact').fieldBackgroundColor, '#203040');
+});
+
+test('new landing settings validate styles strictly and old configurations default to the requested 3D hero', () => {
+  assert.equal(landing.normalizeModel({}).sections[0].heroVisual, 'biomolecule');
+  const model = landing.defaultModel();
+  const contact = model.sections.find((section) => section.id === 'contact');
+  contact.fieldBackgroundColor = 'red;display:none';
+  assert.throws(() => landing.normalizeModel(model, true));
+  assert.equal(landing.normalizeModel(model).sections.find((section) => section.id === 'contact').fieldBackgroundColor, '');
+  contact.fieldBackgroundColor = {};
+  assert.throws(() => landing.normalizeModel(model, true));
+  contact.fieldBackgroundColor = '';
+  model.sections[0].heroVisual = 'https://untrusted.example/scene';
+  assert.throws(() => landing.normalizeModel(model, true));
+});
+
 function adminFixture(t, store = new MemoryStore()) {
   landing._test.setStoreFactory(() => store);
   const user = { id: 'admin-publication-test', app_metadata: { roles: ['admin'] } };

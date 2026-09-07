@@ -12,6 +12,7 @@
   const appearance = window.NextMedAppearance;
   const PALETTE_LABELS = { landing: 'Landing', dashboard: 'Dashboard', studio: 'Studio', account: 'Konto i płatności' };
   const PALETTE_INPUTS = { primary: 'primaryColor', secondary: 'secondaryColor', brandAccent: 'accentColor', brandBackground: 'backgroundColor', surface: 'surfaceColor', brandText: 'textColor', muted: 'mutedColor' };
+  const CONTACT_COLORS = { formBackgroundColor: 'form-background', fieldBackgroundColor: 'field-background', fieldTextColor: 'field-text', fieldBorderColor: 'field-border', fieldFocusColor: 'field-focus', labelTextColor: 'label-text' };
   const ids = ['enabled', 'title', 'subtitle', 'body', 'image', 'image-alt', 'cta-label', 'cta-href', 'background', 'text', 'accent'];
   const elements = Object.fromEntries(ids.map((id) => [camel(id), document.getElementById(`section-${id}`)]));
   Object.assign(elements, {
@@ -127,6 +128,10 @@
   }
 
   function bindEvents() {
+    document.getElementById('section-hero-visual').addEventListener('change', (event) => updateSelected('heroVisual', event.target.value));
+    Object.entries(CONTACT_COLORS).forEach(([key, id]) => {
+      document.getElementById(`contact-${id}`).addEventListener('input', (event) => updateSelected(key, event.target.value));
+    });
     const mapping = {
       title: 'title', subtitle: 'subtitle', body: 'body', image: 'imageUrl', imageAlt: 'imageAlt',
       ctaLabel: 'ctaLabel', ctaHref: 'ctaHref', background: 'backgroundColor', text: 'textColor', accent: 'accentColor'
@@ -340,6 +345,11 @@
 
   function renderEditor() {
     const section = selectedSection();
+    document.getElementById('hero-visual-field').hidden = section.id !== 'home';
+    document.getElementById('section-hero-visual').value = section.heroVisual === 'image' ? 'image' : 'biomolecule';
+    document.getElementById('contact-colors').hidden = section.id !== 'contact';
+    const contactDefaults = { formBackgroundColor: model.branding?.surfaceColor, fieldBackgroundColor: model.branding?.backgroundColor, fieldTextColor: model.branding?.textColor, fieldBorderColor: '#d5dee9', fieldFocusColor: model.branding?.primaryColor, labelTextColor: model.branding?.mutedColor };
+    Object.entries(CONTACT_COLORS).forEach(([key, id]) => { document.getElementById(`contact-${id}`).value = section[key] || contactDefaults[key] || '#ffffff'; });
     elements.editorTitle.textContent = SECTION_LABELS[section.id] || section.id;
     elements.enabled.checked = section.enabled !== false;
     elements.title.value = section.title || '';
@@ -770,6 +780,8 @@
       ['title', 'subtitle', 'body', 'imageUrl', 'imageAlt', 'backgroundColor', 'textColor', 'accentColor', 'ctaLabel', 'ctaHref'].forEach((key) => {
         if (typeof source[key] === 'string') section[key] = source[key];
       });
+      if (section.id === 'home') section.heroVisual = source.heroVisual === 'image' ? 'image' : 'biomolecule';
+      if (section.id === 'contact') Object.keys(CONTACT_COLORS).forEach((key) => { section[key] = typeof source[key] === 'string' ? source[key] : ''; });
       section.enabled = source.enabled !== false;
       section.order = Number.isSafeInteger(source.order) && source.order >= 0 ? source.order : fallback.order;
       return section;
@@ -809,8 +821,9 @@
     const active = new Set(value.sections.filter((section) => section.enabled !== false).map((section) => section.id));
     if (!active.size) return 'Pozostaw co najmniej jedną widoczną sekcję.';
     for (const section of value.sections) {
+      if (section.id === 'home' && section.heroVisual != null && !['biomolecule', 'image'].includes(section.heroVisual)) return 'Start: wybierz model 3D albo obraz.';
       if (section.imageUrl && !safeImageUrl(section.imageUrl)) return `${SECTION_LABELS[section.id]}: obraz wymaga adresu HTTPS albo ścieżki /assets/…`;
-      for (const key of ['backgroundColor', 'textColor', 'accentColor']) {
+      for (const key of ['backgroundColor', 'textColor', 'accentColor', ...(section.id === 'contact' ? Object.keys(CONTACT_COLORS) : [])]) {
         if (section[key] && !/^#[0-9a-f]{6}$/i.test(section[key])) return `${SECTION_LABELS[section.id]}: niepoprawny kolor.`;
       }
       if (section.ctaHref) {
@@ -849,7 +862,7 @@
       exportTemplatePromise = Promise.all([
         fetchStaticText('/index.html'), fetchStaticText('/assets/start_site/style.css'),
         fetchStaticText('/assets/payments/payments.css'), fetchStaticText('/assets/start_site/script.js'),
-        fetchStaticText('/assets/js/landing-runtime.js')
+        fetchStaticText('/assets/js/landing-runtime.js'), fetchStaticText('/assets/js/landing-biomolecule.js')
       ]).catch((error) => { exportTemplatePromise = null; throw error; });
     }
     return exportTemplatePromise;
@@ -860,7 +873,7 @@
     setBusy(true);
     setStatus('Przygotowuję samodzielną stronę HTML…', '');
     try {
-      const [html, css, paymentCss, motionJs, runtimeJs] = await loadExportTemplate();
+      const [html, css, paymentCss, motionJs, runtimeJs, moleculeJs] = await loadExportTemplate();
       const page = new DOMParser().parseFromString(html, 'text/html');
       page.querySelectorAll('script, link[rel="stylesheet"], meta[name="nextmed-landing-config"], base').forEach((node) => node.remove());
       page.title = model.branding.siteTitle || model.branding.brandName;
@@ -901,7 +914,7 @@
       data.type = 'application/json'; data.id = 'nextmed-landing-model';
       data.textContent = serializeEmbeddedModel(normalizeLocalModel(model));
       page.body.append(data);
-      for (const source of [motionJs, runtimeJs]) {
+      for (const source of [motionJs, runtimeJs, moleculeJs]) {
         const script = page.createElement('script');
         script.textContent = source.replace(/<\/script/gi, '<\\/script');
         page.body.append(script);

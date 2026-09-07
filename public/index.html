@@ -60,7 +60,7 @@
   </nav>
 
   <main>
-    <section class="home" id="home">
+    <section class="home has-biomolecule" id="home" data-hero-visual="biomolecule">
       <div class="hero-grid" aria-hidden="true"></div>
       <div class="hero-orb hero-orb-one" data-parallax="-45" aria-hidden="true"></div>
       <div class="hero-orb hero-orb-two" data-parallax="55" aria-hidden="true"></div>
@@ -79,6 +79,15 @@
             <li><span>✓</span> Postęp i powtórki</li>
             <li><span>✓</span> Wsparcie prowadzącego</li>
           </ul>
+        </div>
+        <div class="hero-model" id="hero-biomolecule" data-model-state="paused">
+          <div class="hero-model-heading"><span>NAUKA W NOWYM WYMIARZE</span><span>3D / LIVE</span></div>
+          <div class="hero-model-canvas">
+            <div class="hero-model-fallback"><span aria-hidden="true">◎</span><strong>Odkrywaj to, czego nie widać.</strong><p>Interaktywny świat biomolekuł.</p></div>
+            <div class="hero-model-stage" data-model-stage></div>
+          </div>
+          <div class="hero-model-controls"><span data-model-status role="status">Przygotowuję model 3D…</span><button type="button" data-model-toggle aria-pressed="false" hidden>Zatrzymaj model</button><button type="button" data-model-retry hidden>Spróbuj ponownie</button></div>
+          <noscript><p>Włącz JavaScript, aby zobaczyć ruchomy model 3D.</p></noscript>
         </div>
         <div class="hero-scene" aria-label="Przykładowy widok platformy">
           <div class="scene-orbit" aria-hidden="true"><span class="orbit-marker"></span></div>
@@ -210,6 +219,7 @@
 
   <script src="/assets/start_site/script.js"></script>
   <script defer src="/assets/js/landing-runtime.js"></script>
+  <script defer src="/assets/js/landing-biomolecule.js"></script>
   <script defer src="/assets/js/landing-session.js"></script>
 </body>
 </html>

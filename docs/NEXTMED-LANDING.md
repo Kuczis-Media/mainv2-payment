@@ -1,6 +1,6 @@
 # Landing NextMed i wspólna marka
 
-Otwórz **Studio → Landing Page Builder**. Zmień nazwę marki, firmę, logo, favicon, kolory i kontakt, a następnie treść poszczególnych sekcji. Podgląd reaguje podczas pisania; zmiana kolejności i wyłączenie sekcji nie wymagają edytowania kodu. Ciemny motyw panelu zachowuje własną paletę dla czytelności.
+Otwórz **Studio → Edytor strony głównej**. Zmień nazwę marki, firmę, logo, favicon, kolory i kontakt, a następnie treść poszczególnych sekcji. Podgląd reaguje podczas pisania; zmiana kolejności i wyłączenie sekcji nie wymagają edytowania kodu. Ciemny motyw panelu zachowuje własną paletę dla czytelności.
 
 Samo pisanie i podgląd nie wywołują Functions. Szkic ma lokalną kopię w przeglądarce. **Zapisz szkic** zapisuje go na serwerze, a **Opublikuj** udostępnia nową wersję odwiedzającym. Edycja i eksport są dostępne również wtedy, gdy serwerowy zapis jest niedostępny.
 
@@ -11,6 +11,16 @@ W **Studio → Builder dashboardu → Kolory dashboardu i studia** jest skrót o
 Stare konfiguracje zachowują dotychczasową paletę: przy wczytaniu do edytora jest ona kopiowana do niezależnych `branding.palettes.dashboard`, `studio` i `account`. Nie ma dalszego automatycznego dziedziczenia zmian z landingu. Przycisk **Skopiuj kolory z landingu** pozwala świadomie ujednolicić jeden obszar. **Przywróć kolory NextMed** resetuje tylko wybraną paletę. Nazwa firmy, logo i favicon pozostają wspólne. Kolory pojedynczych sekcji dotyczą wyłącznie landingu, a treść lekcji, quizów i egzaminów nie jest przemalowywana.
 
 Zmiany palet są zapisywane w tym samym JSON i publikowane razem z konfiguracją landingu — przez dotychczasowy zapis z kontrolą konfliktów. Nie ma osobnego endpointu ani dodatkowego odpytywania dla kolorów. Dotyczą jasnego motywu; ciemny zachowuje własną paletę. Zdjęcie w tle logowania pozostaje bez zmian, paleta konta zmienia formularz. Po publikacji odśwież otwarte widoki (obowiązuje opisany niżej cache).
+
+## Ruchomy model i kolory formularza
+
+W sekcji **Start / Hero → Grafika na początku strony** wybierz **Ruchomy model biomolekuły 3D** albo **Własny obraz / ilustracja platformy**. Domyślnie, także dla wcześniejszych konfiguracji bez tego ustawienia, używany jest model. Dotychczasowy adres obrazu pozostaje w konfiguracji; wybór trybu obrazu go przywraca. Przełącznik zapisuje się jako `heroVisual` w sekcji `home`.
+
+Model to ta sama scena `https://prod.spline.design/1gCKLbyQZHQvxlYX/scene.splinecode` i ten sam Spline Viewer `1.10.31`, które wskazano w dostarczonym `generatebiomedicine/index.html`. Kod nie zmienia jej kamery, parametrów fizyki, zdarzeń ani materiałów. Nie przeniesiono analityki ani pozostałych skryptów referencyjnej witryny. Folder `generatebiomedicine` nie jest potrzebny do wdrożenia — strona pobiera scenę i odtwarzacz bezpośrednio z ich publicznych adresów. Ich dostępność zależy od zewnętrznego hostingu.
+
+Odtwarzacz pobiera się dopiero po wyświetleniu obszaru modelu, po rozstrzygnięciu konfiguracji strony i tylko przy włączonych animacjach. Po opuszczeniu obszaru, ukryciu karty albo wyłączeniu ruchu zasoby sceny są zwalniane. Powrót rozpoczyna scenę ponownie z oryginalnymi ustawieniami. Awaria sieci lub WebGL pokazuje zastępczą planszę i przycisk ponowienia; nie blokuje kursu, cennika ani kontaktu. Model działa też w podglądzie Studio i eksporcie HTML; wymaga WebGL i połączenia z internetem. Zobacz [dokumentację Spline Viewer](https://docs.spline.design/exporting-your-scene/web/exporting-as-spline-viewer).
+
+W sekcji **Kontakt → Kolory formularza kontaktowego** oddzielnie ustawisz tło formularza, tło pól, wpisywany tekst, obramowania, wyróżnienie aktywnego pola i etykiety. **Użyj palety** usuwa tylko wskazany własny kolor. Ustawienia dotyczą wyłącznie formularza na końcu landingu — nie przemalowują strony, logowania ani panelu. Są zapisywane, publikowane i eksportowane w tym samym JSON; nie dodają żadnych żądań do Functions. Eksport samodzielnego HTML nadal zastępuje wysyłany formularz odnośnikiem do kontaktu, ponieważ nie ma backendu do wysyłania wiadomości.
 
 ## Publikacja i zmienne
 
@@ -58,7 +68,7 @@ Na głównej stronie aktualny cennik pobiera się automatycznie, bez kliknięcia
 
 ## Wygląd i sesja
 
-Landing ma szeryfowe nagłówki, animowane wejścia, paralaksę i jednorazowy efekt pisania. Przełącznik animacji w builderze oraz ustawienie ograniczonego ruchu w systemie wyłączają ruch. Nie ma stale działającej pętli animacji JavaScript.
+Landing ma szeryfowe nagłówki, animowane wejścia, paralaksę, jednorazowy efekt pisania i opcjonalny model 3D. Przełącznik animacji w builderze oraz ustawienie ograniczonego ruchu w systemie wyłączają ruch. Efekty tekstu i paralaksy nie mają stale działającej pętli JavaScript; model ma własną pętlę renderowania tylko wtedy, gdy jest aktywny. Żaden z tych efektów nie wywołuje AI ani Functions.
 
 Na tej samej domenie informacja o lokalnej sesji zmienia przycisk na **Przejdź do kursu** bez odpytywania Identity. To wskazówka interfejsu, nie potwierdzenie uprawnień — kurs nadal sprawdza sesję i dostęp. Obce odnośniki i CTA prowadzące do cennika nie są zmieniane. Podgląd w builderze pokazuje etykietę autora. Osobna domena nie ma dostępu do sesji platformy.
 

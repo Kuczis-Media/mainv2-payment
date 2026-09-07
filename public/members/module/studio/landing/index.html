@@ -116,6 +116,7 @@
         <label><span>Tytuł</span><input id="section-title" maxlength="120"></label>
         <label><span>Podtytuł</span><input id="section-subtitle" maxlength="180"></label>
         <label class="wide"><span>Opis</span><textarea id="section-body" rows="5" maxlength="2000"></textarea></label>
+        <label class="wide" id="hero-visual-field"><span>Grafika na początku strony</span><select id="section-hero-visual"><option value="biomolecule">Ruchomy model biomolekuły 3D</option><option value="image">Własny obraz / ilustracja platformy</option></select><small>Model zachowuje oryginalny ruch i fizykę. Wczytuje się bezpośrednio z Spline, bez użycia AI i Functions. Obraz poniżej pozostaje zachowany na wypadek zmiany trybu.</small></label>
         <div class="wide asset-url-field">
           <label for="section-image"><span>Obraz sekcji (opcjonalnie)</span></label>
           <div><input id="section-image" maxlength="1000" placeholder="Wklej link do obrazu…"><button type="button" data-open-assets="section">Wybierz / wgraj</button></div>
@@ -134,6 +135,17 @@
             <label><span>Akcent</span><input id="section-accent" type="color" value="#0f766e"><button type="button" data-clear-color="accentColor">Użyj globalnego</button></label>
           </div>
         </fieldset>
+      </details>
+      <details class="section-style-card" id="contact-colors" hidden>
+        <summary>Kolory formularza kontaktowego</summary>
+        <fieldset><legend>Niezależne od tła strony i pozostałych formularzy</legend><div class="color-grid">
+          <label><span>Tło formularza</span><input id="contact-form-background" type="color"><button type="button" data-clear-color="formBackgroundColor">Użyj palety</button></label>
+          <label><span>Tło pól</span><input id="contact-field-background" type="color"><button type="button" data-clear-color="fieldBackgroundColor">Użyj palety</button></label>
+          <label><span>Tekst wpisywany w pola</span><input id="contact-field-text" type="color"><button type="button" data-clear-color="fieldTextColor">Użyj palety</button></label>
+          <label><span>Obramowanie pól</span><input id="contact-field-border" type="color"><button type="button" data-clear-color="fieldBorderColor">Użyj palety</button></label>
+          <label><span>Wyróżnienie aktywnego pola</span><input id="contact-field-focus" type="color"><button type="button" data-clear-color="fieldFocusColor">Użyj palety</button></label>
+          <label><span>Etykiety nad polami</span><input id="contact-label-text" type="color"><button type="button" data-clear-color="labelTextColor">Użyj palety</button></label>
+        </div></fieldset>
       </details>
       <div id="image-preview" class="image-preview" hidden><img alt="Podgląd obrazu sekcji"></div>
     </section>

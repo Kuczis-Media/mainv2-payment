@@ -57,6 +57,41 @@ function routedRuntime({ route, payload, cache, hash = '', hostname = 'course.ex
   return { ...dom, calls, redirects, storage, settled: () => new Promise((resolve) => setImmediate(resolve)) };
 }
 
+test('runtime applies and resets contact field colors locally without recoloring the page or other sections', async () => {
+  const result = routedRuntime(); await result.settled();
+  const model = runtimeModel(1);
+  const contact = model.sections.find((section) => section.id === 'contact');
+  const fields = { formBackgroundColor: '--contact-form-background', fieldBackgroundColor: '--contact-field-background', fieldTextColor: '--contact-field-text', fieldBorderColor: '--contact-field-border', fieldFocusColor: '--contact-field-focus', labelTextColor: '--contact-label-text' };
+  Object.keys(fields).forEach((key) => { contact[key] = '#112233'; });
+  const context = { window: null, document: result.document, URL, CustomEvent: class {}, location: { search: '?landing-preview=1' }, parent: {}, addEventListener() {} };
+  context.window = context;
+  vm.runInNewContext(fs.readFileSync(require.resolve('../public/assets/js/landing-runtime.js'), 'utf8'), context);
+  assert.equal(context.NextMedLanding.applyModel(model), true);
+  for (const variable of Object.values(fields)) {
+    assert.equal(result.sections.contact.style.values[variable], '#112233');
+    assert.equal(result.sections.home.style.values[variable], undefined);
+    assert.equal(result.document.documentElement.style.values[variable], undefined);
+  }
+  Object.keys(fields).forEach((key) => { contact[key] = ''; });
+  context.NextMedLanding.applyModel(model);
+  for (const variable of Object.values(fields)) assert.equal(result.sections.contact.style.values[variable], undefined);
+});
+
+test('3D hero replaces a previously configured background and image mode restores it without losing the URL', async () => {
+  const model = runtimeModel(2); model.sections[0].imageUrl = 'https://images.example/hero.webp';
+  const result = routedRuntime({ payload: { active: true, model } }); await result.settled();
+  assert.equal(result.sections.home.dataset.heroVisual, 'biomolecule');
+  assert.equal(result.sections.home.classList.contains('has-biomolecule'), true);
+  assert.equal(result.sections.home.classList.contains('has-hero-image'), false);
+  assert.equal(result.sections.home.style.backgroundImage, undefined);
+  model.sections[0].heroVisual = 'image';
+  const restored = routedRuntime({ payload: { active: true, model } }); await restored.settled();
+  assert.equal(restored.sections.home.classList.contains('has-biomolecule'), false);
+  assert.equal(restored.sections.home.classList.contains('has-hero-image'), true);
+  assert.match(restored.sections.home.style.backgroundImage, /hero.webp/);
+  assert.equal(restored.navbar.classList.contains('over-hero-image'), true);
+});
+
 test('landing waits for the selected JSON before rendering and isolates cache from another repository', async () => {
   const delivery = require('../public/assets/js/landing-delivery-model.js');
   const route = delivery.normalize({ target: { repository: 'NextMed/web', path: 'start.json', ref: 'main' } });
