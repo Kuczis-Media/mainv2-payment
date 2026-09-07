@@ -10,14 +10,14 @@
   const MAX_SOURCE_LENGTH = 256 * 1024;
   const MASKED_VALUE = '••••••';
   const PRESETS = Object.freeze([
-    preset('NETLIFY_API_TOKEN', 'Netlify', 'Token Netlify do Blobs i narzędzi administratora.', true),
+    preset('NETLIFY_API_TOKEN', 'Netlify', 'Token Netlify do Blobs i narzędzi administratora, również publikacji landingu bez GitHuba.', true),
     preset('SITE_ID', 'Netlify', 'UUID witryny; na deployu Netlify ustawia go automatycznie.', false),
     preset('GITHUB_CONTENT_TOKEN', 'Materiały GitHub', 'Fine-grained PAT do prywatnego repo materiałów.', true),
     preset('GITHUB_CONTENT_REPOSITORIES', 'Materiały GitHub', 'Opcjonalna lista wielu repozytoriów w JSON.', false),
     preset('GITHUB_CONTENT_REPOSITORY', 'Materiały GitHub', 'Pojedyncze repo w formacie właściciel/nazwa.', false, 'Kuczis-Media/chemdisk-content'),
     preset('GITHUB_CONTENT_REF', 'Materiały GitHub', 'Gałąź repozytorium materiałów.', false, 'main'),
     preset('GITHUB_CONTENT_ROOT', 'Materiały GitHub', 'Opcjonalny katalog bazowy materiałów.', false),
-    preset('GITHUB_SITE_ASSETS_TOKEN', 'Logo i landing', 'PAT z Contents: Read and write do publicznego Kuczis-Media/logo (ustawienia i obrazy) oraz repozytorium JSON wybranego w panelu admina → Landing. Wymagany do publikacji; edycja lokalna i eksport HTML działają bez tokenu.', true),
+    preset('GITHUB_SITE_ASSETS_TOKEN', 'Logo i landing', 'PAT z Contents: Read and write do publicznego Kuczis-Media/logo (ustawienia i obrazy) oraz repozytorium JSON wybranego w panelu admina → Landing. Potrzebny do publikacji przez GitHub; tryb Netlify Blobs i eksport HTML nie wymagają tego tokenu.', true),
     preset('GITHUB_SITE_ASSETS_DIRECTORY', 'Logo i landing', 'Opcjonalny katalog na logo i obrazy. Miejsce zapisu JSON strony wybierz osobno: panel admina → Landing.', false),
     preset('GEMINI_API_KEY', 'AI', 'Klucz konfiguracji Gemini (ENV), dostępnej w routerze AI.', true),
     preset('GEMINI_MODEL', 'AI', 'Model konfiguracji Gemini (ENV).', false, 'gemini-2.5-flash'),

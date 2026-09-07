@@ -1,7 +1,7 @@
 (function applySiteBrand() {
   'use strict';
 
-  // Public branding only. Never send a session token or call a Function here.
+  // Public branding only; reuse the shared, cached source result. No session.
   const DEFAULT_CONFIG_URL = 'https://raw.githubusercontent.com/Kuczis-Media/logo/main/landing/config.json';
   let CONFIG_URL = DEFAULT_CONFIG_URL;
   const CACHE_KEY = 'nextmed.site-brand.v1';
@@ -20,13 +20,22 @@
   const titleNode = document.querySelector('title[data-brand-title]');
   let logoGeneration = 0;
   let currentRevision = -1;
+  let publicationVersion = '';
   function initialize() {
     const cached = readCache();
     if (cached) apply(cached.model);
-    if (!cached || Date.now() - cached.checkedAt >= TTL) void refresh();
+    if (!cached || Date.now() - cached.checkedAt >= TTL
+      || (publicationVersion && cached.publicationVersion !== publicationVersion)) void refresh();
   }
   if (window.NextMedLandingSource) {
     window.NextMedLandingSource.ready.then((route) => {
+      publicationVersion = route.publication?.version || '';
+      if (route.publication?.mode === 'netlify-blobs' && route.publication.active === true && validModel(route.publication.model)) {
+        CONFIG_URL = '/.netlify/functions/landing';
+        apply(route.publication.model);
+        try { localStorage.setItem(CACHE_KEY, JSON.stringify({ model: route.publication.model, checkedAt: Date.now(), configUrl: CONFIG_URL, publicationVersion })); } catch {}
+        return;
+      }
       CONFIG_URL = window.NextMedLandingDelivery.rawUrl(route.target);
       initialize();
     }).catch(initialize);
@@ -61,7 +70,7 @@
       const payload = await response.json();
       if (payload?.active !== true || !validModel(payload.model) || payload.model.revision < currentRevision) return;
       apply(payload.model);
-      try { localStorage.setItem(CACHE_KEY, JSON.stringify({ model: payload.model, checkedAt: Date.now(), configUrl: CONFIG_URL })); } catch (_) { /* Optional cache. */ }
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify({ model: payload.model, checkedAt: Date.now(), configUrl: CONFIG_URL, publicationVersion })); } catch (_) { /* Optional cache. */ }
     } catch (_) { /* Keep the checked-in or cached brand when GitHub is unavailable. */ }
     finally { window.clearTimeout(timer); }
   }

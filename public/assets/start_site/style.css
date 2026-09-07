@@ -231,7 +231,7 @@ section[data-landing-managed="true"] { --landing-accent: var(--brand-primary); }
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
 
-/* Lightweight editorial layout. All movement is scroll-driven, never an idle loop. */
+/* Lightweight editorial layout. Motion is scroll-driven or a bounded introduction. */
 .max-width { width: min(1320px, calc(100% - 80px)); }
 .reading-progress { position: fixed; z-index: 1100; inset: 0 0 auto; height: 3px; pointer-events: none; }
 .landing-loading-state { display: none; }
@@ -406,4 +406,63 @@ html:not(.motion-enabled) { scroll-behavior: auto; }
 @media (prefers-reduced-motion: reduce) {
   [data-parallax] { translate: none !important; }
   html.motion-enabled [data-reveal] { opacity: 1 !important; transform: none !important; }
+}
+
+/* An editorial finish: quiet surfaces, confident type, generous breathing room. */
+.home { isolation: isolate; background: radial-gradient(ellipse at 78% 38%, color-mix(in srgb, var(--brand-primary) 7%, transparent), transparent 54%), var(--brand-background); }
+.hero-grid { position: absolute; z-index: -1; inset: 0; pointer-events: none; opacity: .36; background-image: linear-gradient(var(--brand-line) 1px, transparent 1px), linear-gradient(90deg, var(--brand-line) 1px, transparent 1px); background-size: 104px 104px; mask-image: linear-gradient(110deg, transparent 15%, #000 95%); }
+.home .text-1 { gap: 12px; letter-spacing: .16em; }
+.home .text-1::before { content: ''; display: block; flex-shrink: 0; width: 27px; height: 1px; background: currentColor; }
+.home .text-2 { font-family: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif; font-weight: 400; letter-spacing: -.055em; line-height: 1.02; max-width: 760px; }
+.hero-typewriter { position: relative; width: fit-content; max-width: 100%; margin: 0 0 23px; color: var(--landing-text, var(--brand-primary)); font: 11px/1.8 ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: .035em; }
+.typewriter-copy { display: block; }
+.typewriter-ink { display: none; position: absolute; inset: 0; }
+.hero-typewriter.is-typing .typewriter-copy { opacity: 0; }
+.hero-typewriter.is-typing .typewriter-ink { display: block; }
+.hero-typewriter.is-typing .typewriter-ink::after { content: ''; display: inline-block; width: 1px; height: 1em; margin-left: 3px; vertical-align: -.1em; background: currentColor; }
+.home.has-hero-image .hero-typewriter { color: #fff; }
+.home.has-hero-image .hero-grid { display: none; }
+.home .home-content .hero-secondary { gap: 24px; }
+.home .home-content a, .navbar .nav-login { position: relative; overflow: hidden; }
+.home .home-content a::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(110deg, transparent 20%, #ffffff28 45%, transparent 65%); transform: translateX(-140%); }
+html.motion-enabled .home .home-content a:hover::after { transform: translateX(140%); transition: transform .7s ease; }
+.hero-scene { padding-top: 48px; }
+.scene-orbit { border-color: color-mix(in srgb, var(--brand-primary) 24%, transparent); }
+.scene-orbit::before { border-style: dashed; opacity: .45; }
+.orbit-marker { position: absolute; inset: 0; border-radius: 50%; }
+.orbit-marker::after { content: ''; position: absolute; top: 10%; left: 18%; width: 10px; height: 10px; background: var(--brand-accent); border: 3px solid var(--brand-background); box-shadow: 0 0 0 1px var(--brand-accent); border-radius: 50%; }
+.hero-visual { border-radius: 17px; box-shadow: 10px 35px 75px color-mix(in srgb, var(--brand-primary) 17%, transparent), 0 1px 0 #ffffffaa inset; }
+.note-science { background: color-mix(in srgb, var(--brand-accent) 15%, var(--brand-background)); }
+.scene-label { letter-spacing: .12em; }
+.hero-bottom { margin-top: 65px; }
+section .title { font-family: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif; font-weight: 400; letter-spacing: -.045em; }
+.services { overflow: clip; }
+.services::before { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 0 0, color-mix(in srgb, var(--brand-primary) 28%, transparent), transparent 50%); }
+.services .card { transition: border-color .3s ease, box-shadow .3s ease, background .3s ease; }
+.services .card:hover { border-color: #ffffff50; box-shadow: 0 20px 50px #00000016; }
+.platform-sticky > p { font-family: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif; font-weight: 400; }
+.platform-sticky em { font-style: italic; }
+.pricing .chem-price-card { border-radius: 13px; box-shadow: 0 15px 45px color-mix(in srgb, var(--brand-text) 4%, transparent); }
+.pricing .chem-price-card.is-featured { box-shadow: 0 18px 50px color-mix(in srgb, var(--brand-primary) 12%, transparent); }
+html.motion-enabled:not([data-landing-loading='true']) .home-content { animation: editorial-arrive .85s cubic-bezier(.2,.7,.2,1) both; }
+html.motion-enabled:not([data-landing-loading='true']) .hero-scene { animation: editorial-arrive 1.1s .1s cubic-bezier(.2,.7,.2,1) both; }
+html.motion-enabled:not([data-landing-loading='true']) .orbit-marker { animation: orbit-introduction 14s ease-out 1 both; }
+html.motion-enabled:not([data-landing-loading='true']) .visual-chart span { transform-origin: bottom; animation: chart-introduction 1.1s .5s cubic-bezier(.2,.7,.2,1) both; }
+html.motion-enabled .card.is-visible .mini-lines i, html.motion-enabled .card.is-visible .mini-progress i { transform-origin: left bottom; animation: chart-introduction .8s .15s cubic-bezier(.2,.7,.2,1) both; }
+@keyframes editorial-arrive { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+@keyframes orbit-introduction { from { transform: rotate(-80deg); } to { transform: rotate(65deg); } }
+@keyframes chart-introduction { from { transform: scaleY(.15); opacity: .2; } to { transform: scaleY(1); } }
+@media (min-width: 861px) {
+  .home { padding-top: 164px; }
+  .hero-layout { grid-template-columns: 1.1fr 1fr; }
+}
+@media (max-width: 600px) {
+  .hero-typewriter { font-size: 9px; }
+  .home .text-2 { font-size: clamp(43px, 12vw, 68px); }
+  .hero-grid { background-size: 70px 70px; }
+  .hero-bottom { margin-top: 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-typewriter.is-typing .typewriter-copy { opacity: 1; }
+  .hero-typewriter.is-typing .typewriter-ink { display: none; }
 }

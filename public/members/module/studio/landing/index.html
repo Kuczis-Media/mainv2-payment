@@ -35,6 +35,14 @@
     <aside class="section-panel">
       <div class="panel-heading"><div><span class="eyebrow">Struktura</span><h1>Sekcje strony</h1></div><small>Przeciągnij lub użyj strzałek.</small></div>
       <div id="section-list" class="section-list"></div>
+      <div class="publication-settings">
+        <label for="publication-mode">Gdzie opublikować?</label>
+        <select id="publication-mode">
+          <option value="netlify-blobs">Netlify Blobs — bez GitHuba</option>
+          <option value="static-github">GitHub — publiczny plik JSON</option>
+        </select>
+        <p id="publication-mode-note" class="field-hint"></p>
+      </div>
       <div class="cost-note"><strong>Tworzysz po swojemu</strong><span>Wybierz sekcję, zmień treść i zobacz efekt obok. Podgląd niczego nie publikuje. Gotową stronę możesz też pobrać jako HTML.</span></div>
       <p id="status" class="status" role="status" aria-live="polite"></p>
     </aside>
@@ -117,7 +125,7 @@
     <section class="preview-panel" aria-labelledby="preview-title">
       <div class="panel-heading"><div><span class="eyebrow">Podgląd na żywo</span><h2 id="preview-title">Twoja strona</h2></div><div class="preview-actions"><div class="preview-size" role="group" aria-label="Szerokość podglądu"><button type="button" data-preview-size="desktop" aria-pressed="true">Desktop</button><button type="button" data-preview-size="mobile" aria-pressed="false">Telefon</button></div><a href="/" target="_blank" rel="noopener">Otwórz stronę ↗</a></div></div>
       <p class="preview-note">To rzeczywista strona z Twoimi zmianami. Linki zewnętrzne, logowanie i zakup są wyłączone tylko w tym podglądzie.</p>
-      <p class="field-hint">Miejsce publikacji: <a id="landing-publication-location" target="_blank" rel="noopener noreferrer">wczytywanie…</a>. Zmienisz je w panelu admina → Landing.</p>
+      <p class="field-hint">Miejsce publikacji: <a id="landing-publication-location" target="_blank" rel="noopener noreferrer">wczytywanie…</a>. Ścieżkę JSON w GitHubie zmienisz w panelu admina → Landing. Publikacja dotyczy tej aplikacji; niezależny landing na innej domenie musi obsługiwać ten sam odczyt konfiguracji.</p>
       <div class="preview-browser"><div class="preview-browser-bar"><i></i><i></i><i></i><span id="preview-url">twoja-strona.pl</span></div><div id="preview-viewport" class="preview-viewport"><iframe id="landing-preview" class="landing-preview" title="Rzeczywisty podgląd strony" referrerpolicy="same-origin"></iframe></div></div>
     </section>
   </main>

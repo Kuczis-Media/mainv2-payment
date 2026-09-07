@@ -14,6 +14,34 @@
   let frame = 0;
   let revealObserver;
   let parallaxNodes = [];
+  const typingLine = document.querySelector('.hero-typewriter');
+  const typingCopy = typingLine?.querySelector('.typewriter-copy');
+  const typingInk = typingLine?.querySelector('.typewriter-ink');
+  let typingTimer = 0;
+  let typingStarted = false;
+
+  const finishTyping = () => {
+    if (typingTimer) window.clearTimeout(typingTimer);
+    typingTimer = 0;
+    typingLine?.classList.remove('is-typing');
+    typingLine?.classList.add('is-complete');
+  };
+  const configureTyping = () => {
+    if (!typingLine || !typingCopy || !typingInk) return;
+    if (!motionEnabled || document.hidden) { if (typingStarted) finishTyping(); return; }
+    if (typingStarted || document.documentElement.dataset.landingLoading === 'true') return;
+    typingStarted = true;
+    const characters = Array.from(typingCopy.textContent || '');
+    let position = 0;
+    typingInk.textContent = '';
+    typingLine.classList.add('is-typing');
+    const type = () => {
+      if (!motionEnabled || document.hidden || position >= characters.length) { finishTyping(); return; }
+      typingInk.textContent += characters[position++];
+      typingTimer = window.setTimeout(type, characters[position - 1] === '.' ? 200 : 35);
+    };
+    typingTimer = window.setTimeout(type, 250);
+  };
 
   const updateScrollState = () => {
     frame = 0;
@@ -61,6 +89,7 @@
       motionToggle.textContent = motionEnabled ? 'Wyłącz animacje' : 'Włącz animacje';
       motionToggle.setAttribute('aria-pressed', String(!motionEnabled));
     }
+    configureTyping();
     scheduleScroll();
   };
   window.addEventListener('scroll', scheduleScroll, { passive: true });
@@ -68,6 +97,8 @@
   document.addEventListener('chemdisk-landing-applied', configureMotion);
   motionPreference.addEventListener?.('change', configureMotion);
   document.addEventListener('visibilitychange', () => {
+    if (document.hidden) finishTyping();
+    else configureTyping();
     if (document.hidden && frame) { window.cancelAnimationFrame(frame); frame = 0; }
     else scheduleScroll();
   });
@@ -77,6 +108,16 @@
     configureMotion();
   });
   configureMotion();
+  // The source-first renderer reveals the document only after resolving its model.
+  // Start the one-shot writing effect then, not behind the loading screen.
+  if ('MutationObserver' in window) {
+    const loadingObserver = new MutationObserver(() => {
+      if (document.documentElement.dataset.landingLoading === 'true') return;
+      configureTyping();
+      loadingObserver.disconnect();
+    });
+    loadingObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-landing-loading'] });
+  }
 
   scrollButton?.addEventListener('click', () => {
     window.scrollTo({ top: 0, behavior: motionEnabled ? 'smooth' : 'auto' });
@@ -109,16 +150,21 @@
   const preview = new URLSearchParams(location.search).get('landing-preview') === '1' && window.parent !== window;
   const exported = Boolean(document.querySelector('meta[name="nextmed-landing-export"]'));
   const offerButton = document.getElementById('load-offer');
+  const offerStatus = document.getElementById('offer-status');
   let offerLoading = false;
-  offerButton?.addEventListener('click', () => {
+  let offerAllowed = false;
+  const loadOffer = () => {
     if (preview || exported) {
-      if (preview) offerButton.textContent = 'Cennik dostępny na opublikowanej stronie';
+      if (offerStatus) offerStatus.textContent = preview
+        ? 'Aktualne pakiety pojawią się automatycznie na opublikowanej stronie.'
+        : 'Aktualne pakiety i ceny znajdziesz na stronie zakupu.';
       return;
     }
-    if (offerLoading) return;
+    if (!offerAllowed || offerLoading || !offerButton) return;
     offerLoading = true;
     offerButton.disabled = true;
-    offerButton.textContent = 'Wczytuję pakiety…';
+    offerButton.hidden = true;
+    if (offerStatus) offerStatus.textContent = 'Wczytuję aktualne ceny i dostępne pakiety…';
     const script = document.createElement('script');
     script.src = '/assets/payments/payments.js';
     script.async = true;
@@ -128,27 +174,31 @@
       script.remove();
       offerLoading = false;
       offerButton.disabled = false;
-      offerButton.textContent = 'Spróbuj ponownie — pokaż pakiety';
+      offerButton.hidden = false;
+      offerButton.textContent = 'Spróbuj ponownie';
+      if (offerStatus) offerStatus.textContent = 'Nie udało się wczytać cen. Spróbuj ponownie lub otwórz stronę zakupu.';
     }
     script.onerror = failed;
     script.onload = () => { window.clearTimeout(timeout); };
     document.head.append(script);
-  });
-
-  const updateAuthLinks = (authenticated) => {
-    const menuLink = document.getElementById('login-btn');
-    const callToAction = document.getElementById('login-cta');
-    if (menuLink) menuLink.textContent = authenticated ? 'Panel kursanta' : 'Zaloguj';
-    if (callToAction && callToAction.dataset.landingManaged !== 'true') {
-      callToAction.textContent = authenticated ? 'Przejdź do kursu' : 'Zaloguj się';
-    }
   };
-
-  const auth = window.ChemAuth;
-  if (auth && auth.ready && typeof auth.ready.then === 'function') {
-    auth.ready.then((state) => updateAuthLinks(Boolean(state && state.authenticated))).catch(() => {});
+  offerButton?.addEventListener('click', loadOffer);
+  const startOffer = (route) => {
+    if (route?.externalEnabled && route.externalUrl) {
+      try { if (new URL(route.externalUrl).hostname !== location.hostname) return; } catch { return; }
+    }
+    offerAllowed = true;
+    loadOffer();
+  };
+  if (window.NextMedLandingSource?.ready) {
+    window.NextMedLandingSource.ready.then(startOffer).catch(() => startOffer(null));
+  } else {
+    // script.js runs before deferred source/runtime scripts in the document.
+    // Wait for DOMContentLoaded so redirects can be checked before pricing loads.
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => {
+      if (window.NextMedLandingSource?.ready) window.NextMedLandingSource.ready.then(startOffer).catch(() => startOffer(null));
+      else startOffer(null);
+    }, { once: true });
+    else startOffer(null);
   }
-  window.addEventListener('chem-auth-user-changed', (event) => {
-    updateAuthLinks(Boolean(event.detail && event.detail.authenticated));
-  });
 })();

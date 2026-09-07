@@ -19,16 +19,24 @@ exports.handler = async (event = {}, context = {}) => {
           ...await siteAssets.readLandingConfig(process.env, { target: route.settings.target }), route
         }))
       ]);
-      const published = remote.status === 'fulfilled' ? remote.value.model : null;
+      const control = stored.status === 'fulfilled' ? stored.value.publication : null;
+      const blobActive = control?.mode === 'netlify-blobs';
+      const published = blobActive ? control.model : remote.status === 'fulfilled' ? remote.value.model : null;
       const draft = stored.status === 'fulfilled' && stored.value.draftExists
         ? stored.value.draft : published || (stored.status === 'fulfilled' ? stored.value.draft : landing.defaultModel());
       return json({
         draft,
         published,
         storage: stored.status === 'fulfilled' ? { available: true } : { available: false, error: 'LANDING_STORAGE_UNAVAILABLE' },
-        publication: remote.status === 'fulfilled'
-          ? { available: true, mode: 'static-github', sha: remote.value.sha, routeSha: remote.value.route.sha }
-          : { available: false, mode: 'static-github', sha: null, error: remote.reason?.code || 'LANDING_STATIC_PUBLISH_FAILED' },
+        publication: {
+          available: stored.status === 'fulfilled' || remote.status === 'fulfilled',
+          mode: blobActive || remote.status !== 'fulfilled' ? 'netlify-blobs' : 'static-github',
+          activeMode: control?.mode || 'static-github', version: control?.version ?? null,
+          sha: remote.status === 'fulfilled' ? remote.value.sha : null,
+          routeSha: remote.status === 'fulfilled' ? remote.value.route.sha : null,
+          modes: { 'netlify-blobs': stored.status === 'fulfilled', 'static-github': remote.status === 'fulfilled' },
+          ...(remote.status === 'rejected' ? { githubError: remote.reason?.code || 'LANDING_STATIC_PUBLISH_FAILED' } : {})
+        },
         staticConfigUrl: remote.status === 'fulfilled' ? deliveryModel.rawUrl(remote.value.route.settings.target) : siteAssets.publicConfiguration().landingConfigUrl
       });
     }
@@ -36,34 +44,56 @@ exports.handler = async (event = {}, context = {}) => {
     if (!guard.ok) return responseForFailure(guard);
     const parsed = parseJsonBody(event);
     if (!parsed.ok) return responseForFailure(parsed);
-    const allowed = method === 'PUT' ? ['model'] : ['action', 'model', 'expectedPublishedSha', 'expectedRouteSha'];
+    const allowed = method === 'PUT' ? ['model'] : ['action', 'model', 'expectedPublishedSha', 'expectedRouteSha', 'publishMode', 'expectedPublicationVersion'];
     if (Object.keys(parsed.value).some((key) => !allowed.includes(key))) return json({ error: 'UNEXPECTED_FIELDS' }, 400);
     if (!parsed.value.model || typeof parsed.value.model !== 'object' || Array.isArray(parsed.value.model)) {
       return json({ error: 'INVALID_LANDING_MODEL' }, 400);
     }
     if (method === 'PUT') return json({ draft: await landing.saveDraft(landing.getLandingStore(), parsed.value.model, auth.userId) });
     if (parsed.value.action !== 'publish') return json({ error: 'INVALID_LANDING_ACTION' }, 400);
-    if (!Object.hasOwn(parsed.value, 'expectedPublishedSha')
-      || (parsed.value.expectedPublishedSha !== null && !/^[a-f0-9]{40}$/i.test(parsed.value.expectedPublishedSha))) {
+    const mode = parsed.value.publishMode || 'static-github';
+    if (!['static-github', 'netlify-blobs'].includes(mode)) return json({ error: 'INVALID_LANDING_PUBLICATION_MODE' }, 400);
+    if (mode === 'static-github' && (!Object.hasOwn(parsed.value, 'expectedPublishedSha')
+      || (parsed.value.expectedPublishedSha !== null && !/^[a-f0-9]{40}$/i.test(parsed.value.expectedPublishedSha)))) {
       return json({ error: 'LANDING_PUBLICATION_REQUIRED' }, 400);
     }
     const input = landing.normalizeModel(parsed.value.model, true);
-    const route = await siteAssets.readLandingRoute();
-    if ((parsed.value.expectedRouteSha ?? null) !== route.sha) return json({ error: 'LANDING_DESTINATION_CHANGED' }, 409);
+    const expectedVersion = parsed.value.expectedPublicationVersion ?? null;
+    if (expectedVersion !== null && (typeof expectedVersion !== 'string' || !/^[a-f0-9-]{36}$/i.test(expectedVersion))) return json({ error: 'LANDING_PUBLICATION_REQUIRED' }, 400);
     let store = null;
     let currentDraft = null;
-    try {
-      store = landing.getLandingStore();
+    let currentPublication = null;
+    try { store = landing.getLandingStore(); } catch {}
+    if (store) {
+      // A temporary store read failure must not hide an already active Blob
+      // publication behind a new GitHub write.
+      currentPublication = await landing.readPublication(store);
+      if (currentPublication.version !== expectedVersion) return json({ error: 'LANDING_DESTINATION_CHANGED' }, 409);
       currentDraft = await landing.readModel(store, landing.DRAFT_KEY);
-    } catch { store = null; }
+    } else if (mode === 'netlify-blobs' || expectedVersion !== null) return json({ error: 'LANDING_STORAGE_UNAVAILABLE' }, 503);
     if (currentDraft?.exists && input.revision !== currentDraft.model.revision
       && landing.comparableModel(input) !== landing.comparableModel(currentDraft.model)) {
       return json({ error: 'LANDING_CONFLICT' }, 409);
     }
+    if (mode === 'netlify-blobs') {
+      const draft = currentDraft?.exists && input.revision !== currentDraft.model.revision
+        ? currentDraft.model : await landing.saveDraft(store, input, auth.userId);
+      const published = landing.normalizeModel({ ...draft, publishedAt: new Date().toISOString() }, true);
+      const control = await landing.setPublication(store, { mode, model: published }, expectedVersion);
+      return json({
+        draft, published: landing.publicModel(published),
+        delivery: { static: false, mode, url: '/.netlify/functions/landing' },
+        publication: { available: true, mode, activeMode: mode, version: control.version },
+        storage: { available: true }
+      });
+    }
+    const route = await siteAssets.readLandingRoute();
+    if ((parsed.value.expectedRouteSha ?? null) !== route.sha) return json({ error: 'LANDING_DESTINATION_CHANGED' }, 409);
     // GitHub is the publication source. A failure must never be reported as a
     // successful Blob publish which an older public GitHub artifact would hide.
     const result = await siteAssets.publishLandingConfig(input, process.env, { expectedSha: parsed.value.expectedPublishedSha, target: route.settings.target });
     const { model: published, ...delivery } = result;
+    const control = store ? await landing.setPublication(store, { mode }, expectedVersion) : null;
     let draft = published;
     let draftWarning = '';
     if (store) {
@@ -78,7 +108,7 @@ exports.handler = async (event = {}, context = {}) => {
       published,
       draft,
       delivery: { ...delivery, static: true },
-      publication: { available: true, mode: 'static-github', sha: delivery.sha, routeSha: route.sha },
+      publication: { available: true, mode, activeMode: mode, version: control?.version ?? null, sha: delivery.sha, routeSha: route.sha },
       draftWarning,
       storage: { available: Boolean(store) && !draftWarning }
     });

@@ -140,29 +140,45 @@ test('a builder opened before a destination change cannot publish to the newly s
   assert.equal(save.mock.callCount(), 0);
 });
 
-async function sourceRun({ cache, status = 200, payload = delivery.normalize({ target: custom }), offline = false, preview = false } = {}) {
+async function sourceRun({ cache, publicationCache, publicationPayload = { active: false }, status = 200, payload = delivery.normalize({ target: custom }), offline = false, preview = false } = {}) {
   const storage = new Map(cache ? [['nextmed.landing.route.v1', JSON.stringify(cache)]] : []);
+  if (publicationCache) storage.set('nextmed.landing.publication.v1', JSON.stringify(publicationCache));
   const calls = [];
   const context = {
     NextMedLandingDelivery: delivery, URLSearchParams, AbortController, setTimeout, clearTimeout,
     location: { search: preview ? '?landing-preview=1' : '' }, document: { querySelector: () => null },
     localStorage: { getItem: (key) => storage.get(key), setItem: (key, value) => storage.set(key, value) },
-    fetch: async (url, options) => { calls.push({ url, options }); if (offline) throw new Error('offline'); return response(payload, status); }
+    fetch: async (url, options) => { calls.push({ url, options }); if (offline) throw new Error('offline'); return response(url === '/.netlify/functions/landing' ? publicationPayload : payload, status); }
   };
   context.window = context; context.parent = preview ? {} : context;
   vm.runInNewContext(fs.readFileSync(require.resolve('../public/assets/js/landing-source.js'), 'utf8'), context);
   return { settings: await context.NextMedLandingSource.ready, calls, storage };
 }
 
-test('public route resolves once via static GitHub without credentials or any Function', async () => {
+test('public route resolves alongside one cached publication request, without credentials or polling', async () => {
   const result = await sourceRun();
   assert.deepEqual(result.settings.target, custom);
-  assert.equal(result.calls.length, 1);
+  assert.equal(result.calls.length, 2);
   assert.equal(result.calls[0].url, delivery.ROUTE_URL);
   assert.equal(result.calls[0].options.credentials, 'omit');
   assert.equal(result.calls[0].options.headers, undefined);
-  const cached = await sourceRun({ cache: { settings: result.settings, checkedAt: Date.now() } });
+  assert.equal(result.calls[1].url, '/.netlify/functions/landing');
+  assert.equal(result.calls[1].options.cache, 'default');
+  assert.equal(result.calls[1].options.credentials, 'omit');
+  const cached = await sourceRun({ cache: { settings: result.settings, checkedAt: Date.now() }, publicationCache: { publication: null, checkedAt: Date.now() } });
   assert.equal(cached.calls.length, 0);
+});
+
+test('only an explicit Blob mode overrides GitHub; historical published data does not', async () => {
+  const model = landing.defaultModel();
+  const legacy = await sourceRun({ publicationPayload: { active: true, model } });
+  assert.equal(legacy.settings.publication, undefined);
+  const publication = { mode: 'netlify-blobs', version: '11111111-1111-4111-8111-111111111111', active: true, model };
+  const active = await sourceRun({ publicationPayload: publication });
+  assert.equal(active.settings.publication.mode, 'netlify-blobs');
+  assert.equal(active.settings.publication.model.branding.brandName, 'NextMed');
+  const offline = await sourceRun({ offline: true, publicationCache: { publication, checkedAt: Date.now() - 120_000 } });
+  assert.equal(offline.settings.publication.mode, 'netlify-blobs');
 });
 
 test('route loading handles old installations, network failure and editor previews without blocking', async () => {

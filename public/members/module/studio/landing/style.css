@@ -159,3 +159,8 @@ fieldset { margin: 13px 0 0; padding: 11px; border: 1px solid var(--line); borde
 @media (max-width: 760px) { .landing-header { grid-template-columns: auto 1fr; } .header-title { text-align: left; } .header-actions { grid-column: 1 / -1; justify-content: flex-start; } #builder { grid-template-columns: 1fr; } .section-panel { position: static; max-height: none; } .preview-panel { grid-column: auto; } .form-grid, .color-grid, .global-colors { grid-template-columns: 1fr 1fr; } .form-grid .wide { grid-column: 1 / -1; } .asset-url-field > div { grid-template-columns: 1fr; } }
 @media (max-width: 480px) { .form-grid, .color-grid, .global-colors { grid-template-columns: 1fr; } .form-grid .wide { grid-column: auto; } .asset-drop { grid-template-columns: auto 1fr; } .asset-drop button { grid-column: 1 / -1; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+/* Publishing is an explicit choice; switching never silently copies a draft. */
+.publication-settings { margin-top: 1.25rem; padding: 1rem; border: 1px solid var(--line, #dce4e1); border-radius: 14px; }
+.publication-settings > label { display: block; margin-bottom: .6rem; font-weight: 700; }
+.publication-settings select { width: 100%; min-height: 44px; padding: .65rem; border: 1px solid var(--line, #dce4e1); border-radius: 8px; background: var(--surface, #fff); color: inherit; font: inherit; }
+.publication-settings .field-hint { line-height: 1.6; margin-bottom: 0; }

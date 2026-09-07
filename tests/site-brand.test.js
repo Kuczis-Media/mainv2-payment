@@ -60,6 +60,23 @@ test('branding follows the custom JSON source, ignoring a fresh cache from anoth
   assert.equal(JSON.parse(result.storage.get('nextmed.site-brand.v1')).configUrl, delivery.rawUrl(route.target));
 });
 
+test('Blob publication branding overrides an older GitHub cache with no second request', async () => {
+  const delivery = require('../public/assets/js/landing-delivery-model.js');
+  const route = { ...delivery.normalize(), publication: { mode: 'netlify-blobs', active: true, version: 'new', model: model({ brandName: 'Live Blobs' }) } };
+  const result = await run({ route, cache: { 'chem.landing.public.v3': JSON.stringify({ model: model({ brandName: 'Old GitHub' }), checkedAt: Date.now() }) } });
+  assert.equal(result.names[0].textContent, 'Live Blobs');
+  assert.equal(result.calls.length, 0);
+});
+
+test('a new GitHub publication version refreshes branding even when the previous cache is fresh', async () => {
+  const delivery = require('../public/assets/js/landing-delivery-model.js');
+  const route = { ...delivery.normalize(), publication: { mode: 'static-github', active: false, version: 'new' } };
+  const result = await run({ route, cache: { 'chem.landing.public.v3': JSON.stringify({ model: model({ brandName: 'Old GitHub' }), checkedAt: Date.now(), publicationVersion: 'old' }) }, response: { active: true, model: model({ brandName: 'New GitHub' }) } });
+  assert.equal(result.names[0].textContent, 'New GitHub');
+  assert.equal(result.calls.length, 1);
+  assert.equal(JSON.parse(result.storage.get('nextmed.site-brand.v1')).publicationVersion, 'new');
+});
+
 test('expired shell cache refreshes only public GitHub data without credentials', async () => {
   const result = await run({
     cache: { 'nextmed.site-brand.v1': JSON.stringify({ model: model({ brandName: 'Old' }), checkedAt: Date.now() - 16 * 60 * 1000 }) },

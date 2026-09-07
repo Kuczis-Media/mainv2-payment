@@ -18,6 +18,7 @@
   let brandingRequestId = 0;
   let currentModel = null;
   let resolvedConfigUrl = '';
+  let publicationVersion = '';
   const previewMode = /(?:^|[?&])landing-preview=1(?:&|$)/.test(window.location?.search || '') && window.parent !== window;
   const exportMode = Boolean(document.querySelector('meta[name="nextmed-landing-export"]'));
   const exportOrigin = exportMode ? document.querySelector('meta[name="nextmed-landing-origin"]')?.content || '' : '';
@@ -42,15 +43,22 @@
   async function initializeFromSource() {
     try {
       const route = await window.NextMedLandingSource.ready;
-      resolvedConfigUrl = window.NextMedLandingDelivery.rawUrl(route.target);
+      publicationVersion = route.publication?.version || '';
+      const blobPublication = route.publication?.mode === 'netlify-blobs' && usablePayload(route.publication);
+      resolvedConfigUrl = blobPublication ? FUNCTION_ENDPOINT : window.NextMedLandingDelivery.rawUrl(route.target);
       if (route.externalEnabled && route.externalUrl) {
         const target = new URL(route.externalUrl);
         // Never forward login tokens, query strings or fragments to another domain.
         const authHash = /(?:^|[#&])(?:invite_token|recovery_token|confirmation_token|email_change_token|access_token|token|error|error_description|type)=/i.test(location.hash || '');
         if (target.hostname !== location.hostname && !authHash) { location.replace(target.href); return; }
       }
+      if (blobPublication) {
+        if (safelyApply(route.publication.model)) writeCache(route.publication.model, 'netlify-blobs');
+        return;
+      }
       const cached = readCache();
-      if (cached?.model && Date.now() - cached.checkedAt < CACHE_TTL_MS) safelyApply(cached.model);
+      if (cached?.model && Date.now() - cached.checkedAt < CACHE_TTL_MS
+        && (!publicationVersion || cached.publicationVersion === publicationVersion)) safelyApply(cached.model);
       else {
         const inactive = await refresh(cached?.model);
         if (!inactive && !currentModel && cached?.model) safelyApply(cached.model);
@@ -418,7 +426,7 @@
         const model = parsed?.model || parsed;
         if (!validModel(model)) continue;
         const checkedAt = Number(parsed?.checkedAt) || 0;
-        return { model, checkedAt: checkedAt > 0 && checkedAt <= Date.now() ? checkedAt : 0, source: parsed?.source || 'legacy' };
+        return { model, checkedAt: checkedAt > 0 && checkedAt <= Date.now() ? checkedAt : 0, source: parsed?.source || 'legacy', publicationVersion: parsed?.publicationVersion || '' };
       } catch {}
     }
     return null;
@@ -426,7 +434,7 @@
 
   function writeCache(model, source) {
     try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ model, checkedAt: Date.now(), source, configUrl: staticConfigUrl() }));
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ model, checkedAt: Date.now(), source, configUrl: staticConfigUrl(), publicationVersion }));
       localStorage.removeItem(LEGACY_CACHE_KEY);
     } catch {}
   }

@@ -23,6 +23,7 @@
     company: document.getElementById('branding-company'), email: document.getElementById('branding-email'), phone: document.getElementById('branding-phone'), address: document.getElementById('branding-address'), footerText: document.getElementById('branding-footer'),
     siteDescription: document.getElementById('branding-site-description'), copyLogo: document.getElementById('copy-logo-url'),
     save: document.getElementById('save-draft'), publish: document.getElementById('publish'), restore: document.getElementById('restore-published'),
+    publishMode: document.getElementById('publication-mode'), publishModeNote: document.getElementById('publication-mode-note'),
     share: document.getElementById('share-page'), exportHtml: document.getElementById('export-html'), exportConfig: document.getElementById('export-config'), importConfig: document.getElementById('import-config'), importFile: document.getElementById('import-file'),
     recover: document.getElementById('recover-local'), assetDialog: document.getElementById('asset-dialog'), assetClose: document.getElementById('asset-close'),
     assetDrop: document.getElementById('asset-drop'), assetFile: document.getElementById('asset-file'), assetFileButton: document.getElementById('asset-file-button'),
@@ -77,6 +78,7 @@
       try {
         payload = await requestLanding('GET');
         publication = payload.publication || { available: false, sha: null };
+        elements.publishMode.value = publication.mode || 'netlify-blobs';
         serverStorageAvailable = payload.storage?.available !== false;
         staticConfigUrl = safeHttpsUrl(payload.staticConfigUrl);
         model = normalizeLocalModel(payload.draft);
@@ -101,18 +103,12 @@
       bindEvents();
       initializeLivePreview();
       renderAll();
-      elements.publish.disabled = !publication.available;
-      elements.publish.title = publication.available ? '' : 'Publikacja wymaga dostępu do publicznego repozytorium. Możesz pobrać gotową stronę HTML.';
+      updatePublicationControls();
       const previewUrl = document.getElementById('preview-url');
       if (previewUrl) previewUrl.textContent = location.host || 'twoja-strona.pl';
-      const publicationLocation = document.getElementById('landing-publication-location');
-      if (publicationLocation) {
-        publicationLocation.textContent = staticConfigUrl || 'Brak połączenia z repozytorium';
-        if (staticConfigUrl) publicationLocation.href = staticConfigUrl;
-      }
       syncRecoveryButton();
       elements.restore.hidden = !publishedModel;
-      setStatus(bootstrapWarning || (!publication.available ? 'Możesz edytować i pobrać gotową stronę HTML. Publikacja online wymaga skonfigurowanego dostępu do repozytorium GitHub.' : publishedModel
+      setStatus(bootstrapWarning || (!publication.available ? 'Możesz edytować i pobrać gotową stronę HTML. Publikacja online wymaga dostępu do Netlify Blobs lub repozytorium GitHub.' : publishedModel
         ? 'Wczytano draft. Opublikowana strona pozostaje aktywna do kolejnej publikacji.'
         : 'Wczytano wersję startową. Zapisz draft lub opublikuj.'), bootstrapWarning ? 'warning' : 'success');
       if (new URLSearchParams(location.search).get('assets') === '1') void openAssetLibrary('logo');
@@ -159,6 +155,7 @@
     elements.importFile.addEventListener('change', () => { void importConfiguration(elements.importFile.files?.[0]); elements.importFile.value = ''; });
     elements.save.addEventListener('click', saveDraft);
     elements.publish.addEventListener('click', publish);
+    elements.publishMode.addEventListener('change', updatePublicationControls);
     elements.restore.addEventListener('click', restorePublished);
     elements.recover.addEventListener('click', recoverLocalDraft);
     window.addEventListener('beforeunload', (event) => {
@@ -572,14 +569,16 @@
 
   async function publish() {
     if (!validateModelForSave()) return;
-    if (!publication.available) { setStatus('Publikacja wymaga połączenia z repozytorium. Odśwież Studio po konfiguracji GitHuba lub pobierz gotową stronę HTML.', 'error'); return; }
-    if (!window.confirm('Opublikować ten układ i treść na stronie głównej?')) return;
+    const publishMode = elements.publishMode.value;
+    if (!canPublish()) { setStatus('Wybrany magazyn jest niedostępny. Wybierz drugi sposób publikacji lub pobierz HTML.', 'error'); return; }
+    if (!window.confirm(`Opublikować ten układ i treść na stronie głównej przez ${publishMode === 'netlify-blobs' ? 'Netlify Blobs' : 'GitHub'}? Wybrana wersja stanie się aktywnym źródłem strony.`)) return;
     setBusy(true);
     setStatus('Publikowanie strony…', '');
     try {
-      const payload = await requestLanding('POST', { action: 'publish', model, expectedPublishedSha: publication.sha, expectedRouteSha: publication.routeSha ?? null });
-      if (!isLocalModel(payload?.published) || payload?.delivery?.static !== true || !payload?.publication?.sha) throw new Error('Serwer nie potwierdził publikacji. Zachowano bieżące zmiany.');
-      publication = payload.publication;
+      const payload = await requestLanding('POST', { action: 'publish', model, publishMode, expectedPublishedSha: publication.sha ?? null, expectedRouteSha: publication.routeSha ?? null, expectedPublicationVersion: publication.version ?? null });
+      if (!isLocalModel(payload?.published) || payload?.publication?.mode !== publishMode
+        || (publishMode === 'static-github' ? payload?.delivery?.static !== true || !payload.publication.sha : !payload.publication.version)) throw new Error('Serwer nie potwierdził publikacji. Zachowano bieżące zmiany.');
+      publication = { ...publication, ...payload.publication };
       // Draft and publication revisions are independent (the static page may
       // have been published from another device without Blob storage).
       model = normalizeLocalModel(payload.draft || payload.published);
@@ -590,7 +589,8 @@
       clearRecovery();
       renderAll();
       serverStorageAvailable = payload.storage?.available !== false;
-      setStatus(`Zapisano publikację w GitHubie ${new Date(publishedModel.publishedAt).toLocaleString('pl-PL')}. Publiczne cache mogą odświeżać treść do 15 minut. Odsłony treści nie uruchamiają Functions.${payload.draftWarning ? ' Nie udało się zsynchronizować szkicu na serwerze; kolejne zmiany zapiszesz lokalnie.' : ''}`, payload.draftWarning ? 'warning' : 'success');
+      updatePublicationControls();
+      setStatus(`Opublikowano przez ${publishMode === 'netlify-blobs' ? 'Netlify Blobs' : 'GitHub'} ${new Date(publishedModel.publishedAt).toLocaleString('pl-PL')}. ${publishMode === 'netlify-blobs' ? 'Odwiedzający zobaczą zmiany po odświeżeniu cache (zwykle do 2 minut). Odpowiedź jest współdzielona w CDN.' : 'JSON jest statyczny; publiczne cache mogą odświeżać treść do 15 minut. Tryb publikacji jest sprawdzany przez cache CDN.'}${payload.draftWarning ? ' Nie udało się zsynchronizować szkicu na serwerze; kolejne zmiany zapiszesz lokalnie.' : ''}`, payload.draftWarning ? 'warning' : 'success');
     } catch (error) { setStatus(error.message, 'error'); }
     finally { setBusy(false); }
   }
@@ -654,7 +654,10 @@
 
   function cachePublishedLocally(published) {
     try {
-      localStorage.setItem('chem.landing.public.v3', JSON.stringify({ model: published, checkedAt: Date.now(), source: 'builder', configUrl: staticConfigUrl }));
+      const blobMode = publication.mode === 'netlify-blobs';
+      const publicState = publication.version ? { mode: publication.mode, version: publication.version, active: blobMode, ...(blobMode ? { model: published } : {}) } : null;
+      localStorage.setItem('nextmed.landing.publication.v1', JSON.stringify({ publication: publicState, checkedAt: Date.now() }));
+      localStorage.setItem('chem.landing.public.v3', JSON.stringify({ model: published, checkedAt: Date.now(), source: 'builder', configUrl: blobMode ? '/.netlify/functions/landing' : staticConfigUrl, publicationVersion: publication.version || '' }));
       localStorage.removeItem('chem.landing.public.v2');
     } catch {}
   }
@@ -1143,11 +1146,31 @@
     return payload;
   }
 
+  function canPublish() {
+    return publication.available && (publication.modes ? publication.modes[elements.publishMode.value] === true : elements.publishMode.value === publication.mode);
+  }
+
+  function updatePublicationControls() {
+    for (const option of elements.publishMode.options) option.disabled = publication.modes ? publication.modes[option.value] !== true : option.value !== publication.mode;
+    const blobMode = elements.publishMode.value === 'netlify-blobs';
+    elements.publish.disabled = !canPublish();
+    elements.publish.title = canPublish() ? '' : 'Magazyn jest niedostępny. Sprawdź konfigurację lub pobierz stronę HTML.';
+    elements.publishModeNote.textContent = blobMode
+      ? 'Publikacja bez repozytorium GitHub. Wymaga skonfigurowanych Netlify Blobs (SITE_ID i NETLIFY_API_TOKEN). Odczyt jest cache’owany przez 60 s w CDN i przeglądarce; brak ciągłego odpytywania. Szkic nie jest publiczny.'
+      : 'Treść jako publiczny JSON w wybranym repozytorium. Token GitHuba musi mieć prawo zapisu. Tylko informacja o aktywnym źródle jest odczytywana przez cache’owaną Function.';
+    const publicationLocation = document.getElementById('landing-publication-location');
+    const url = blobMode ? new URL('/.netlify/functions/landing', location.origin).href : staticConfigUrl;
+    if (publicationLocation) {
+      publicationLocation.textContent = blobMode ? 'Netlify Blobs → ta strona' : staticConfigUrl || 'Brak połączenia z repozytorium';
+      if (url) publicationLocation.href = url; else publicationLocation.removeAttribute('href');
+    }
+  }
+
   function setBusy(busy) {
     elements.builder.inert = busy;
     elements.builder.setAttribute('aria-busy', String(busy));
     elements.save.disabled = busy;
-    elements.publish.disabled = busy || !publication.available;
+    elements.publish.disabled = busy || !canPublish();
     elements.restore.disabled = busy;
     elements.recover.disabled = busy;
     elements.exportHtml.disabled = busy;

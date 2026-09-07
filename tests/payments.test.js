@@ -25,7 +25,7 @@ function publicOffer(overrides = {}) {
   };
 }
 
-function loadPaymentsClient({ storage = new Map(), fetchImpl }) {
+function loadPaymentsClient({ storage = new Map(), fetchImpl, schedule = setTimeout, cancel = clearTimeout }) {
   const document = {
     readyState: 'loading',
     addEventListener() {},
@@ -39,7 +39,8 @@ function loadPaymentsClient({ storage = new Map(), fetchImpl }) {
   const window = {
     document,
     sessionStorage,
-    setTimeout,
+    setTimeout: schedule,
+    clearTimeout: cancel,
     dispatchEvent() {},
     location: { assign() {} }
   };
@@ -65,6 +66,27 @@ function loadPaymentsClient({ storage = new Map(), fetchImpl }) {
   );
   return { api: window.ChemPayments, storage };
 }
+
+test('price requests time out, release the shared pending request and can be retried', async () => {
+  let expire; let attempts = 0; let cancelled = 0;
+  const client = loadPaymentsClient({
+    schedule: (callback, delay) => { assert.equal(delay, 10_000); expire = callback; return 1; },
+    cancel: () => { cancelled++; },
+    fetchImpl: async (url, options) => {
+      attempts++;
+      if (attempts === 1) return new Promise((resolve, reject) => options.signal.addEventListener('abort', () => reject(new Error('Aborted'))));
+      return { ok: true, json: async () => publicOffer() };
+    }
+  });
+  const first = client.api.loadConfig(false);
+  assert.equal(client.api.loadConfig(false), first);
+  expire();
+  await assert.rejects(first, /Aborted/);
+  assert.equal(attempts, 1);
+  await client.api.loadConfig(false);
+  assert.equal(attempts, 2);
+  assert.equal(cancelled, 2);
+});
 
 function purchase(id, plan = 'month', amount = 5_000) {
   return {

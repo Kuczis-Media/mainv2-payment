@@ -89,6 +89,28 @@ test('fresh cache from the selected file renders without another config request'
   assert.equal(result.document.documentElement.dataset.landingLoading, undefined);
 });
 
+test('an explicit Blob publication renders without a GitHub request even if a fresh GitHub cache has a higher revision', async () => {
+  const delivery = require('../public/assets/js/landing-delivery-model.js');
+  const route = { ...delivery.normalize(), publication: { mode: 'netlify-blobs', version: 'new-publication', active: true, model: runtimeModel(1, 'Blobs live') } };
+  const result = routedRuntime({ route, cache: { model: runtimeModel(90, 'Stale GitHub'), checkedAt: Date.now(), configUrl: STATIC_CONFIG_URL } });
+  await result.settled();
+  assert.equal(result.document.title, 'Blobs live — NextMed');
+  assert.equal(result.calls.length, 0);
+  assert.equal(JSON.parse(result.storage.get('chem.landing.public.v3')).configUrl, '/.netlify/functions/landing');
+});
+
+test('a changed GitHub publication version refreshes an otherwise fresh cache', async () => {
+  const delivery = require('../public/assets/js/landing-delivery-model.js');
+  const route = { ...delivery.normalize(), publication: { mode: 'static-github', version: 'new-publication', active: false } };
+  const result = routedRuntime({ route, payload: { active: true, model: runtimeModel(3, 'Published now') }, cache: {
+    model: runtimeModel(2, 'Previous'), checkedAt: Date.now(), configUrl: STATIC_CONFIG_URL, publicationVersion: 'previous-publication'
+  } });
+  await result.settled();
+  assert.equal(result.document.title, 'Published now — NextMed');
+  assert.equal(result.calls.length, 1);
+  assert.equal(JSON.parse(result.storage.get('chem.landing.public.v3')).publicationVersion, 'new-publication');
+});
+
 test('an inactive publication clears an expired cache without reapplying it', async () => {
   const result = routedRuntime({ payload: { active: false }, cache: { model: runtimeModel(5, 'Retired'), checkedAt: 1, configUrl: STATIC_CONFIG_URL } });
   await result.settled();

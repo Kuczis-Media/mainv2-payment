@@ -4,8 +4,8 @@ const { json } = require('../admin-common.js');
 const landing = require('../landing-content.js');
 
 const PUBLIC_CACHE_HEADERS = Object.freeze({
-  'Cache-Control': 'public, max-age=60, stale-while-revalidate=300',
-  'Netlify-CDN-Cache-Control': 'public, durable, max-age=600, stale-while-revalidate=3600',
+  'Cache-Control': 'public, max-age=60, must-revalidate',
+  'Netlify-CDN-Cache-Control': 'public, durable, max-age=60, must-revalidate',
   'Netlify-Cache-Tag': 'chemdisk-landing',
   Vary: 'Accept-Encoding'
 });
@@ -13,7 +13,14 @@ const PUBLIC_CACHE_HEADERS = Object.freeze({
 exports.handler = async (event = {}) => {
   if (String(event.httpMethod || '').toUpperCase() !== 'GET') return json({ error: 'METHOD_NOT_ALLOWED' }, 405, { Allow: 'GET' });
   try {
-    const result = await landing.readModel(landing.getLandingStore(), landing.PUBLISHED_KEY);
+    const store = landing.getLandingStore();
+    const publication = await landing.readPublication(store);
+    if (publication.version) return json({
+      mode: publication.mode, version: publication.version,
+      active: publication.mode === 'netlify-blobs',
+      ...(publication.model ? { model: landing.publicModel(publication.model) } : {})
+    }, 200, PUBLIC_CACHE_HEADERS);
+    const result = await landing.readModel(store, landing.PUBLISHED_KEY);
     return json(result.exists ? {
       active: true,
       model: landing.publicModel(result.model)

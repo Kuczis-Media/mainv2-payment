@@ -1,12 +1,14 @@
 'use strict';
 
 const { getStore } = require('@netlify/blobs');
+const { randomUUID } = require('node:crypto');
 const { storageConfig } = require('./progress-storage.js');
 const DEFAULT_MODEL = require('../public/assets/data/landing-default.json');
 
 const STORE_NAME = 'chemdisk-landing';
 const DRAFT_KEY = 'draft.json';
 const PUBLISHED_KEY = 'published.json';
+const PUBLICATION_KEY = 'publication.json';
 const MAX_RETRIES = 8;
 const MODEL_VERSION = 3;
 const SECTION_IDS = Object.freeze(['home', 'about', 'services', 'pricing', 'skills', 'contact']);
@@ -124,12 +126,40 @@ async function readModel(store, key) {
 }
 
 async function readEditorState(store) {
-  const [draft, published] = await Promise.all([readModel(store, DRAFT_KEY), readModel(store, PUBLISHED_KEY)]);
+  const [draft, published, publication] = await Promise.all([readModel(store, DRAFT_KEY), readModel(store, PUBLISHED_KEY), readPublication(store)]);
   return {
     draft: draft.exists ? draft.model : published.exists ? published.model : defaultModel(),
     draftExists: draft.exists,
-    published: published.exists ? published.model : null
+    published: published.exists ? published.model : null,
+    publication
   };
+}
+
+// One conditional write changes the active delivery mode and its public model
+// together. Historical published.json files never silently override GitHub.
+async function readPublication(store) {
+  const entry = await readEntry(store, PUBLICATION_KEY);
+  if (!entry) return { mode: 'static-github', version: null, model: null };
+  const value = entry.value;
+  if (!plainObject(value) || !['static-github', 'netlify-blobs'].includes(value.mode)
+    || typeof value.version !== 'string' || !/^[a-f0-9-]{36}$/i.test(value.version)) throw landingError('LANDING_STORAGE_INVALID', 503);
+  return {
+    mode: value.mode, version: value.version,
+    model: value.mode === 'netlify-blobs' ? normalizeModel(value.model, true) : null
+  };
+}
+
+async function setPublication(store, { mode, model }, expectedVersion) {
+  if (!['static-github', 'netlify-blobs'].includes(mode)) throw landingError('INVALID_LANDING_PUBLICATION_MODE', 400);
+  const current = await readEntry(store, PUBLICATION_KEY);
+  if ((current?.value?.version ?? null) !== expectedVersion) throw landingError('LANDING_DESTINATION_CHANGED', 409);
+  const next = { mode, version: randomUUID(), ...(mode === 'netlify-blobs' ? { model: normalizeModel(model, true) } : {}) };
+  const result = await store.set(PUBLICATION_KEY, JSON.stringify(next), {
+    ...(current ? { onlyIfMatch: current.etag } : { onlyIfNew: true }),
+    metadata: { mode, version: next.version }
+  });
+  if (result?.modified !== true) throw landingError('LANDING_DESTINATION_CHANGED', 409);
+  return { ...next, model: next.model || null };
 }
 
 async function saveDraft(store, raw, adminId) {
@@ -320,6 +350,7 @@ module.exports = {
   DRAFT_KEY,
   MODEL_VERSION,
   PUBLISHED_KEY,
+  PUBLICATION_KEY,
   SECTION_IDS,
   STORE_NAME,
   defaultModel,
@@ -329,8 +360,10 @@ module.exports = {
   publish,
   publicModel,
   readEditorState,
+  readPublication,
   readModel,
   saveDraft,
+  setPublication,
   _test: {
     resetStoreFactory() { injectedStoreFactory = null; },
     setStoreFactory(factory) { injectedStoreFactory = typeof factory === 'function' ? factory : null; }

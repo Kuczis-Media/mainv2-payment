@@ -51,7 +51,7 @@
         <li id="nav-pricing"><a href="#pricing">Cennik</a></li>
         <li id="nav-skills"><a href="#skills">Jak zacząć</a></li>
         <li id="nav-contact"><a href="#contact">Kontakt</a></li>
-        <li id="nav-login"><a id="login-btn" class="nav-login" href="/members/">Zaloguj się</a></li>
+        <li id="nav-login"><a id="login-btn" class="nav-login" href="/login/">Zaloguj się</a></li>
       </ul>
       <button class="menu-toggle" type="button" aria-label="Otwórz menu" aria-expanded="false" aria-controls="landing-menu">
         <span></span><span></span><span></span>
@@ -61,16 +61,18 @@
 
   <main>
     <section class="home" id="home">
+      <div class="hero-grid" aria-hidden="true"></div>
       <div class="hero-orb hero-orb-one" data-parallax="-45" aria-hidden="true"></div>
       <div class="hero-orb hero-orb-two" data-parallax="55" aria-hidden="true"></div>
       <div class="max-width hero-layout">
         <div class="home-content">
           <div class="text-1">Twój kierunek: więcej możliwości</div>
           <h1 class="text-2">Ta matura. Twój następny krok.</h1>
+          <p class="hero-typewriter"><span class="typewriter-copy">Zrozumieć. Przećwiczyć. Zapamiętać.</span><span class="typewriter-ink" aria-hidden="true"></span></p>
           <p class="text-3">Zamień wielkie plany w małe, codzienne kroki. Ucz się, sprawdzaj wiedzę i wracaj do tego, co naprawdę wymaga powtórki.</p>
           <div class="hero-actions">
             <a id="login-cta" href="/members/">Zacznij naukę</a>
-            <a class="hero-secondary" href="#services">Zobacz platformę</a>
+            <a class="hero-secondary" href="#pricing">Poznaj pakiety <span aria-hidden="true">↗</span></a>
           </div>
           <ul class="hero-proof" aria-label="Najważniejsze zalety">
             <li><span>✓</span> Materiały w jednym miejscu</li>
@@ -79,7 +81,7 @@
           </ul>
         </div>
         <div class="hero-scene" aria-label="Przykładowy widok platformy">
-          <div class="scene-orbit" aria-hidden="true"></div>
+          <div class="scene-orbit" aria-hidden="true"><span class="orbit-marker"></span></div>
           <div class="scene-label"><span class="live-dot"></span> PRZESTRZEŃ DO NAUKI / 01</div>
           <div class="hero-visual" data-parallax="-58">
             <div class="visual-topbar"><span></span><span></span><span></span><small data-brand-name>NextMed</small></div>
@@ -145,7 +147,8 @@
         <div class="section-heading" data-reveal><span>03 / Zaczynamy?</span><h2 class="title">Wybierz dostęp</h2></div>
         <p class="landing-section-subtitle">Pakiet dopasowany do Twojego planu</p>
         <p class="pricing-intro">Aktualne ceny, zakres dostępu i zasady przedłużania zawsze zobaczysz poniżej przed płatnością.</p>
-        <div class="chem-pricing" data-pricing data-pricing-mode="public" aria-live="polite"><div class="offer-gate" data-reveal><span class="offer-symbol" aria-hidden="true">↗</span><div><h3>Twój plan. Twoje tempo.</h3><p>Zobacz dostępne pakiety i aktualne ceny. Wybierz dostęp, który pasuje do Ciebie.</p></div><button id="load-offer" type="button">Pokaż pakiety <span aria-hidden="true">→</span></button><a class="offer-fallback" href="/purchase/">Przejdź do oferty ↗</a></div></div>
+        <div class="chem-pricing" data-pricing data-pricing-mode="public" aria-live="polite"><div class="offer-gate"><span class="offer-symbol" aria-hidden="true">↗</span><div><h3>Dobry plan to dobra inwestycja.</h3><p id="offer-status">Wczytuję aktualne ceny i dostępne pakiety…</p></div><button id="load-offer" type="button" hidden>Spróbuj ponownie</button><a class="offer-fallback" href="/purchase/">Otwórz cennik na stronie zakupu ↗</a></div></div>
+        <noscript><p><a href="/purchase/">Otwórz stronę zakupu, aby sprawdzić aktualne ceny.</a> Do wczytania pakietów potrzebny jest JavaScript.</p></noscript>
         <a class="landing-section-cta" href="#" hidden></a>
       </div>
     </section>
@@ -207,5 +210,6 @@
 
   <script src="/assets/start_site/script.js"></script>
   <script defer src="/assets/js/landing-runtime.js"></script>
+  <script defer src="/assets/js/landing-session.js"></script>
 </body>
 </html>

@@ -39,10 +39,13 @@
       return configPromise;
     }
     configLoadedAt = 0;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 10_000);
     configPromise = fetch(CONFIG_URL, {
       method: 'GET',
       cache: force ? 'no-store' : 'default',
       credentials: 'same-origin',
+      signal: controller.signal,
       headers: { Accept: 'application/json' }
     }).then(async (response) => {
       let payload = null;
@@ -57,7 +60,7 @@
       configPromise = null;
       configLoadedAt = 0;
       throw error;
-    });
+    }).finally(() => window.clearTimeout(timeout));
     return configPromise;
   }
 

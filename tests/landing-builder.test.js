@@ -26,6 +26,81 @@ class MemoryStore {
 
 test.afterEach(() => landing._test.resetStoreFactory());
 
+function adminFixture(t, store = new MemoryStore()) {
+  landing._test.setStoreFactory(() => store);
+  const user = { id: 'admin-publication-test', app_metadata: { roles: ['admin'] } };
+  const context = { clientContext: { user, identity: { url: 'https://course.example/.netlify/identity' } } };
+  const headers = { authorization: 'Bearer test', 'content-type': 'application/json', origin: 'https://course.example', host: 'course.example', 'x-forwarded-proto': 'https' };
+  t.mock.method(global, 'fetch', async () => new Response(JSON.stringify(user), { status: 200 }));
+  const request = (body) => adminEndpoint.handler({ httpMethod: 'POST', headers, body: JSON.stringify({ action: 'publish', ...body }) }, context);
+  return { store, user, context, headers, request };
+}
+
+test('builder publishes through Blobs without a GitHub token and public reads never disclose the editor identity', async (t) => {
+  const fixture = adminFixture(t);
+  const assets = require('../netlify/site-assets.js');
+  const github = t.mock.method(assets, 'readLandingRoute', async () => { throw Object.assign(new Error('No token'), { code: 'SITE_ASSETS_NOT_CONFIGURED' }); });
+  const opened = JSON.parse((await adminEndpoint.handler({ httpMethod: 'GET', headers: fixture.headers }, fixture.context)).body);
+  assert.equal(opened.publication.mode, 'netlify-blobs');
+  assert.equal(opened.publication.modes['netlify-blobs'], true);
+  assert.equal(opened.publication.modes['static-github'], false);
+  const result = await fixture.request({ publishMode: 'netlify-blobs', model: opened.draft, expectedPublicationVersion: null });
+  assert.equal(result.statusCode, 200);
+  const saved = JSON.parse(result.body);
+  assert.equal(saved.publication.mode, 'netlify-blobs');
+  assert.match(saved.publication.version, /^[a-f0-9-]{36}$/);
+  assert.equal(github.mock.callCount(), 1, 'Only opening the editor checks optional GitHub; Blob publish does not call it');
+  const publicResult = await publicEndpoint.handler({ httpMethod: 'GET' });
+  const publicData = JSON.parse(publicResult.body);
+  assert.equal(publicData.mode, 'netlify-blobs');
+  assert.equal(publicData.active, true);
+  assert.equal(publicData.model.branding.brandName, 'NextMed');
+  assert.doesNotMatch(publicResult.body, /admin-publication-test|updatedBy/);
+  assert.match(publicResult.headers['Netlify-CDN-Cache-Control'], /max-age=60/);
+});
+
+test('a newer Blob publication rejects an older open editor without replacing its public content', async (t) => {
+  const { store, request } = adminFixture(t);
+  const first = JSON.parse((await request({ publishMode: 'netlify-blobs', model: landing.defaultModel(), expectedPublicationVersion: null })).body);
+  const edit = structuredClone(first.draft); edit.sections[0].title = 'Latest live version';
+  const second = JSON.parse((await request({ publishMode: 'netlify-blobs', model: edit, expectedPublicationVersion: first.publication.version })).body);
+  const stale = await request({ publishMode: 'netlify-blobs', model: first.draft, expectedPublicationVersion: first.publication.version });
+  assert.equal(stale.statusCode, 409);
+  assert.equal((await landing.readPublication(store)).model.sections[0].title, 'Latest live version');
+  assert.notEqual(second.publication.version, first.publication.version);
+});
+
+test('GitHub failure does not silently replace the active Blob publication; an explicit successful switch does', async (t) => {
+  const { store, request } = adminFixture(t);
+  const initial = JSON.parse((await request({ publishMode: 'netlify-blobs', model: landing.defaultModel(), expectedPublicationVersion: null })).body);
+  const assets = require('../netlify/site-assets.js');
+  t.mock.method(assets, 'readLandingRoute', async () => ({ settings: require('../public/assets/js/landing-delivery-model.js').normalize(), sha: null }));
+  const publish = t.mock.method(assets, 'publishLandingConfig', async () => { throw Object.assign(new Error('GitHub failed'), { code: 'LANDING_STATIC_PUBLISH_FAILED', status: 503 }); });
+  const body = { publishMode: 'static-github', expectedPublishedSha: null, expectedRouteSha: null, expectedPublicationVersion: initial.publication.version, model: initial.draft };
+  assert.equal((await request(body)).statusCode, 503);
+  assert.equal((await landing.readPublication(store)).version, initial.publication.version);
+  publish.mock.mockImplementation(async (model) => ({ model: { ...model, revision: 20, publishedAt: new Date().toISOString() }, sha: 'c'.repeat(40), mode: 'static-github' }));
+  assert.equal((await request(body)).statusCode, 200);
+  const publicData = JSON.parse((await publicEndpoint.handler({ httpMethod: 'GET' })).body);
+  assert.equal(publicData.mode, 'static-github');
+  assert.equal(publicData.active, false);
+  assert.equal(publicData.model, undefined, 'An old Blob model cannot accompany a switch to GitHub');
+});
+
+test('publication CAS protects the read-to-write race and rejects unavailable storage without contacting GitHub', async (t) => {
+  const store = new MemoryStore();
+  const start = await landing.setPublication(store, { mode: 'netlify-blobs', model: landing.defaultModel() }, null);
+  const originalSet = store.set.bind(store);
+  t.mock.method(store, 'set', async (key, ...args) => key === landing.PUBLICATION_KEY ? { modified: false } : originalSet(key, ...args));
+  await assert.rejects(() => landing.setPublication(store, { mode: 'static-github' }, start.version), { code: 'LANDING_DESTINATION_CHANGED' });
+  assert.equal((await landing.readPublication(store)).mode, 'netlify-blobs');
+  const fixture = adminFixture(t, { getWithMetadata: async () => { throw new Error('Storage offline'); } });
+  const github = t.mock.method(require('../netlify/site-assets.js'), 'readLandingRoute', async () => { throw new Error('Must not read GitHub'); });
+  const failed = await fixture.request({ publishMode: 'static-github', model: landing.defaultModel(), expectedPublishedSha: null, expectedPublicationVersion: null });
+  assert.equal(failed.statusCode, 503);
+  assert.equal(github.mock.callCount(), 0);
+});
+
 test('publication failure leaves the public page untouched and draft/public revisions stay independent', async (t) => {
   const siteAssets = require('../netlify/site-assets.js');
   t.mock.method(siteAssets, 'readLandingRoute', async () => ({ settings: require('../public/assets/js/landing-delivery-model.js').normalize(), sha: null }));

@@ -6,13 +6,20 @@ Samo pisanie i podgląd nie wywołują Functions. Szkic ma lokalną kopię w prz
 
 ## Publikacja i zmienne
 
-W generatorze `.env` znajdziesz grupę **Logo i landing**. Ustaw `GITHUB_SITE_ASSETS_TOKEN`: fine-grained PAT z uprawnieniem **Contents: Read and write** do publicznego repozytorium `Kuczis-Media/logo` oraz repozytorium JSON, jeśli wybierzesz inne. Token pozostaje wyłącznie po stronie serwera. Plik domyślnie publikowany pod `landing/config.json` zawiera publiczną treść strony i informacje o marce, dlatego nie wpisuj tam sekretów.
+W builderze wybierz **Gdzie opublikować?**, a następnie **Opublikuj**:
+
+- **Netlify Blobs — bez GitHuba**: wymaga `SITE_ID` i `NETLIFY_API_TOKEN`. Nie potrzebuje tokenu GitHuba do publikacji treści. Szkic jest osobny; aktywna publikacja znajduje się w rekordzie `publication.json` magazynu `chemdisk-landing`.
+- **GitHub — publiczny plik JSON**: wymaga `GITHUB_SITE_ASSETS_TOKEN` z **Contents: Read and write** do publicznego `Kuczis-Media/logo` oraz wybranego repozytorium JSON. Domyślna ścieżka to `landing/config.json`.
+
+Rekord aktywnego źródła w Blobs rozstrzyga, którą publikację wyświetlać. Stare pliki GitHuba nie przesłaniają aktywnej wersji Blobs, a błąd GitHuba nie uruchamia automatycznej publikacji do innego miejsca. Zmiana z aktywnych Blobs na GitHub wymaga działającego magazynu, aby zapisać zmianę źródła. Starsza karta buildera nie może zastąpić nowszej publikacji; przy konflikcie zachowaj JSON i odśwież edytor.
+
+Generator `.env` opisuje obie możliwości. Sekrety zostają na serwerze; nie wpisuj ich w treściach strony. Bez konfiguracji serwerowej nadal działa edycja lokalna i eksport HTML.
 
 `GITHUB_SITE_ASSETS_DIRECTORY` opcjonalnie wybiera katalog przesyłanych obrazów. Nie zmienia ścieżki konfiguracji strony. Serwerowy szkic wymaga też działającego magazynu Blobs (`SITE_ID` i `NETLIFY_API_TOKEN`). Po zmianie zmiennych środowiskowych wykonaj deploy aplikacji.
 
-Publikacja zapisuje statyczną konfigurację w GitHubie. Jeśli zapis GitHuba się nie powiedzie, Studio zgłasza błąd publikacji; publiczna strona zachowuje poprzednią wersję. Skuteczna publikacja nie wymaga nowego deploya. Nazwa, logo i favicon z tej konfiguracji są także używane przez główne ekrany panelu, Studio, logowania, zakupów i statusu dostępu.
+Skuteczna publikacja treści nie wymaga nowego deploya. Nazwa, logo i favicon z aktywnej konfiguracji są także używane przez główne ekrany panelu, Studio, logowania, zakupów i statusu dostępu. Nowy kod aplikacji wymaga jednorazowego wdrożenia; później wystarczy publikować z buildera.
 
-Odczyt wspólnej marki używa 15-minutowego cache w przeglądarce. Osoba, która wcześniej odwiedziła stronę, może więc zobaczyć zmianę z opóźnieniem do około 15 minut, dodatkowo zależnym od cache GitHuba. Odświeżenie strony wciąż korzysta z aktualnej kopii lokalnej. Obrazy przesłane w Studio mają linki CDN przypięte do wersji pliku, co umożliwia długie cache bez mylenia różnych wersji logo.
+Aktywne źródło ma 60-sekundowy cache CDN i przeglądarki. Zmiana może pojawić się przy kolejnym wejściu z opóźnieniem około 1–2 minut, a dla GitHuba dochodzi jego cache. Sama treść GitHuba ma 15-minutowy cache lokalny, ale nowa wersja publikacji z buildera wymusza wcześniejsze odświeżenie. Ręczne zmiany JSON poza builderem pozostają zależne od tego 15-minutowego cache. Publikujący otrzymuje lokalną kopię od razu. Obrazy przesłane w Studio mają linki CDN przypięte do wersji pliku.
 
 ## Inna domena i własna ścieżka JSON
 
@@ -21,11 +28,11 @@ W **Panel admina → Landing** dostępne są:
 - **Używaj landingu z innej domeny** i adres, np. `start.netlify.app`. Po zapisaniu wejście na stronę główną przekierowuje przeglądarkę na ten adres HTTPS. Wyłączenie przełącznika przywraca lokalny landing. Panel `/members/`, logowanie `/login/` i kurs nie są przekierowywane. Parametry i fragment wejściowego adresu, w tym tokeny logowania, nie są przekazywane obcej domenie.
 - **Plik JSON** w formacie `właściciel/repozytorium/ścieżka.json`, np. `Kuczis-Media/repo/strona.json`, oraz **Gałąź GitHuba**, np. `main`. Repozytorium i gałąź muszą już istnieć, repozytorium musi być publiczne. Obok można skopiować gotowy publiczny URL. Nie trzeba zmieniać `.env` ani robić deploya po każdej zmianie ścieżki.
 
-Przy zapisie do nieistniejącego pliku aplikacja najpierw kopiuje obecną publikację (lub domyślny landing, jeśli jeszcze nie ma publikacji), dopiero potem zmienia aktywne źródło. Poprzedni plik zostaje na miejscu. Istniejący poprawny landing jest używany bez nadpisania; niepowiązany lub uszkodzony JSON powoduje błąd. W razie konfliktu przy przełączeniu źródła nowa kopia może już istnieć, ale stary plik i aktywne ustawienia nie są usuwane. Po zmianie źródła odśwież otwarte Studio — publikacja ze starej karty zostanie zablokowana. Szkic edytora jest oddzielny od publikacji: sprawdź jego treść przed opublikowaniem w nowym miejscu.
+Przy zapisie do nieistniejącego pliku aplikacja najpierw kopiuje obecną publikację GitHuba (lub domyślny landing, jeśli jeszcze nie ma takiej publikacji), dopiero potem zmienia źródło dla trybu GitHub. Wybór ścieżki nie wyłącza aktywnej publikacji Blobs — tryb wybierasz osobno w builderze. Poprzedni plik zostaje na miejscu. Istniejący poprawny landing jest używany bez nadpisania; niepowiązany lub uszkodzony JSON powoduje błąd. W razie konfliktu przy przełączeniu źródła nowa kopia może już istnieć, ale stary plik i aktywne ustawienia nie są usuwane. Po zmianie źródła odśwież otwarte Studio — publikacja ze starej karty zostanie zablokowana. Szkic edytora jest oddzielny od publikacji: sprawdź jego treść przed opublikowaniem w nowym miejscu.
 
 Mały plik startowy `Kuczis-Media/logo@main/landing/route.json` przechowuje adres zewnętrzny i wskazanie wybranego JSON. Ta ścieżka jest stała i zarezerwowana, żeby wszystkie strony wiedziały, skąd odczytać ustawienia. Repozytorium obrazów pozostaje `Kuczis-Media/logo`; zmiana lokalizacji JSON nie przenosi obrazów. Token musi mieć dostęp zarówno do repozytorium ustawień, jak i do docelowego repozytorium JSON.
 
-Strona główna najpierw ustala źródło, potem odczytuje JSON i renderuje treść. W czasie oczekiwania pokazuje krótki komunikat ładowania. Odczyty mają timeouty; przy awarii używana jest poprawna kopia z cache lub strona dołączona do wdrożenia. Plik startowy ma 1-minutowy cache przeglądarki, sama treść i marka — 15-minutowy. Cache treści jest przypisany do pełnego adresu JSON, więc zmiana repozytorium nie wczytuje poprzedniej marki. Dochodzi do tego czas odświeżenia cache GitHuba. Odczyt ustawień i treści nie wywołuje Functions; w panelu funkcja uruchamia się przy wczytaniu lub zapisie ustawień, bez cyklicznego odpytywania.
+Strona główna najpierw ustala źródło, potem odczytuje JSON i renderuje treść. W czasie oczekiwania pokazuje krótki komunikat ładowania. Odczyty mają timeouty; przy awarii używana jest poprawna kopia z cache lub strona dołączona do wdrożenia. Plik startowy ma 1-minutowy cache przeglądarki, sama treść i marka — 15-minutowy. Cache treści jest przypisany do pełnego adresu JSON, więc zmiana repozytorium nie wczytuje poprzedniej marki. Dochodzi do tego czas odświeżenia cache GitHuba. Aktywne źródło jest dodatkowo sprawdzane przez cache’owany endpoint opisany niżej; w panelu funkcja uruchamia się przy wczytaniu lub zapisie ustawień, bez cyklicznego odpytywania.
 
 Zewnętrzny landing jest niezależną stroną, a nie ramką w aplikacji. Musi mieć własny kod odczytu i renderowania wybranego JSON; samo wpisanie domeny nie dodaje takiego kodu. Kopia tej aplikacji NextMed korzysta z tego samego pliku startowego i pomija przekierowanie na własną domenę. Eksport **Pobierz stronę HTML** pozostaje natomiast samodzielną migawką, nie odczytuje późniejszych zmian JSON.
 
@@ -37,8 +44,14 @@ Linki do kursu, konta i zakupu prowadzą do oryginalnej aplikacji. Kontakt używ
 
 ## Koszt odczytów
 
-Statyczna konfiguracja, marka i animacje przewijania nie uruchamiają Functions. Zapis szkicu i publikacja wykonują pojedyncze żądanie do funkcji administracyjnej; publikacja może wewnątrz wykonać kilka operacji GitHuba lub magazynu.
+Animacje przewijania, efekt pisania i lokalna edycja nie wywołują Functions. Aktywne źródło jest pobierane przez `/.netlify/functions/landing`, z 60-sekundowym cache przeglądarki i współdzielonym cache CDN. W trybie Blobs ta sama odpowiedź zawiera treść, bez drugiego żądania. W trybie GitHub treść pochodzi ze statycznego JSON. Nie ma odpytywania w tle podczas przewijania. Nie oznacza to zerowego kosztu Functions — cache ogranicza liczbę wykonań. Zapis szkicu i publikacja wykonują pojedyncze żądanie administracyjne, które może wewnętrznie wykonać kilka operacji magazynu lub GitHuba.
 
-Na głównej stronie aplikacji aktualne pakiety pobierają się po kliknięciu przycisku pokazania oferty. Ten odczyt ma cache, ale może wywołać funkcję płatności. Logowanie, checkout, sprawdzanie uprawnień i działanie samego kursu pozostają funkcjami aplikacji, a nie statycznej strony. Nie należy więc interpretować statycznego landingu jako wyłączenia kosztu całego backendu.
+Na głównej stronie aktualny cennik pobiera się automatycznie, bez kliknięcia. Odczyt cen ma cache i limit czasu; w razie problemu można go ponowić. Podgląd w builderze i eksport HTML nie pobierają cen. Logowanie, checkout, sprawdzanie uprawnień i działanie samego kursu pozostają funkcjami aplikacji, a nie statycznej strony. Nie należy więc interpretować statycznego landingu jako wyłączenia kosztu całego backendu.
+
+## Wygląd i sesja
+
+Landing ma szeryfowe nagłówki, animowane wejścia, paralaksę i jednorazowy efekt pisania. Przełącznik animacji w builderze oraz ustawienie ograniczonego ruchu w systemie wyłączają ruch. Nie ma stale działającej pętli animacji JavaScript.
+
+Na tej samej domenie informacja o lokalnej sesji zmienia przycisk na **Przejdź do kursu** bez odpytywania Identity. To wskazówka interfejsu, nie potwierdzenie uprawnień — kurs nadal sprawdza sesję i dostęp. Obce odnośniki i CTA prowadzące do cennika nie są zmieniane. Podgląd w builderze pokazuje etykietę autora. Osobna domena nie ma dostępu do sesji platformy.
 
 Techniczne nazwy istniejących repozytoriów, magazynów danych i kluczy sesji nie zostały przemianowane: zmiana widocznej marki nie wymaga migracji kont ani materiałów.
