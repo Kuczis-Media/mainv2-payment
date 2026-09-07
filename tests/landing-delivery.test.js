@@ -128,17 +128,34 @@ test('settings endpoint requires admin and same-origin mutation and passes the e
   assert.equal(save.mock.calls[0].arguments[2].origin, 'https://course.example');
 });
 
-test('a builder opened before a destination change cannot publish to the newly selected file', async (t) => {
-  t.mock.method(global, 'fetch', async () => response(user));
-  t.mock.method(assets, 'readLandingRoute', async () => ({ settings: delivery.normalize({ target: custom }), sha: NEW_SHA }));
-  const save = t.mock.method(assets, 'publishLandingConfig', async () => { throw new Error('Must not write'); });
-  const result = await publisher.handler({ httpMethod: 'POST', headers, body: JSON.stringify({
-    action: 'publish', model: landing.defaultModel(), expectedPublishedSha: SHA, expectedRouteSha: SHA
-  }) }, context);
-  assert.equal(result.statusCode, 409);
-  assert.equal(JSON.parse(result.body).error, 'LANDING_DESTINATION_CHANGED');
-  assert.equal(save.mock.callCount(), 0);
-});
+for (const storageAvailable of [false, true]) {
+  test(`a builder opened before a destination change cannot publish to the newly selected file (${storageAvailable ? 'with' : 'without'} Blobs)`, async (t) => {
+    const fetch = t.mock.method(global, 'fetch', async () => response(user));
+    const store = {
+      getWithMetadata: t.mock.fn(async () => null),
+      set: t.mock.fn(async () => { throw new Error('Must not write Blobs'); })
+    };
+    // Netlify builds inherit SITE_ID and NETLIFY_API_TOKEN. Isolate storage
+    // explicitly so those variables cannot open a real Blobs client whose
+    // requests would accidentally receive the Identity-only fetch fixture.
+    t.mock.method(landing, 'getLandingStore', () => {
+      if (!storageAvailable) throw Object.assign(new Error('Storage not configured'), { code: 'LANDING_STORAGE_UNAVAILABLE' });
+      return store;
+    });
+    const route = t.mock.method(assets, 'readLandingRoute', async () => ({ settings: delivery.normalize({ target: custom }), sha: NEW_SHA }));
+    const save = t.mock.method(assets, 'publishLandingConfig', async () => { throw new Error('Must not write GitHub'); });
+    const result = await publisher.handler({ httpMethod: 'POST', headers, body: JSON.stringify({
+      action: 'publish', model: landing.defaultModel(), expectedPublishedSha: SHA, expectedRouteSha: SHA
+    }) }, context);
+    assert.equal(result.statusCode, 409);
+    assert.equal(JSON.parse(result.body).error, 'LANDING_DESTINATION_CHANGED');
+    assert.equal(route.mock.callCount(), 1);
+    assert.equal(save.mock.callCount(), 0);
+    assert.equal(store.set.mock.callCount(), 0);
+    assert.deepEqual(store.getWithMetadata.mock.calls.map((call) => call.arguments[0]), storageAvailable ? [landing.PUBLICATION_KEY, landing.DRAFT_KEY] : []);
+    assert.deepEqual(fetch.mock.calls.map((call) => String(call.arguments[0])), ['https://course.example/.netlify/identity/user']);
+  });
+}
 
 async function sourceRun({ cache, publicationCache, publicationPayload = { active: false }, status = 200, payload = delivery.normalize({ target: custom }), offline = false, preview = false } = {}) {
   const storage = new Map(cache ? [['nextmed.landing.route.v1', JSON.stringify(cache)]] : []);
