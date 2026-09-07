@@ -70,6 +70,27 @@ test('a newer Blob publication rejects an older open editor without replacing it
   assert.notEqual(second.publication.version, first.publication.version);
 });
 
+test('independent palettes survive draft save, publication and reopening without recoloring other areas', async (t) => {
+  const fixture = adminFixture(t);
+  t.mock.method(require('../netlify/site-assets.js'), 'readLandingRoute', async () => { throw new Error('No GitHub configured'); });
+  const appearance = require('../public/assets/js/site-appearance.js');
+  const model = landing.defaultModel();
+  appearance.updatePalette(model.branding, 'dashboard', { textColor: '#112233', backgroundColor: '#ddeeff' });
+  appearance.updatePalette(model.branding, 'studio', { textColor: '#334455', backgroundColor: '#aabbcc' });
+  const saved = await adminEndpoint.handler({ httpMethod: 'PUT', headers: fixture.headers, body: JSON.stringify({ model }) }, fixture.context);
+  assert.equal(saved.statusCode, 200);
+  const draft = JSON.parse(saved.body).draft;
+  assert.deepEqual(draft.branding.palettes, model.branding.palettes);
+  const published = await fixture.request({ publishMode: 'netlify-blobs', expectedPublicationVersion: null, model: draft });
+  assert.equal(published.statusCode, 200);
+  const publicModel = JSON.parse((await publicEndpoint.handler({ httpMethod: 'GET' })).body).model;
+  assert.deepEqual(publicModel.branding.palettes, model.branding.palettes);
+  assert.equal(publicModel.branding.textColor, model.branding.textColor);
+  const reopened = JSON.parse((await adminEndpoint.handler({ httpMethod: 'GET', headers: fixture.headers }, fixture.context)).body);
+  assert.deepEqual(reopened.draft.branding.palettes, model.branding.palettes);
+  assert.deepEqual(reopened.published.branding.palettes, model.branding.palettes);
+});
+
 test('GitHub failure does not silently replace the active Blob publication; an explicit successful switch does', async (t) => {
   const { store, request } = adminFixture(t);
   const initial = JSON.parse((await request({ publishMode: 'netlify-blobs', model: landing.defaultModel(), expectedPublicationVersion: null })).body);

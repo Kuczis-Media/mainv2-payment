@@ -90,7 +90,10 @@
       link.href = favicon;
       link.removeAttribute('type');
     });
-    applyPalette(brand);
+    const scope = window.NextMedAppearance?.scopeForPath(window.location?.pathname);
+    if (plainObject(brand.palettes?.[scope])) document.documentElement?.setAttribute('data-site-palette', scope);
+    else document.documentElement?.removeAttribute('data-site-palette');
+    applyPalette(window.NextMedAppearance?.paletteFor(brand, scope) || brand);
     applyLogo(imageUrl(brand.logoUrl), text(brand.logoAlt, 120) || name);
   }
 
@@ -139,7 +142,10 @@
       document.head.append(stylesheet);
     }
     // A selector rather than inline variables lets theme switching keep its dark palette.
-    stylesheet.textContent = `:root:not([data-theme="dark"]){${declarations.join(';')}} [data-brand-logo-slot] svg[hidden]{display:none}`;
+    const priceVariables = { primaryColor: '--chem-price-primary', textColor: '--chem-price-ink', mutedColor: '--chem-price-muted', surfaceColor: '--chem-price-surface' };
+    const priceDeclarations = Object.entries(priceVariables).filter(([field]) => /^#[0-9a-f]{6}$/i.test(brand[field] || '')).map(([field, variable]) => `${variable}:${brand[field]}`);
+    if (/^#[0-9a-f]{6}$/i.test(brand.primaryColor || '')) priceDeclarations.push(`--chem-price-primary-hover:${mixColor(brand.primaryColor, 0, 0.15)}`, `--chem-price-soft:${mixColor(brand.primaryColor, 255, 0.9)}`);
+    stylesheet.textContent = `:root:not([data-theme="dark"]){${declarations.join(';')}} :root:not([data-theme="dark"]) .chem-pricing{${priceDeclarations.join(';')}} [data-brand-logo-slot] svg[hidden]{display:none}`;
   }
 
   function setText(selector, value) {

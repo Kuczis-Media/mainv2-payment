@@ -9,12 +9,18 @@
   const MAX_ASSET_BYTES = 4 * 1024 * 1024;
   const ACCEPTED_ASSETS = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml']);
   const SECTION_LABELS = { home: 'Start / Hero', about: 'O nas', services: 'Kursy i moduły', pricing: 'Cennik', skills: 'Jak zacząć', contact: 'Kontakt' };
+  const appearance = window.NextMedAppearance;
+  const PALETTE_LABELS = { landing: 'Landing', dashboard: 'Dashboard', studio: 'Studio', account: 'Konto i płatności' };
+  const PALETTE_INPUTS = { primary: 'primaryColor', secondary: 'secondaryColor', brandAccent: 'accentColor', brandBackground: 'backgroundColor', surface: 'surfaceColor', brandText: 'textColor', muted: 'mutedColor' };
   const ids = ['enabled', 'title', 'subtitle', 'body', 'image', 'image-alt', 'cta-label', 'cta-href', 'background', 'text', 'accent'];
   const elements = Object.fromEntries(ids.map((id) => [camel(id), document.getElementById(`section-${id}`)]));
   Object.assign(elements, {
     builder: document.getElementById('builder'), access: document.getElementById('access-state'), list: document.getElementById('section-list'),
     status: document.getElementById('status'), editorTitle: document.getElementById('editor-title'), preview: document.getElementById('landing-preview'),
     previewPanel: document.querySelector('.preview-panel'), motion: document.getElementById('branding-motion'),
+    paletteScope: document.getElementById('palette-scope'), paletteNote: document.getElementById('palette-scope-note'),
+    paletteLegend: document.getElementById('palette-legend'), paletteSample: document.getElementById('palette-sample'),
+    paletteSampleTitle: document.getElementById('palette-sample-title'), paletteCopy: document.getElementById('palette-copy-landing'), paletteReset: document.getElementById('palette-reset'),
     imagePreview: document.getElementById('image-preview'), logoPreview: document.getElementById('logo-preview'),
     brandName: document.getElementById('branding-name'), tagline: document.getElementById('branding-tagline'),
     primary: document.getElementById('branding-primary'), secondary: document.getElementById('branding-secondary'), brandAccent: document.getElementById('branding-accent'),
@@ -36,6 +42,8 @@
   let recoveryDraft = null;
   let currentAdminId = '';
   let selectedId = 'home';
+  const requestedPalette = new URLSearchParams(location.search).get('palette');
+  let selectedPalette = Object.hasOwn(PALETTE_LABELS, requestedPalette) ? requestedPalette : 'landing';
   let draggedId = '';
   let assetTarget = 'section';
   let assetItems = [];
@@ -131,13 +139,21 @@
     [elements.image, elements.logo, elements.favicon].forEach((input) => input.addEventListener('blur', () => normalizeUrlInput(input)));
     const brandingMapping = {
       brandName: 'brandName', tagline: 'tagline', logo: 'logoUrl', logoAlt: 'logoAlt', favicon: 'faviconUrl',
-      primary: 'primaryColor', secondary: 'secondaryColor', brandAccent: 'accentColor', brandBackground: 'backgroundColor', surface: 'surfaceColor', brandText: 'textColor', muted: 'mutedColor',
       company: 'companyName', email: 'contactEmail', phone: 'contactPhone', address: 'contactAddress', footerText: 'footerText',
       siteTitle: 'siteTitle', siteDescription: 'siteDescription'
     };
     Object.entries(brandingMapping).forEach(([elementName, field]) => {
       elements[elementName].addEventListener('input', () => updateBranding(field, elements[elementName].value));
     });
+    Object.entries(PALETTE_INPUTS).forEach(([elementName, field]) => {
+      elements[elementName].addEventListener('input', () => updatePalette({ [field]: elements[elementName].value }));
+    });
+    elements.paletteScope.addEventListener('change', () => {
+      selectedPalette = Object.hasOwn(PALETTE_LABELS, elements.paletteScope.value) ? elements.paletteScope.value : 'landing';
+      renderPalette();
+    });
+    elements.paletteCopy.addEventListener('click', () => updatePalette(appearance.paletteFor(model.branding, 'landing')));
+    elements.paletteReset.addEventListener('click', () => updatePalette(appearance.paletteFor(defaultModel.branding, 'landing')));
     document.querySelectorAll('[data-clear-color]').forEach((button) => button.addEventListener('click', () => {
       selectedSection()[button.dataset.clearColor] = '';
       renderEditor();
@@ -258,10 +274,28 @@
       graphite: { primaryColor: '#1f2937', secondaryColor: '#475569', accentColor: '#f97316', backgroundColor: '#f5f6f8', surfaceColor: '#ffffff', textColor: '#111827', mutedColor: '#64748b' }
     };
     if (!palettes[name]) return;
-    Object.assign(model.branding, palettes[name]);
-    renderEditor();
-    renderPreview();
-    markDirty('Zastosowano gotową paletę. Zapisz draft albo opublikuj.');
+    updatePalette(palettes[name]);
+  }
+
+  function updatePalette(changes) {
+    appearance.updatePalette(model.branding, selectedPalette, changes);
+    renderPalette();
+    if (selectedPalette === 'landing') schedulePreview();
+    markDirty(`${PALETTE_LABELS[selectedPalette]}: zmieniono tylko kolory tego obszaru. Zapisz szkic albo opublikuj.`);
+  }
+
+  function renderPalette() {
+    const palette = appearance.paletteFor(model.branding, selectedPalette);
+    elements.paletteScope.value = selectedPalette;
+    elements.paletteLegend.textContent = `Kolory: ${PALETTE_LABELS[selectedPalette]}`;
+    elements.paletteNote.textContent = `Edytujesz: ${PALETTE_LABELS[selectedPalette]}. Zmiany kolorów i gotowe palety nie zmienią pozostałych obszarów.`;
+    elements.paletteCopy.hidden = selectedPalette === 'landing';
+    elements.paletteSampleTitle.textContent = PALETTE_LABELS[selectedPalette];
+    Object.entries(PALETTE_INPUTS).forEach(([elementName, field]) => {
+      const value = palette[field] || appearance.DEFAULT_PALETTE[field];
+      elements[elementName].value = value;
+      elements.paletteSample.style.setProperty(`--sample-${field}`, value);
+    });
   }
 
   function renderAll() {
@@ -322,13 +356,7 @@
     elements.motion.checked = model.branding.motionEnabled !== false;
     elements.brandName.value = model.branding.brandName || '';
     elements.tagline.value = model.branding.tagline || '';
-    elements.primary.value = model.branding.primaryColor || '#0f766e';
-    elements.secondary.value = model.branding.secondaryColor || '#2563eb';
-    elements.brandAccent.value = model.branding.accentColor || '#f59e0b';
-    elements.brandBackground.value = model.branding.backgroundColor || '#f6f8fc';
-    elements.surface.value = model.branding.surfaceColor || '#ffffff';
-    elements.brandText.value = model.branding.textColor || '#0f172a';
-    elements.muted.value = model.branding.mutedColor || '#5f6b7c';
+    renderPalette();
     elements.logo.value = model.branding.logoUrl || '';
     elements.logoAlt.value = model.branding.logoAlt || '';
     elements.favicon.value = model.branding.faviconUrl || '';
@@ -734,6 +762,7 @@
       if (typeof sourceBranding[key] === 'string') branding[key] = sourceBranding[key].slice(0, key.includes('Description') ? 320 : 1_000);
     });
     branding.motionEnabled = sourceBranding.motionEnabled !== false;
+    branding.palettes = appearance.normalizePalettes({ ...branding, palettes: sourceBranding.palettes }, true);
     const sourceSections = new Map((Array.isArray(value.sections) ? value.sections : []).filter((section) => section && typeof section === 'object' && SECTION_LABELS[section.id]).map((section) => [section.id, section]));
     const sections = defaults.sections.map((fallback) => {
       const source = sourceSections.get(fallback.id) || {};
@@ -758,7 +787,9 @@
   }
 
   function createDefaultModel() {
-    return clone(defaultModel);
+    const value = clone(defaultModel);
+    value.branding.palettes = appearance.normalizePalettes(value.branding);
+    return value;
   }
 
   function validationIssue(value) {
@@ -773,6 +804,8 @@
     for (const key of ['primaryColor', 'secondaryColor', 'accentColor', 'backgroundColor', 'surfaceColor', 'textColor', 'mutedColor']) {
       if (branding[key] && !/^#[0-9a-f]{6}$/i.test(branding[key])) return 'Kolory muszą mieć format #RRGGBB.';
     }
+    try { appearance.normalizePalettes(branding, true); }
+    catch { return 'Kolory obszarów muszą mieć format #RRGGBB. Sprawdź palety dashboardu, studia i konta.'; }
     const active = new Set(value.sections.filter((section) => section.enabled !== false).map((section) => section.id));
     if (!active.size) return 'Pozostaw co najmniej jedną widoczną sekcję.';
     for (const section of value.sections) {

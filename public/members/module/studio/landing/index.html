@@ -11,6 +11,10 @@
   <script src="/members/module/theme.js"></script>
   <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
   <script defer src="/assets/js/auth.js"></script>
+  <script defer src="/assets/js/landing-delivery-model.js"></script>
+  <script defer src="/assets/js/landing-source.js"></script>
+  <script defer src="/assets/js/site-appearance.js"></script>
+  <script defer src="/assets/js/site-brand.js"></script>
   <link rel="stylesheet" href="/members/module/theme.css">
   <link rel="stylesheet" href="./style.css">
 </head>
@@ -48,20 +52,23 @@
     </aside>
 
     <section class="editor-panel" aria-labelledby="editor-title">
-      <details class="branding-card" open>
-        <summary><span><span class="eyebrow">Cała firma w jednym miejscu</span><strong>Marka i kolory</strong></span><small>Zmiany dotyczą całego landingu</small></summary>
+      <details id="appearance" class="branding-card" open>
+        <summary><span><span class="eyebrow">Wspólna marka, niezależny wygląd</span><strong>Marka i kolory</strong></span><small>Wybierz, który obszar zmieniasz</small></summary>
+        <label class="palette-scope"><span>Gdzie zmienić kolory?</span><select id="palette-scope" aria-describedby="palette-scope-note">
+          <option value="landing">Landing — strona główna</option>
+          <option value="dashboard">Dashboard — panel kursanta i administratora</option>
+          <option value="studio">Studio — narzędzia i buildery</option>
+          <option value="account">Konto — logowanie, płatności i dostęp</option>
+        </select></label>
+        <p id="palette-scope-note" class="field-hint" role="status"></p>
         <div class="brand-presets" role="group" aria-label="Gotowe palety kolorów">
           <button type="button" data-palette="nextmed"><i class="palette-nextmed"></i> NextMed</button>
           <button type="button" data-palette="ocean"><i class="palette-ocean"></i> Ocean</button>
           <button type="button" data-palette="violet"><i class="palette-violet"></i> Violet</button>
           <button type="button" data-palette="graphite"><i class="palette-graphite"></i> Graphite</button>
         </div>
-        <div class="form-grid branding-grid">
-          <label><span>Nazwa marki</span><input id="branding-name" maxlength="120" placeholder="NextMed"></label>
-          <label><span>Hasło marki</span><input id="branding-tagline" maxlength="180" placeholder="Nauka, która prowadzi do wyniku"></label>
-        </div>
         <fieldset class="theme-fieldset">
-          <legend>Paleta globalna</legend>
+          <legend id="palette-legend">Kolory landingu</legend>
           <div class="color-grid global-colors">
             <label><span>Główny</span><input id="branding-primary" type="color" value="#0f766e"></label>
             <label><span>Dodatkowy</span><input id="branding-secondary" type="color" value="#2563eb"></label>
@@ -72,6 +79,15 @@
             <label><span>Tekst pomocniczy</span><input id="branding-muted" type="color" value="#5f6b7c"></label>
           </div>
         </fieldset>
+        <div class="palette-actions"><button id="palette-copy-landing" type="button" hidden>Skopiuj kolory z landingu</button><button id="palette-reset" type="button">Przywróć kolory NextMed</button></div>
+        <div id="palette-sample" class="palette-sample" aria-label="Przykładowy podgląd kolorów">
+          <div class="palette-sample-card"><small>Podgląd wybranej palety</small><strong id="palette-sample-title">Landing</strong><p>Tak wyglądają tekst i powierzchnia karty.</p><span class="palette-sample-button">Przykładowy przycisk</span><span class="palette-sample-accent">Akcent</span></div>
+        </div>
+        <p class="field-hint">Kolory dotyczą jasnego motywu. Ciemny motyw zachowuje własną paletę. Nazwa, logo i favicon poniżej są wspólne. „Opublikuj” zapisuje całą konfigurację marki i landingu.</p>
+        <div class="form-grid branding-grid">
+          <label><span>Nazwa marki (wspólna)</span><input id="branding-name" maxlength="120" placeholder="NextMed"></label>
+          <label><span>Hasło marki (wspólne)</span><input id="branding-tagline" maxlength="180" placeholder="Nauka, która prowadzi do wyniku"></label>
+        </div>
         <label class="motion-toggle"><input id="branding-motion" type="checkbox" checked><span>Animacje przy przewijaniu<small>Delikatny ruch elementów. Preferencje ograniczenia ruchu odwiedzającego są zawsze respektowane.</small></span></label>
         <details class="brand-advanced">
           <summary>Logo, favicon, kontakt i SEO</summary>
@@ -111,7 +127,7 @@
       <details class="section-style-card">
         <summary>Zaawansowane kolory tej sekcji</summary>
         <fieldset>
-          <legend>Puste pole oznacza użycie palety globalnej</legend>
+          <legend>Puste pole oznacza użycie palety landingu</legend>
           <div class="color-grid">
             <label><span>Tło</span><input id="section-background" type="color" value="#ffffff"><button type="button" data-clear-color="backgroundColor">Użyj globalnego</button></label>
             <label><span>Tekst</span><input id="section-text" type="color" value="#0f172a"><button type="button" data-clear-color="textColor">Użyj globalnego</button></label>
@@ -124,7 +140,7 @@
 
     <section class="preview-panel" aria-labelledby="preview-title">
       <div class="panel-heading"><div><span class="eyebrow">Podgląd na żywo</span><h2 id="preview-title">Twoja strona</h2></div><div class="preview-actions"><div class="preview-size" role="group" aria-label="Szerokość podglądu"><button type="button" data-preview-size="desktop" aria-pressed="true">Desktop</button><button type="button" data-preview-size="mobile" aria-pressed="false">Telefon</button></div><a href="/" target="_blank" rel="noopener">Otwórz stronę ↗</a></div></div>
-      <p class="preview-note">To rzeczywista strona z Twoimi zmianami. Linki zewnętrzne, logowanie i zakup są wyłączone tylko w tym podglądzie.</p>
+      <p class="preview-note">To rzeczywisty podgląd landingu. Kolory dashboardu, studia i konta sprawdzisz w próbce obok — nie zmieniają tej strony. Linki zewnętrzne, logowanie i zakup są wyłączone tylko w tym podglądzie.</p>
       <p class="field-hint">Miejsce publikacji: <a id="landing-publication-location" target="_blank" rel="noopener noreferrer">wczytywanie…</a>. Ścieżkę JSON w GitHubie zmienisz w panelu admina → Landing. Publikacja dotyczy tej aplikacji; niezależny landing na innej domenie musi obsługiwać ten sam odczyt konfiguracji.</p>
       <div class="preview-browser"><div class="preview-browser-bar"><i></i><i></i><i></i><span id="preview-url">twoja-strona.pl</span></div><div id="preview-viewport" class="preview-viewport"><iframe id="landing-preview" class="landing-preview" title="Rzeczywisty podgląd strony" referrerpolicy="same-origin"></iframe></div></div>
     </section>

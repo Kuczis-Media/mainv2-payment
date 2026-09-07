@@ -218,6 +218,20 @@ button:hover {
 /* Busy state */
 button[data-busy="1"] { opacity: 0.7; pointer-events: none; }
 
+/* Explicit account palette; old publications keep their original photo theme. */
+:root[data-site-palette="account"]:not([data-theme="dark"]) body::before { background: var(--page-bg); }
+:root[data-site-palette="account"]:not([data-theme="dark"]) .wrapper { color: var(--page-ink); background: var(--page-surface); border-color: var(--page-muted); }
+:root[data-site-palette="account"]:not([data-theme="dark"]) :is(h2, .input-field label, .input-field input, .inactive-account, .inactive-copy, .flash) { color: var(--page-ink); }
+:root[data-site-palette="account"]:not([data-theme="dark"]) :is(.helper, .inactive-copy span, .inactive-info) { color: var(--page-muted); }
+:root[data-site-palette="account"]:not([data-theme="dark"]) .input-field { border-bottom-color: var(--page-muted); }
+:root[data-site-palette="account"]:not([data-theme="dark"]) button { color: #fff; background: var(--page-primary); }
+:root[data-site-palette="account"]:not([data-theme="dark"]) button:hover { background: var(--primary-hover); border-color: var(--page-primary); }
+:root[data-site-palette="account"]:not([data-theme="dark"]) :is(.tab-btn:not(.active), .inactive-logout) { color: var(--page-ink); background: var(--page-bg); border-color: var(--page-muted); }
+:root[data-site-palette="account"]:not([data-theme="dark"]) .helper a { color: var(--page-primary); }
+:root[data-site-palette="account"]:not([data-theme="dark"]) .flash.warn { color: #775609; }
+:root[data-site-palette="account"]:not([data-theme="dark"]) .flash.error { color: #b42318; }
+:root[data-site-palette="account"]:not([data-theme="dark"]) .flash.success { color: var(--page-primary); }
+
 @media (max-width: 460px) {
   body { padding: 0 14px; }
   .wrapper { padding: 22px 18px; }

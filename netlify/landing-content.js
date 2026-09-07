@@ -4,6 +4,7 @@ const { getStore } = require('@netlify/blobs');
 const { randomUUID } = require('node:crypto');
 const { storageConfig } = require('./progress-storage.js');
 const DEFAULT_MODEL = require('../public/assets/data/landing-default.json');
+const appearance = require('../public/assets/js/site-appearance.js');
 
 const STORE_NAME = 'chemdisk-landing';
 const DRAFT_KEY = 'draft.json';
@@ -81,6 +82,7 @@ function normalizeModel(raw, strict = false) {
       surfaceColor: colorField(branding, 'surfaceColor', DEFAULT_BRANDING.surfaceColor, strict),
       textColor: colorField(branding, 'textColor', DEFAULT_BRANDING.textColor, strict),
       mutedColor: colorField(branding, 'mutedColor', DEFAULT_BRANDING.mutedColor, strict),
+      palettes: appearance.normalizePalettes(branding, strict),
       motionEnabled: branding.motionEnabled !== false,
       companyName: migratedBrandText(branding, 'companyName', DEFAULT_BRANDING.companyName, 160, legacy),
       contactEmail: emailField(branding, 'contactEmail', DEFAULT_BRANDING.contactEmail, strict),

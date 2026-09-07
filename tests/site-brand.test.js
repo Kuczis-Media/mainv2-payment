@@ -11,7 +11,7 @@ function model(branding = {}) {
   return { version: 3, revision: 2, branding: { brandName: 'TestMed', companyName: 'Test Company', primaryColor: '#112233', faviconUrl: 'https://example.com/favicon.png', ...branding }, sections: ids.map((id) => ({ id })) };
 }
 
-async function run({ cache, response = null, route } = {}) {
+async function run({ cache, response = null, route, pathname = '/members/' } = {}) {
   const storage = new Map(Object.entries(cache || {}));
   const names = [{ textContent: 'NextMed' }];
   const company = [{ textContent: 'NextMed' }];
@@ -21,6 +21,7 @@ async function run({ cache, response = null, route } = {}) {
   const calls = [];
   const document = {
     title: 'Panel kursanta — NextMed',
+    documentElement: { attributes: {}, setAttribute(key, value) { this.attributes[key] = value; }, removeAttribute(key) { delete this.attributes[key]; } },
     querySelector: (selector) => selector === 'title[data-brand-title]' ? title : null,
     querySelectorAll: (selector) => ({ '[data-brand-name]': names, '[data-company-name]': company, 'link[rel="icon"]': [icon] }[selector] || []),
     getElementById: (id) => styles.find((entry) => entry.id === id),
@@ -29,7 +30,7 @@ async function run({ cache, response = null, route } = {}) {
   };
   vm.runInNewContext(script, {
     document, URL, AbortController, Date,
-    window: { setTimeout, clearTimeout, ...(route ? { NextMedLandingSource: { ready: Promise.resolve(route) }, NextMedLandingDelivery: require('../public/assets/js/landing-delivery-model.js') } : {}) },
+    window: { setTimeout, clearTimeout, location: { pathname }, NextMedAppearance: require('../public/assets/js/site-appearance.js'), ...(route ? { NextMedLandingSource: { ready: Promise.resolve(route) }, NextMedLandingDelivery: require('../public/assets/js/landing-delivery-model.js') } : {}) },
     localStorage: { getItem: (key) => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
     fetch: async (url, options) => { calls.push({ url, options }); return { ok: true, json: async () => response }; }
   });
@@ -45,6 +46,36 @@ test('shared public cache updates shell names, title and favicon without another
   assert.equal(result.icon.href, 'https://example.com/favicon.png');
   assert.equal(result.icon.type, undefined);
   assert.equal(result.calls.length, 0);
+});
+
+test('the same cached configuration renders independent dashboard, Studio and account palettes without requests', async () => {
+  const palettes = {
+    dashboard: { primaryColor: '#110000', textColor: '#220000', backgroundColor: '#330000' },
+    studio: { primaryColor: '#001100', textColor: '#002200', backgroundColor: '#003300' },
+    account: { primaryColor: '#000011', textColor: '#000022', backgroundColor: '#000033' }
+  };
+  const cache = { 'chem.landing.public.v3': JSON.stringify({ model: model({ palettes }), checkedAt: Date.now() }) };
+  for (const [pathname, scope] of [['/members/', 'dashboard'], ['/members/module/studio/', 'studio'], ['/members/module/studio/landing/', 'studio'], ['/members/module/studio/env/', 'studio'], ['/login/', 'account'], ['/purchase/', 'account'], ['/time', 'account'], ['/payment-success/', 'account']]) {
+    const result = await run({ cache, pathname });
+    const css = result.styles[0].textContent;
+    assert.ok(css.includes(`--primary:${palettes[scope].primaryColor}`), pathname);
+    assert.ok(css.includes(`--ink:${palettes[scope].textColor}`), pathname);
+    assert.ok(css.includes(`--chem-bg:${palettes[scope].backgroundColor}`), pathname);
+    assert.equal(result.document.documentElement.attributes['data-site-palette'], scope);
+    assert.equal(result.names[0].textContent, 'TestMed');
+    assert.equal(result.icon.href, 'https://example.com/favicon.png');
+    assert.equal(result.calls.length, 0);
+    assert.match(css, /:root:not\(\[data-theme="dark"\]\)/);
+  }
+});
+
+test('unsafe scoped colors cannot inject CSS or fall through to another areas palette', async () => {
+  const result = await run({ pathname: '/members/module/studio/', response: { active: true, model: model({ palettes: {
+    studio: { textColor: 'red;}body{display:none', primaryColor: '#aabbcc' }, dashboard: { textColor: '#123456' }
+  } }) } });
+  const css = result.styles[0].textContent;
+  assert.match(css, /--primary:#aabbcc/);
+  assert.doesNotMatch(css, /red;\}|--ink:#123456|--ink:red/);
 });
 
 test('branding follows the custom JSON source, ignoring a fresh cache from another repository', async () => {

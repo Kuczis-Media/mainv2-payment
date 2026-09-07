@@ -114,3 +114,13 @@ h1 {
   color: #334155;
   background: #fff;
 }
+
+/* The account palette is independent from dashboard, Studio and landing. */
+:root[data-site-palette="account"]:not([data-theme="dark"]) body { color: var(--page-ink); background: var(--page-bg); }
+:root[data-site-palette="account"]:not([data-theme="dark"]) .success-card { background: var(--page-surface); }
+:root[data-site-palette="account"]:not([data-theme="dark"]) :is(.eyebrow, .success-mark:not(.is-error)) { color: var(--page-primary); }
+:root[data-site-palette="account"]:not([data-theme="dark"]) .success-mark:not(.is-error) { background: var(--page-primary-soft); }
+:root[data-site-palette="account"]:not([data-theme="dark"]) :is(#success-status, .success-details) { color: var(--page-muted); }
+:root[data-site-palette="account"]:not([data-theme="dark"]) .success-details { background: var(--page-bg); }
+:root[data-site-palette="account"]:not([data-theme="dark"]) .button.primary { color: #fff; background: var(--page-primary); border-color: var(--page-primary); }
+:root[data-site-palette="account"]:not([data-theme="dark"]) .button.secondary { color: var(--page-ink); background: var(--page-surface); }
