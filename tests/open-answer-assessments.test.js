@@ -34,6 +34,7 @@ test.afterEach(() => {
   openAnswerGrader.setSendRequest(null);
   quizFunction._test.setStoreFactory(null);
   adminExams._test.setExamStoreFactory(null);
+  adminExams._test.setProgressStoreFactory(null);
 });
 
 test('AI grader batches open answers, clamps ratios and does not call AI for blank answers', async () => {
@@ -79,6 +80,55 @@ test('AI grading has a hard request cap, stops after provider failure and reject
   assert.equal(calls, 1);
   assert.equal(failed.failedQuestionIds.length, 20);
   assert.deepEqual(Object.keys(openAnswerGrader._test.parseGrades('{"grades":[{"questionId":"q","ratio":null}]}', [{ questionId: 'q' }])), []);
+});
+
+test('AI grading accepts one wrapped JSON result but rejects ambiguity and invalid numeric grades', async () => {
+  const batch = [{ questionId: 'q' }];
+  const body = '{"grades":[{"questionId":"q","ratio":0.75,"feedback":"Wzór {H2O} poprawny."}]}';
+  assert.equal(openAnswerGrader._test.parseGrades(`Oto ocena:\n\`\`\`json\n${body}\n\`\`\`\nGotowe.`, batch).q.ratio, 0.75);
+  assert.deepEqual(Object.keys(openAnswerGrader._test.parseGrades(`${body}\nAlbo:\n${body}`, batch)), []);
+  assert.deepEqual(Object.keys(openAnswerGrader._test.parseGrades('{"grades":[{"questionId":"q","ratio":"1"}]}', batch)), []);
+  openAnswerGrader.setSendRequest(async () => ({ text: 'Nie mogę ocenić odpowiedzi.' }));
+  const result = await openAnswerGrader.evaluateAiQuestions([{ questionId: 'q', gradingMode: 'ai', points: 1, prompt: 'Pytanie', answerKey: 'Klucz' }], { q: 'Odpowiedź' }, { userId: 'admin' });
+  assert.equal(result.errorCode, 'AI_GRADING_INVALID_RESPONSE');
+  assert.deepEqual(result.failedQuestionIds, ['q']);
+});
+
+test('explicit author AI grading saves formatted feedback, readable report and final score exactly once', async (t) => {
+  const store = new MemoryStore(), progressStore = new MemoryStore();
+  adminExams._test.setExamStoreFactory(() => store);
+  adminExams._test.setProgressStoreFactory(() => progressStore);
+  const definition = examCommon.normalizeDefinition({ examId: 'ocena-ai', metadata: { name: 'Ocena AI' }, questions: [
+    { questionId: 'open', type: 'open_answer', prompt: '**Wyjaśnij**.', points: 4, gradingMode: 'ai', answerKey: 'Klucz' }
+  ] });
+  const attempt = { version: 1, revision: 0, attemptId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', number: 1,
+    repositoryId: 'default', examId: definition.examId, userId: 'student-123', profile: { email: 'student@example.com', name: 'Uczeń' },
+    status: 'submitted', definitionSnapshot: definition, questions: definition.questions, answers: { open: 'Uzasadnienie ucznia' },
+    operationIds: [], lastActivityAt: new Date().toISOString(), submittedAt: new Date().toISOString(), durationSeconds: 30 };
+  attempt.result = examCommon.gradeAttempt(attempt, definition);
+  await examStorage.createAttempt(store, attempt);
+  let calls = 0;
+  openAnswerGrader.setSendRequest(async (input) => {
+    calls += 1;
+    assert.equal(input.userId, 'admin-1234', 'Author-triggered grading uses the author quota');
+    return { text: 'Ocena:\n```json\n{"grades":[{"questionId":"open","ratio":0.75,"feedback":"Dobry tok rozumowania."}]}\n```' };
+  });
+  t.mock.method(global, 'fetch', async () => new Response(JSON.stringify({ id: 'admin-1234', app_metadata: { roles: ['admin'] } }), { status: 200 }));
+  const event = { httpMethod: 'POST', headers: { authorization: 'Bearer test-token', 'content-type': 'application/json', origin: 'https://course.example', host: 'course.example', 'x-forwarded-proto': 'https' }, body: JSON.stringify({
+    action: 'ai-grade', repositoryId: 'default', examId: definition.examId, targetUserId: attempt.userId, attemptId: attempt.attemptId,
+    revision: 0, operationId: 'admin-ai-grade:one-click'
+  }) };
+  const context = { clientContext: { user: { id: 'admin-1234', app_metadata: { roles: ['admin'] } }, identity: { url: 'https://course.example/.netlify/identity' } } };
+  const response = await adminExams.handler(event, context);
+  assert.equal(response.statusCode, 200, response.body);
+  const result = JSON.parse(response.body);
+  assert.equal(result.aiGradedCount, 1);
+  assert.equal(result.attempt.result.points, 3);
+  assert.equal(result.attempt.result.gradingStatus, 'graded');
+  assert.deepEqual(result.attempt.questions[0].answerDisplay, ['Uzasadnienie ucznia']);
+  assert.equal(result.attempt.result.questionResults[0].feedback, 'Dobry tok rozumowania.');
+  assert.equal((await adminExams.handler(event, context)).statusCode, 200);
+  assert.equal(calls, 1, 'Replaying a completed operation never calls AI again');
 });
 
 test('quiz open questions support AI, manual and ungraded scoring without leaking the key', () => {

@@ -375,7 +375,7 @@
     article.dataset.questionId = question.questionId;
     article.dataset.questionIndex = String(index);
     article.append(tag(`${index + 1}. ${typeLabel(question.type)}`, 'small'));
-    const heading = document.createElement('h2'); heading.textContent = question.prompt || question.template; article.append(heading);
+    const heading = document.createElement('h2'); window.ChemAssessmentText.render(heading, question.prompt || question.template, question.promptFormat); article.append(heading);
     if (question.images?.length) article.append(imageGrid(question.images));
     article.append(answerControl(question, state.attempt.answers[question.questionId]));
     const immediate = state.attempt.exam.resultVisibility?.feedbackMode === 'immediate';
@@ -885,7 +885,9 @@
     elements.resultQuestions.replaceChildren();
     (result.questions || []).forEach((question, index) => {
       const item = document.createElement('article'); item.className = 'exam-result-question';
-      item.append(tag(`${index + 1}. ${question.prompt}`, 'strong'));
+      const heading = tag('', 'strong');
+      window.ChemAssessmentText.render(heading, `${index + 1}. ${question.prompt}`, question.promptFormat);
+      item.append(heading);
       if (Object.hasOwn(question, 'correct')) item.append(tag(question.correct ? 'Odpowiedź poprawna' : 'Odpowiedź niepoprawna', 'small'));
       if (question.reviewStatus === 'pending') item.append(tag('Oczekuje na ocenę sprawdzającego', 'small'));
       if (question.reviewStatus === 'not_scored') item.append(tag('Pytanie nie wpływa na wynik', 'small'));

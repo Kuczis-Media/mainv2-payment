@@ -1,4 +1,5 @@
 'use strict';
+const assessmentText = require('../public/assets/js/assessment-text.js');
 
 const crypto = require('node:crypto');
 const openAnswerGrader = require('./open-answer-grader.js');
@@ -112,6 +113,7 @@ function normalizeQuestion(value, index = 0) {
     questionId,
     type,
     prompt: clean(source.prompt || source.text, 20_000),
+    promptFormat: assessmentText.normalizeFormat(source.promptFormat),
     images: normalizeImages(source.images || source.image),
     tags: uniqueStrings(source.tags, 20, 80),
     categories: uniqueStrings(source.categories || (source.category ? [source.category] : []), 12, 80),
@@ -510,6 +512,7 @@ function safeQuestion(question) {
     questionId: question.questionId,
     type: question.type,
     prompt: question.prompt,
+    promptFormat: assessmentText.normalizeFormat(question.promptFormat),
     images: question.images,
     points: question.points
   };
@@ -699,7 +702,7 @@ function resultForStudent(attempt, definitionInput) {
     const byId = new Map((attempt.result?.questionResults || []).map((entry) => [entry.questionId, entry]));
     result.questions = attempt.questions.map((question) => {
       const graded = byId.get(question.questionId) || {};
-      const item = { questionId: question.questionId, prompt: question.prompt, type: question.type };
+      const item = { questionId: question.questionId, prompt: question.prompt, promptFormat: assessmentText.normalizeFormat(question.promptFormat), type: question.type };
       if (visibility.ownAnswers) {
         item.answer = attempt.answers && Object.hasOwn(attempt.answers, question.questionId)
           ? attempt.answers[question.questionId] : null;
@@ -813,6 +816,8 @@ module.exports = {
   availabilityState,
   canonicalMaterialId,
   canonicalQuestionType,
+  displayAnswer,
+  displayCorrectAnswer,
   gradeAttempt,
   gradeQuestion,
   immediateQuestionFeedback,

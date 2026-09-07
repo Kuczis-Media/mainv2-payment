@@ -1,0 +1,24 @@
+.assessment-rich-text { overflow-wrap: anywhere; line-height: 1.65; }
+.assessment-rich-text sub, .assessment-rich-text sup { line-height: 0; }
+.assessment-math { display: inline-block; max-width: 100%; overflow-x: auto; vertical-align: middle; }
+.assessment-math.is-display { display: block; padding-block: 10px; }
+.assessment-answer-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 14px 0; }
+.assessment-answer-card { min-width: 0; padding: 16px; border: 1px solid var(--chem-line, #d5dee9); border-radius: 12px; background: var(--chem-surface, #fff); color: var(--chem-text, #172033); }
+.assessment-answer-card.is-key { border-left: 4px solid var(--chem-primary, #0e665a); }
+.assessment-answer-card h4 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--chem-muted, #56637a); }
+.assessment-answer-card p { margin: 6px 0; white-space: pre-wrap; }
+.assessment-answer-card ul { margin: 0; padding-left: 20px; }
+.assessment-answer-card li + li { margin-top: 8px; }
+.assessment-answer-empty { color: var(--chem-muted, #56637a); font-style: italic; }
+.assessment-editor { display: grid; gap: 10px; min-width: 0; }
+.assessment-editor textarea, .assessment-editor select, .assessment-editor input:not([type="checkbox"]) { width: 100%; min-width: 0; padding: 10px; border: 1px solid var(--chem-line, #d5dee9); border-radius: 9px; color: var(--chem-text, #172033); background: var(--chem-surface, #fff); font: inherit; }
+.assessment-editor textarea { min-height: 90px; resize: vertical; }
+.assessment-editor input[type="color"] { min-height: 42px; padding: 4px; cursor: pointer; }
+.assessment-toolbar { display: flex; flex-wrap: wrap; gap: 6px; }
+.assessment-toolbar button { min-width: 38px; min-height: 36px; border: 1px solid var(--chem-line); border-radius: 8px; background: var(--chem-surface); color: var(--chem-text); cursor: pointer; }
+.assessment-format-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.assessment-editor-preview { padding: 16px; border: 1px dashed var(--chem-line); border-radius: 10px; background: var(--chem-surface); }
+.assessment-formula-builder { padding: 12px; border: 1px solid var(--chem-line); border-radius: 10px; }
+.assessment-formula-builder summary { cursor: pointer; font-weight: 700; }
+.assessment-formula-builder > div { display: grid; gap: 10px; margin-top: 12px; }
+@media (max-width: 700px) { .assessment-answer-grid { grid-template-columns: 1fr; } }

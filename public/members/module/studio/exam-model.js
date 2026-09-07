@@ -62,6 +62,7 @@
       questionId,
       type,
       prompt: text(source.prompt || 'Wpisz treść pytania.'),
+      promptFormat: (typeof module === 'object' && module.exports ? require('../../../assets/js/assessment-text.js') : globalThis.ChemAssessmentText).normalizeFormat(source.promptFormat),
       images: normalizeImages(source.images || source.image),
       tags: list(source.tags).slice(0, 20),
       categories: list(source.categories || source.category).slice(0, 12),

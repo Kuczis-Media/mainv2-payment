@@ -623,7 +623,11 @@
       row(
         field('Typ pytania', select('@type', question.type, Object.entries(TYPE_LABELS).map(([value, label]) => ({ value, label }))))
       ),
-      field('Treść pytania', textarea('@prompt', question.prompt, { rows: 5 })),
+      window.ChemAssessmentEditor.create(question.prompt, question.promptFormat, (prompt, format) => {
+        question.prompt = prompt; question.promptFormat = format;
+        if (scope === 'bank') state.bankDirty = true;
+        saveDrafts(); renderSummary(); elements.badge.textContent = 'Niezapisane zmiany';
+      }),
       row(
         field('Kategorie', input('@categories', question.categories.join(', '))),
         field('Tagi', input('@tags', question.tags.join(', ')))
@@ -1046,12 +1050,20 @@
       const graded = attempt.result?.questionResults?.find((entry) => entry.questionId === question.questionId);
       const details = document.createElement('details'); details.className = 'exam-attempt-question';
       const summary = document.createElement('summary');
+      const prompt = create('span');
+      window.ChemAssessmentText.render(prompt, `${index + 1}. ${question.prompt || question.template}`, question.promptFormat);
       summary.append(
-        create('span', '', `${index + 1}. ${question.prompt || question.template}`),
+        prompt,
         create('strong', '', `${graded?.points ?? '—'}/${graded?.maxPoints ?? question.points} pkt`)
       );
-      const answer = create('pre', '', `Odpowiedź ucznia:\n${JSON.stringify(attempt.answers?.[question.questionId] ?? null, null, 2)}\n\nKlucz odpowiedzi:\n${JSON.stringify(answerKey(question), null, 2)}`);
+      const answer = create('div', 'assessment-answer-grid');
+      answer.append(
+        answerCard('Odpowiedź ucznia', question.answerDisplay, false),
+        answerCard('Klucz odpowiedzi', question.correctAnswerDisplay, true)
+      );
       details.append(summary, answer);
+      if (question.aiInstruction) details.append(answerCard('Kryteria oceniania autora', [question.aiInstruction], true));
+      if (graded?.feedback) details.append(answerCard('Informacja zwrotna', [graded.feedback], false));
       if (finished && question.type === 'open_answer' && question.gradingMode !== 'ungraded' && Number(question.points) > 0) {
         const grading = create('div', 'exam-manual-grade');
         const points = input('', graded?.points ?? '', { type: 'number', min: 0, max: graded?.maxPoints ?? question.points, step: .1 });
@@ -1083,6 +1095,7 @@
     if (pendingAi) {
       const aiGrade = create('button', 'button button-soft', '✦ Sprawdź oczekujące odpowiedzi za pomocą AI');
       aiGrade.type = 'button'; aiGrade.dataset.examAction = 'ai-grade-attempt';
+      aiGrade.disabled = state.aiGrading;
       report.append(aiGrade);
     }
     if (finished && (attempt.questions || []).some((question) => question.type === 'open_answer' && question.gradingMode !== 'ungraded' && Number(question.points) > 0)) {
@@ -1111,19 +1124,15 @@
     );
   }
 
-  function answerKey(question) {
-    if (question.type === 'open_answer') return {
-      gradingMode: question.gradingMode,
-      answerKey: question.answerKey || '',
-      aiInstruction: question.aiInstruction || ''
-    };
-    if (question.correctAnswerIds) return question.correctAnswerIds;
-    if (question.acceptedAnswers) return question.acceptedAnswers;
-    if (question.type === 'number') return { value: question.correctNumber, tolerance: question.tolerance };
-    if (question.correctOrder) return question.correctOrder;
-    if (question.pairs) return question.pairs.map((pair) => ({ left: pair.left, right: pair.right }));
-    if (question.blanks) return question.blanks.map((blank) => ({ blankId: blank.blankId, acceptedAnswers: blank.acceptedAnswers }));
-    return null;
+  function answerCard(title, values, key) {
+    const card = create('section', `assessment-answer-card${key ? ' is-key' : ''}`);
+    card.append(create('h4', '', title));
+    const entries = Array.isArray(values) ? values.filter((value) => typeof value === 'string' && value.trim()) : [];
+    if (!entries.length) card.append(create('p', 'assessment-answer-empty', key ? 'Nie podano klucza.' : 'Brak odpowiedzi.'));
+    else for (const value of entries) {
+      const content = create('p'); window.ChemAssessmentText.render(content, value); card.append(content);
+    }
+    return card;
   }
 
   function renderSummary() {
@@ -1745,10 +1754,11 @@
       elements.status.classList.add('is-error');
     } finally {
       state.aiGrading = false;
-      if (button?.isConnected) {
-        button.disabled = false;
-        button.textContent = '✦ Sprawdź oczekujące odpowiedzi za pomocą AI';
-      }
+      // loadReport may have replaced the clicked button while grading a batch.
+      elements.editor.querySelectorAll('[data-exam-action="ai-grade-attempt"]').forEach((control) => {
+        control.disabled = false;
+        control.textContent = '✦ Sprawdź oczekujące odpowiedzi za pomocą AI';
+      });
     }
   }
 
@@ -1776,23 +1786,41 @@
 
   async function adminGrade(body) {
     const token = await window.ChemAuth.getAccessToken();
-    const response = await fetch('/.netlify/functions/admin-exams', {
-      method: 'POST', credentials: 'same-origin', cache: 'no-store',
-      headers: { Accept: 'application/json', Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    const payload = await response.json().catch(() => ({}));
+    if (!token) throw new Error('Sesja wygasła. Zaloguj się ponownie i otwórz raport.');
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 45_000);
+    let response, payload;
+    try {
+      response = await fetch('/.netlify/functions/admin-exams', {
+        method: 'POST', credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
+        headers: { Accept: 'application/json', Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      payload = await response.json().catch(() => ({}));
+    } catch {
+      throw new Error('Nie otrzymano odpowiedzi serwera. Odśwież próbę przed ponowną oceną — poprzednia operacja mogła zostać zapisana.');
+    } finally { window.clearTimeout(timeout); }
     if (!response.ok) {
       const messages = {
         AI_NOT_CONFIGURED: 'Najpierw przypisz konfigurację AI do modułu aiGrader w panelu AI / Modele.',
         AI_RATE_LIMITED: 'Dostawca AI ograniczył ruch. Spróbuj ponownie później albo oceń odpowiedzi ręcznie.',
+        AI_PROVIDER_TIMEOUT: 'AI nie odpowiedziało w wymaganym czasie. Odpowiedzi są zachowane — możesz przyznać punkty ręcznie albo spróbować później.',
+        AI_INVALID_KEY: 'Klucz API jest nieprawidłowy. Sprawdź konfigurację przypisaną do modułu aiGrader w AI / Modele.',
+        AI_PERMISSION_DENIED: 'Klucz API nie ma dostępu do wybranego modelu. Sprawdź konfigurację aiGrader.',
+        AI_MODEL_UNAVAILABLE: 'Wybrany model jest niedostępny. W AI / Modele wybierz dostępny model dla aiGrader.',
+        AI_QUOTA_EXHAUSTED: 'Dostawca AI zgłasza wyczerpaną kwotę API. Sprawdź rozliczenia klucza albo oceń ręcznie.',
+        AI_CREDIT_BALANCE_EXHAUSTED: 'Brak środków na koncie dostawcy API. Doładuj je albo oceń odpowiedzi ręcznie.',
+        AI_CONCURRENT_REQUEST_LIMIT_REACHED: 'Inna operacja AI nadal trwa. Zaczekaj na jej zakończenie.',
+        AI_LIMIT_STORAGE_UNAVAILABLE: 'Nie można odczytać limitów AI. Sprawdź dostęp do Netlify Blobs (SITE_ID i NETLIFY_API_TOKEN).',
+        EMPTY_MODEL_RESPONSE: 'Model nie zwrócił oceny. Spróbuj innym modelem przypisanym do aiGrader albo oceń ręcznie.',
         AI_DISABLED_FOR_USER: 'Ocena AI jest wyłączona dla Twojego konta.',
         AI_GRADING_INVALID_RESPONSE: 'AI nie zwróciło poprawnej punktacji. Spróbuj ponownie albo oceń ręcznie.',
         NO_AI_ANSWERS_TO_GRADE: 'Nie ma już oczekujących odpowiedzi przeznaczonych do oceny AI.',
         ATTEMPT_VERSION_CONFLICT: 'Raport został w międzyczasie zmieniony. Otwórz próbę ponownie i ponów ocenę.',
         ATTEMPT_NOT_FINISHED: 'Ta próba nie została jeszcze zakończona.'
       };
-      throw new Error(messages[payload.error] || payload.error || 'Błąd zapisywania punktów.');
+      const limit = /LIMIT.*(?:REACHED|EXCEEDED)/.test(payload.error || '');
+      throw new Error(messages[payload.error] || (limit ? 'Osiągnięto limit AI dla tej operacji. Sprawdź AI Limity dla konta sprawdzającego i modułu aiGrader.' : payload.error) || 'Błąd zapisywania punktów.');
     }
     return payload;
   }

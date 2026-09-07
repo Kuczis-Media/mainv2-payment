@@ -4,6 +4,14 @@ Otwórz **Studio → Landing Page Builder**. Zmień nazwę marki, firmę, logo, 
 
 Samo pisanie i podgląd nie wywołują Functions. Szkic ma lokalną kopię w przeglądarce. **Zapisz szkic** zapisuje go na serwerze, a **Opublikuj** udostępnia nową wersję odwiedzającym. Edycja i eksport są dostępne również wtedy, gdy serwerowy zapis jest niedostępny.
 
+## Osobne kolory dashboardu i studia
+
+W **Studio → Builder dashboardu → Kolory dashboardu i studia** jest skrót otwierający konfigurator w nowej karcie (nie zamyka pracy nad układem). W **Marka i kolory → Gdzie zmienić kolory?** wybierz landing, dashboard, studio albo konto i płatności. Kolor tekstu, tła, kart, akcenty i gotowe palety zmieniają wyłącznie wybrany obszar. Próbka pokazuje jego kolory; ramka z pełną stroną nadal pokazuje landing.
+
+Stare konfiguracje zachowują dotychczasową paletę: przy wczytaniu do edytora jest ona kopiowana do niezależnych `branding.palettes.dashboard`, `studio` i `account`. Nie ma dalszego automatycznego dziedziczenia zmian z landingu. Przycisk **Skopiuj kolory z landingu** pozwala świadomie ujednolicić jeden obszar. **Przywróć kolory NextMed** resetuje tylko wybraną paletę. Nazwa firmy, logo i favicon pozostają wspólne. Kolory pojedynczych sekcji dotyczą wyłącznie landingu, a treść lekcji, quizów i egzaminów nie jest przemalowywana.
+
+Zmiany palet są zapisywane w tym samym JSON i publikowane razem z konfiguracją landingu — przez dotychczasowy zapis z kontrolą konfliktów. Nie ma osobnego endpointu ani dodatkowego odpytywania dla kolorów. Dotyczą jasnego motywu; ciemny zachowuje własną paletę. Zdjęcie w tle logowania pozostaje bez zmian, paleta konta zmienia formularz. Po publikacji odśwież otwarte widoki (obowiązuje opisany niżej cache).
+
 ## Publikacja i zmienne
 
 W builderze wybierz **Gdzie opublikować?**, a następnie **Opublikuj**:

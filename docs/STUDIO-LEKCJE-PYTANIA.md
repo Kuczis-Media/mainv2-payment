@@ -34,3 +34,19 @@ Identyfikatory odpowiedzi i przypisane obrazy są zachowywane podczas edycji. Us
 Quiz i zadania lekcji korzystają z tego samego układu osobnych pól dla wariantów tekstowych, a pytania wyboru i luki zachowują swoje wizualne konfiguratory. Dotychczasowe pliki pozostają obsługiwane; nie trzeba ręcznie przepisywać istniejących odpowiedzi.
 
 Ocena AI nie uruchamia się od edytowania. W egzaminie uruchamia ją autor w raporcie; w quizie uczeń może wywołać sprawdzenie. Tryby ręczny i bez punktów nadal są dostępne.
+
+## Formatowanie pytań egzaminacyjnych
+
+W **Studio → Exam Builder → Pytania** (także w banku pytań) edytor treści ma przyciski pogrubienia, kursywy, podkreślenia, indeksu dolnego i górnego dla zaznaczonego fragmentu. Poniżej wybierasz kolor, czcionkę, rozmiar i wyrównanie całego pytania, w tym justowanie. Próbka pokazuje rezultat, a przycisk **Kolor domyślny** usuwa własny kolor.
+
+Rozwiń **Kreator równań chemicznych i matematycznych**. Dla reakcji wpisz substraty, produkty, wybierz strzałkę i opcjonalny warunek; dla matematyki wybierz przykład (ułamek, pierwiastek, potęga, suma, wzór kwadratowy) i dostosuj LaTeX. **Wstaw równanie do pytania** wstawia je w miejscu kursora. Formatowanie zapisuje się razem z egzaminem i bankiem oraz trafia do odtwarzacza i raportu. Rozpoczęta już próba zachowuje wcześniejszą migawkę pytań.
+
+Obsługiwane zapisy tekstowe: `**pogrubienie**`, `*kursywa*`, `__podkreślenie__`, `H~2~O`, `x^2^`; wzory mają delimitery `\(...\)` albo `\[...\]`. Renderer nie wykonuje HTML, JavaScript ani dowolnych poleceń TeX. Moduł równań jest statyczny i ładuje się dopiero, gdy jest potrzebny (Studio może już mieć wspólny MathJax). Nie korzysta z AI ani Functions.
+
+## Czytelny raport i ocena AI
+
+Szczegóły próby pokazują osobne ramki **Odpowiedź ucznia**, **Klucz odpowiedzi**, kryteria i komentarz. Odpowiedzi wyboru są nazwami wariantów, pary pokazują dopasowania, a kolejność — ponumerowane pozycje. Klucz pozostaje dostępny tylko administratorowi; uczeń nadal widzi wyłącznie informacje dozwolone ustawieniami egzaminu.
+
+W pytaniu otwartym wybierz **Autor uruchamia ocenę AI w raporcie** i uzupełnij klucz. W **Raporty → wybrana zakończona próba** użyj **Sprawdź oczekujące odpowiedzi za pomocą AI**. Konfigurację dostawcy przypisuje się do `aiGrader` w **AI / Modele**; operacja autora korzysta z jego limitu, a nie limitu ucznia. Jedno kliknięcie zleca jedną ograniczoną partię; pozostałe pytania można sprawdzić kolejnym kliknięciem lub ręcznie. Powtórzenie już zapisanej operacji nie wywołuje AI ponownie.
+
+Parser akceptuje także poprawny JSON otoczony komentarzem modelu, ale nie zgaduje ocen z niejednoznacznych albo błędnych wyników. Przy błędzie lub przekroczeniu czasu odpowiedzi ucznia pozostają zapisane. Po utracie połączenia odśwież próbę przed ponownym kliknięciem — poprzednia ocena mogła zostać zapisana. Limity, brak klucza, brak środków i niedostępny model mają komunikaty diagnostyczne; punkty zawsze można przyznać ręcznie.

@@ -2,6 +2,8 @@
 
 const {
   gradeAttempt,
+  displayAnswer,
+  displayCorrectAnswer,
   normalizeDefinition,
   SAFE_EXAM_ID,
   SAFE_REPOSITORY_ID
@@ -567,7 +569,12 @@ function adminAttempt(attempt) {
     expiresAt: attempt.expiresAt,
     submittedAt: attempt.submittedAt,
     durationSeconds: attempt.durationSeconds,
-    questions: attempt.questions,
+    questions: attempt.questions.map((question) => ({
+      ...question,
+      answerDisplay: displayAnswer(question, attempt.answers?.[question.questionId]),
+      correctAnswerDisplay: question.type === 'open_answer'
+        ? (question.answerKey ? [question.answerKey] : []) : displayCorrectAnswer(question)
+    })),
     answers: attempt.answers,
     result: attempt.result,
     order: attempt.questions.map((question) => question.questionId),
