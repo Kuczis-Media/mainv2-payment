@@ -1542,6 +1542,8 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
   border-left: 1px solid var(--chem-line);
 }
 
+.inspector-resize-handle { display: none; }
+
 .panel-heading {
   display: flex;
   min-height: 72px;
@@ -6321,4 +6323,30 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
   .answer-pair-row { grid-template-columns: minmax(0, 1fr); }
   .answer-connector { display: none; }
   .answer-list-row { grid-template-columns: 1fr; }
+}
+
+/* Only the lesson inspector changes width; mobile keeps the stacked layout. */
+#lesson-inspector-panel, #lesson-inspector-panel .inspector-form,
+#lesson-inspector-panel .inspector-form label { min-width: 0; }
+#lesson-inspector-panel .inspector-form input,
+#lesson-inspector-panel .inspector-form select,
+#lesson-inspector-panel .inspector-form textarea { min-width: 0; max-width: 100%; }
+#lesson-inspector-panel .inspector-form small { overflow-wrap: anywhere; }
+@media (min-width: 1021px) {
+  #lesson-workspace { --lesson-palette-width: 270px; --lesson-inspector-width: 340px; }
+  #lesson-workspace .builder-layout { grid-template-columns: var(--lesson-palette-width) minmax(360px, 1fr) var(--lesson-inspector-track, var(--lesson-inspector-width)); }
+  #lesson-workspace.is-palette-collapsed { --lesson-palette-width: 52px; }
+  #lesson-workspace.is-inspector-collapsed { --lesson-inspector-track: 52px; }
+  #lesson-workspace .inspector-resize-handle { display: block; position: absolute; z-index: 5; inset: 0 auto 0 0; width: 10px; cursor: col-resize; touch-action: none; }
+  #lesson-workspace.is-inspector-collapsed .inspector-resize-handle { display: none; }
+  .inspector-resize-handle::after { content: ''; position: absolute; width: 3px; height: 48px; top: calc(50% - 24px); left: 2px; border-radius: 3px; background: var(--chem-line); }
+  .inspector-resize-handle:hover::after, .inspector-resize-handle:focus-visible::after,
+  .is-inspector-resizing .inspector-resize-handle::after { background: var(--chem-primary); }
+  .inspector-resize-handle:focus-visible { outline: 2px solid var(--chem-primary); outline-offset: -2px; }
+  #lesson-workspace.is-inspector-resizing { user-select: none; cursor: col-resize; }
+  #lesson-workspace.is-inspector-resizing .builder-layout { transition: none; }
+  #lesson-workspace.is-inspector-resizing iframe { pointer-events: none; }
+}
+@media (min-width: 1021px) and (max-width: 1240px) {
+  #lesson-workspace { --lesson-palette-width: 235px; --lesson-inspector-width: 300px; }
 }

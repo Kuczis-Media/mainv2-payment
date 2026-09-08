@@ -120,6 +120,31 @@ test('live preview switches banner, image and side-card on the same DOM, restori
   assert.equal(dom.navbar.classList.contains('landing-solid'), true);
 });
 
+test('editing landing copy reuses the loaded logo and removing it restores only the text brand', () => {
+  const dom = landingDom();
+  const context = { window: null, document: dom.document, URL, CustomEvent: class {}, location: { search: '?landing-preview=1' }, parent: {}, addEventListener() {} };
+  context.window = context;
+  vm.runInNewContext(fs.readFileSync(require.resolve('../public/assets/js/landing-runtime.js'), 'utf8'), context);
+  const model = runtimeModel(1);
+  model.branding.logoUrl = 'https://cdn.jsdelivr.net/gh/example/media@main/logo.svg';
+  context.NextMedLanding.applyModel(model);
+  const image = dom.brand.children[0];
+  image.onload();
+  assert.equal(dom.brand.dataset.logoState, 'ready');
+  model.branding.brandName = 'New Name';
+  model.sections[0].title = 'New title';
+  context.NextMedLanding.applyModel(model);
+  assert.equal(dom.brand.children.length, 1);
+  assert.equal(dom.brand.children[0], image);
+  assert.equal(dom.brand.dataset.logoState, 'ready');
+  model.branding.logoUrl = '';
+  context.NextMedLanding.applyModel(model);
+  image.onerror();
+  assert.equal(dom.brand.dataset.logoState, 'fallback');
+  assert.equal(dom.brand.classList.contains('has-brand-image'), false);
+  assert.equal(dom.brand.children[0].textContent, 'New Name');
+});
+
 test('landing waits for the selected JSON before rendering and isolates cache from another repository', async () => {
   const delivery = require('../public/assets/js/landing-delivery-model.js');
   const route = delivery.normalize({ target: { repository: 'NextMed/web', path: 'start.json', ref: 'main' } });

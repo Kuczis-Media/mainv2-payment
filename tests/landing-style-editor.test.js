@@ -123,3 +123,56 @@ test('contact submit buttons have breathing room after CAPTCHA on landing and da
   assert.match(landing, /\.contact form \.button-area\s*\{[^}]*margin-top: 24px/);
   assert.match(members, /\.right-side \.button\s*\{[^}]*margin-top: 24px/);
 });
+
+test('a pasted jsDelivr logo and reopening the image picker never require the optional repository', async () => {
+  const source = fs.readFileSync(require.resolve('../public/members/module/studio/landing/script.js'), 'utf8');
+  const nodes = new Map(), requests = [], previews = [];
+  const node = () => ({ value: '', dataset: {}, events: {}, children: [], open: false,
+    addEventListener(name, callback) { this.events[name] = callback; },
+    setAttribute() {}, removeAttribute() {}, append(...items) { this.children.push(...items); }, replaceChildren(...items) { this.children = items; },
+    querySelector() { return this.child || (this.child = node()); },
+    showModal() { this.open = true; }, close() { this.open = false; },
+    contentWindow: { postMessage(message) { previews.push(message); } }
+  });
+  const byId = (id) => { if (!nodes.has(id)) nodes.set(id, node()); return nodes.get(id); };
+  const context = { URL, URLSearchParams, AbortController, location: { search: '', origin: 'https://course.example' }, crypto: { randomUUID: () => 'assets-test' }, defaults,
+    NextMedAppearance: require('../public/assets/js/site-appearance.js'), ChemAuth: { getAccessToken: async () => 'test-token' },
+    document: { getElementById: byId, querySelector: () => node(), createElement: node, addEventListener() {} },
+    setTimeout() {}, clearTimeout() {},
+    fetch: async (url) => { requests.push(url); return { ok: false, status: 503, json: async () => ({ error: 'SITE_ASSETS_NOT_CONFIGURED' }) }; }
+  };
+  context.window = context;
+  vm.runInNewContext(source.replace(/\}\)\(\);\s*$/, `defaultModel = defaults; model = normalizeLocalModel(defaults); previewReady = true;
+    window.assetTest = {openAssetLibrary, useAssetUrl, loadAssets, renderBrandingPreview, model}; })();`), context);
+  const tools = context.assetTest;
+  await tools.openAssetLibrary('logo');
+  assert.equal(requests.length, 0);
+  const url = 'https://cdn.jsdelivr.net/gh/example/media@main/logo.svg';
+  byId('asset-url').value = url; tools.useAssetUrl();
+  assert.equal(tools.model.branding.logoUrl, url);
+  assert.equal(previews.at(-1).model.branding.logoUrl, url);
+  const image = byId('logo-preview').querySelector('img');
+  image.onload();
+  tools.renderBrandingPreview();
+  assert.equal(byId('logo-preview').dataset.state, 'ready');
+  assert.equal(byId('asset-dialog').open, false);
+  assert.equal(requests.length, 0);
+  await tools.openAssetLibrary('logo');
+  assert.equal(byId('asset-url').value, url);
+  assert.equal(requests.length, 0);
+  await tools.loadAssets(true);
+  assert.equal(requests.length, 1, 'Only an explicit library browse contacts its repository');
+  assert.equal(byId('asset-status').dataset.state, 'error');
+  await tools.openAssetLibrary('logo');
+  assert.equal(requests.length, 1, 'A failed optional repository is not queried on every open');
+  assert.equal(byId('asset-status').dataset.state, '');
+  byId('asset-url').value = 'javascript:alert(1)'; tools.useAssetUrl();
+  assert.equal(tools.model.branding.logoUrl, url);
+});
+
+test('landing logo reserves its own row and a positive gap before the tagline', () => {
+  const css = fs.readFileSync(require.resolve('../public/assets/start_site/style.css'), 'utf8');
+  assert.match(css, /\.navbar \.logo \{[^}]*row-gap: 8px/);
+  assert.match(css, /\.navbar \.logo > small \{[^}]*margin: 0/);
+  assert.match(css, /\.navbar \.logo a\.has-brand-image img \{[^}]*display: block;[^}]*max-height: 44px/);
+});

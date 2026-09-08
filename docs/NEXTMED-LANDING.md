@@ -4,6 +4,10 @@ Otwórz **Studio → Edytor strony głównej**. Zmień nazwę marki, firmę, log
 
 Samo pisanie i podgląd nie wywołują Functions. Szkic ma lokalną kopię w przeglądarce. **Zapisz szkic** zapisuje go na serwerze, a **Opublikuj** udostępnia nową wersję odwiedzającym. Edycja i eksport są dostępne również wtedy, gdy serwerowy zapis jest niedostępny.
 
+Gotowy link do logo (np. jsDelivr) wkleisz w pole logo albo w oknie **Wybierz / wgraj → Gotowy link do obrazu → Użyj linku**. Nie wymaga to repozytorium ani tokenu GitHuba. Biblioteka jest sprawdzana dopiero po kliknięciu **Przeglądaj bibliotekę**; błąd jej konfiguracji nie blokuje używania linków ani nie wywołuje ponownych prób przy otwieraniu okna. Publikacja konfiguracji nadal korzysta z osobno wybranego magazynu. Załadowane logo zastępuje stary symbol panelu (nie jest nakładane na niego), a landing pozostawia odstęp między obrazem i podpisem. Zmiana treści podglądu nie tworzy ponownie tego samego obrazu logo.
+
+W **Studio → Lekcja** szerokość prawego panelu ustawień zmienisz, przeciągając uchwyt na jego lewej krawędzi. Po ustawieniu fokusu na uchwycie strzałki lewo/prawo zmieniają szerokość, Home/End wybierają skrajne wartości, a dwuklik przywraca domyślną. Panel ma zakres 300–680 px, ograniczony dostępną szerokością okna; zapisuje preferencję tylko lokalnie, bez Functions. Na telefonie pozostaje układ pionowy.
+
 ## Osobne kolory dashboardu i studia
 
 W **Studio → Builder dashboardu → Kolory dashboardu i studia** jest skrót otwierający konfigurator w nowej karcie (nie zamyka pracy nad układem). W **Marka i kolory → Gdzie zmienić kolory?** wybierz landing, dashboard, studio albo konto i płatności. Kolor tekstu, tła, kart, akcenty i gotowe palety zmieniają wyłącznie wybrany obszar. Próbka pokazuje jego kolory; ramka z pełną stroną nadal pokazuje landing.

@@ -95,7 +95,7 @@
             <div class="wide asset-url-field">
               <label for="branding-logo"><span>Link do logo</span></label>
               <div><input id="branding-logo" maxlength="1000" placeholder="https://…"><button type="button" data-open-assets="logo">Wybierz / wgraj</button><button id="copy-logo-url" type="button">Kopiuj URL</button></div>
-              <small>Wklej link do obrazu lub wybierz plik z biblioteki. Linki z GitHuba są automatycznie przygotowywane do szybkiego wyświetlania.</small>
+              <small>Gotowy link HTTPS (np. jsDelivr) działa bez konfigurowania repozytorium i tokenu. Biblioteka jest potrzebna tylko do przeglądania lub wgrywania plików.</small>
             </div>
             <label><span>Tekst ALT logo</span><input id="branding-logo-alt" maxlength="120"></label>
             <label><span>Favicon i wspólne logo paneli</span><input id="branding-favicon" maxlength="1000" placeholder="https://…"><small>Ta sama ikona w karcie przeglądarki, dashboardzie, studiu i panelach konta. Wklej link do pliku z biblioteki lub GitHuba.</small></label>
@@ -161,12 +161,13 @@
 
   <dialog id="asset-dialog" class="asset-dialog" aria-labelledby="asset-dialog-title">
     <div class="asset-shell">
-      <header><div><span class="eyebrow">Publiczna biblioteka obrazów</span><h2 id="asset-dialog-title">Logo i obrazy strony</h2><p>Wgraj obraz i użyj go na stronie lub skopiuj link. Każdy z linkiem będzie mógł go otworzyć — nie dodawaj tutaj poufnych plików.</p></div><button id="asset-close" type="button" aria-label="Zamknij">×</button></header>
+      <header><div><span class="eyebrow">Obraz z linku lub biblioteki</span><h2 id="asset-dialog-title">Logo i obrazy strony</h2><p>Wklej gotowy link albo opcjonalnie wgraj plik do biblioteki. Wgrane pliki są publiczne — nie dodawaj tutaj poufnych plików.</p></div><button id="asset-close" type="button" aria-label="Zamknij">×</button></header>
+      <div class="asset-url-field"><label for="asset-url">Gotowy link do obrazu</label><div><input id="asset-url" type="url" maxlength="1000" placeholder="https://cdn.jsdelivr.net/…"><button id="asset-use-url" type="button">Użyj linku</button></div><small>Bez repozytorium, tokenu i przesyłania pliku. Obraz wczytamy bezpośrednio z podanego adresu.</small></div>
       <section id="asset-drop" class="asset-drop" tabindex="0">
         <input id="asset-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" multiple hidden>
         <span aria-hidden="true">＋</span><div><strong>Przeciągnij, wklej lub wybierz plik</strong><small>PNG, JPG i WebP zostaną automatycznie zoptymalizowane · maks. 4 MB</small></div><button id="asset-file-button" type="button">Wybierz pliki</button>
       </section>
-      <div class="asset-toolbar"><label><span class="sr-only">Szukaj pliku</span><input id="asset-search" type="search" placeholder="Szukaj po nazwie…"></label><button id="asset-refresh" type="button">↻ Odśwież</button></div>
+      <div class="asset-toolbar"><label><span class="sr-only">Szukaj pliku</span><input id="asset-search" type="search" placeholder="Szukaj po nazwie…"></label><button id="asset-refresh" type="button">Przeglądaj bibliotekę</button></div>
       <p id="asset-status" class="asset-status" role="status" aria-live="polite"></p>
       <div id="asset-grid" class="asset-grid"></div>
     </div>

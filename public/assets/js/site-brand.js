@@ -21,6 +21,7 @@
   const iconNode = document.querySelector('link[rel~="icon"]');
   const fallbackIcon = imageUrl(iconNode?.getAttribute('href') || iconNode?.href);
   const pendingLogos = new WeakMap();
+  const fallbackMarks = new WeakMap();
   let currentRevision = -1;
   let publicationVersion = '';
   // Reuse the already declared favicon immediately, even while the public
@@ -106,34 +107,43 @@
 
   function applyLogo(url, alt) {
     document.querySelectorAll('[data-brand-logo-slot]').forEach((slot) => {
+      if (!fallbackMarks.has(slot)) fallbackMarks.set(slot, Array.from(slot.childNodes));
       const previous = slot.querySelector('[data-site-brand-image]');
       const pending = pendingLogos.get(slot);
       if (pending?.getAttribute('src') === url) { pending.alt = alt; return; }
       pendingLogos.delete(slot);
       if (!url) {
-        previous?.remove();
-        slot.querySelector('svg')?.removeAttribute('hidden');
-        slot.querySelector('svg')?.style?.removeProperty('display');
+        slot.replaceChildren(...fallbackMarks.get(slot));
+        markLogoLoaded(slot, false);
         return;
       }
-      if (previous?.getAttribute('src') === url) { previous.alt = alt; return; }
+      if (previous?.getAttribute('src') === url) { previous.alt = alt; markLogoLoaded(slot, true); return; }
       const image = document.createElement('img');
       image.alt = alt;
       image.decoding = 'async';
       image.setAttribute('data-site-brand-image', '');
-      image.style.cssText = 'width:100%;height:100%;max-width:100%;object-fit:contain;display:block';
+      image.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;display:block';
       pendingLogos.set(slot, image);
       image.onload = () => {
         if (pendingLogos.get(slot) !== image) return;
         pendingLogos.delete(slot);
-        slot.querySelector('[data-site-brand-image]')?.remove();
-        slot.querySelector('svg')?.setAttribute('hidden', '');
-        slot.querySelector('svg')?.style?.setProperty('display', 'none');
-        slot.append(image);
+        markLogoLoaded(slot, true);
+        slot.replaceChildren(image);
       };
       image.onerror = () => { if (pendingLogos.get(slot) === image) pendingLogos.delete(slot); };
       // The original mark stays visible until the image has loaded successfully.
       image.src = url;
+    });
+  }
+
+  function markLogoLoaded(slot, loaded) {
+    slot.dataset.logoState = loaded ? 'ready' : 'fallback';
+    // A loaded image is the whole mark, not an extra row inside the original
+    // decorative badge. Keep its fixed CSS size and the neighbouring text.
+    const styles = { position: 'relative', overflow: 'hidden', background: 'transparent', 'border-color': 'transparent', 'border-radius': '0', 'box-shadow': 'none' };
+    Object.entries(styles).forEach(([property, value]) => {
+      if (loaded) slot.style.setProperty(property, value);
+      else slot.style.removeProperty(property);
     });
   }
 

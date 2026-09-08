@@ -45,6 +45,7 @@
   <script src="presentation-builder.js" defer></script>
   <script src="quiz-builder.js" defer></script>
   <script src="script.js" defer></script>
+  <script src="inspector-resize.js" defer></script>
 </head>
 <body>
   <div class="ambient ambient-one" aria-hidden="true"></div>
@@ -687,7 +688,8 @@
             <div class="builder-canvas lesson-canvas" id="lesson-canvas" data-drop-root="lesson"></div>
           </section>
 
-          <aside class="inspector-panel" aria-label="Ustawienia lekcji">
+          <aside class="inspector-panel" id="lesson-inspector-panel" aria-label="Ustawienia lekcji">
+            <div class="inspector-resize-handle" id="lesson-inspector-resize" role="separator" tabindex="0" aria-orientation="vertical" aria-controls="lesson-inspector-panel" aria-label="Szerokość panelu ustawień lekcji" aria-valuemin="300" aria-valuemax="680" aria-valuenow="340" title="Przeciągnij w lewo, aby poszerzyć. Strzałki zmieniają szerokość; dwuklik przywraca domyślną."></div>
             <div class="panel-heading inspector-panel-heading">
               <div><small>Panel boczny</small><strong>Narzędzia i podgląd</strong></div>
               <button class="panel-collapse-button" type="button" data-studio-toggle="inspector" aria-label="Zwiń panel narzędzi i podglądu" aria-expanded="true" title="Zwiń panel narzędzi i podglądu">

@@ -35,7 +35,7 @@
     recover: document.getElementById('recover-local'), assetDialog: document.getElementById('asset-dialog'), assetClose: document.getElementById('asset-close'),
     assetDrop: document.getElementById('asset-drop'), assetFile: document.getElementById('asset-file'), assetFileButton: document.getElementById('asset-file-button'),
     assetSearch: document.getElementById('asset-search'), assetRefresh: document.getElementById('asset-refresh'), assetStatus: document.getElementById('asset-status'),
-    assetGrid: document.getElementById('asset-grid')
+    assetGrid: document.getElementById('asset-grid'), assetUrl: document.getElementById('asset-url'), assetUseUrl: document.getElementById('asset-use-url')
   });
 
   let model = null;
@@ -192,6 +192,8 @@
   }
 
   function bindAssetDialog() {
+    elements.assetUseUrl.addEventListener('click', useAssetUrl);
+    elements.assetUrl.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); useAssetUrl(); } });
     elements.assetClose.addEventListener('click', () => elements.assetDialog.close());
     elements.assetDialog.addEventListener('click', (event) => { if (event.target === elements.assetDialog) elements.assetDialog.close(); });
     elements.assetFileButton.addEventListener('click', (event) => { event.stopPropagation(); elements.assetFile.click(); });
@@ -945,9 +947,16 @@
   async function openAssetLibrary(target) {
     assetTarget = target === 'logo' ? 'logo' : 'section';
     elements.assetDialog.querySelector('h2').textContent = assetTarget === 'logo' ? 'Wybierz logo strony' : `Wybierz obraz: ${SECTION_LABELS[selectedId] || selectedId}`;
+    elements.assetUrl.value = assetTarget === 'logo' ? model.branding?.logoUrl || '' : selectedSection().imageUrl || '';
     if (!elements.assetDialog.open) elements.assetDialog.showModal();
-    if (!assetsLoaded) await loadAssets(false);
-    else renderAssets();
+    if (!assetsLoaded) setAssetStatus('Wklej gotowy link lub wybierz „Przeglądaj bibliotekę”. Link nie wymaga repozytorium GitHub.');
+    renderAssets();
+  }
+
+  function useAssetUrl() {
+    const url = safeImageUrl(elements.assetUrl.value);
+    if (!url) { setAssetStatus('Wklej poprawny link HTTPS do pliku obrazu.', 'error'); return; }
+    chooseAsset({ cdnUrl: url, filename: 'obraz z linku' });
   }
 
   async function loadAssets(refresh) {
@@ -959,6 +968,7 @@
       const payload = await requestAssets('GET');
       assetItems = Array.isArray(payload.assets) ? payload.assets : [];
       assetsLoaded = true;
+      elements.assetRefresh.textContent = '↻ Odśwież bibliotekę';
       const locationLabel = [payload.configuration?.repository, payload.configuration?.directory].filter(Boolean).join('/');
       setAssetStatus(`${assetItems.length} ${assetItems.length === 1 ? 'plik' : 'plików'} · ${locationLabel || 'publiczne repozytorium'}`);
     } catch (error) {
@@ -982,7 +992,7 @@
     if (!assets.length) {
       const empty = document.createElement('div');
       empty.className = 'asset-empty';
-      empty.textContent = query ? 'Brak plików pasujących do wyszukiwania.' : 'Repozytorium nie ma jeszcze obrazów. Wgraj pierwszy plik powyżej.';
+      empty.textContent = !assetsLoaded ? 'Biblioteka jest opcjonalna. Gotowy link do obrazu możesz dodać powyżej.' : query ? 'Brak plików pasujących do wyszukiwania.' : 'Biblioteka nie ma jeszcze obrazów. Wgraj plik lub użyj gotowego linku.';
       elements.assetGrid.replaceChildren(empty);
       return;
     }

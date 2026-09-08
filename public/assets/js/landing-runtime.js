@@ -15,7 +15,6 @@
     contact: { title: '.title', subtitle: '.column.left .text', body: '.column.left > p', image: 'managed', cta: '.landing-section-cta' }
   };
   const SECTION_IDS = Object.keys(COPY_TARGETS);
-  let brandingRequestId = 0;
   let currentModel = null;
   let resolvedConfigUrl = '';
   let publicationVersion = '';
@@ -202,7 +201,6 @@
   }
 
   function applyBranding(branding) {
-    const requestId = ++brandingRequestId;
     const brandName = cleanText(branding.brandName) || 'NextMed';
     if (typeof branding.siteTitle === 'string' && branding.siteTitle.trim()) document.title = branding.siteTitle.trim();
     const description = document.querySelector('meta[name="description"]');
@@ -218,25 +216,37 @@
 
     const anchor = document.querySelector('.navbar .logo a');
     if (!anchor) return;
+    anchor.dataset.logoFallbackName = brandName;
     const logoUrl = safeImageUrl(branding.logoUrl);
     if (!logoUrl) {
       renderTextBrand(anchor, brandName);
       return;
     }
+    const previous = anchor.children[0];
+    if (previous?.dataset.logoUrl === logoUrl) {
+      previous.alt = cleanText(branding.logoAlt) || brandName;
+      return;
+    }
     const image = document.createElement('img');
-    image.src = logoUrl;
+    image.dataset.logoUrl = logoUrl;
     image.alt = cleanText(branding.logoAlt) || brandName;
     image.decoding = 'async';
     image.fetchPriority = 'high';
+    image.addEventListener('load', () => {
+      if (anchor.children[0] === image) anchor.dataset.logoState = 'ready';
+    }, { once: true });
     image.addEventListener('error', () => {
-      if (requestId === brandingRequestId) renderTextBrand(anchor, brandName);
+      if (anchor.children[0] === image) renderTextBrand(anchor, anchor.dataset.logoFallbackName);
     }, { once: true });
     anchor.classList.add('has-brand-image');
+    anchor.dataset.logoState = 'loading';
     anchor.replaceChildren(image);
+    image.src = logoUrl;
   }
 
   function renderTextBrand(anchor, brandName) {
     anchor.classList.remove('has-brand-image');
+    anchor.dataset.logoState = 'fallback';
     const name = document.createElement('span');
     const dot = document.createElement('i');
     name.textContent = brandName;

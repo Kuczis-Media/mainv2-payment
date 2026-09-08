@@ -26,10 +26,15 @@ async function run({ cache, response = null, route, pathname = '/members/', logo
     if (tag === 'img') images.push(result);
     return result;
   }
-  const slots = Array.from({ length: logoSlots }, () => ({ children: [], svg: node('svg'),
-    querySelector(selector) { return selector === 'svg' ? this.svg : this.children.find((child) => child.tag === 'img'); },
-    append(child) { child.parent = this; this.children.push(child); }
-  }));
+  const slots = Array.from({ length: logoSlots }, () => {
+    const svg = node('svg');
+    return { children: [svg], svg, dataset: {}, style: node('span').style,
+      get childNodes() { return this.children; },
+      querySelector(selector) { return this.children.find((child) => child.tag === (selector === 'svg' ? 'svg' : 'img')); },
+      append(child) { child.parent = this; this.children.push(child); },
+      replaceChildren(...children) { this.children = []; children.forEach((child) => this.append(child)); }
+    };
+  });
   const styles = [];
   const calls = [];
   const document = {
@@ -62,7 +67,11 @@ test('shell logos use the favicon instead of the landing logo, with late loads u
       assert.equal(slot.children.length, 1);
       assert.equal(slot.children[0].src, result.icon.href);
       assert.equal(slot.children[0].alt, 'TestMed');
-      assert.equal(slot.svg.style.display, 'none');
+      assert.equal(slot.querySelector('svg'), undefined, 'The old mark is removed, not merely hidden behind the logo');
+      assert.equal(slot.dataset.logoState, 'ready');
+      assert.equal(slot.style.background, 'transparent');
+      assert.equal(slot.style['box-shadow'], 'none');
+      assert.match(slot.children[0].style.cssText, /position:absolute/);
     }
     assert.equal(result.calls.length, 0);
     assert.equal(result.images.some((image) => /wide-logo/.test(image.src)), false);
@@ -82,7 +91,8 @@ test('offline configuration uses the checked-in favicon; an image failure keeps 
   assert.equal(result.images[0].src, '/icon.svg');
   result.images[0].onerror();
   assert.equal(result.slots[0].svg.attrs.hidden, undefined);
-  assert.equal(result.slots[0].children.length, 0);
+  assert.equal(result.slots[0].children.length, 1);
+  assert.equal(result.slots[0].children[0], result.slots[0].svg);
 });
 
 test('shared public cache updates shell names, title and favicon without another request', async () => {
