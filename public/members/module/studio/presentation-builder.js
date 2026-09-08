@@ -144,7 +144,7 @@
       return button;
     }));
     if (!assets.length) {
-      setLibraryStatus(state.assets.length ? 'Brak prezentacji pasujących do wyszukiwania.' : 'Brak prezentacji w tym repozytorium.');
+      setLibraryStatus(state.assets.length ? 'Brak prezentacji pasujących do wyszukiwania.' : 'Brak prezentacji w tej bibliotece.');
     } else {
       setLibraryStatus(`${assets.length} pasujących prezentacji.`);
       elements.library.append(pagedListApi.controls(root.document, state.libraryPaging, paged, {

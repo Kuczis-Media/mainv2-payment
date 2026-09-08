@@ -70,8 +70,8 @@ test('AI limit settings cover all metrics, periods, timezone and configurable pr
 
 test('admin and student interfaces expose AI limits without a client-side security counter', () => {
   const root = path.join(__dirname, '..');
-  const html = fs.readFileSync(path.join(root, 'public/members/index.html'), 'utf8');
-  const dashboard = fs.readFileSync(path.join(root, 'public/members/dashboard.js'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'public/members/module/studio/manage/index.html'), 'utf8');
+  const dashboard = fs.readFileSync(path.join(root, 'public/members/module/studio/manage/management.js'), 'utf8');
   const chatHtml = fs.readFileSync(path.join(root, 'public/members/module/chat/index.html'), 'utf8');
   const chatScript = fs.readFileSync(path.join(root, 'public/members/module/chat/script.js'), 'utf8');
   assert.match(html, /data-admin-tab="ai-usage"/);
@@ -82,7 +82,7 @@ test('admin and student interfaces expose AI limits without a client-side securi
   assert.match(html, /id="admin-ai-usage-period"[\s\S]*value="hour"/);
   assert.match(dashboard, /admin-ai-usage/);
   assert.match(dashboard, /Limit bazowy/);
-  assert.match(dashboard, /billing_required/);
+  assert.match(fs.readFileSync(path.join(root, 'public/members/dashboard.js'), 'utf8'), /billing_required/);
   assert.match(dashboard, /view=users/);
   assert.match(chatHtml, /id="ai-own-usage"/);
   assert.match(chatScript, /\.netlify\/functions\/ai-usage/);

@@ -599,6 +599,8 @@
     finishEdit();
     const next = ['home', 'dashboard', 'lesson', 'quiz', 'exam', 'presentation', 'prompt'].includes(mode) ? mode : 'home';
     state.mode = next;
+    const toolSelect = document.getElementById('studio-tool-select');
+    if (toolSelect) toolSelect.value = next;
     elements.home.hidden = next !== 'home';
     elements.dashboardWorkspace.hidden = next !== 'dashboard';
     elements.lessonWorkspace.hidden = next !== 'lesson';
@@ -804,7 +806,7 @@
         point: isText ? 1 : null,
         prompt: isText ? '' : asset.filename,
         title: asset.title || asset.filename,
-        description: asset.description || 'Asystent korzystający z instrukcji z prywatnego repozytorium.'
+        description: asset.description || 'Asystent korzystający z Twoich zapisanych instrukcji.'
       });
     }
     addDashboardNode(node.module, null, undefined, node);
@@ -1062,7 +1064,7 @@
         value: '',
         label: fallback
           ? `Domyślne — ${fallback.label || fallback.repository}`
-          : 'Domyślne repozytorium'
+          : 'Domyślna biblioteka'
       });
     }
     return options;
@@ -1099,7 +1101,7 @@
       .filter((asset) => !selectedRepositoryId || asset.repositoryId === selectedRepositoryId);
     return materialPicker(input, assets, {
       type: kind === 'lesson' ? 'Lekcja' : `Plik ${extension.toUpperCase()}`,
-      empty: kind === 'lesson' ? 'Brak lekcji w tym repozytorium.' : `Brak plików .${extension}.`
+      empty: kind === 'lesson' ? 'Brak lekcji w tej bibliotece.' : `Brak plików .${extension}.`
     });
   }
 
@@ -1123,7 +1125,7 @@
       ));
     return materialPicker(input, assets, {
       type: allowedExtensions.map((item) => item.toUpperCase()).join(' / '),
-      empty: 'Brak pasujących plików w tym repozytorium.'
+      empty: 'Brak pasujących plików w tej bibliotece.'
     });
   }
 
@@ -1425,7 +1427,7 @@
         form.append(field(
           'Plik lekcji',
           repositoryFilenameInput(node.file, 'file', 'lesson', 'md', node.repositoryId),
-          'Wybierz plik z prywatnego repozytorium albo wpisz jego nazwę.'
+          'Wybierz materiał z biblioteki albo wpisz nazwę jego pliku.'
         ));
       }
       if (node.module === 'exam') {
@@ -1440,7 +1442,7 @@
           materialPicker(textInput(node.examId, 'examId', { placeholder: 'Wyszukaj egzamin…' }), exams, {
             type: 'Egzamin',
             icon: 'E',
-            empty: 'Brak egzaminów w tym repozytorium.',
+            empty: 'Brak egzaminów w tej bibliotece.',
             allowCustom: false
           }),
           'Karta przechowuje tylko repositoryId i examId. Definicja pozostaje w jednym pliku exam.json.'
@@ -1458,7 +1460,7 @@
           materialPicker(textInput(node.presentationId, 'presentationId', { placeholder: 'Wyszukaj prezentację…' }), presentations, {
             type: 'Prezentacja',
             icon: 'S',
-            empty: 'Brak prezentacji w tym repozytorium.',
+            empty: 'Brak prezentacji w tej bibliotece.',
             allowCustom: false
           }),
           'Karta wskazuje presentation.json. Stare moduły Google Slides nadal działają niezależnie.'
@@ -1476,7 +1478,7 @@
           materialPicker(textInput(node.quizId, 'quizId', { placeholder: 'Wyszukaj quiz…' }), quizzes, {
             type: 'Quiz',
             icon: 'Q',
-            empty: 'Brak quizów w tym repozytorium.',
+            empty: 'Brak quizów w tej bibliotece.',
             allowCustom: false
           }),
           'Karta wskazuje quizzes/<quizId>/quiz.json i otwiera tylko opublikowaną definicję.'
@@ -1505,7 +1507,7 @@
           form.append(field(
             'Plik JSON',
             repositoryFilenameInput(node.prompt, 'prompt', 'prompt', 'json', node.repositoryId),
-            'Lista pochodzi z prywatnego repozytorium materiałów.'
+            'Lista zawiera materiały z Twojej biblioteki.'
           ));
         }
       }
@@ -4092,7 +4094,7 @@
           materialPicker(lessonInput(block.presentationId, 'presentationId', { placeholder: 'Wyszukaj prezentację…' }), presentations, {
             type: 'Prezentacja',
             icon: 'S',
-            empty: 'Brak prezentacji w tym repozytorium.',
+            empty: 'Brak prezentacji w tej bibliotece.',
             allowCustom: false
           })
         ),
@@ -4115,7 +4117,7 @@
           materialPicker(lessonInput(block.quizId, 'quizId', { placeholder: 'Wyszukaj quiz…' }), quizzes, {
             type: 'Quiz',
             icon: 'Q',
-            empty: 'Brak quizów w tym repozytorium.',
+            empty: 'Brak quizów w tej bibliotece.',
             allowCustom: false
           })
         ),
@@ -4161,7 +4163,7 @@
           materialPicker(lessonInput(block.examId, 'examId', { placeholder: 'Wyszukaj egzamin…' }), exams, {
             type: 'Egzamin',
             icon: 'E',
-            empty: 'Brak egzaminów w tym repozytorium.',
+            empty: 'Brak egzaminów w tej bibliotece.',
             allowCustom: false
           })
         ),
@@ -4429,7 +4431,7 @@
         create(
           'p',
           'formula-builder-tip',
-          'Wiadomości trafiają do Netlify Forms. Administrator może je przeglądać, usuwać i pobrać wszystkie w panelu administratora.'
+          'Odpowiedzi znajdziesz w panelu administratora, w zakładce Formularze. Możesz je przeglądać, pobrać lub usunąć.'
         )
       );
     } else if (block.type === 'link') {
@@ -6416,7 +6418,7 @@
       source = currentSource(mode);
     } catch (error) {
       toast(
-        'Nie można wygenerować Markdown',
+        'Nie można przygotować kodu',
         error && error.message ? error.message : 'Uzupełnij wymagane pola.',
         'error'
       );
@@ -6424,9 +6426,9 @@
     }
     state.sourceMode = mode;
     elements.sourceDialogEyebrow.textContent = mode === 'dashboard'
-      ? 'Dashboard Markdown'
+      ? 'Kod panelu kursanta'
       : mode === 'lesson'
-        ? 'Lesson Markdown'
+        ? 'Kod lekcji'
         : 'Prompt JSON/TXT';
     elements.sourceDialogTitle.textContent = mode === 'dashboard'
       ? 'Kod źródłowy dashboardu'
@@ -6469,13 +6471,13 @@
       }
       elements.sourceDialog.close();
       toast(
-        state.sourceMode === 'prompt' ? 'Prompt zastosowany' : 'Markdown zastosowany',
+        state.sourceMode === 'prompt' ? 'Prompt zastosowany' : 'Zmiany zastosowane',
         state.sourceMode === 'prompt'
           ? 'Kod został zamieniony na edytowalny model promptu.'
           : 'Kod został zamieniony na graficzne klocki.'
       );
     } catch (error) {
-      elements.sourceStatus.textContent = error && error.message ? error.message : 'Nieprawidłowy Markdown.';
+      elements.sourceStatus.textContent = error && error.message ? error.message : 'Nieprawidłowy format treści.';
       elements.sourceStatus.className = 'dialog-status is-error';
     }
   }
@@ -6561,7 +6563,7 @@
       }
       toast('Plik zaimportowany', `${file.name} jest gotowy do edycji.`);
     } catch (error) {
-      toast('Nie udało się zaimportować', error && error.message ? error.message : 'Nieprawidłowy Markdown.', 'error');
+      toast('Nie udało się zaimportować', error && error.message ? error.message : 'Nieprawidłowy format treści.', 'error');
     }
   }
 
@@ -7326,7 +7328,7 @@
       const selected = selectedRepository();
       elements.contentExplorerStatus.classList.toggle('is-error', Boolean(state.contentLibrary.error));
       elements.contentExplorerStatus.textContent = state.contentLibrary.loading
-        ? 'Pobieranie plików z prywatnego repozytorium…'
+        ? 'Wczytywanie materiałów…'
         : state.contentLibrary.error
           ? state.contentLibrary.error
           : state.contentLibrary.loaded
@@ -7593,11 +7595,11 @@
     state.contentLibrary.error = '';
     [elements.dashboardAssetStatus, elements.lessonAssetStatus, elements.promptAssetStatus].forEach((status) => {
       status.classList.remove('is-error');
-      status.textContent = 'Pobieranie listy z prywatnego repozytorium…';
+      status.textContent = 'Wczytywanie biblioteki…';
     });
     if (elements.contentExplorerStatus) {
       elements.contentExplorerStatus.classList.remove('is-error');
-      elements.contentExplorerStatus.textContent = 'Pobieranie plików z prywatnego repozytorium…';
+      elements.contentExplorerStatus.textContent = 'Wczytywanie materiałów…';
     }
     renderContentExplorer();
     try {
@@ -8149,6 +8151,7 @@
   }
 
   function bindEvents() {
+    document.addEventListener('studio-select-mode', (event) => switchMode(event.detail));
     all('[data-open-mode]').forEach((button) => {
       button.addEventListener('click', () => switchMode(button.dataset.openMode));
     });
@@ -8413,7 +8416,7 @@
     elements.lessonCopy.addEventListener('click', async () => {
       try {
         await copyText(lessonModelApi.serializeLesson(state.lesson.model));
-        toast('Markdown skopiowany', 'Możesz wkleić go bezpośrednio do nowego pliku .md.');
+        toast('Kod skopiowany', 'Możesz wkleić go bezpośrednio do nowego pliku .md.');
       } catch (error) {
         toast('Nie udało się skopiować', error.message, 'error');
       }
@@ -8524,7 +8527,7 @@
     elements.accessState.hidden = true;
     elements.app.hidden = false;
     elements.modeSwitch.hidden = false;
-    switchMode('home');
+    switchMode(new URL(window.location.href).searchParams.get('mode') || 'home');
     initializeContentExplorerLoader();
     setSaveIndicator('Szkice gotowe', 'saved');
   }

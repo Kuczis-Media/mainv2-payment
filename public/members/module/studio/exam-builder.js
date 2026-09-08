@@ -296,7 +296,7 @@
       return button;
     }));
     if (!assets.length) {
-      elements.libraryStatus.textContent = query ? 'Brak egzaminów pasujących do wyszukiwania.' : 'Brak egzaminów w tym repozytorium.';
+      elements.libraryStatus.textContent = query ? 'Brak egzaminów pasujących do wyszukiwania.' : 'Brak egzaminów w tej bibliotece.';
     } else {
       elements.libraryStatus.textContent = `${assets.length} pasujących egzaminów.`;
       elements.library.append(pagedListApi.controls(document, state.libraryPaging, paged, {
@@ -547,7 +547,7 @@
   }
 
   function renderInformation() {
-    const main = section('Definicja egzaminu', 'Identyfikator jest częścią stabilnej ścieżki w prywatnym repozytorium.');
+    const main = section('Definicja egzaminu', 'Identyfikator tworzy stały adres egzaminu. Nie zmieniaj go po udostępnieniu uczestnikom.');
     main.append(
       row(
         field('ID egzaminu', input('examId', state.exam.examId, { placeholder: 'np. alkohole-proba-1', maxLength: 80 }), 'Małe litery, cyfry i myślniki.'),
@@ -1517,7 +1517,7 @@
           state.usersTotal = Number.isFinite(Number(payload.pagination?.total)) ? Number(payload.pagination.total) : state.usersTotal;
         } while (state.usersHasMore && state.usersLoadAllRequested);
       } catch (error) {
-        state.usersError = error.message || 'Nie udało się pobrać użytkowników z Netlify Identity.';
+        state.usersError = error.message || 'Nie udało się wczytać listy użytkowników.';
       } finally {
         state.usersLoading = false; state.usersPromise = null;
         if (!state.usersHasMore) state.usersLoadAllRequested = false;

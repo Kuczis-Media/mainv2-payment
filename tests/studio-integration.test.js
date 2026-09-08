@@ -72,7 +72,7 @@ test('Studio defers repository bootstrap until a builder or explorer is opened',
   assert.match(html, /id="content-explorer"/);
   assert.match(script, /function initializeContentExplorerLoader\(\)/);
   assert.match(script, /new window\.IntersectionObserver/);
-  assert.match(script, /switchMode\('home'\);\s*initializeContentExplorerLoader\(\);/);
+  assert.match(script, /switchMode\(new URL\(window.location.href\)\.searchParams.get\('mode'\) \|\| 'home'\);\s*initializeContentExplorerLoader\(\);/);
   assert.match(script, /elements\.contentExplorerRefresh\.disabled = state\.contentLibrary\.loading/);
   assert.match(script, /const repositoryReady = next === 'home'\s*\? Promise\.resolve\(\)\s*:\s*loadRepositoryAssets\(false\)/);
   assert.match(script, /if \(state\.mode === 'quiz'\) return window\.ChemQuizBuilder\?\.activate\?\.\(\)/);

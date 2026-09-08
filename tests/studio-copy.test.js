@@ -24,13 +24,14 @@ test('Studio primary actions use consistent everyday Polish rather than storage 
   }
 });
 
-test('simple publication wording preserves public-file warnings and technical destination choices', () => {
+test('simple publication wording preserves public-file warnings and both destination choices', () => {
   const html = read('landing/index.html');
   assert.match(html, /id="publish"[^>]*>Opublikuj<\/button>/);
   assert.match(html, /id="save-draft"[^>]*>Zapisz szkic<\/button>/);
   assert.match(html, /nie dodawaj tutaj poufnych plików/);
-  assert.match(html, /value="netlify-blobs">Netlify Blobs/);
-  assert.match(html, /value="static-github">GitHub — publiczny plik JSON/);
+  assert.match(html, /value="netlify-blobs">Na platformie/);
+  assert.match(html, /value="static-github">W publicznej bibliotece plików/);
+  assert.match(read('landing/script.js'), /Nie dodawaj do nich haseł ani prywatnych danych/);
   const script = read('landing/script.js');
   assert.match(script, /dostępny tylko dla administratora/);
   assert.match(script, /Odwiedzający zobaczą zmiany dopiero po publikacji/);

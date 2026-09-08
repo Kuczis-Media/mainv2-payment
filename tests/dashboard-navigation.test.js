@@ -55,7 +55,7 @@ test('every published page uses the same GitHub CDN favicon', () => {
   });
   visit(path.join(root, 'public'));
 
-  assert.equal(htmlFiles.length, 26);
+  assert.equal(htmlFiles.length, 27);
   for (const filename of htmlFiles) {
     const html = fs.readFileSync(filename, 'utf8');
     assert.match(html, new RegExp(`<link rel=["']icon["'] href=["']${canonical.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'] type=["']image/svg\\+xml["']\\s*/?>`), filename);

@@ -6350,3 +6350,31 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
 @media (min-width: 1021px) and (max-width: 1240px) {
   #lesson-workspace { --lesson-palette-width: 235px; --lesson-inspector-width: 300px; }
 }
+
+
+/* Grouped tool chooser: a native, keyboard-friendly select in every editor. */
+.tool-switch { position: static; display: grid; gap: 3px; min-width: 230px; padding: 7px 12px; transform: none; }
+.tool-switch label { color: var(--chem-muted); font-size: .65rem; font-weight: 750; }
+.tool-switch select { width: 100%; min-height: 28px; border: 0; background: transparent; color: var(--chem-text); font: inherit; font-size: .83rem; font-weight: 750; }
+.tool-switch option, .tool-switch optgroup { background: var(--chem-surface); color: var(--chem-text); }
+.tool-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; margin: 24px 0 12px; }
+.tool-categories { display: flex; flex-wrap: wrap; gap: 8px; flex: 1; }
+.tool-categories button { min-height: 40px; padding: 10px 15px; border: 1px solid var(--chem-line); border-radius: 999px; background: var(--chem-surface); color: var(--chem-text); font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; }
+.tool-categories button[aria-pressed="true"] { background: var(--chem-primary); border-color: var(--chem-primary); color: var(--chem-primary-contrast, #fff); }
+.tool-search input { width: 100%; min-height: 44px; padding: 10px 16px; border: 1px solid var(--chem-line); border-radius: 12px; background: var(--chem-surface); color: var(--chem-text); font: inherit; }
+.tool-count { margin: 0 0 16px; color: var(--chem-muted); font-size: .8rem; }
+.tool-empty { padding: 24px; text-align: center; color: var(--chem-muted); }
+.home-view .project-card { min-height: 172px; padding: 26px; gap: 18px; border-radius: 22px; }
+.home-view .project-copy strong { font-size: clamp(1.15rem, 2vw, 1.45rem); }
+.home-view .project-copy > span { font-size: .88rem; line-height: 1.65; }
+.home-view .project-icon { width: 56px; height: 56px; border-radius: 16px; }
+@media (min-width: 761px) and (max-width: 1020px) {
+  .studio-header { grid-template-columns: minmax(160px, 1fr) minmax(210px, auto) auto; gap: 12px; }
+  .brand-copy small { display: none; }
+  .header-actions .save-indicator { display: none; }
+}
+@media (max-width: 760px) {
+  .tool-switch { position: fixed; bottom: 10px; right: 12px; left: 12px; min-width: 0; z-index: 101; padding: 8px 14px; background: var(--chem-surface); box-shadow: var(--chem-shadow-lg); }
+  .tool-search { width: 100%; }
+  .home-view .project-card { padding: 20px; gap: 14px; min-height: 150px; }
+}

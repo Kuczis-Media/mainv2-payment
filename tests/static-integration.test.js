@@ -329,7 +329,7 @@ test('administrator UI covers users, Forms, dashboard and private content status
   const html = fs.readFileSync(path.join(root, 'public', 'members', 'index.html'), 'utf8');
   const script = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.js'), 'utf8');
 
-  for (const tab of ['users', 'forms', 'dashboard', 'content', 'payments']) {
+  for (const tab of ['users', 'forms', 'dashboard', 'content', 'ai', 'landing']) {
     assert.match(html, new RegExp(`data-admin-tab=["']${tab}["']`));
     assert.match(html, new RegExp(`data-admin-panel=["']${tab}["']`));
   }

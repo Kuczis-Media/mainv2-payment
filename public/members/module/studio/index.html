@@ -46,6 +46,7 @@
   <script src="quiz-builder.js" defer></script>
   <script src="script.js" defer></script>
   <script src="inspector-resize.js" defer></script>
+  <script src="tool-picker.js" defer></script>
 </head>
 <body>
   <div class="ambient ambient-one" aria-hidden="true"></div>
@@ -63,18 +64,34 @@
       </span>
       <span class="brand-copy">
         <strong><span data-brand-name>NextMed</span> Studio</strong>
-        <small>Dashboardy, lekcje i prompty bez ręcznej edycji plików</small>
+        <small>Twoje treści i zarządzanie platformą</small>
       </span>
     </a>
 
-    <nav class="mode-switch" id="mode-switch" aria-label="Rodzaj projektu" hidden>
-      <button type="button" data-switch-mode="home">Start</button>
-      <button type="button" data-switch-mode="dashboard">Dashboard</button>
-      <button type="button" data-switch-mode="lesson">Lekcja</button>
-      <button type="button" data-switch-mode="quiz">Quiz</button>
-      <button type="button" data-switch-mode="exam">Egzamin</button>
-      <button type="button" data-switch-mode="presentation">Prezentacja</button>
-      <button type="button" data-switch-mode="prompt">Prompt AI</button>
+    <nav class="mode-switch tool-switch" id="mode-switch" aria-label="Wybór narzędzia" hidden>
+      <label for="studio-tool-select">Otwórz narzędzie</label>
+      <select id="studio-tool-select">
+        <option value="home">Start — wszystkie narzędzia</option>
+        <optgroup label="Tworzenie treści">
+          <option value="lesson">Lekcje</option>
+          <option value="quiz">Quizy</option>
+          <option value="exam">Egzaminy</option>
+          <option value="presentation">Prezentacje</option>
+          <option value="prompt">Instrukcje AI</option>
+        </optgroup>
+        <optgroup label="Wygląd platformy">
+          <option value="dashboard">Edytor panelu kursanta</option>
+          <option value="landing">Edytor strony głównej</option>
+          <option value="assets">Logo i obrazy</option>
+        </optgroup>
+        <optgroup label="Zarządzanie">
+          <option value="progress">Postępy i raporty</option>
+          <option value="ai-usage">Limity AI</option>
+          <option value="payments">Płatności</option>
+          <option value="ai-settings">Konfiguracja AI</option>
+          <option value="env">Generator .env</option>
+        </optgroup>
+      </select>
     </nav>
 
     <div class="header-actions">
@@ -106,12 +123,22 @@
       <section class="home-view" id="home-view">
         <div class="home-hero">
           <span class="eyebrow">Wizualne studio publikacji</span>
-          <h1>Co chcesz dziś zbudować?</h1>
-          <p>Układaj treść z klocków, przeciągaj elementy, podejrzyj efekt i dopiero wtedy publikuj albo pobierz gotowy plik.</p>
+          <h1>Co chcesz dziś zrobić?</h1>
+          <p>Twórz materiały, dopasuj wygląd platformy lub sprawdź, jak idzie uczestnikom. Wybierz narzędzie, aby zacząć.</p>
         </div>
 
+        <div class="tool-filters" role="group" aria-label="Znajdź narzędzie">
+          <div class="tool-categories" role="group" aria-label="Kategorie narzędzi">
+            <button type="button" data-tool-filter="all" aria-pressed="true">Wszystkie</button>
+            <button type="button" data-tool-filter="content" aria-pressed="false">Tworzenie treści</button>
+            <button type="button" data-tool-filter="appearance" aria-pressed="false">Wygląd platformy</button>
+            <button type="button" data-tool-filter="management" aria-pressed="false">Zarządzanie</button>
+          </div>
+          <label class="tool-search"><span class="sr-only">Szukaj narzędzia</span><input id="studio-tool-search" type="search" placeholder="Szukaj narzędzia…" autocomplete="off"></label>
+        </div>
+        <p id="studio-tool-count" class="tool-count" role="status" aria-live="polite"></p>
         <div class="project-choices">
-          <button class="project-card project-card-dashboard" type="button" data-open-mode="dashboard">
+          <button class="project-card project-card-dashboard" type="button" data-open-mode="dashboard" data-tool-group="appearance">
             <span class="project-icon" aria-hidden="true">
               <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><rect x="4" y="5" width="12" height="30" rx="4"></rect><rect x="20" y="5" width="16" height="13" rx="4"></rect><rect x="20" y="22" width="16" height="13" rx="4"></rect></svg>
             </span>
@@ -123,7 +150,7 @@
             <span class="project-arrow" aria-hidden="true">→</span>
           </button>
 
-          <button class="project-card project-card-lesson" type="button" data-open-mode="lesson">
+          <button class="project-card project-card-lesson" type="button" data-open-mode="lesson" data-tool-group="content">
             <span class="project-icon" aria-hidden="true">
               <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><path d="M9 5h18l6 6v24H9z"></path><path d="M27 5v7h6M15 18h12M15 24h12M15 30h8"></path></svg>
             </span>
@@ -135,7 +162,7 @@
             <span class="project-arrow" aria-hidden="true">→</span>
           </button>
 
-          <button class="project-card project-card-prompt" type="button" data-open-mode="prompt">
+          <button class="project-card project-card-prompt" type="button" data-open-mode="prompt" data-tool-group="content">
             <span class="project-icon" aria-hidden="true">
               <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><path d="M8 7h24v26H8z"></path><path d="M14 15h12M14 21h12M14 27h7"></path><path d="m27 25 2 2 4-5"></path></svg>
             </span>
@@ -147,7 +174,7 @@
             <span class="project-arrow" aria-hidden="true">→</span>
           </button>
 
-          <button class="project-card project-card-exam" type="button" data-open-mode="exam">
+          <button class="project-card project-card-exam" type="button" data-open-mode="exam" data-tool-group="content">
             <span class="project-icon" aria-hidden="true">
               <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><path d="M9 6h22v28H9z"></path><path d="M14 14h12M14 20h12M14 26h7"></path><circle cx="29" cy="28" r="5"></circle><path d="m27 28 1.5 1.5L31 27"></path></svg>
             </span>
@@ -159,7 +186,7 @@
             <span class="project-arrow" aria-hidden="true">→</span>
           </button>
 
-          <button class="project-card project-card-presentation" type="button" data-open-mode="presentation">
+          <button class="project-card project-card-presentation" type="button" data-open-mode="presentation" data-tool-group="content">
             <span class="project-icon" aria-hidden="true">
               <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><rect x="5" y="6" width="30" height="23" rx="3"></rect><path d="M20 29v6M13 35h14M11 13h18M11 18h11"></path></svg>
             </span>
@@ -171,7 +198,7 @@
             <span class="project-arrow" aria-hidden="true">→</span>
           </button>
 
-          <button class="project-card project-card-quiz" type="button" data-open-mode="quiz">
+          <button class="project-card project-card-quiz" type="button" data-open-mode="quiz" data-tool-group="content">
             <span class="project-icon" aria-hidden="true">
               <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><path d="M8 6h24v28H8z"></path><path d="m13 14 2 2 4-5M22 14h5M13 23h14M13 29h9"></path></svg>
             </span>
@@ -183,7 +210,7 @@
             <span class="project-arrow" aria-hidden="true">→</span>
           </button>
 
-          <button class="project-card project-card-media" type="button" data-studio-tool="media">
+          <button class="project-card project-card-media" type="button" data-studio-tool="media" data-tool-group="content">
             <span class="project-icon" aria-hidden="true">
               <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><rect x="5" y="7" width="30" height="26" rx="4"></rect><circle cx="14" cy="16" r="3"></circle><path d="m9 29 8-8 5 5 4-4 5 7"></path></svg>
             </span>
@@ -195,7 +222,7 @@
             <span class="project-arrow" aria-hidden="true">→</span>
           </button>
 
-          <a class="project-card project-card-media" href="/members/module/studio/landing/?assets=1">
+          <a class="project-card project-card-media" href="/members/module/studio/landing/?assets=1" data-tool-group="appearance">
             <span class="project-icon" aria-hidden="true">
               <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><path d="M7 9h26v22H7z"></path><path d="M12 26h16M14 14h12v7H14z"></path><circle cx="30" cy="11" r="5"></circle><path d="m28 11 1.5 1.5L32 9"></path></svg>
             </span>
@@ -207,7 +234,7 @@
             <span class="project-arrow" aria-hidden="true">→</span>
           </a>
 
-          <a class="project-card project-card-dashboard" href="/members/module/studio/landing/">
+          <a class="project-card project-card-dashboard" href="/members/module/studio/landing/" data-tool-group="appearance">
             <span class="project-icon" aria-hidden="true">
               <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><rect x="5" y="6" width="30" height="28" rx="4"></rect><path d="M5 14h30M12 21h16M12 27h10"></path></svg>
             </span>
@@ -219,7 +246,7 @@
             <span class="project-arrow" aria-hidden="true">→</span>
           </a>
 
-          <a class="project-card project-card-prompt" href="/members/module/studio/env/">
+          <a class="project-card project-card-prompt" href="/members/module/studio/env/" data-tool-group="management">
             <span class="project-icon" aria-hidden="true">
               <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><path d="M8 6h24v28H8z"></path><path d="M13 14h14M13 20h10M13 26h14"></path><path d="m26 19 5 5-5 5"></path></svg>
             </span>
@@ -231,7 +258,7 @@
             <span class="project-arrow" aria-hidden="true">→</span>
           </a>
 
-          <a class="project-card project-card-ai" href="/members/?admin=ai">
+          <a class="project-card project-card-ai" href="/members/?admin=ai" data-tool-group="management">
             <span class="project-icon" aria-hidden="true">
               <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><path d="M20 5v5M20 30v5M5 20h5M30 20h5"></path><path d="M20 11a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z"></path><path d="m16 21 3 3 6-8"></path></svg>
             </span>
@@ -243,7 +270,7 @@
             <span class="project-arrow" aria-hidden="true">→</span>
           </a>
 
-          <a class="project-card project-card-ai" href="/members/?admin=ai-usage">
+          <a class="project-card project-card-ai" href="/members/module/studio/manage/?tab=ai-usage" data-tool-group="management">
             <span class="project-icon" aria-hidden="true">
               <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><circle cx="20" cy="20" r="14"></circle><path d="M20 20V10M20 20l8 4M10 31l4-5M30 31l-4-5"></path></svg>
             </span>
@@ -255,7 +282,7 @@
             <span class="project-arrow" aria-hidden="true">→</span>
           </a>
 
-          <a class="project-card project-card-dashboard" href="/members/?admin=progress">
+          <a class="project-card project-card-dashboard" href="/members/module/studio/manage/?tab=progress" data-tool-group="management">
             <span class="project-icon" aria-hidden="true">
               <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><path d="M7 31V20M16 31V12M25 31V17M34 31V7"></path><path d="M5 34h31"></path></svg>
             </span>
@@ -266,8 +293,21 @@
             </span>
             <span class="project-arrow" aria-hidden="true">→</span>
           </a>
+
+          <a class="project-card project-card-dashboard" href="/members/module/studio/manage/?tab=payments" data-tool-group="management">
+            <span class="project-icon" aria-hidden="true">
+              <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><rect x="5" y="9" width="30" height="23" rx="4"></rect><path d="M5 17h30M11 25h7M26 25h3"></path></svg>
+            </span>
+            <span class="project-copy">
+              <small>Cennik i dostęp do kursu</small>
+              <strong>Płatności</strong>
+              <span>Ustalaj ceny pakietów, wybieraj walutę i zarządzaj zasadami przedłużania dostępu.</span>
+            </span>
+            <span class="project-arrow" aria-hidden="true">→</span>
+          </a>
         </div>
 
+        <p id="studio-tools-empty" class="tool-empty" hidden>Nie znaleziono narzędzia. Zmień wyszukiwanie lub wybierz inną kategorię.</p>
         <section class="content-explorer" id="content-explorer" aria-labelledby="content-explorer-title">
           <header class="content-explorer-heading">
             <div>
@@ -279,15 +319,15 @@
           </header>
           <div class="content-explorer-controls">
             <label class="repository-picker">
-              <span>Repozytorium</span>
-              <select id="content-explorer-repository" aria-label="Repozytorium eksploratora treści"></select>
+              <span>Biblioteka</span>
+              <select id="content-explorer-repository" aria-label="Biblioteka treści"></select>
             </label>
             <label class="content-explorer-search">
               <span class="sr-only">Szukaj plików</span>
               <input id="content-explorer-search" type="search" placeholder="Szukaj po nazwie, pliku lub tagu…" autocomplete="off">
             </label>
           </div>
-          <p class="content-explorer-status" id="content-explorer-status" role="status" aria-live="polite">Łączenie z repozytorium…</p>
+          <p class="content-explorer-status" id="content-explorer-status" role="status" aria-live="polite">Wczytywanie biblioteki…</p>
           <div class="content-explorer-folders" id="content-explorer-folders"></div>
         </section>
 
@@ -312,7 +352,7 @@
             <button class="button button-soft" id="dashboard-load-button" type="button">
               <span aria-hidden="true">↻</span> Wczytaj aktywny
             </button>
-            <button class="button button-soft" id="dashboard-source-button" type="button">Markdown</button>
+            <button class="button button-soft" id="dashboard-source-button" type="button">Edytuj kod</button>
             <button class="button button-primary" id="dashboard-publish-button" type="button">
               <span aria-hidden="true">●</span> Opublikuj
             </button>
@@ -344,11 +384,11 @@
               </summary>
               <div class="repository-library-body">
                 <label class="repository-picker">
-                  <span>Repozytorium</span>
+                  <span>Biblioteka</span>
                   <select id="dashboard-repository-select" aria-label="Repozytorium materiałów dashboardu"></select>
                 </label>
                 <input id="dashboard-asset-search" type="search" placeholder="Szukaj pliku…" autocomplete="off">
-                <p id="dashboard-asset-status" role="status" aria-live="polite">Łączenie z repozytorium…</p>
+                <p id="dashboard-asset-status" role="status" aria-live="polite">Wczytywanie biblioteki…</p>
                 <div class="repository-asset-list" id="dashboard-asset-list"></div>
               </div>
             </details>
@@ -430,7 +470,7 @@
                     <span class="palette-symbol is-teal">⚛</span><span><strong>ATONOM</strong><small>Modele cząsteczek</small></span>
                   </button>
                   <button class="palette-item palette-item-wide" type="button" draggable="true" data-dashboard-add="contact" data-search="kontakt formularz wiadomość pytanie zgłoszenie">
-                    <span class="palette-symbol is-amber">✉</span><span><strong>Formularz kontaktowy</strong><small>Wiadomość do prowadzącego zapisywana w Netlify Forms</small></span>
+                    <span class="palette-symbol is-amber">✉</span><span><strong>Formularz kontaktowy</strong><small>Wiadomość do prowadzącego</small></span>
                   </button>
                   <button class="palette-item" type="button" draggable="true" data-dashboard-add="external" data-search="link zewnętrzny strona">
                     <span class="palette-symbol is-navy">↗</span><span><strong>Link zewnętrzny</strong><small>Dowolny adres HTTPS</small></span>
@@ -498,7 +538,7 @@
               <span aria-hidden="true">＋</span> Nowa lekcja
             </button>
             <button class="button button-soft" id="lesson-import-button" type="button">Importuj .md</button>
-            <button class="button button-soft" id="lesson-source-button" type="button">Markdown</button>
+            <button class="button button-soft" id="lesson-source-button" type="button">Edytuj kod</button>
             <button class="button button-soft" id="lesson-copy-button" type="button">Kopiuj</button>
             <button class="button button-soft" id="lesson-download-button" type="button">
               <span aria-hidden="true">↓</span> Pobierz .md
@@ -534,11 +574,11 @@
               </summary>
               <div class="repository-library-body">
                 <label class="repository-picker">
-                  <span>Repozytorium</span>
+                  <span>Biblioteka</span>
                   <select id="lesson-repository-select" aria-label="Repozytorium lekcji"></select>
                 </label>
                 <input id="lesson-asset-search" type="search" placeholder="Szukaj lekcji…" autocomplete="off">
-                <p id="lesson-asset-status" role="status" aria-live="polite">Łączenie z repozytorium…</p>
+                <p id="lesson-asset-status" role="status" aria-live="polite">Wczytywanie biblioteki…</p>
                 <div class="repository-asset-list" id="lesson-asset-list"></div>
               </div>
             </details>
@@ -735,7 +775,7 @@
         <div class="builder-layout prompt-builder-layout">
           <aside class="palette-panel" aria-label="Biblioteka promptów">
             <div class="panel-heading">
-              <div><small>Prywatne repozytorium</small><strong>Gotowe prompty</strong></div>
+              <div><small>Twoja biblioteka</small><strong>Gotowe prompty</strong></div>
               <div class="panel-heading-actions">
                 <span class="count-badge" id="prompt-point-count">1</span>
                 <button class="panel-collapse-button" type="button" data-studio-toggle="palette" aria-label="Zwiń bibliotekę" aria-expanded="true" title="Zwiń bibliotekę">
@@ -749,10 +789,10 @@
                 <input id="prompt-asset-search" type="search" placeholder="Szukaj promptu…" autocomplete="off">
               </label>
               <label class="repository-picker repository-picker-prompt">
-                <span>Repozytorium</span>
+                <span>Biblioteka</span>
                 <select id="prompt-repository-select" aria-label="Repozytorium promptów"></select>
               </label>
-              <p class="prompt-repository-status" id="prompt-asset-status" role="status" aria-live="polite">Łączenie z repozytorium…</p>
+              <p class="prompt-repository-status" id="prompt-asset-status" role="status" aria-live="polite">Wczytywanie biblioteki…</p>
               <div class="repository-asset-list prompt-repository-list" id="prompt-asset-list"></div>
               <div class="prompt-help-card">
                 <strong>JSON czy TXT?</strong>
@@ -828,12 +868,12 @@
               </summary>
               <div class="repository-library-body">
                 <label class="repository-picker">
-                  <span>Repozytorium</span>
+                  <span>Biblioteka</span>
                   <select id="quiz-repository-select" aria-label="Repozytorium quizów"></select>
                 </label>
                 <input id="quiz-library-search" type="search" placeholder="Szukaj quizu…" autocomplete="off" aria-label="Szukaj quizu">
-                <p id="quiz-library-status" role="status" aria-live="polite">Łączenie z repozytorium…</p>
-                <div class="repository-asset-list quiz-library" id="quiz-library" aria-label="Quizy w repozytorium"></div>
+                <p id="quiz-library-status" role="status" aria-live="polite">Wczytywanie biblioteki…</p>
+                <div class="repository-asset-list quiz-library" id="quiz-library" aria-label="Zapisane quizy"></div>
               </div>
             </details>
             <div class="quiz-add-menu">
@@ -917,12 +957,12 @@
               </summary>
               <div class="repository-library-body">
                 <label class="repository-picker">
-                  <span>Repozytorium</span>
+                  <span>Biblioteka</span>
                   <select id="presentation-repository" aria-label="Repozytorium prezentacji"></select>
                 </label>
                 <input id="presentation-search" type="search" placeholder="Szukaj prezentacji…" autocomplete="off" aria-label="Szukaj prezentacji">
-                <p id="presentation-library-status" role="status" aria-live="polite">Łączenie z repozytorium…</p>
-                <div id="presentation-library" class="repository-asset-list presentation-library" aria-label="Prezentacje w repozytorium"></div>
+                <p id="presentation-library-status" role="status" aria-live="polite">Wczytywanie biblioteki…</p>
+                <div id="presentation-library" class="repository-asset-list presentation-library" aria-label="Zapisane prezentacje"></div>
               </div>
             </details>
             <header><div><small>Scenariusz</small><strong>Slajdy</strong></div><button type="button" data-presentation-action="add-slide">＋</button></header>
@@ -986,12 +1026,12 @@
               </summary>
               <div class="repository-library-body">
                 <label class="repository-picker">
-                  <span>Repozytorium</span>
+                  <span>Biblioteka</span>
                   <select id="exam-repository-select" aria-label="Repozytorium egzaminów"></select>
                 </label>
                 <input id="exam-library-search" type="search" placeholder="Szukaj egzaminu…" autocomplete="off" aria-label="Szukaj egzaminu">
-                <p id="exam-library-status" role="status" aria-live="polite">Łączenie z repozytorium…</p>
-                <div class="repository-asset-list exam-library" id="exam-library" aria-label="Egzaminy w repozytorium"></div>
+                <p id="exam-library-status" role="status" aria-live="polite">Wczytywanie biblioteki…</p>
+                <div class="repository-asset-list exam-library" id="exam-library" aria-label="Zapisane egzaminy"></div>
               </div>
             </details>
             <nav class="exam-tab-list" id="exam-tab-list">
@@ -1028,7 +1068,7 @@
             </div>
             <div class="exam-validation" id="exam-validation" role="status" aria-live="polite"></div>
             <div class="exam-summary" id="exam-summary"></div>
-            <p class="exam-builder-status" id="exam-builder-status" role="status" aria-live="polite">Łączenie z prywatnym repozytorium…</p>
+            <p class="exam-builder-status" id="exam-builder-status" role="status" aria-live="polite">Wczytywanie biblioteki…</p>
           </aside>
         </div>
       </section>
@@ -1039,7 +1079,7 @@
     <form method="dialog" class="dialog-shell">
       <header>
         <div>
-          <span class="eyebrow" id="source-dialog-eyebrow">Markdown</span>
+          <span class="eyebrow" id="source-dialog-eyebrow">Edytuj kod</span>
           <h2 id="source-dialog-title">Kod źródłowy</h2>
         </div>
         <button class="icon-button" value="cancel" aria-label="Zamknij" title="Zamknij" type="submit">×</button>

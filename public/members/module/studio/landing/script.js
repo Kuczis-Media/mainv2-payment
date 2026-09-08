@@ -100,7 +100,7 @@
           }
         }
         if (!serverStorageAvailable) {
-          bootstrapWarning = 'Szkic zapisujesz na tym urządzeniu. Nadal możesz opublikować stronę w wybranym repozytorium lub pobrać gotową stronę HTML.';
+          bootstrapWarning = 'Szkic zapisujesz na tym urządzeniu. Nadal możesz opublikować stronę w publicznej bibliotece lub pobrać gotową stronę HTML.';
         }
       } catch (error) {
         serverStorageAvailable = false;
@@ -117,7 +117,7 @@
       if (previewUrl) previewUrl.textContent = location.host || 'twoja-strona.pl';
       syncRecoveryButton();
       elements.restore.hidden = !publishedModel;
-      setStatus(bootstrapWarning || (!publication.available ? 'Możesz edytować i pobrać gotową stronę HTML. Publikacja online wymaga dostępu do Netlify Blobs lub repozytorium GitHub.' : publishedModel
+      setStatus(bootstrapWarning || (!publication.available ? 'Możesz edytować i pobrać gotową stronę HTML. Aby publikować online, dokończ konfigurację miejsca zapisu w ustawieniach platformy.' : publishedModel
         ? 'Wczytano szkic. Odwiedzający zobaczą zmiany dopiero po publikacji.'
         : 'Wczytano wersję startową. Zapisz szkic lub opublikuj.'), bootstrapWarning ? 'warning' : 'success');
       if (new URLSearchParams(location.search).get('assets') === '1') void openAssetLibrary('logo');
@@ -613,7 +613,7 @@
     } catch (error) {
       if (error.code === 'LANDING_STORAGE_UNAVAILABLE') {
         writeRecoveryNow();
-        setStatus('Magazyn Netlify nie jest skonfigurowany. Kopia została zachowana lokalnie; nadal możesz opublikować statycznie przez GitHub.', 'warning');
+        setStatus('Zapis szkicu na platformie nie jest dostępny. Kopia pozostała na tym urządzeniu; możesz opublikować stronę w publicznej bibliotece plików.', 'warning');
       } else setStatus(error.message, 'error');
     }
     finally { setBusy(false); }
@@ -949,7 +949,7 @@
     elements.assetDialog.querySelector('h2').textContent = assetTarget === 'logo' ? 'Wybierz logo strony' : `Wybierz obraz: ${SECTION_LABELS[selectedId] || selectedId}`;
     elements.assetUrl.value = assetTarget === 'logo' ? model.branding?.logoUrl || '' : selectedSection().imageUrl || '';
     if (!elements.assetDialog.open) elements.assetDialog.showModal();
-    if (!assetsLoaded) setAssetStatus('Wklej gotowy link lub wybierz „Przeglądaj bibliotekę”. Link nie wymaga repozytorium GitHub.');
+    if (!assetsLoaded) setAssetStatus('Wklej gotowy link lub wybierz „Przeglądaj bibliotekę”.');
     renderAssets();
   }
 
@@ -1224,12 +1224,12 @@
     elements.publish.disabled = !canPublish();
     elements.publish.title = canPublish() ? '' : 'Magazyn jest niedostępny. Sprawdź konfigurację lub pobierz stronę HTML.';
     elements.publishModeNote.textContent = blobMode
-      ? 'Publikacja bez repozytorium GitHub. Wymaga skonfigurowanych Netlify Blobs (SITE_ID i NETLIFY_API_TOKEN). Odczyt jest cache’owany przez 60 s w CDN i przeglądarce; brak ciągłego odpytywania. Szkic nie jest publiczny.'
-      : 'Treść jako publiczny JSON w wybranym repozytorium. Token GitHuba musi mieć prawo zapisu. Tylko informacja o aktywnym źródle jest odczytywana przez cache’owaną Function.';
+      ? 'Strona jest publikowana bezpośrednio na platformie. Zmiany mogą pojawić się z opóźnieniem do minuty. Szkic pozostaje prywatny.'
+      : 'Ustawienia i treści strony zostaną zapisane w publicznym pliku. Nie dodawaj do nich haseł ani prywatnych danych. Zmiany pojawią się po odświeżeniu pamięci podręcznej.';
     const publicationLocation = document.getElementById('landing-publication-location');
     const url = blobMode ? new URL('/.netlify/functions/landing', location.origin).href : staticConfigUrl;
     if (publicationLocation) {
-      publicationLocation.textContent = blobMode ? 'Netlify Blobs → ta strona' : staticConfigUrl || 'Brak połączenia z repozytorium';
+      publicationLocation.textContent = blobMode ? 'Ta platforma' : staticConfigUrl || 'Brak połączenia z biblioteką';
       if (url) publicationLocation.href = url; else publicationLocation.removeAttribute('href');
     }
   }

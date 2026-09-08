@@ -465,7 +465,7 @@
       if (state.isAdmin) {
         showError(
           'Wybierz lekcję z biblioteki',
-          'Otwórz bibliotekę u góry i wybierz materiał z prywatnego repozytorium.',
+          'Otwórz bibliotekę u góry i wybierz lekcję.',
           false
         );
         openLessonLibrary();
@@ -553,7 +553,7 @@
       elements.libraryStatus.className = 'lesson-library-status is-error';
       elements.libraryStatus.textContent = error && error.message
         ? error.message
-        : 'Nie udało się pobrać listy repozytoriów.';
+        : 'Nie udało się wczytać bibliotek.';
       return;
     }
     if (state.libraryAssets.length) {
@@ -569,7 +569,7 @@
       });
       elements.libraryStatus.className = 'lesson-library-status';
       elements.libraryStatus.textContent = state.libraryAssets.length
-        ? `${state.libraryAssets.length} lekcji w wybranym repozytorium.`
+        ? `${state.libraryAssets.length} lekcji w wybranej bibliotece.`
         : 'Repozytorium nie zawiera jeszcze lekcji.';
       renderLessonLibrary();
     } catch (error) {
@@ -584,7 +584,7 @@
     if (!state.repositories.length) {
       state.repositories = await window.ChemContentLibrary.repositories();
     }
-    if (!state.repositories.length) throw new Error('Nie skonfigurowano żadnego repozytorium.');
+    if (!state.repositories.length) throw new Error('Biblioteka lekcji nie jest jeszcze dostępna. Skontaktuj się z prowadzącym.');
     const selected = state.repositories.find((repository) => repository.id === state.repositoryId)
       || state.repositories.find((repository) => repository.default)
       || state.repositories[0];

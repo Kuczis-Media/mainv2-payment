@@ -474,7 +474,7 @@
       }));
       setLibraryStatus(`${assets.length} pasujących quizów.`);
     } else {
-      setLibraryStatus(state.assets.length ? 'Brak quizów pasujących do wyszukiwania.' : 'Brak quizów w tym repozytorium.');
+      setLibraryStatus(state.assets.length ? 'Brak quizów pasujących do wyszukiwania.' : 'Brak quizów w tej bibliotece.');
     }
   }
 

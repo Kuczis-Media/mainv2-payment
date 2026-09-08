@@ -74,7 +74,7 @@ test('sequential presentations complete before navigation and unlock from raw re
 
 test('admin student report renders a compact, lazily expanded material tree', () => {
   const css = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.css'), 'utf8');
-  const dashboard = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.js'), 'utf8');
+  const dashboard = fs.readFileSync(path.join(root, 'public', 'members', 'module', 'studio', 'manage', 'management.js'), 'utf8');
   assert.match(dashboard, /accountSettings\.className = 'admin-progress-account-settings'/);
   assert.match(dashboard, /card = document\.createElement\('details'\)/);
   assert.match(dashboard, /card\.addEventListener\('toggle',[\s\S]*if \(!card\.open \|\| hydrated\) return;[\s\S]*admin-progress-material-body/);
@@ -88,8 +88,8 @@ test('admin student report renders a compact, lazily expanded material tree', ()
 
 test('global progress report explains metrics and renders readable audit entries', () => {
   const css = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.css'), 'utf8');
-  const dashboard = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.js'), 'utf8');
-  const html = fs.readFileSync(path.join(root, 'public', 'members', 'index.html'), 'utf8');
+  const dashboard = fs.readFileSync(path.join(root, 'public', 'members', 'module', 'studio', 'manage', 'management.js'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'public', 'members', 'module', 'studio', 'manage', 'index.html'), 'utf8');
   assert.match(html, /Raporty globalne i historia zmian/);
   assert.match(html, /Zbiorcze wyniki kursantów oraz operacje wykonane przez administratorów/);
   assert.match(dashboard, /Jak uczniowie przechodzą kurs/);
@@ -103,8 +103,8 @@ test('global progress report explains metrics and renders readable audit entries
 
 test('admin progress lists render in bounded pages and fetch more only on demand', () => {
   const css = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.css'), 'utf8');
-  const dashboard = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.js'), 'utf8');
-  const html = fs.readFileSync(path.join(root, 'public', 'members', 'index.html'), 'utf8');
+  const dashboard = fs.readFileSync(path.join(root, 'public', 'members', 'module', 'studio', 'manage', 'management.js'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'public', 'members', 'module', 'studio', 'manage', 'index.html'), 'utf8');
 
   assert.match(html, /id="admin-progress-more"[^>]*hidden/);
   assert.match(dashboard, /const ADMIN_PROGRESS_PAGE_SIZE = 30/);

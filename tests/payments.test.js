@@ -519,8 +519,10 @@ test('payment offer has a separate purchase page and admin users remain collapsi
   assert.doesNotMatch(members, /data-pricing-mode=["']authenticated["']/);
   assert.match(members, /href=["']\/purchase\/["'][\s\S]*Kup lub przedłuż/);
   assert.match(purchasePage, /data-pricing-mode=["']authenticated["']/);
-  assert.match(members, /id=["']admin-payment-disabled["']/);
-  assert.match(members, /data-admin-tab=["']payments["']/);
+  const management = fs.readFileSync(path.join(root, 'public/members/module/studio/manage/index.html'), 'utf8');
+  assert.match(management, /id=["']admin-payment-disabled["']/);
+  assert.match(management, /data-admin-tab=["']payments["']/);
+  assert.doesNotMatch(members, /data-admin-tab=["']payments["']/);
   assert.match(members, /Kup lub przedłuż[\s\S]*Status dostępu/);
   assert.match(dashboard, /document\.createElement\('details'\)/);
   assert.match(dashboard, /PAYMENT_ADMIN_URL/);
