@@ -18,9 +18,14 @@
     mutedColor: ['--muted', '--chem-muted', '--page-muted']
   };
   const titleNode = document.querySelector('title[data-brand-title]');
-  let logoGeneration = 0;
+  const iconNode = document.querySelector('link[rel~="icon"]');
+  const fallbackIcon = imageUrl(iconNode?.getAttribute('href') || iconNode?.href);
+  const pendingLogos = new WeakMap();
   let currentRevision = -1;
   let publicationVersion = '';
+  // Reuse the already declared favicon immediately, even while the public
+  // configuration is loading/offline. No separate logo/config endpoint.
+  applyLogo(fallbackIcon, '');
   function initialize() {
     const cached = readCache();
     if (cached) apply(cached.model);
@@ -85,8 +90,8 @@
     setText('[data-footer-text]', text(brand.footerText, 240) || name);
     document.querySelectorAll('[data-brand-home]').forEach((link) => link.setAttribute('aria-label', `${name} — panel kursanta`));
     if (titleNode) document.title = `${titleNode.dataset.brandTitle} — ${name}`;
-    const favicon = imageUrl(brand.faviconUrl);
-    if (favicon) document.querySelectorAll('link[rel="icon"]').forEach((link) => {
+    const favicon = imageUrl(brand.faviconUrl) || fallbackIcon;
+    if (favicon) document.querySelectorAll('link[rel~="icon"]').forEach((link) => {
       link.href = favicon;
       link.removeAttribute('type');
     });
@@ -94,30 +99,39 @@
     if (plainObject(brand.palettes?.[scope])) document.documentElement?.setAttribute('data-site-palette', scope);
     else document.documentElement?.removeAttribute('data-site-palette');
     applyPalette(window.NextMedAppearance?.paletteFor(brand, scope) || brand);
-    applyLogo(imageUrl(brand.logoUrl), text(brand.logoAlt, 120) || name);
+    // Small shell marks must always match the tab icon; logoUrl remains the
+    // separate wide logo setting for the landing page.
+    applyLogo(favicon, name);
   }
 
   function applyLogo(url, alt) {
-    const generation = ++logoGeneration;
     document.querySelectorAll('[data-brand-logo-slot]').forEach((slot) => {
       const previous = slot.querySelector('[data-site-brand-image]');
+      const pending = pendingLogos.get(slot);
+      if (pending?.getAttribute('src') === url) { pending.alt = alt; return; }
+      pendingLogos.delete(slot);
       if (!url) {
         previous?.remove();
         slot.querySelector('svg')?.removeAttribute('hidden');
+        slot.querySelector('svg')?.style?.removeProperty('display');
         return;
       }
-      if (previous?.getAttribute('src') === url) return;
+      if (previous?.getAttribute('src') === url) { previous.alt = alt; return; }
       const image = document.createElement('img');
       image.alt = alt;
       image.decoding = 'async';
       image.setAttribute('data-site-brand-image', '');
       image.style.cssText = 'width:100%;height:100%;max-width:100%;object-fit:contain;display:block';
+      pendingLogos.set(slot, image);
       image.onload = () => {
-        if (generation !== logoGeneration) return;
-        previous?.remove();
+        if (pendingLogos.get(slot) !== image) return;
+        pendingLogos.delete(slot);
+        slot.querySelector('[data-site-brand-image]')?.remove();
         slot.querySelector('svg')?.setAttribute('hidden', '');
+        slot.querySelector('svg')?.style?.setProperty('display', 'none');
         slot.append(image);
       };
+      image.onerror = () => { if (pendingLogos.get(slot) === image) pendingLogos.delete(slot); };
       // The original mark stays visible until the image has loaded successfully.
       image.src = url;
     });

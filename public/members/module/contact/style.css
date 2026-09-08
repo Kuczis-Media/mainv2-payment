@@ -136,7 +136,7 @@ body{
 }
 .right-side .button{
   display: inline-block;
-  margin-top: 12px;
+  margin-top: 24px;
 }
 .right-side .button input[type="button"],
 .right-side .button input[type="submit"]{

@@ -9,8 +9,8 @@ function setup({ motion = true, reduced = false, image = false, loading = false 
   const nodes = [], timers = new Map(), docEvents = {}, winEvents = {}, mediaEvents = {};
   let sequence = 0, registered = false, intersect, mutate;
   function node(tag = 'div') {
-    const item = { tag, dataset: {}, attrs: {}, events: {}, children: [], textContent: '', hidden: false, loads: 0, unloads: 0,
-      addEventListener(name, callback) { this.events[name] = callback; },
+    const item = { tag, dataset: {}, attrs: {}, events: {}, eventOptions: {}, children: [], textContent: '', hidden: false, loads: 0, unloads: 0,
+      addEventListener(name, callback, options) { this.events[name] = callback; this.eventOptions[name] = options; },
       setAttribute(name, value) { this.attrs[name] = value; },
       append(child) { this.children.push(child); if (child.tag === 'spline-viewer') child.load(); },
       remove() { this.removed = true; },
@@ -53,6 +53,21 @@ test('biomolecule uses the exact reference player and scene, without a replaceme
   assert.doesNotMatch(source, /setAttribute\(['"](?:background|events-target|loading)['"]/);
 });
 
+test('wheel input is stopped before Spline controls without cancelling native scroll or browser zoom', () => {
+  for (const heroVisual of ['biomolecule', 'biomolecule-banner']) {
+    const env = setup(); env.home.dataset.heroVisual = heroVisual;
+    assert.equal(env.stage.eventOptions.wheel.capture, true);
+    assert.equal(env.stage.eventOptions.wheel.passive, true);
+    for (const ctrlKey of [false, true]) {
+      let stopped = false, cancelled = false;
+      env.stage.events.wheel({ ctrlKey, deltaY: 45, stopPropagation() { stopped = true; }, preventDefault() { cancelled = true; } });
+      assert.equal(stopped, true);
+      assert.equal(cancelled, false);
+    }
+    assert.equal(env.stage.events.pointermove, undefined, 'Pointer interactions still reach the original model');
+    assert.equal(env.nodes.filter((item) => item.tag === 'script').length, 0);
+  }
+});
 test('3D player loads only when visible and selected, once, without delaying page content', async () => {
   const env = setup({ loading: true });
   env.visible(); assert.equal(env.nodes.filter((item) => item.tag === 'script').length, 0);

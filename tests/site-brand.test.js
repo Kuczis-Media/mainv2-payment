@@ -11,21 +11,34 @@ function model(branding = {}) {
   return { version: 3, revision: 2, branding: { brandName: 'TestMed', companyName: 'Test Company', primaryColor: '#112233', faviconUrl: 'https://example.com/favicon.png', ...branding }, sections: ids.map((id) => ({ id })) };
 }
 
-async function run({ cache, response = null, route, pathname = '/members/' } = {}) {
+async function run({ cache, response = null, route, pathname = '/members/', logoSlots = 0 } = {}) {
   const storage = new Map(Object.entries(cache || {}));
   const names = [{ textContent: 'NextMed' }];
   const company = [{ textContent: 'NextMed' }];
   const title = { dataset: { brandTitle: 'Panel kursanta' } };
-  const icon = { href: '/icon.svg', type: 'image/svg+xml', removeAttribute(name) { delete this[name]; } };
+  const icon = { href: '/icon.svg', type: 'image/svg+xml', getAttribute(name) { return this[name]; }, removeAttribute(name) { delete this[name]; } };
+  const images = [];
+  function node(tag) {
+    const result = { tag, attrs: {}, style: { setProperty(key, value) { this[key] = value; }, removeProperty(key) { delete this[key]; } },
+      setAttribute(key, value) { this.attrs[key] = value; }, getAttribute(key) { return key === 'src' ? this.src : this.attrs[key]; },
+      removeAttribute(key) { delete this.attrs[key]; }, remove() { if (this.parent) this.parent.children = this.parent.children.filter((child) => child !== this); }
+    };
+    if (tag === 'img') images.push(result);
+    return result;
+  }
+  const slots = Array.from({ length: logoSlots }, () => ({ children: [], svg: node('svg'),
+    querySelector(selector) { return selector === 'svg' ? this.svg : this.children.find((child) => child.tag === 'img'); },
+    append(child) { child.parent = this; this.children.push(child); }
+  }));
   const styles = [];
   const calls = [];
   const document = {
     title: 'Panel kursanta — NextMed',
     documentElement: { attributes: {}, setAttribute(key, value) { this.attributes[key] = value; }, removeAttribute(key) { delete this.attributes[key]; } },
-    querySelector: (selector) => selector === 'title[data-brand-title]' ? title : null,
-    querySelectorAll: (selector) => ({ '[data-brand-name]': names, '[data-company-name]': company, 'link[rel="icon"]': [icon] }[selector] || []),
+    querySelector: (selector) => selector === 'title[data-brand-title]' ? title : selector === 'link[rel~="icon"]' ? icon : null,
+    querySelectorAll: (selector) => ({ '[data-brand-name]': names, '[data-company-name]': company, 'link[rel~="icon"]': [icon], '[data-brand-logo-slot]': slots }[selector] || []),
     getElementById: (id) => styles.find((entry) => entry.id === id),
-    createElement: () => ({}),
+    createElement: node,
     head: { append: (node) => styles.push(node) }
   };
   vm.runInNewContext(script, {
@@ -35,8 +48,42 @@ async function run({ cache, response = null, route, pathname = '/members/' } = {
     fetch: async (url, options) => { calls.push({ url, options }); return { ok: true, json: async () => response }; }
   });
   await new Promise((resolve) => setImmediate(resolve));
-  return { document, names, company, icon, styles, calls, storage };
+  return { document, names, company, icon, styles, calls, storage, slots, images };
 }
+
+test('shell logos use the favicon instead of the landing logo, with late loads unable to overwrite it', async () => {
+  for (const pathname of ['/members/', '/members/module/studio/', '/purchase/', '/time']) {
+    const result = await run({ pathname, logoSlots: 2, cache: { 'chem.landing.public.v3': JSON.stringify({ model: model({ logoUrl: 'https://example.com/wide-logo.svg' }), checkedAt: Date.now() }) } });
+    const current = result.images.filter((image) => image.src === result.icon.href);
+    assert.equal(current.length, 2);
+    current.forEach((image) => image.onload());
+    result.images.filter((image) => image.src === '/icon.svg').forEach((image) => image.onload());
+    for (const slot of result.slots) {
+      assert.equal(slot.children.length, 1);
+      assert.equal(slot.children[0].src, result.icon.href);
+      assert.equal(slot.children[0].alt, 'TestMed');
+      assert.equal(slot.svg.style.display, 'none');
+    }
+    assert.equal(result.calls.length, 0);
+    assert.equal(result.images.some((image) => /wide-logo/.test(image.src)), false);
+  }
+});
+
+test('same favicon in cache and refresh reuses an in-flight logo and updates its accessible name', async () => {
+  const result = await run({ logoSlots: 1, cache: { 'nextmed.site-brand.v1': JSON.stringify({ model: model(), checkedAt: Date.now() - 16 * 60 * 1000 }) }, response: { active: true, model: model({ brandName: 'Renamed' }) } });
+  const matching = result.images.filter((image) => image.src === result.icon.href);
+  assert.equal(matching.length, 1);
+  matching[0].onload();
+  assert.equal(result.slots[0].children[0].alt, 'Renamed');
+});
+
+test('offline configuration uses the checked-in favicon; an image failure keeps a visible fallback', async () => {
+  const result = await run({ logoSlots: 1 });
+  assert.equal(result.images[0].src, '/icon.svg');
+  result.images[0].onerror();
+  assert.equal(result.slots[0].svg.attrs.hidden, undefined);
+  assert.equal(result.slots[0].children.length, 0);
+});
 
 test('shared public cache updates shell names, title and favicon without another request', async () => {
   const result = await run({ cache: { 'chem.landing.public.v3': JSON.stringify({ model: model(), checkedAt: Date.now() }) } });

@@ -19,6 +19,11 @@
   const shouldRun = () => selected() && visible && !document.hidden && !paused && motionAllowed()
     && document.documentElement.dataset.landingLoading !== 'true';
 
+  // Spline's canvas cancels wheel events for its camera/page-scroll controls.
+  // Keep native page scrolling (including trackpad momentum and Ctrl+zoom),
+  // while leaving pointer movement, dragging and the scene physics untouched.
+  stage.addEventListener('wheel', (event) => event.stopPropagation(), { capture: true, passive: true });
+
   function clearTimer() { window.clearTimeout(timer); timer = 0; }
   function message(state, copy) {
     host.dataset.modelState = state;

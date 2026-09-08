@@ -129,9 +129,7 @@
 
   function bindEvents() {
     document.getElementById('section-hero-visual').addEventListener('change', (event) => updateSelected('heroVisual', event.target.value));
-    Object.entries(CONTACT_COLORS).forEach(([key, id]) => {
-      document.getElementById(`contact-${id}`).addEventListener('input', (event) => updateSelected(key, event.target.value));
-    });
+    bindContactColorEvents();
     const mapping = {
       title: 'title', subtitle: 'subtitle', body: 'body', image: 'imageUrl', imageAlt: 'imageAlt',
       ctaLabel: 'ctaLabel', ctaHref: 'ctaHref', background: 'backgroundColor', text: 'textColor', accent: 'accentColor'
@@ -225,6 +223,20 @@
 
   function selectedSection() {
     return model.sections.find((section) => section.id === selectedId) || model.sections[0];
+  }
+
+  function bindContactColorEvents() {
+    Object.entries(CONTACT_COLORS).forEach(([key, id]) => {
+      const input = document.getElementById(`contact-${id}`);
+      const update = () => {
+        // A native color dialog can commit with change only. Never write its
+        // result into a newly selected section or the global page palette.
+        if (selectedId !== 'contact' || selectedSection()[key] === input.value) return;
+        updateSelected(key, input.value);
+      };
+      input.addEventListener('input', update);
+      input.addEventListener('change', update);
+    });
   }
 
   function updateSelected(field, value) {

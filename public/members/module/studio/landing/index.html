@@ -98,7 +98,7 @@
               <small>Wklej link do obrazu lub wybierz plik z biblioteki. Linki z GitHuba są automatycznie przygotowywane do szybkiego wyświetlania.</small>
             </div>
             <label><span>Tekst ALT logo</span><input id="branding-logo-alt" maxlength="120"></label>
-            <label><span>Adres faviconu</span><input id="branding-favicon" maxlength="1000" placeholder="https://…"></label>
+            <label><span>Favicon i wspólne logo paneli</span><input id="branding-favicon" maxlength="1000" placeholder="https://…"><small>Ta sama ikona w karcie przeglądarki, dashboardzie, studiu i panelach konta. Wklej link do pliku z biblioteki lub GitHuba.</small></label>
             <label><span>Nazwa firmy</span><input id="branding-company" maxlength="160"></label>
             <label><span>E-mail</span><input id="branding-email" type="email" maxlength="254"></label>
             <label><span>Telefon (opcjonalnie)</span><input id="branding-phone" type="tel" maxlength="40"></label>
@@ -130,17 +130,18 @@
         <fieldset>
           <legend>Puste pole oznacza użycie palety landingu</legend>
           <div class="color-grid">
-            <label><span>Tło</span><input id="section-background" type="color" value="#ffffff"><button type="button" data-clear-color="backgroundColor">Użyj globalnego</button></label>
+            <label><span>Tło całej sekcji (nie pól)</span><input id="section-background" type="color" value="#ffffff"><button type="button" data-clear-color="backgroundColor">Użyj globalnego</button></label>
             <label><span>Tekst</span><input id="section-text" type="color" value="#0f172a"><button type="button" data-clear-color="textColor">Użyj globalnego</button></label>
             <label><span>Akcent</span><input id="section-accent" type="color" value="#0f766e"><button type="button" data-clear-color="accentColor">Użyj globalnego</button></label>
           </div>
         </fieldset>
       </details>
-      <details class="section-style-card" id="contact-colors" hidden>
-        <summary>Kolory formularza kontaktowego</summary>
+      <details class="section-style-card" id="contact-colors" hidden open>
+        <summary>Formularz — tło pól i kolory</summary>
+        <p class="field-hint">Tło pól zmienia miejsca, w które wpisujesz imię, e-mail, temat i wiadomość. Tło formularza zmienia tylko ramkę wokół nich — żadne z tych ustawień nie zmienia tła strony.</p>
         <fieldset><legend>Niezależne od tła strony i pozostałych formularzy</legend><div class="color-grid">
           <label><span>Tło formularza</span><input id="contact-form-background" type="color"><button type="button" data-clear-color="formBackgroundColor">Użyj palety</button></label>
-          <label><span>Tło pól</span><input id="contact-field-background" type="color"><button type="button" data-clear-color="fieldBackgroundColor">Użyj palety</button></label>
+          <label><span>Tło pól do wpisywania</span><input id="contact-field-background" type="color"><button type="button" data-clear-color="fieldBackgroundColor">Użyj palety</button></label>
           <label><span>Tekst wpisywany w pola</span><input id="contact-field-text" type="color"><button type="button" data-clear-color="fieldTextColor">Użyj palety</button></label>
           <label><span>Obramowanie pól</span><input id="contact-field-border" type="color"><button type="button" data-clear-color="fieldBorderColor">Użyj palety</button></label>
           <label><span>Wyróżnienie aktywnego pola</span><input id="contact-field-focus" type="color"><button type="button" data-clear-color="fieldFocusColor">Użyj palety</button></label>

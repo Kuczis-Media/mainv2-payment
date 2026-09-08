@@ -70,8 +70,56 @@ test('contact controls are separate, resettable and mapped to the same saved fie
   for (const field of ['formBackgroundColor', 'fieldBackgroundColor', 'fieldTextColor', 'fieldBorderColor', 'fieldFocusColor', 'labelTextColor']) {
     assert.ok(html.includes(`data-clear-color="${field}"`));
   }
-  assert.match(html, /id="contact-colors" hidden/);
+  assert.match(html, /id="contact-colors" hidden open/);
   assert.match(html, /id="section-hero-visual"/);
   assert.match(css, /background: var\(--contact-field-background, var\(--brand-background\)\)/);
   assert.match(css, /color: var\(--contact-field-text, var\(--brand-text\)\)/);
+  assert.match(css, /input:-webkit-autofill[^}]+--contact-field-background/);
+  assert.match(css, /input:autofill[^}]+--contact-field-background/);
+});
+
+test('native field-color input and change events reach the live preview without editing the section or page background', () => {
+  const source = fs.readFileSync(require.resolve('../public/members/module/studio/landing/script.js'), 'utf8');
+  const nodes = new Map(), previews = [];
+  const node = () => ({ value: '', dataset: {}, events: {}, children: [],
+    addEventListener(name, callback) { this.events[name] = callback; },
+    setAttribute() {}, append(...items) { this.children.push(...items); }, replaceChildren(...items) { this.children = items; },
+    contentWindow: { postMessage(message) { previews.push(message); } }
+  });
+  const byId = (id) => { if (!nodes.has(id)) nodes.set(id, node()); return nodes.get(id); };
+  const context = { URL, URLSearchParams, location: { search: '', origin: 'https://course.example' }, crypto: { randomUUID: () => 'color-test' }, defaults,
+    NextMedAppearance: require('../public/assets/js/site-appearance.js'),
+    document: { getElementById: byId, querySelector: () => node(), createElement: node, addEventListener() {} },
+    setTimeout() {}, clearTimeout() {}, requestAnimationFrame(callback) { callback(); return 1; }, cancelAnimationFrame() {}
+  };
+  context.window = context;
+  vm.runInNewContext(source.replace(/\}\)\(\);\s*$/, `
+    defaultModel = defaults; model = normalizeLocalModel(defaults); selectedId = 'contact'; previewReady = true;
+    bindContactColorEvents(); window.colorTest = { model, select: (id) => { selectedId = id; } }; })();`), context);
+  for (const event of ['input', 'change']) {
+    const input = byId('contact-field-background');
+    input.value = event === 'input' ? '#123456' : '#654321';
+    input.events[event]();
+    const rendered = previews.at(-1).model;
+    const contact = rendered.sections.find((section) => section.id === 'contact');
+    assert.equal(contact.fieldBackgroundColor, input.value);
+    assert.equal(contact.backgroundColor, '');
+    assert.equal(rendered.branding.backgroundColor, defaults.branding.backgroundColor);
+    assert.equal(rendered.sections[0].fieldBackgroundColor, undefined);
+    assert.equal(contact.formBackgroundColor, '');
+  }
+  const count = previews.length;
+  byId('contact-field-background').events.change();
+  assert.equal(previews.length, count, 'Committing the same value does not render twice');
+  context.colorTest.select('home');
+  byId('contact-field-background').value = '#ffffff';
+  byId('contact-field-background').events.change();
+  assert.equal(previews.length, count, 'A late picker event never edits another section');
+});
+
+test('contact submit buttons have breathing room after CAPTCHA on landing and dashboard forms', () => {
+  const landing = fs.readFileSync(require.resolve('../public/assets/start_site/style.css'), 'utf8');
+  const members = fs.readFileSync(require.resolve('../public/members/module/contact/style.css'), 'utf8');
+  assert.match(landing, /\.contact form \.button-area\s*\{[^}]*margin-top: 24px/);
+  assert.match(members, /\.right-side \.button\s*\{[^}]*margin-top: 24px/);
 });
