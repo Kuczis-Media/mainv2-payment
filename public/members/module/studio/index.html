@@ -69,7 +69,8 @@
     </a>
 
     <nav class="mode-switch tool-switch" id="mode-switch" aria-label="Wybór narzędzia" hidden>
-      <label for="studio-tool-select">Otwórz narzędzie</label>
+      <span class="tool-switch-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" focusable="false"><rect x="3" y="3" width="7" height="7" rx="2"></rect><rect x="14" y="3" width="7" height="7" rx="2"></rect><rect x="3" y="14" width="7" height="7" rx="2"></rect><path d="M14 17.5h7M17.5 14v7"></path></svg></span>
+      <label for="studio-tool-select">Twoja przestrzeń robocza</label>
       <select id="studio-tool-select">
         <option value="home">Start — wszystkie narzędzia</option>
         <optgroup label="Tworzenie treści">
@@ -92,6 +93,7 @@
           <option value="env">Generator .env</option>
         </optgroup>
       </select>
+      <svg class="tool-switch-chevron" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="m7 10 5 5 5-5"></path></svg>
     </nav>
 
     <div class="header-actions">
@@ -140,7 +142,7 @@
         <div class="project-choices">
           <button class="project-card project-card-dashboard" type="button" data-open-mode="dashboard" data-tool-group="appearance">
             <span class="project-icon" aria-hidden="true">
-              <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><rect x="4" y="5" width="12" height="30" rx="4"></rect><rect x="20" y="5" width="16" height="13" rx="4"></rect><rect x="20" y="22" width="16" height="13" rx="4"></rect></svg>
+              <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><rect x="4" y="6" width="32" height="28" rx="4"></rect><path d="M13 6v28M4 13h32M8 18h1M8 23h1M8 28h1"></path><rect x="18" y="18" width="12" height="5" rx="1.5"></rect><path d="M18 28h5M27 28h3"></path></svg>
             </span>
             <span class="project-copy">
               <small>Układ i wygląd kursu</small>
@@ -152,7 +154,7 @@
 
           <button class="project-card project-card-lesson" type="button" data-open-mode="lesson" data-tool-group="content">
             <span class="project-icon" aria-hidden="true">
-              <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><path d="M9 5h18l6 6v24H9z"></path><path d="M27 5v7h6M15 18h12M15 24h12M15 30h8"></path></svg>
+              <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><path d="M20 11C15 7 9 7 4 9v23c5-2 11-2 16 2 5-4 11-4 16-2V9c-5-2-11-2-16 2Zm0 0v23"></path><path d="M9 15h6M9 21h6M25 15h6M25 21h6"></path></svg>
             </span>
             <span class="project-copy">
               <small>Interaktywne materiały do nauki</small>
@@ -164,7 +166,7 @@
 
           <button class="project-card project-card-prompt" type="button" data-open-mode="prompt" data-tool-group="content">
             <span class="project-icon" aria-hidden="true">
-              <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><path d="M8 7h24v26H8z"></path><path d="M14 15h12M14 21h12M14 27h7"></path><path d="m27 25 2 2 4-5"></path></svg>
+              <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><path d="M23 7H9a5 5 0 0 0-5 5v14a5 5 0 0 0 5 5h3v5l7-5h12a5 5 0 0 0 5-5v-7"></path><path d="m29 3 2.5 6.5L38 12l-6.5 2.5L29 21l-2.5-6.5L20 12l6.5-2.5ZM11 19h6M11 25h15"></path></svg>
             </span>
             <span class="project-copy">
               <small>Instrukcje dla Twojego asystenta</small>
@@ -176,7 +178,7 @@
 
           <button class="project-card project-card-exam" type="button" data-open-mode="exam" data-tool-group="content">
             <span class="project-icon" aria-hidden="true">
-              <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><path d="M9 6h22v28H9z"></path><path d="M14 14h12M14 20h12M14 26h7"></path><circle cx="29" cy="28" r="5"></circle><path d="m27 28 1.5 1.5L31 27"></path></svg>
+              <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><path d="M14 7H9a3 3 0 0 0-3 3v23a3 3 0 0 0 3 3h22a3 3 0 0 0 3-3V10a3 3 0 0 0-3-3h-5"></path><rect x="14" y="3" width="12" height="8" rx="2"></rect><path d="m13 22 5 5 10-11M13 31h14"></path></svg>
             </span>
             <span class="project-copy">
               <small>Próby, punktacja i raporty</small>
@@ -188,7 +190,7 @@
 
           <button class="project-card project-card-presentation" type="button" data-open-mode="presentation" data-tool-group="content">
             <span class="project-icon" aria-hidden="true">
-              <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><rect x="5" y="6" width="30" height="23" rx="3"></rect><path d="M20 29v6M13 35h14M11 13h18M11 18h11"></path></svg>
+              <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><rect x="4" y="6" width="32" height="23" rx="3"></rect><path d="M20 29v6M12 36l8-4 8 4M11 23l6-7 5 4 7-9M24 11h5v5"></path></svg>
             </span>
             <span class="project-copy">
               <small>Od pierwszego slajdu do publikacji</small>
@@ -200,7 +202,7 @@
 
           <button class="project-card project-card-quiz" type="button" data-open-mode="quiz" data-tool-group="content">
             <span class="project-icon" aria-hidden="true">
-              <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><path d="M8 6h24v28H8z"></path><path d="m13 14 2 2 4-5M22 14h5M13 23h14M13 29h9"></path></svg>
+              <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><rect x="4" y="4" width="32" height="32" rx="5"></rect><circle cx="12" cy="12" r="3"></circle><circle cx="12" cy="27" r="3"></circle><path d="M20 12h9M20 20h9M20 27h9m-12-7 3 3 5-6"></path></svg>
             </span>
             <span class="project-copy">
               <small>Szkic, podgląd i publikacja</small>
@@ -224,7 +226,7 @@
 
           <a class="project-card project-card-media" href="/members/module/studio/landing/?assets=1" data-tool-group="appearance">
             <span class="project-icon" aria-hidden="true">
-              <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><path d="M7 9h26v22H7z"></path><path d="M12 26h16M14 14h12v7H14z"></path><circle cx="30" cy="11" r="5"></circle><path d="m28 11 1.5 1.5L32 9"></path></svg>
+              <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><path d="M20 4C10 4 4 11 4 20s7 16 15 16h3a4 4 0 0 0 0-8h-1a3 3 0 0 1 0-6h7c6 0 8-3 8-7 0-6-8-11-16-11Z"></path><circle cx="12" cy="14" r="2"></circle><circle cx="20" cy="10" r="2"></circle><circle cx="28" cy="14" r="2"></circle><circle cx="10" cy="23" r="2"></circle></svg>
             </span>
             <span class="project-copy">
               <small>Gotowe linki do udostępniania</small>
@@ -236,7 +238,7 @@
 
           <a class="project-card project-card-dashboard" href="/members/module/studio/landing/" data-tool-group="appearance">
             <span class="project-icon" aria-hidden="true">
-              <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><rect x="5" y="6" width="30" height="28" rx="4"></rect><path d="M5 14h30M12 21h16M12 27h10"></path></svg>
+              <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><rect x="4" y="6" width="32" height="28" rx="4"></rect><path d="M4 13h32M9 10h1M14 10h1M9 20h11M9 25h8M9 29h6"></path><rect x="25" y="19" width="6" height="10" rx="2"></rect></svg>
             </span>
             <span class="project-copy">
               <small>Szkic, podgląd i publikacja</small>
@@ -248,7 +250,7 @@
 
           <a class="project-card project-card-prompt" href="/members/module/studio/env/" data-tool-group="management">
             <span class="project-icon" aria-hidden="true">
-              <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><path d="M8 6h24v28H8z"></path><path d="M13 14h14M13 20h10M13 26h14"></path><path d="m26 19 5 5-5 5"></path></svg>
+              <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><path d="M24 4H9a3 3 0 0 0-3 3v26a3 3 0 0 0 3 3h22a3 3 0 0 0 3-3V14L24 4Zm0 0v10h10M15 19l-4 5 4 5M25 19l4 5-4 5M22 18l-4 12"></path></svg>
             </span>
             <span class="project-copy">
               <small>Ustawienia techniczne projektu</small>
@@ -260,7 +262,7 @@
 
           <a class="project-card project-card-ai" href="/members/?admin=ai" data-tool-group="management">
             <span class="project-icon" aria-hidden="true">
-              <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><path d="M20 5v5M20 30v5M5 20h5M30 20h5"></path><path d="M20 11a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z"></path><path d="m16 21 3 3 6-8"></path></svg>
+              <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><rect x="9" y="9" width="22" height="22" rx="4"></rect><path d="M15 4v5M25 4v5M15 31v5M25 31v5M4 15h5M4 25h5M31 15h5M31 25h5m-16-9 2 4 4 2-4 2-2 4-2-4-4-2 4-2Z"></path></svg>
             </span>
             <span class="project-copy">
               <small>OpenAI i Google Gemini</small>
@@ -272,7 +274,7 @@
 
           <a class="project-card project-card-ai" href="/members/module/studio/manage/?tab=ai-usage" data-tool-group="management">
             <span class="project-icon" aria-hidden="true">
-              <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><circle cx="20" cy="20" r="14"></circle><path d="M20 20V10M20 20l8 4M10 31l4-5M30 31l-4-5"></path></svg>
+              <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><path d="M8 31a16 16 0 1 1 24 0H8ZM20 8v3M9 14l3 2M31 14l-3 2M7 24h4M29 24h4M22 22l5-7"></path><circle cx="20" cy="25" r="4"></circle></svg>
             </span>
             <span class="project-copy">
               <small>Wiadomości, zużycie i koszty</small>
