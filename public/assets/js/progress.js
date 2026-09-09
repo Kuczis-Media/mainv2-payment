@@ -6,6 +6,8 @@
   const MATERIAL_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
   const pending = new Map();
   const timers = new Map();
+  const batches = new Map();
+  const MAX_BATCH_WAIT_MS = 15_000;
   const openedThisPage = new Set();
   let initialUrl = null;
   try { initialUrl = new URL(root.location.href); } catch (_) {}
@@ -148,7 +150,13 @@
       pending.delete(id);
       root.clearTimeout(timers.get(id));
       timers.delete(id);
-      return send(payload, options).catch((error) => {
+      const batch = batches.get(id);
+      batches.delete(id);
+      return send(payload, options).then((result) => {
+        batch?.resolve(result);
+        return result;
+      }).catch((error) => {
+        batch?.resolve(null);
         reportBackgroundError(error);
         if (options.throwOnError) throw error;
         return null;
@@ -156,15 +164,22 @@
     }
     pending.set(id, mergeObjects(pending.get(id), event));
     root.clearTimeout(timers.get(id));
-    return new Promise((resolve) => {
-      timers.set(id, root.setTimeout(async () => {
-        const payload = pending.get(id);
-        pending.delete(id);
-        timers.delete(id);
-        try { resolve(await send(payload)); }
-        catch (error) { reportBackgroundError(error); resolve(null); }
-      }, Math.max(750, Number(options.debounceMs) || 3_000)));
-    });
+    if (!batches.has(id)) {
+      const batch = { startedAt: Date.now() };
+      batch.promise = new Promise((resolve) => { batch.resolve = resolve; });
+      batches.set(id, batch);
+    }
+    const batch = batches.get(id);
+    const delay = Math.min(Math.max(750, Number(options.debounceMs) || 5_000), Math.max(0, MAX_BATCH_WAIT_MS - (Date.now() - batch.startedAt)));
+    timers.set(id, root.setTimeout(async () => {
+      const payload = pending.get(id);
+      pending.delete(id);
+      timers.delete(id);
+      batches.delete(id);
+      try { batch.resolve(await send(payload)); }
+      catch (error) { reportBackgroundError(error); batch.resolve(null); }
+    }, delay));
+    return batch.promise;
   }
 
   function open(options) {
@@ -271,10 +286,12 @@
     const jobs = [];
     pending.forEach((event, id) => {
       root.clearTimeout(timers.get(id));
-      jobs.push(send(event, { keepalive: true }).catch(reportBackgroundError));
+      const batch = batches.get(id);
+      jobs.push(send(event, { keepalive: true }).catch(reportBackgroundError).then((result) => { batch?.resolve(result); }));
     });
     pending.clear();
     timers.clear();
+    batches.clear();
     await Promise.allSettled(jobs);
   }
 
@@ -351,6 +368,7 @@
   }
 
   root.addEventListener('pagehide', () => { flush(); });
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => { if (document.hidden) void flush(); });
   root.addEventListener('chem-auth-user-changed', (event) => {
     if (!event.detail?.authenticated) {
       accessToken = '';

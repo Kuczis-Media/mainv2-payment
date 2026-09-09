@@ -4,7 +4,7 @@
   if (!api) return;
   const CACHE_KEY = 'nextmed.landing.route.v1';
   const PUBLICATION_CACHE_KEY = 'nextmed.landing.publication.v1';
-  const TTL = 60_000;
+  const TTL = 5 * 60_000;
   let cached;
   try {
     const entry = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
@@ -18,12 +18,16 @@
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), 2500);
     try {
-      const response = await fetch(api.ROUTE_URL, { cache: 'no-cache', credentials: 'omit', signal: controller.signal });
+      const response = await fetch(api.ROUTE_URL, { cache: 'default', credentials: 'omit', signal: controller.signal });
       if (!response.ok && response.status !== 404) throw new Error('Route unavailable');
       const settings = response.status === 404 ? api.normalize() : api.normalize(await response.json());
       try { localStorage.setItem(CACHE_KEY, JSON.stringify({ settings, checkedAt: Date.now() })); } catch {}
       return settings;
-    } catch { return cached?.settings || api.normalize(); }
+    } catch {
+      const settings = cached?.settings || api.normalize();
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify({ settings, checkedAt: Date.now() })); } catch {}
+      return settings;
+    }
     finally { window.clearTimeout(timer); }
   }
   function validPublication(value) {

@@ -35,6 +35,6 @@ test('simple publication wording preserves public-file warnings and both destina
   const script = read('landing/script.js');
   assert.match(script, /dostępny tylko dla administratora/);
   assert.match(script, /Odwiedzający zobaczą zmiany dopiero po publikacji/);
-  assert.match(script, /w ciągu 2 minut/);
+  assert.match(script, /do 10 minut/);
   assert.match(script, /do 15 minut/);
 });

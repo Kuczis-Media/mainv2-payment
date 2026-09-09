@@ -128,6 +128,13 @@
   }
 
   function bindEvents() {
+    document.getElementById('edit-contact-colors').addEventListener('click', () => {
+      selectedId = 'contact';
+      selectedPalette = 'landing';
+      renderAll();
+      renderPreview(true);
+      document.getElementById('contact-colors').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
     document.getElementById('section-hero-visual').addEventListener('change', (event) => updateSelected('heroVisual', event.target.value));
     bindContactColorEvents();
     const mapping = {
@@ -230,15 +237,31 @@
   function bindContactColorEvents() {
     Object.entries(CONTACT_COLORS).forEach(([key, id]) => {
       const input = document.getElementById(`contact-${id}`);
+      const hex = document.getElementById(`contact-${id}-hex`);
       const update = () => {
         // A native color dialog can commit with change only. Never write its
         // result into a newly selected section or the global page palette.
         if (selectedId !== 'contact' || selectedSection()[key] === input.value) return;
         updateSelected(key, input.value);
+        hex.value = input.value;
+        hex.setCustomValidity('');
+        renderContactSample();
       };
       input.addEventListener('input', update);
       input.addEventListener('change', update);
+      hex.addEventListener('input', () => {
+        const value = hex.value.trim();
+        if (!/^#[0-9a-f]{6}$/i.test(value)) { hex.setCustomValidity('Wpisz kolor w formacie #RRGGBB.'); return; }
+        hex.setCustomValidity('');
+        input.value = value.toLowerCase();
+        update();
+      });
     });
+  }
+
+  function renderContactSample() {
+    const sample = document.getElementById('contact-color-sample');
+    Object.values(CONTACT_COLORS).forEach((id) => sample.style.setProperty(`--contact-${id}`, document.getElementById(`contact-${id}`).value));
   }
 
   function updateSelected(field, value) {
@@ -362,8 +385,14 @@
     document.getElementById('hero-visual-field').hidden = section.id !== 'home';
     document.getElementById('section-hero-visual').value = ['image', 'biomolecule-banner'].includes(section.heroVisual) ? section.heroVisual : 'biomolecule';
     document.getElementById('contact-colors').hidden = section.id !== 'contact';
-    const contactDefaults = { formBackgroundColor: model.branding?.surfaceColor, fieldBackgroundColor: model.branding?.backgroundColor, fieldTextColor: model.branding?.textColor, fieldBorderColor: '#d5dee9', fieldFocusColor: model.branding?.primaryColor, labelTextColor: model.branding?.mutedColor };
-    Object.entries(CONTACT_COLORS).forEach(([key, id]) => { document.getElementById(`contact-${id}`).value = section[key] || contactDefaults[key] || '#ffffff'; });
+    const contactDefaults = { formBackgroundColor: model.branding?.surfaceColor, fieldBackgroundColor: model.branding?.surfaceColor, fieldTextColor: model.branding?.textColor, fieldBorderColor: '#d5dee9', fieldFocusColor: model.branding?.primaryColor, labelTextColor: model.branding?.mutedColor };
+    Object.entries(CONTACT_COLORS).forEach(([key, id]) => {
+      const value = section[key] || contactDefaults[key] || '#ffffff';
+      document.getElementById(`contact-${id}`).value = value;
+      const hex = document.getElementById(`contact-${id}-hex`);
+      hex.value = value; hex.setCustomValidity('');
+    });
+    renderContactSample();
     elements.editorTitle.textContent = SECTION_LABELS[section.id] || section.id;
     elements.enabled.checked = section.enabled !== false;
     elements.title.value = section.title || '';
@@ -642,7 +671,7 @@
       renderAll();
       serverStorageAvailable = payload.storage?.available !== false;
       updatePublicationControls();
-      setStatus(`Opublikowano ${new Date(publishedModel.publishedAt).toLocaleString('pl-PL')}. ${publishMode === 'netlify-blobs' ? 'Odwiedzający zobaczą zmiany zwykle w ciągu 2 minut.' : 'Odświeżenie strony u wszystkich odwiedzających może potrwać do 15 minut.'}${payload.draftWarning ? ' Nie udało się zsynchronizować szkicu na serwerze; kolejne zmiany zapiszesz na tym urządzeniu.' : ''}`, payload.draftWarning ? 'warning' : 'success');
+      setStatus(`Opublikowano ${new Date(publishedModel.publishedAt).toLocaleString('pl-PL')}. ${publishMode === 'netlify-blobs' ? 'U Ciebie zmiany są widoczne od razu. U innych odwiedzających odświeżenie może potrwać do 10 minut.' : 'Odświeżenie strony u wszystkich odwiedzających może potrwać do 15 minut.'}${payload.draftWarning ? ' Nie udało się zsynchronizować szkicu na serwerze; kolejne zmiany zapiszesz na tym urządzeniu.' : ''}`, payload.draftWarning ? 'warning' : 'success');
     } catch (error) { setStatus(error.message, 'error'); }
     finally { setBusy(false); }
   }
@@ -1224,7 +1253,7 @@
     elements.publish.disabled = !canPublish();
     elements.publish.title = canPublish() ? '' : 'Magazyn jest niedostępny. Sprawdź konfigurację lub pobierz stronę HTML.';
     elements.publishModeNote.textContent = blobMode
-      ? 'Strona jest publikowana bezpośrednio na platformie. Zmiany mogą pojawić się z opóźnieniem do minuty. Szkic pozostaje prywatny.'
+      ? 'Strona jest publikowana bezpośrednio na platformie. Pamięć podręczna ogranicza wywołania serwera; inni odwiedzający mogą zobaczyć zmiany z opóźnieniem do 10 minut. Szkic pozostaje prywatny.'
       : 'Ustawienia i treści strony zostaną zapisane w publicznym pliku. Nie dodawaj do nich haseł ani prywatnych danych. Zmiany pojawią się po odświeżeniu pamięci podręcznej.';
     const publicationLocation = document.getElementById('landing-publication-location');
     const url = blobMode ? new URL('/.netlify/functions/landing', location.origin).href : staticConfigUrl;

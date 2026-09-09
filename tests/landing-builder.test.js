@@ -109,7 +109,7 @@ test('builder publishes through Blobs without a GitHub token and public reads ne
   assert.equal(publicData.active, true);
   assert.equal(publicData.model.branding.brandName, 'NextMed');
   assert.doesNotMatch(publicResult.body, /admin-publication-test|updatedBy/);
-  assert.match(publicResult.headers['Netlify-CDN-Cache-Control'], /max-age=60/);
+  assert.match(publicResult.headers['Netlify-CDN-Cache-Control'], /max-age=300/);
 });
 
 test('a newer Blob publication rejects an older open editor without replacing its public content', async (t) => {

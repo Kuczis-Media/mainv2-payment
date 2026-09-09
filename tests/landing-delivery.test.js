@@ -194,14 +194,36 @@ test('only an explicit Blob mode overrides GitHub; historical published data doe
   const active = await sourceRun({ publicationPayload: publication });
   assert.equal(active.settings.publication.mode, 'netlify-blobs');
   assert.equal(active.settings.publication.model.branding.brandName, 'NextMed');
-  const offline = await sourceRun({ offline: true, publicationCache: { publication, checkedAt: Date.now() - 120_000 } });
+  const offline = await sourceRun({ offline: true, publicationCache: { publication, checkedAt: Date.now() - 300_001 } });
   assert.equal(offline.settings.publication.mode, 'netlify-blobs');
 });
 
 test('route loading handles old installations, network failure and editor previews without blocking', async () => {
   assert.deepEqual((await sourceRun({ status: 404 })).settings, delivery.normalize());
   const settings = delivery.normalize({ target: custom });
-  assert.deepEqual((await sourceRun({ offline: true, cache: { settings, checkedAt: Date.now() - 120_000 } })).settings, settings);
+  assert.deepEqual((await sourceRun({ offline: true, cache: { settings, checkedAt: Date.now() - 300_001 } })).settings, settings);
   assert.deepEqual((await sourceRun({ offline: true })).settings, delivery.normalize());
   assert.equal((await sourceRun({ preview: true })).calls.length, 0);
+});
+
+test('landing route and publication reuse the cache after one minute and refresh after five minutes', async () => {
+  const settings = delivery.normalize({ target: custom });
+  const recent = Date.now() - 120_000;
+  const warm = await sourceRun({ cache: { settings, checkedAt: recent }, publicationCache: { publication: null, checkedAt: recent } });
+  assert.equal(warm.calls.length, 0, 'Another page visit needs no Function request while the cache is fresh');
+  const expired = Date.now() - 300_001;
+  const cold = await sourceRun({ cache: { settings, checkedAt: expired }, publicationCache: { publication: null, checkedAt: expired } });
+  assert.equal(cold.calls.length, 2);
+  assert.equal(cold.calls.filter((call) => call.url.startsWith('/.netlify/functions/')).length, 1);
+});
+
+test('route and publication outages do not cause another request on each page navigation', async () => {
+  const failed = await sourceRun({ offline: true });
+  assert.equal(failed.calls.length, 2);
+  const nextPage = await sourceRun({ offline: true,
+    cache: JSON.parse(failed.storage.get('nextmed.landing.route.v1')),
+    publicationCache: JSON.parse(failed.storage.get('nextmed.landing.publication.v1'))
+  });
+  assert.equal(nextPage.calls.length, 0);
+  assert.deepEqual(nextPage.settings, delivery.normalize());
 });

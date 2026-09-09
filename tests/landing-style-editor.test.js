@@ -72,7 +72,7 @@ test('contact controls are separate, resettable and mapped to the same saved fie
   }
   assert.match(html, /id="contact-colors" hidden open/);
   assert.match(html, /id="section-hero-visual"/);
-  assert.match(css, /background: var\(--contact-field-background, var\(--brand-background\)\)/);
+  assert.match(css, /background: var\(--contact-field-background, var\(--brand-surface\)\)/);
   assert.match(css, /color: var\(--contact-field-text, var\(--brand-text\)\)/);
   assert.match(css, /input:-webkit-autofill[^}]+--contact-field-background/);
   assert.match(css, /input:autofill[^}]+--contact-field-background/);
@@ -82,6 +82,7 @@ test('native field-color input and change events reach the live preview without 
   const source = fs.readFileSync(require.resolve('../public/members/module/studio/landing/script.js'), 'utf8');
   const nodes = new Map(), previews = [];
   const node = () => ({ value: '', dataset: {}, events: {}, children: [],
+    style: { setProperty() {} }, setCustomValidity(message) { this.validationMessage = message; },
     addEventListener(name, callback) { this.events[name] = callback; },
     setAttribute() {}, append(...items) { this.children.push(...items); }, replaceChildren(...items) { this.children = items; },
     contentWindow: { postMessage(message) { previews.push(message); } }
@@ -111,10 +112,19 @@ test('native field-color input and change events reach the live preview without 
   const count = previews.length;
   byId('contact-field-background').events.change();
   assert.equal(previews.length, count, 'Committing the same value does not render twice');
+  const hex = byId('contact-field-background-hex');
+  assert.equal(hex.value, '#654321');
+  hex.value = '#ABCDEF'; hex.events.input();
+  assert.equal(byId('contact-field-background').value, '#abcdef');
+  assert.equal(previews.at(-1).model.sections.find((section) => section.id === 'contact').fieldBackgroundColor, '#abcdef');
+  assert.equal(previews.at(-1).model.branding.backgroundColor, defaults.branding.backgroundColor);
+  hex.value = 'red'; hex.events.input();
+  assert.ok(hex.validationMessage);
+  assert.equal(previews.length, count + 1, 'Incomplete or invalid codes never alter the saved model');
   context.colorTest.select('home');
   byId('contact-field-background').value = '#ffffff';
   byId('contact-field-background').events.change();
-  assert.equal(previews.length, count, 'A late picker event never edits another section');
+  assert.equal(previews.length, count + 1, 'A late picker event never edits another section');
 });
 
 test('contact submit buttons have breathing room after CAPTCHA on landing and dashboard forms', () => {

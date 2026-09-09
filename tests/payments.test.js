@@ -26,19 +26,21 @@ function publicOffer(overrides = {}) {
 }
 
 function loadPaymentsClient({ storage = new Map(), fetchImpl, schedule = setTimeout, cancel = clearTimeout }) {
+  const events = {};
   const document = {
     readyState: 'loading',
     addEventListener() {},
     querySelectorAll() { return []; }
   };
-  const sessionStorage = {
+  const localStorage = {
     getItem(key) { return storage.get(key) || null; },
     setItem(key, value) { storage.set(key, String(value)); },
     removeItem(key) { storage.delete(key); }
   };
   const window = {
     document,
-    sessionStorage,
+    localStorage,
+    addEventListener(name, callback) { events[name] = callback; },
     setTimeout: schedule,
     clearTimeout: cancel,
     dispatchEvent() {},
@@ -54,7 +56,7 @@ function loadPaymentsClient({ storage = new Map(), fetchImpl, schedule = setTime
     Intl,
     location: { origin: 'https://nextmed.example', search: '' },
     Promise,
-    sessionStorage,
+    localStorage,
     setTimeout,
     URL,
     window
@@ -64,7 +66,7 @@ function loadPaymentsClient({ storage = new Map(), fetchImpl, schedule = setTime
     context,
     { filename: 'payments.js' }
   );
-  return { api: window.ChemPayments, storage };
+  return { api: window.ChemPayments, storage, events };
 }
 
 test('price requests time out, release the shared pending request and can be retried', async () => {
@@ -166,7 +168,7 @@ test('safe public fallback is cached briefly when payment storage is unavailable
   assert.equal(JSON.parse(response.body).checkoutAvailable, false);
 });
 
-test('browser payment config reuses only a fresh validated session cache and force bypasses it', async () => {
+test('browser payment config reuses only a fresh validated public cache across pages and force bypasses it', async () => {
   const storage = new Map();
   const requests = [];
   const firstOffer = publicOffer();
@@ -182,6 +184,7 @@ test('browser payment config reuses only a fresh validated session cache and for
   assert.equal(first.currency, 'pln');
   assert.equal(requests.length, 1);
   assert.equal(requests[0].cache, 'default');
+  assert.equal(requests[0].credentials, 'omit', 'Public offers must not forward a visitor session');
 
   const secondPage = loadPaymentsClient({ storage, fetchImpl });
   const cached = await secondPage.api.loadConfig(false);
@@ -195,7 +198,7 @@ test('browser payment config reuses only a fresh validated session cache and for
   assert.equal(requests[1].cache, 'no-store');
 });
 
-test('browser payment config rejects malformed or expired session cache entries', async () => {
+test('browser payment config rejects malformed or expired public cache entries', async () => {
   const cacheKey = 'nextmed.payments.public-config.v1';
   const malformedStorage = new Map([[cacheKey, JSON.stringify({
     savedAt: Date.now(),
@@ -213,7 +216,7 @@ test('browser payment config rejects malformed or expired session cache entries'
   assert.equal(malformedFetches, 1);
 
   const expiredStorage = new Map([[cacheKey, JSON.stringify({
-    savedAt: Date.now() - 60_001,
+    savedAt: Date.now() - 300_001,
     config: publicOffer()
   })]]);
   let expiredFetches = 0;
@@ -226,6 +229,28 @@ test('browser payment config rejects malformed or expired session cache entries'
   });
   await expiredPage.api.loadConfig(false);
   assert.equal(expiredFetches, 1);
+});
+
+test('price cache changes in another tab invalidate settled copies but keep an in-flight request shared', async () => {
+  const key = 'nextmed.payments.public-config.v1';
+  let finish; let requests = 0;
+  const client = loadPaymentsClient({ fetchImpl: async () => {
+    requests++;
+    if (requests === 1) await new Promise((resolve) => { finish = resolve; });
+    return { ok: true, json: async () => publicOffer() };
+  } });
+  const first = client.api.loadConfig(false);
+  client.events.storage({ key });
+  assert.equal(client.api.loadConfig(false), first);
+  finish(); await first;
+  client.storage.set(key, JSON.stringify({ savedAt: Date.now(), config: publicOffer({ currency: 'eur' }) }));
+  client.events.storage({ key });
+  assert.equal((await client.api.loadConfig(false)).currency, 'eur');
+  assert.equal(requests, 1, 'A fresh public offer from another tab needs no additional request');
+  client.storage.delete(key);
+  client.events.storage({ key });
+  await client.api.loadConfig(false);
+  assert.equal(requests, 2, 'Removing the public cache after a price edit also invalidates the in-memory copy');
 });
 
 test('an existing four-price configuration migrates without changing its public offer', () => {

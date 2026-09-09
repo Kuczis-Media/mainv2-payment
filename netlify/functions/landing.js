@@ -5,7 +5,7 @@ const landing = require('../landing-content.js');
 
 const PUBLIC_CACHE_HEADERS = Object.freeze({
   'Cache-Control': 'public, max-age=60, must-revalidate',
-  'Netlify-CDN-Cache-Control': 'public, durable, max-age=60, must-revalidate',
+  'Netlify-CDN-Cache-Control': 'public, durable, max-age=300, must-revalidate',
   'Netlify-Cache-Tag': 'chemdisk-landing',
   Vary: 'Accept-Encoding'
 });

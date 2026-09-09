@@ -72,9 +72,22 @@ test('runtime applies and resets contact field colors locally without recoloring
     assert.equal(result.sections.home.style.values[variable], undefined);
     assert.equal(result.document.documentElement.style.values[variable], undefined);
   }
+  const controls = result.sections.contact.querySelectorAll('form input:not([type="hidden"]):not([type="submit"]), form textarea');
+  assert.equal(controls.length, 4);
+  for (const input of controls) {
+    assert.equal(input.style.values['background-color'], '#112233');
+    assert.equal(input.style.values.color, '#112233');
+  }
+  model.branding.backgroundColor = '#abcdef';
+  context.NextMedLanding.applyModel(model);
+  for (const input of controls) assert.equal(input.style.values['background-color'], '#112233', 'Changing the page background preserves the chosen field background');
   Object.keys(fields).forEach((key) => { contact[key] = ''; });
   context.NextMedLanding.applyModel(model);
   for (const variable of Object.values(fields)) assert.equal(result.sections.contact.style.values[variable], undefined);
+  for (const input of controls) {
+    assert.equal(input.style.values['background-color'], undefined);
+    assert.equal(input.style.values.color, undefined);
+  }
 });
 
 test('3D hero replaces a previously configured background and image mode restores it without losing the URL', async () => {
@@ -309,6 +322,12 @@ class FakeElement {
     if (selector === '.landing-section-image') return this.findByClass('landing-section-image');
     return null;
   }
+  querySelectorAll(selector) {
+    assert.equal(selector, 'form input:not([type="hidden"]):not([type="submit"]), form textarea');
+    const descendants = (element) => element.children.flatMap((child) => child instanceof FakeElement ? [child, ...descendants(child)] : []);
+    return descendants(this).filter((child) => child.tagName === 'TEXTAREA'
+      || (child.tagName === 'INPUT' && !['hidden', 'submit'].includes(child.attributes.get('type'))));
+  }
   findByClass(name) {
     for (const child of this.children) {
       if (!child || typeof child !== 'object') continue;
@@ -352,6 +371,15 @@ function landingDom(options = {}) {
       || section.selectors.get('.pricing-intro')
       || section.selectors.get('.title');
     if (lead) container.selectors.set('.landing-section-body, .pricing-intro, .title', lead);
+    if (id === 'contact') {
+      const form = new FakeElement('form');
+      for (const type of ['text', 'email', 'text', 'hidden', 'submit', 'textarea']) {
+        const control = new FakeElement(type === 'textarea' ? 'textarea' : 'input');
+        control.setAttribute('type', type);
+        form.append(control);
+      }
+      container.append(form);
+    }
     sections[id] = section;
   });
 

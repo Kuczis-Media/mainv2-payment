@@ -540,6 +540,7 @@
       setAdminPriceInputs(payload);
       setPanelStatus(elements.adminPricesStatus, 'Oferta zapisana. Waluta, dostępne pakiety i zasady przedłużania obowiązują już dla nowych płatności.', 'info');
       pendingChanges.delete('payments');
+      try { window.localStorage.removeItem('nextmed.payments.public-config.v1'); } catch (_) {}
     } catch (error) {
       setPanelStatus(elements.adminPricesStatus, error && error.message ? error.message : 'Nie udało się zapisać cen.', 'error');
     } finally {

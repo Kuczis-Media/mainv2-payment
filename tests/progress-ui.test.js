@@ -30,6 +30,104 @@ function loadProgressApi() {
   return window.ChemProgress;
 }
 
+function progressClient({ fail = false } = {}) {
+  let now = 1_700_000_000_000, nextTimer = 0;
+  const timers = new Map(), requests = [], windowEvents = {}, documentEvents = {};
+  const document = { hidden: false, addEventListener(name, handler) { documentEvents[name] = handler; } };
+  const window = {
+    location: { href: 'https://course.example/members/' },
+    ChemAuth: { ready: Promise.resolve({ authenticated: true, session: { ok: true } }), getAccessToken: async () => 'student-token' },
+    addEventListener(name, handler) { windowEvents[name] = handler; }, dispatchEvent() {},
+    setTimeout(callback, delay) { const id = ++nextTimer; timers.set(id, { callback, at: now + delay }); return id; },
+    clearTimeout(id) { timers.delete(id); }
+  };
+  vm.runInNewContext(fs.readFileSync(path.join(root, 'public/assets/js/progress.js'), 'utf8'), {
+    window, document, URL, Date: { now: () => now }, CustomEvent: class {},
+    console: { warn() {} }, localStorage: { getItem() { return null; }, setItem() {} },
+    fetch: async (url, options) => {
+      requests.push({ url, options, body: JSON.parse(options.body) });
+      return { ok: !fail, status: fail ? 503 : 200, json: async () => fail ? { error: 'OFFLINE' } : { saved: true } };
+    }
+  });
+  return {
+    api: window.ChemProgress, requests, timers, windowEvents, documentEvents, document,
+    async advance(milliseconds) {
+      const target = now + milliseconds;
+      while (true) {
+        const next = [...timers.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+        if (!next || next[1].at > target) break;
+        now = next[1].at; timers.delete(next[0]); await next[1].callback();
+      }
+      now = target;
+    }
+  };
+}
+
+const lessonEvent = (question, answer) => ({ materialId: 'lesson-1', materialType: 'lesson', action: 'lesson_step', details: { lessonAnswers: { [question]: answer } } });
+
+test('lesson background writes wait five seconds, merge answers and settle every caller with one request', async () => {
+  const client = progressClient();
+  const first = client.api.update(lessonEvent('q1', 'one'));
+  await client.advance(4_000);
+  assert.equal(client.requests.length, 0);
+  const second = client.api.update(lessonEvent('q2', 'two'));
+  assert.equal(first, second, 'Coalesced calls must share completion instead of leaving promises unresolved');
+  await client.advance(4_999);
+  assert.equal(client.requests.length, 0);
+  await client.advance(1);
+  assert.equal(client.requests.length, 1);
+  assert.deepEqual(client.requests[0].body.details.lessonAnswers, { q1: 'one', q2: 'two' });
+  assert.equal((await first).saved, true);
+  assert.equal(client.requests[0].options.headers.Authorization, 'Bearer student-token');
+  assert.equal(client.requests[0].options.cache, 'no-store', 'Protected writes never enter shared caches');
+});
+
+test('continuous lesson editing cannot postpone a server write past fifteen seconds', async () => {
+  const client = progressClient();
+  const first = client.api.update(lessonEvent('q1', '0'));
+  for (let index = 1; index <= 3; index++) {
+    await client.advance(4_000);
+    client.api.update(lessonEvent('q1', String(index)));
+  }
+  await client.advance(2_999);
+  assert.equal(client.requests.length, 0);
+  await client.advance(1);
+  assert.equal(client.requests.length, 1);
+  assert.equal(client.requests[0].body.details.lessonAnswers.q1, '3');
+  assert.equal((await first).saved, true);
+});
+
+test('completion immediately includes pending answers and cancels redundant autosaves', async () => {
+  const client = progressClient();
+  const pending = client.api.update(lessonEvent('q1', 'answer'));
+  const result = await client.api.update({ materialId: 'lesson-1', action: 'complete' }, { immediate: true, throwOnError: true });
+  assert.equal(result, await pending);
+  assert.equal(client.requests[0].body.action, 'complete');
+  assert.equal(client.requests[0].body.details.lessonAnswers.q1, 'answer');
+  await client.advance(30_000);
+  assert.equal(client.requests.length, 1);
+});
+
+test('hiding the document flushes pending answers once with keepalive, without a duplicate on pagehide', async () => {
+  const client = progressClient();
+  const pending = client.api.update(lessonEvent('q1', 'answer'));
+  client.document.hidden = true; client.documentEvents.visibilitychange();
+  assert.equal((await pending).saved, true);
+  client.windowEvents.pagehide(); await client.advance(30_000);
+  assert.equal(client.requests.length, 1);
+  assert.equal(client.requests[0].options.keepalive, true);
+});
+
+test('failed coalesced writes settle all callers and explicit completion still surfaces a server error', async () => {
+  const client = progressClient({ fail: true });
+  const background = client.api.update(lessonEvent('q1', 'answer'));
+  await client.advance(5_000);
+  assert.equal(await background, null);
+  const pending = client.api.update(lessonEvent('q2', 'answer'));
+  await assert.rejects(client.api.update({ materialId: 'lesson-1', action: 'complete' }, { immediate: true, throwOnError: true }), /OFFLINE/);
+  assert.equal(await pending, null);
+});
+
 test('student progress labels never round a positive value down to zero', () => {
   const api = loadProgressApi();
   assert.equal(api.percentLabel(0), '0%');

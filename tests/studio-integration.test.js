@@ -158,7 +158,7 @@ test('Studio exposes dashboard, lesson, exam and prompt authoring workflows', ()
   assert.match(examBuilder, /loadAssets\(true, \{ keepBank: true \}\)/);
   assert.match(styles, /\.exam-media-dropzone/);
   assert.match(examStyles, /\[hidden\]\s*\{\s*display:\s*none\s*!important/);
-  assert.match(examPlayer, /ANSWER_SAVE_INTERVAL_MS\s*=\s*8_000/);
+  assert.match(examPlayer, /ANSWER_SAVE_INTERVAL_MS\s*=\s*15_000/);
   assert.match(examPlayer, /client\.bootstrap\(/);
   assert.match(examPlayer, /SIGNAL_THROTTLE_MS\s*=\s*10_000/);
   assert.match(examPlayer, /autosave-batch/);

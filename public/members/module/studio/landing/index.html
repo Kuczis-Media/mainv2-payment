@@ -111,6 +111,7 @@
         </details>
       </details>
 
+      <button id="edit-contact-colors" class="contact-color-shortcut" type="button">Edytuj kolory pól formularza na stronie głównej →</button>
       <div class="panel-heading section-editor-heading"><div><span class="eyebrow">Wybrana sekcja</span><h2 id="editor-title">Sekcja</h2></div><label class="toggle"><input id="section-enabled" type="checkbox"><span>Widoczna</span></label></div>
       <div class="form-grid">
         <label><span>Tytuł</span><input id="section-title" maxlength="120"></label>
@@ -140,13 +141,14 @@
         <summary>Formularz — tło pól i kolory</summary>
         <p class="field-hint">Tło pól zmienia miejsca, w które wpisujesz imię, e-mail, temat i wiadomość. Tło formularza zmienia tylko ramkę wokół nich — żadne z tych ustawień nie zmienia tła strony.</p>
         <fieldset><legend>Niezależne od tła strony i pozostałych formularzy</legend><div class="color-grid">
-          <label><span>Tło formularza</span><input id="contact-form-background" type="color"><button type="button" data-clear-color="formBackgroundColor">Użyj palety</button></label>
-          <label><span>Tło pól do wpisywania</span><input id="contact-field-background" type="color"><button type="button" data-clear-color="fieldBackgroundColor">Użyj palety</button></label>
-          <label><span>Tekst wpisywany w pola</span><input id="contact-field-text" type="color"><button type="button" data-clear-color="fieldTextColor">Użyj palety</button></label>
-          <label><span>Obramowanie pól</span><input id="contact-field-border" type="color"><button type="button" data-clear-color="fieldBorderColor">Użyj palety</button></label>
-          <label><span>Wyróżnienie aktywnego pola</span><input id="contact-field-focus" type="color"><button type="button" data-clear-color="fieldFocusColor">Użyj palety</button></label>
-          <label><span>Etykiety nad polami</span><input id="contact-label-text" type="color"><button type="button" data-clear-color="labelTextColor">Użyj palety</button></label>
+          <label><span>Tło formularza</span><input id="contact-form-background" type="color"><input id="contact-form-background-hex" class="color-hex" aria-label="Kod koloru tła formularza" maxlength="7" spellcheck="false"><button type="button" data-clear-color="formBackgroundColor">Użyj palety</button></label>
+          <label><span>Tło pól do wpisywania</span><input id="contact-field-background" type="color"><input id="contact-field-background-hex" class="color-hex" aria-label="Kod koloru tła pól" maxlength="7" spellcheck="false"><button type="button" data-clear-color="fieldBackgroundColor">Użyj palety</button></label>
+          <label><span>Tekst wpisywany w pola</span><input id="contact-field-text" type="color"><input id="contact-field-text-hex" class="color-hex" aria-label="Kod koloru tekstu pól" maxlength="7" spellcheck="false"><button type="button" data-clear-color="fieldTextColor">Użyj palety</button></label>
+          <label><span>Obramowanie pól</span><input id="contact-field-border" type="color"><input id="contact-field-border-hex" class="color-hex" aria-label="Kod koloru obramowania" maxlength="7" spellcheck="false"><button type="button" data-clear-color="fieldBorderColor">Użyj palety</button></label>
+          <label><span>Wyróżnienie aktywnego pola</span><input id="contact-field-focus" type="color"><input id="contact-field-focus-hex" class="color-hex" aria-label="Kod koloru aktywnego pola" maxlength="7" spellcheck="false"><button type="button" data-clear-color="fieldFocusColor">Użyj palety</button></label>
+          <label><span>Etykiety nad polami</span><input id="contact-label-text" type="color"><input id="contact-label-text-hex" class="color-hex" aria-label="Kod koloru etykiet" maxlength="7" spellcheck="false"><button type="button" data-clear-color="labelTextColor">Użyj palety</button></label>
         </div></fieldset>
+        <div id="contact-color-sample" class="contact-color-sample"><span>Podgląd pola formularza</span><input type="text" value="Tak będzie wyglądać wpisany tekst" aria-label="Podgląd kolorów pola" readonly></div>
       </details>
       <div id="image-preview" class="image-preview" hidden><img alt="Podgląd obrazu sekcji"></div>
     </section>

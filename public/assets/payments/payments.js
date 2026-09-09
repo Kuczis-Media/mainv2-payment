@@ -4,7 +4,7 @@
   const CONFIG_URL = '/.netlify/functions/payment-config';
   const CHECKOUT_URL = '/.netlify/functions/create-checkout';
   const CONFIG_CACHE_KEY = 'nextmed.payments.public-config.v1';
-  const CONFIG_CACHE_TTL_MS = 60_000;
+  const CONFIG_CACHE_TTL_MS = 5 * 60_000;
   const VALID_PLANS = new Set(['hour', 'day', 'week', 'month', 'halfyear', 'year']);
   const VALID_CURRENCIES = new Set(['pln', 'eur', 'usd', 'gbp', 'chf', 'czk', 'cad', 'aud']);
   const ERROR_MESSAGES = Object.freeze({
@@ -27,6 +27,15 @@
   let configLoadedAt = 0;
   let checkoutInFlight = false;
 
+  window.addEventListener('storage', (event) => {
+    // Another tab may update the offer while this tab is already fetching it.
+    // Keep the shared in-flight promise; only invalidate a settled memory copy.
+    if ((event.key === CONFIG_CACHE_KEY || event.key === null) && configLoadedAt !== 0) {
+      configPromise = null;
+      configLoadedAt = 0;
+    }
+  });
+
   function loadConfig(force) {
     const memoryAge = Date.now() - configLoadedAt;
     if (!force && configPromise && (configLoadedAt === 0 || (memoryAge >= 0 && memoryAge <= CONFIG_CACHE_TTL_MS))) {
@@ -44,7 +53,7 @@
     configPromise = fetch(CONFIG_URL, {
       method: 'GET',
       cache: force ? 'no-store' : 'default',
-      credentials: 'same-origin',
+      credentials: 'omit',
       signal: controller.signal,
       headers: { Accept: 'application/json' }
     }).then(async (response) => {
@@ -66,11 +75,11 @@
 
   function readCachedConfig() {
     try {
-      const entry = JSON.parse(window.sessionStorage.getItem(CONFIG_CACHE_KEY) || 'null');
+      const entry = JSON.parse(window.localStorage.getItem(CONFIG_CACHE_KEY) || 'null');
       const savedAt = entry?.savedAt;
       const age = Date.now() - savedAt;
       if (!Number.isSafeInteger(savedAt) || age < 0 || age > CONFIG_CACHE_TTL_MS || !validPublicConfig(entry?.config)) {
-        window.sessionStorage.removeItem(CONFIG_CACHE_KEY);
+        window.localStorage.removeItem(CONFIG_CACHE_KEY);
         return null;
       }
       return { config: entry.config, savedAt };
@@ -82,7 +91,7 @@
   function writeCachedConfig(config, savedAt = Date.now()) {
     if (!validPublicConfig(config)) return;
     try {
-      window.sessionStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify({ savedAt, config }));
+      window.localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify({ savedAt, config }));
     } catch (_) {}
   }
 

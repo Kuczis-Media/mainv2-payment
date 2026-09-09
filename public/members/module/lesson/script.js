@@ -398,7 +398,7 @@
           totalTrackedSteps: tracked.length,
           lessonAnswers: serializedStudentAnswers(true)
         }
-      }, { immediate, debounceMs: 1200, throwOnError });
+      }, { immediate, debounceMs: 5_000, throwOnError });
     }
     return Promise.resolve(null);
   }

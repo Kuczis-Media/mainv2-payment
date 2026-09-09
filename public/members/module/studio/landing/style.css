@@ -177,3 +177,10 @@ fieldset { margin: 13px 0 0; padding: 11px; border: 1px solid var(--line); borde
 .publication-settings > label { display: block; margin-bottom: .6rem; font-weight: 700; }
 .publication-settings select { width: 100%; min-height: 44px; padding: .65rem; border: 1px solid var(--line, #dce4e1); border-radius: 8px; background: var(--surface, #fff); color: inherit; font: inherit; }
 .publication-settings .field-hint { line-height: 1.6; margin-bottom: 0; }
+.contact-color-shortcut { width: 100%; margin-block: 14px; }
+.color-grid input.color-hex { width: 100%; min-width: 0; margin-top: 6px; font-family: ui-monospace, monospace; }
+.color-grid input.color-hex:invalid { border-color: var(--danger); }
+.contact-color-sample { display: grid; gap: 9px; padding: 18px; margin-top: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--contact-form-background); }
+.contact-color-sample > span { color: var(--contact-label-text); font-size: 12px; font-weight: 700; }
+.contact-color-sample input { width: 100%; min-width: 0; background: var(--contact-field-background); color: var(--contact-field-text); border-color: var(--contact-field-border); }
+.contact-color-sample input:focus { border-color: var(--contact-field-focus); outline: 2px solid var(--contact-field-focus); outline-offset: 2px; }

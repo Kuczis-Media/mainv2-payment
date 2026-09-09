@@ -181,6 +181,12 @@
       if (config.id === 'contact') {
         const fields = { formBackgroundColor: '--contact-form-background', fieldBackgroundColor: '--contact-field-background', fieldTextColor: '--contact-field-text', fieldBorderColor: '--contact-field-border', fieldFocusColor: '--contact-field-focus', labelTextColor: '--contact-label-text' };
         Object.entries(fields).forEach(([key, variable]) => setStyle(section, variable, safeColor(config[key])));
+        // Set explicit field colors on the actual controls as well: neither a
+        // page palette nor an older cached stylesheet may cover a custom value.
+        section.querySelectorAll('form input:not([type="hidden"]):not([type="submit"]), form textarea').forEach((input) => {
+          setStyle(input, 'background-color', safeColor(config.fieldBackgroundColor));
+          setStyle(input, 'color', safeColor(config.fieldTextColor));
+        });
       }
       const targets = COPY_TARGETS[config.id];
       setText(section, targets.title, config.title);
