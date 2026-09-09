@@ -802,31 +802,6 @@ html[data-theme="dark"] .resource-card:focus-within {
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.3);
 }
 
-html[data-theme="dark"] .resource-card[data-kind="video"] {
-  --icon-color: #ff9ba3;
-  --icon-background: #402127;
-}
-
-html[data-theme="dark"] .resource-card[data-kind="document"] {
-  --icon-color: #9ebbea;
-  --icon-background: #202f48;
-}
-
-html[data-theme="dark"] .resource-card[data-kind="exercise"] {
-  --icon-color: #c6a6e8;
-  --icon-background: #332642;
-}
-
-html[data-theme="dark"] .resource-card[data-kind="calculator"] {
-  --icon-color: #efbd72;
-  --icon-background: #3c301d;
-}
-
-html[data-theme="dark"] .resource-card[data-kind="contact"] {
-  --icon-color: #8fc6da;
-  --icon-background: #1d3540;
-}
-
 html[data-theme="dark"] .section-notice,
 html[data-theme="dark"] .admin-guidance,
 html[data-theme="dark"] .admin-timed-status,
@@ -1495,6 +1470,9 @@ html[data-theme="dark"] .accordion-children .accordion-children .accordion-child
 }
 
 .resource-card {
+  --module-icon-tint: color-mix(in srgb, var(--surface) 70%, var(--card-accent, #64b8a8));
+  --module-icon-start: color-mix(in srgb, var(--module-icon-tint) 34%, #111c2e);
+  --module-icon-end: color-mix(in srgb, var(--module-icon-tint) 16%, #111c2e);
   position: relative;
   display: flex;
   min-height: 180px;
@@ -1502,7 +1480,7 @@ html[data-theme="dark"] .accordion-children .accordion-children .accordion-child
   flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 17px;
+  border-radius: 20px;
   box-shadow: var(--shadow-sm);
   transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
 }
@@ -1628,7 +1606,7 @@ html[data-theme="dark"] .accordion-children .accordion-children .accordion-child
   left: 25px;
   height: 2px;
   content: "";
-  background: var(--card-accent, #64b8a8);
+  background: linear-gradient(90deg, var(--card-accent, #64b8a8), color-mix(in srgb, var(--surface) 65%, var(--card-accent, #64b8a8)));
   border-radius: 0 0 4px 4px;
   opacity: 0;
   transition: opacity 180ms ease;
@@ -1651,13 +1629,19 @@ html[data-theme="dark"] .accordion-children .accordion-children .accordion-child
   display: grid;
   width: 43px;
   height: 43px;
+  flex-shrink: 0;
   margin-bottom: 16px;
   place-items: center;
-  color: var(--icon-color, #176b5f);
-  background: var(--icon-background, #e7f4f1);
+  color: #ffffff;
+  background: #263848;
+  background: linear-gradient(145deg, var(--module-icon-start), var(--module-icon-end));
+  border: 1px solid rgba(255, 255, 255, .24);
   border-radius: 13px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), 0 5px 12px rgba(8, 18, 32, .16);
   font-size: 19px;
+  font-weight: 750;
   line-height: 1;
+  transition: box-shadow 180ms ease;
 }
 
 .card-icon.is-text-icon {
@@ -1668,32 +1652,22 @@ html[data-theme="dark"] .accordion-children .accordion-children .accordion-child
 
 .resource-card[data-kind="video"] {
   --card-accent: #d96d74;
-  --icon-color: #ad3f48;
-  --icon-background: #fdecee;
 }
 
 .resource-card[data-kind="document"] {
   --card-accent: #6c91cd;
-  --icon-color: #426ba9;
-  --icon-background: #edf3fc;
 }
 
 .resource-card[data-kind="exercise"] {
   --card-accent: #9a75c5;
-  --icon-color: #74509e;
-  --icon-background: #f4eefb;
 }
 
 .resource-card[data-kind="calculator"] {
   --card-accent: #e3a344;
-  --icon-color: #9b6719;
-  --icon-background: #fff5e5;
 }
 
 .resource-card[data-kind="contact"] {
   --card-accent: #5b9bb4;
-  --icon-color: #36768e;
-  --icon-background: #e9f5f9;
 }
 
 .resource-card h3 {
@@ -4684,7 +4658,22 @@ html[data-theme="dark"] .admin-content-config-grid input {
 .landing-delivery-toggle input { width: 22px; height: 22px; accent-color: var(--primary, #176b54); }
 .landing-delivery-form .admin-editor-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 
+/* Cosmetic only: keep the card link, progress controls and sequence layout intact. */
+.resource-card:focus-within .card-icon {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2), 0 7px 16px rgba(8, 18, 32, .22);
+}
+.resource-card .card-link:focus-visible { outline: 3px solid var(--primary); outline-offset: 4px; }
+.search-box:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 14%, transparent); }
+.welcome { border: 1px solid rgba(255, 255, 255, .16); }
+@media (prefers-reduced-motion: no-preference) {
+  .welcome, .card-grid > .resource-card:nth-child(-n+8) { animation: dashboard-arrive 380ms cubic-bezier(.2, .7, .3, 1) backwards; }
+  .card-grid > .resource-card:nth-child(2) { animation-delay: 35ms; }
+  .card-grid > .resource-card:nth-child(3) { animation-delay: 70ms; }
+}
+@keyframes dashboard-arrive { from { opacity: .55; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
 @media (prefers-reduced-motion: reduce) {
+  .resource-card:hover, .resource-card:focus-within, .resource-card:hover .card-open span { transform: none; }
   html {
     scroll-behavior: auto;
   }

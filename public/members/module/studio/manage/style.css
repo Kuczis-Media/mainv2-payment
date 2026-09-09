@@ -31,4 +31,12 @@
   .management-header nav a { flex: 1; text-align: center; }
   .management-tabs .admin-tab { padding: 12px 8px; }
 }
+.management-header { background-image: linear-gradient(110deg, color-mix(in srgb, var(--primary) 5%, transparent), transparent 60%); }
+.management-tabs { padding: 6px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow-sm); }
+.management-tabs .admin-tab { border-radius: 12px; transition: background-color 160ms ease, box-shadow 160ms ease; }
+.management-tabs .admin-tab:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+@media (prefers-reduced-motion: no-preference) {
+  .management-heading { animation: management-arrive 300ms ease-out; }
+}
+@keyframes management-arrive { from { opacity: .6; transform: translateY(5px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }

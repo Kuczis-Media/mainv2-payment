@@ -177,4 +177,42 @@ button, input, textarea, select { font: inherit; }
   .exam-navigator-grid { grid-template-columns: repeat(6, 1fr); }
 }
 
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+/* Quiet assessment surfaces: no layout shifts, countdown animation or moving answers. */
+.exam-start, .exam-question-area, .exam-result-card {
+  border-color: color-mix(in srgb, var(--exam-primary) 16%, var(--exam-line));
+  box-shadow: 0 8px 30px rgba(12, 30, 47, .07), 0 1px 2px rgba(12, 30, 47, .04);
+}
+.exam-start-card, .exam-result-card {
+  background-image: radial-gradient(ellipse at 100% 0, color-mix(in srgb, var(--exam-primary) 7%, transparent), transparent 65%);
+}
+.exam-facts span { border: 1px solid var(--exam-line); }
+.exam-topbar-state strong { border: 1px solid var(--exam-line); letter-spacing: .025em; }
+.exam-navigator { box-shadow: 0 6px 24px rgba(12, 30, 47, .06); }
+.exam-progress-track span { background: linear-gradient(90deg, var(--exam-primary-dark), var(--exam-primary)); }
+.exam-option, .exam-text-answer, .exam-matching select, .exam-navigator-grid button {
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+.exam-option:has(input:checked) {
+  background: color-mix(in srgb, var(--exam-primary) 6%, var(--exam-surface));
+}
+.exam-option:focus-within { outline: 2px solid var(--exam-primary); outline-offset: 3px; }
+.exam-text-answer:focus, .exam-matching select:focus { outline: 2px solid var(--exam-primary); outline-offset: 2px; }
+.exam-button { transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease; }
+.exam-button.is-primary { box-shadow: 0 4px 12px color-mix(in srgb, var(--exam-primary-dark) 20%, transparent); }
+.exam-button:focus-visible, .exam-flag-button:focus-visible, .exam-navigator-grid button:focus-visible { outline: 3px solid var(--exam-primary); outline-offset: 3px; }
+.exam-result-metrics div { border: 1px solid var(--exam-line); }
+@media (hover: hover) and (pointer: fine) {
+  .exam-option:has(input:not(:disabled)):hover { border-color: var(--exam-primary); }
+  .exam-button:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(12, 30, 47, .12); }
+  .exam-button:not(:disabled):active { transform: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .exam-start, .exam-result-card { animation: exam-arrive 350ms ease-out backwards; }
+  .exam-question { animation: exam-question-reveal 180ms ease-out; }
+}
+@keyframes exam-arrive { from { opacity: .6; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes exam-question-reveal { from { opacity: .7; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+  .exam-button:not(:disabled):hover { transform: none; }
+}

@@ -403,6 +403,7 @@ button {
 }
 
 .project-card {
+  --project-icon-tint: color-mix(in srgb, var(--chem-surface) 50%, var(--card-color));
   position: relative;
   display: grid;
   min-width: 0;
@@ -413,7 +414,7 @@ button {
   gap: 23px;
   overflow: hidden;
   color: var(--chem-text);
-  background: color-mix(in srgb, var(--chem-surface) 94%, transparent);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--card-color) 4%, var(--chem-surface)), var(--chem-surface));
   border: 1px solid var(--chem-line);
   border-radius: 28px;
   box-shadow: var(--chem-shadow-sm);
@@ -1211,10 +1212,12 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
   aspect-ratio: 1;
   place-self: start;
   place-items: center;
-  color: var(--card-color);
-  background: color-mix(in srgb, var(--card-color) 12%, var(--chem-surface));
-  border: 1px solid color-mix(in srgb, var(--card-color) 26%, var(--chem-line));
+  color: #ffffff;
+  background: #263848;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--project-icon-tint) 34%, #111c2e), color-mix(in srgb, var(--project-icon-tint) 16%, #111c2e));
+  border: 1px solid rgba(255, 255, 255, .24);
   border-radius: 20px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), 0 7px 16px rgba(8, 18, 32, .14);
 }
 
 .project-icon svg {
@@ -1274,7 +1277,10 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
   align-self: center;
   place-items: center;
   color: var(--card-color);
-  font-size: 1.8rem;
+  background: color-mix(in srgb, var(--card-color) 10%, var(--chem-surface));
+  border: 1px solid color-mix(in srgb, var(--card-color) 20%, var(--chem-line));
+  border-radius: 50%;
+  font-size: 1.4rem;
   line-height: 1;
   text-decoration: none;
   transition: transform 180ms ease;
@@ -6357,7 +6363,7 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
 .tool-switch label { color: var(--chem-muted); font-size: .65rem; font-weight: 750; }
 .tool-switch select { width: 100%; min-height: 28px; border: 0; background: transparent; color: var(--chem-text); font: inherit; font-size: .83rem; font-weight: 750; }
 .tool-switch option, .tool-switch optgroup { background: var(--chem-surface); color: var(--chem-text); }
-.tool-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; margin: 24px 0 12px; }
+.tool-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; margin: 24px 0 12px; padding: 14px; background: color-mix(in srgb, var(--chem-surface) 85%, transparent); border: 1px solid var(--chem-line); border-radius: 20px; }
 .tool-categories { display: flex; flex-wrap: wrap; gap: 8px; flex: 1; }
 .tool-categories button { min-height: 40px; padding: 10px 15px; border: 1px solid var(--chem-line); border-radius: 999px; background: var(--chem-surface); color: var(--chem-text); font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; }
 .tool-categories button[aria-pressed="true"] { background: var(--chem-primary); border-color: var(--chem-primary); color: var(--chem-primary-contrast, #fff); }
@@ -6377,4 +6383,35 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
   .tool-switch { position: fixed; bottom: 10px; right: 12px; left: 12px; min-width: 0; z-index: 101; padding: 8px 14px; background: var(--chem-surface); box-shadow: var(--chem-shadow-lg); }
   .tool-search { width: 100%; }
   .home-view .project-card { padding: 20px; gap: 14px; min-height: 150px; }
+}
+
+/* Surface polish stays outside the movable/resizable editor canvas. */
+.home-hero .eyebrow {
+  padding: 8px 13px;
+  border: 1px solid color-mix(in srgb, var(--chem-primary) 24%, var(--chem-line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--chem-primary) 5%, var(--chem-surface));
+}
+.tool-categories button, .tool-search input, .mode-switch button {
+  transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+.tool-search input:focus { border-color: var(--chem-primary); box-shadow: 0 0 0 3px var(--studio-focus); }
+.workspace-toolbar, .panel-heading {
+  background-image: linear-gradient(100deg, color-mix(in srgb, var(--chem-primary) 4%, transparent), transparent 60%);
+}
+.quiz-question-card:focus-within, .quiz-settings-card:focus-within {
+  border-color: var(--chem-primary);
+  box-shadow: 0 0 0 2px var(--studio-focus);
+}
+.project-card::before { pointer-events: none; transition: opacity 200ms ease; opacity: .55; }
+.project-card:is(:hover, :focus-visible)::before { opacity: 1; }
+@media (prefers-reduced-motion: no-preference) {
+  .home-hero, .project-card { animation: studio-arrive 400ms cubic-bezier(.2, .7, .3, 1) backwards; }
+  .project-choices > .project-card:nth-child(2) { animation-delay: 35ms; }
+  .project-choices > .project-card:nth-child(3) { animation-delay: 70ms; }
+}
+@keyframes studio-arrive { from { opacity: .55; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .project-card:hover, .project-card:is(:hover, :focus-visible) .project-arrow,
+  .button:hover:not(:disabled), .mini-button:hover:not(:disabled), .icon-button:hover:not(:disabled) { transform: none; }
 }
