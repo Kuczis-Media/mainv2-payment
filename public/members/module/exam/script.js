@@ -34,9 +34,12 @@
     signalTimes: new Map(),
     transitioning: false,
     pendingNavigationIndex: null,
+    navigationTask: null,
+    navigatorAttemptId: null,
     deadlineSaveFor: '',
     mutationQueue: Promise.resolve(),
-    objectUrls: [],
+    imageCache: new Map(),
+    imageCacheGeneration: 0,
     imageObserver: null
   };
 
@@ -129,6 +132,7 @@
     elements.questionList.addEventListener('click', questionAction);
     elements.theme.addEventListener('click', toggleTheme);
     window.addEventListener('pagehide', () => logLifecycle('leave', true));
+    window.addEventListener('chem-auth-user-changed', clearImageCache);
     document.documentElement.addEventListener('mouseleave', () => logSignal('cursor_leave'));
     document.addEventListener('copy', () => logSignal('copy'));
     document.addEventListener('paste', () => logSignal('paste'));
@@ -254,6 +258,8 @@
     state.signalTimes.clear();
     state.transitioning = false;
     state.pendingNavigationIndex = null;
+    state.navigationTask = null;
+    state.navigatorAttemptId = null;
     state.deadlineSaveFor = '';
     state.attempt = attempt;
     state.resultAttemptId = attempt?.attemptId || '';
@@ -356,7 +362,7 @@
   }
 
   function renderQuestions() {
-    revokeObjectUrls();
+    disconnectImageObserver();
     const indices = visibleIndices();
     elements.questionList.replaceChildren(...indices.map((index) => questionView(state.attempt.questions[index], index)));
     const first = indices[0] + 1;
@@ -545,6 +551,7 @@
   }
 
   async function flushPendingAnswers(explicit) {
+    if (state.navigationTask) await state.navigationTask;
     window.clearTimeout(state.saveTimer);
     state.saveTimer = 0;
     const pending = capturePendingAnswers();
@@ -579,6 +586,9 @@
   }
 
   async function navigateTo(targetIndex) {
+    if (!state.attempt || state.attempt.status !== 'active') return;
+    if (targetIndex === state.attempt.currentIndex) return;
+    if (canBrowseWhileSaving()) return navigateFreely(targetIndex);
     if (state.transitioning) return;
     const previousIndex = state.attempt.currentIndex;
     const previousHighestReachedIndex = state.attempt.highestReachedIndex;
@@ -627,6 +637,78 @@
     }
   }
 
+  function canBrowseWhileSaving() {
+    const navigation = state.attempt?.exam.navigation;
+    return state.attempt?.status === 'active' && state.attempt.exam.timing.mode !== 'question'
+      && navigation?.allowFreeNavigation && navigation.allowBack && navigation.allowSkip
+      && !navigation.requireAnswerBeforeNext;
+  }
+
+  function navigationBlocked() {
+    return state.transitioning && !canBrowseWhileSaving();
+  }
+
+  function navigateFreely(targetIndex) {
+    const error = localNavigationError(targetIndex);
+    if (error) { setMessage(elements.attemptMessage, ERROR_MESSAGES[error] || ERROR_MESSAGES.EXAM_UNAVAILABLE); return; }
+    const previousIndex = state.attempt.currentIndex;
+    const previousHighest = state.attempt.highestReachedIndex;
+    state.transitioning = true;
+    state.pendingNavigationIndex = targetIndex;
+    state.attempt.currentIndex = targetIndex;
+    state.attempt.highestReachedIndex = Math.max(previousHighest, targetIndex);
+    window.clearTimeout(state.saveTimer);
+    state.saveTimer = 0;
+    renderQuestions();
+    renderNavigator();
+    updateControls();
+    elements.saveState.textContent = 'Zapisywanie w tle…';
+    setMessage(elements.attemptMessage, '', false);
+    // Only one navigation writer. Rapid clicks update the desired destination
+    // immediately and coalesce into the latest index, not a request per click.
+    if (!state.navigationTask) state.navigationTask = syncFreeNavigation(previousIndex, previousHighest);
+    return state.navigationTask;
+  }
+
+  async function syncFreeNavigation(acknowledgedIndex, acknowledgedHighest) {
+    const attemptId = state.attempt.attemptId;
+    try {
+      while (state.pendingNavigationIndex != null && state.attempt.status === 'active') {
+        const targetIndex = state.pendingNavigationIndex;
+        const pending = capturePendingAnswers();
+        const payload = await mutate('navigate', { targetIndex, ...(pending.count ? { answers: pending.answers } : {}) });
+        if (state.attempt.attemptId !== attemptId) return;
+        acknowledgedIndex = payload.attempt.currentIndex;
+        acknowledgedHighest = payload.attempt.highestReachedIndex;
+        if (state.pendingNavigationIndex === targetIndex) state.pendingNavigationIndex = null;
+        acceptServerAttempt(payload.attempt, pending);
+        if (state.attempt.status !== 'active') { renderResult(state.attempt.result); break; }
+      }
+      elements.saveState.textContent = state.dirtyQuestions.size ? 'Nowsze zmiany czekają na zapis' : 'Odpowiedzi zapisane';
+    } catch (error) {
+      if (state.attempt.attemptId !== attemptId) return;
+      state.pendingNavigationIndex = null;
+      if (error.payload?.attempt) acceptServerAttempt(error.payload.attempt);
+      else {
+        state.attempt.currentIndex = acknowledgedIndex;
+        state.attempt.highestReachedIndex = acknowledgedHighest;
+      }
+      if (state.attempt.status === 'active') {
+        renderAttempt();
+        scheduleAnswerSave();
+        elements.saveState.textContent = 'Zmiany lokalne zachowane — zapis nie został potwierdzony';
+        setMessage(elements.attemptMessage, errorMessage(error));
+      } else renderResult(state.attempt.result);
+    } finally {
+      if (state.attempt.attemptId === attemptId) {
+        state.transitioning = false;
+        state.pendingNavigationIndex = null;
+        state.navigationTask = null;
+        if (state.attempt.status === 'active') { renderNavigator(); updateControls(); }
+      }
+    }
+  }
+
   function localNavigationError(targetIndex) {
     if (!Number.isSafeInteger(targetIndex) || targetIndex < 0 || targetIndex >= state.attempt.totalQuestions) {
       return 'INVALID_QUESTION_INDEX';
@@ -647,6 +729,7 @@
   }
 
   async function toggleFlag() {
+    if (state.transitioning) return;
     const question = state.attempt.questions[state.attempt.currentIndex];
     const flagged = !state.attempt.flags.includes(question.questionId);
     window.clearTimeout(state.saveTimer);
@@ -686,6 +769,7 @@
   }
 
   async function confirmQuestion(questionId) {
+    if (state.transitioning) return;
     window.clearTimeout(state.saveTimer);
     state.saveTimer = 0;
     const pending = capturePendingAnswers();
@@ -711,6 +795,8 @@
   }
 
   async function submitAttempt() {
+    if (state.navigationTask) await state.navigationTask;
+    if (state.attempt?.status !== 'active') return;
     const answered = Object.values(state.attempt.answers || {}).filter(answerPresent).length;
     const unanswered = state.attempt.totalQuestions - answered;
     if (unanswered > 0 && !window.confirm(`Pozostało ${unanswered} pytań bez odpowiedzi. Zakończyć próbę?`)) return;
@@ -734,16 +820,20 @@
   }
 
   function mutate(action, body) {
-    const operation = () => client.mutate(action, {
-      ...state.reference,
-      preview: state.preview,
-      body: {
-        attemptId: state.attempt.attemptId,
-        revision: state.attempt.revision,
-        operationId: operationId(),
-        ...body
-      }
-    });
+    const attemptId = state.attempt.attemptId;
+    const operation = () => {
+      if (state.attempt?.attemptId !== attemptId) throw new Error('ATTEMPT_CHANGED');
+      return client.mutate(action, {
+        ...state.reference,
+        preview: state.preview,
+        body: {
+          attemptId,
+          revision: state.attempt.revision,
+          operationId: operationId(),
+          ...body
+        }
+      });
+    };
     const result = state.mutationQueue.then(operation, operation);
     state.mutationQueue = result.catch(() => undefined);
     return result;
@@ -789,21 +879,37 @@
     elements.progressCopy.textContent = `${answered}/${state.attempt.totalQuestions}`;
     elements.progressBar.style.width = `${state.attempt.totalQuestions ? (answered / state.attempt.totalQuestions) * 100 : 0}%`;
     elements.navigator.hidden = !state.attempt.exam.navigation.allowFreeNavigation && state.attempt.exam.display.mode !== 'all';
-    elements.navigatorGrid.replaceChildren(...state.attempt.questions.map((question, index) => {
-      const button = document.createElement('button'); button.type = 'button'; button.textContent = String(index + 1); button.dataset.questionIndex = String(index);
-      button.classList.toggle('is-current', visibleIndices().includes(index));
+    if (state.navigatorAttemptId !== state.attempt.attemptId || elements.navigatorGrid.children.length !== state.attempt.questions.length) {
+      elements.navigatorGrid.replaceChildren(...state.attempt.questions.map((question, index) => {
+        const button = document.createElement('button'); button.type = 'button'; button.textContent = String(index + 1); button.dataset.questionIndex = String(index);
+        return button;
+      }));
+      state.navigatorAttemptId = state.attempt.attemptId;
+    }
+    const visible = new Set(visibleIndices());
+    const flagged = new Set(state.attempt.flags);
+    Array.from(elements.navigatorGrid.children).forEach((button, index) => {
+      const question = state.attempt.questions[index];
+      button.classList.toggle('is-current', visible.has(index));
+      button.setAttribute('aria-current', visible.has(index) ? 'step' : 'false');
       button.classList.toggle('is-answered', answerPresent(state.attempt.answers[question.questionId]));
-      button.classList.toggle('is-flagged', state.attempt.flags.includes(question.questionId));
-      button.disabled = state.transitioning
+      button.classList.toggle('is-flagged', flagged.has(question.questionId));
+      button.disabled = navigationBlocked()
         || (!state.attempt.exam.navigation.allowFreeNavigation && index > state.attempt.highestReachedIndex + 1);
-      return button;
-    }));
+    });
   }
 
   function updateControls() {
     const indices = visibleIndices();
-    elements.previous.disabled = state.transitioning || indices[0] === 0 || !state.attempt.exam.navigation.allowBack;
-    elements.next.disabled = state.transitioning || indices.at(-1) >= state.attempt.totalQuestions - 1;
+    elements.flag.disabled = state.transitioning;
+    elements.save.disabled = state.transitioning;
+    elements.submit.disabled = state.transitioning;
+    elements.questionList.querySelectorAll('[data-confirm-question]').forEach((button) => {
+      button.disabled = Boolean(state.transitioning || state.attempt.confirmedQuestionIds?.includes(button.dataset.confirmQuestion)
+        || state.attempt.timedOutQuestionIds?.includes(button.dataset.confirmQuestion));
+    });
+    elements.previous.disabled = navigationBlocked() || indices[0] === 0 || !state.attempt.exam.navigation.allowBack;
+    elements.next.disabled = navigationBlocked() || indices.at(-1) >= state.attempt.totalQuestions - 1;
     elements.next.hidden = state.attempt.exam.display.mode === 'all';
     elements.previous.hidden = state.attempt.exam.display.mode === 'all';
     elements.submit.hidden = state.attempt.exam.display.mode !== 'all' && indices.at(-1) < state.attempt.totalQuestions - 1;
@@ -996,7 +1102,6 @@
     try {
       const url = await protectedImageUrl(image.dataset.examImageRef);
       if (!image.isConnected) {
-        URL.revokeObjectURL(url);
         return;
       }
       image.src = url;
@@ -1006,6 +1111,40 @@
   }
 
   async function protectedImageUrl(ref) {
+    const key = JSON.stringify([state.reference, state.preview, ref]);
+    const cached = state.imageCache.get(key);
+    if (cached && (cached.pending || cached.expiresAt > Date.now())) {
+      state.imageCache.delete(key);
+      state.imageCache.set(key, cached);
+      return cached.promise;
+    }
+    if (cached?.url) URL.revokeObjectURL(cached.url);
+    const generation = state.imageCacheGeneration;
+    const entry = { pending: true, size: 0, url: '', expiresAt: 0 };
+    entry.promise = fetchProtectedImageBlob(ref).then((blob) => {
+      if (generation !== state.imageCacheGeneration) throw new Error('AUTH_EXPIRED');
+      entry.url = URL.createObjectURL(blob);
+      entry.size = blob.size;
+      entry.pending = false;
+      entry.expiresAt = Date.now() + 15 * 60 * 1000;
+      let bytes = Array.from(state.imageCache.values()).reduce((sum, item) => sum + item.size, 0);
+      for (const [oldKey, old] of state.imageCache) {
+        if (state.imageCache.size <= 96 && bytes <= 64 * 1024 * 1024) break;
+        if (old.pending || old === entry) continue;
+        URL.revokeObjectURL(old.url);
+        state.imageCache.delete(oldKey);
+        bytes -= old.size;
+      }
+      return entry.url;
+    }).catch((error) => {
+      if (state.imageCache.get(key) === entry) state.imageCache.delete(key);
+      throw error;
+    });
+    state.imageCache.set(key, entry);
+    return entry.promise;
+  }
+
+  async function fetchProtectedImageBlob(ref) {
     const library = window.ChemContentLibrary;
     if (library?.readMediaBlob) {
       const shared = String(ref || '').startsWith('assets/shared/');
@@ -1016,20 +1155,23 @@
         reference: ref,
         repositoryId: state.reference.repositoryId
       });
-      const url = URL.createObjectURL(blob);
-      state.objectUrls.push(url);
-      return url;
+      return blob;
     }
     const token = await window.ChemAuth.getAccessToken();
     const response = await fetch(client.imageUrl({ ...state.reference, preview: state.preview }, ref), { headers: { Authorization: `Bearer ${token}` }, credentials: 'same-origin' });
     if (!response.ok) throw new Error('IMAGE_UNAVAILABLE');
-    const url = URL.createObjectURL(await response.blob()); state.objectUrls.push(url); return url;
+    return response.blob();
   }
 
-  function revokeObjectUrls() {
+  function disconnectImageObserver() {
     state.imageObserver?.disconnect();
     state.imageObserver = null;
-    state.objectUrls.splice(0).forEach((url) => URL.revokeObjectURL(url));
+  }
+
+  function clearImageCache() {
+    state.imageCacheGeneration++;
+    state.imageCache.forEach((entry) => { if (entry.url) URL.revokeObjectURL(entry.url); });
+    state.imageCache.clear();
   }
 
   function initializeTheme() {
