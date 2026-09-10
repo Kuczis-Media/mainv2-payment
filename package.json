@@ -8,8 +8,8 @@
   },
   "scripts": {
     "dev": "netlify dev",
-    "build": "node --test",
-    "test": "node --test",
+    "build": "node scripts/run-tests.cjs",
+    "test": "node scripts/run-tests.cjs",
     "start": "netlify dev"
   },
   "devDependencies": {
