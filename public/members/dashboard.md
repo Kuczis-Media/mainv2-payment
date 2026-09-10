@@ -14,7 +14,7 @@
 
 # Przykładowy kurs chemii organicznej
 
-Kompletny zestaw demonstracyjny ChemDisk: lekcja, prezentacje, quiz, egzamin, prompt AI, materiały Google oraz wszystkie klocki dostępne w Studio Dashboardu.
+Kompletny zestaw demonstracyjny NextMed: lekcja, prezentacje, quiz, egzamin, prompt AI, materiały Google oraz wszystkie klocki dostępne w Studio Dashboardu.
 
 > Zacznij od uporządkowanej ścieżki. Kolejny materiał odblokuje się po ukończeniu poprzedniego.
 
@@ -32,11 +32,11 @@ Wykonaj kolejno prezentację, lekcję, quiz i egzamin.
 - [3. Chemia organiczna — quiz](/members/module/quiz/?repo=repo-testowe&quiz=quiz-chemia-organiczna) — Cztery typy pytań przygotowane w Quiz Builderze.
 - [4. Chemia organiczna — egzamin](/members/module/exam/?repo=repo-testowe&exam=egzamin-chemia-organiczna) — Pełny egzamin obejmujący wszystkie typy zadań Exam Studio.
 
-### Materiały natywne ChemDisk
+### Materiały natywne NextMed
 
 Te karty sprawdzają materiały przechowywane w prywatnym repozytorium testowym.
 
-- [Prezentacja ChemDisk — aldehydy](/members/module/presentation/?repo=repo-testowe&presentation=prezentacja-aldehydy) — Natywna prezentacja z Presentation Studio.
+- [Prezentacja NextMed — aldehydy](/members/module/presentation/?repo=repo-testowe&presentation=prezentacja-aldehydy) — Natywna prezentacja z Presentation Studio.
 - [Lekcja — chemia organiczna](/members/module/lesson/?repo=repo-testowe&file=lekcja-chemia-organiczna.md) — Bezpośrednie otwarcie kompletnej lekcji przykładowej.
 - [Quiz — chemia organiczna](/members/module/quiz/?repo=repo-testowe&quiz=quiz-chemia-organiczna) — Bezpośrednie otwarcie quizu przykładowego.
 - [Egzamin — chemia organiczna](/members/module/exam/?repo=repo-testowe&exam=egzamin-chemia-organiczna) — Bezpośrednie otwarcie egzaminu przykładowego.
@@ -55,7 +55,7 @@ Prawdziwe identyfikatory przekazane do zestawu demonstracyjnego.
 ### Filmy i odtwarzacze
 
 - [Ciekawostka chemiczna 1 — Film](/members/module/film/?id=sU6epNBjvzo&type=1) — YouTube w chronionym odtwarzaczu Film.
-- [Ciekawostka chemiczna 2 — Odtwarzacz YT](/members/module/yt/?id=PG6fB57aAoA) — YouTube z własnymi kontrolkami ChemDisk.
+- [Ciekawostka chemiczna 2 — Odtwarzacz YT](/members/module/yt/?id=PG6fB57aAoA) — YouTube z własnymi kontrolkami NextMed.
 - [Ciekawostka chemiczna 3 — pełny YouTube](/members/module/film/?id=kOoRildWO0s&type=3) — Film z pełniejszym interfejsem YouTube.
 
 ## Narzędzia Studio

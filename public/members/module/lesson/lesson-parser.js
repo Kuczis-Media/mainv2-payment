@@ -1102,19 +1102,19 @@
     if (type === 'presentation') {
       const repository = safeRepositoryId(values.repository || 'default');
       const presentationId = String(values.presentation || '').trim().toLowerCase();
-      const title = String(values.title || 'Prezentacja ChemDisk').trim();
-      const description = String(values.description || 'Otwórz prezentację przygotowaną w ChemDisk.').trim();
+      const title = String(values.title || 'Prezentacja').trim();
+      const description = String(values.description || 'Otwórz prezentację przygotowaną na platformie.').trim();
       const button = String(values.button || 'Otwórz prezentację').trim();
       if (!repository || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(presentationId) || !title || !button) {
         return '<p class="lesson-interactive-error">Nieprawidłowe odwołanie do prezentacji.</p>';
       }
       const href = `/members/module/presentation/?repo=${encodeURIComponent(repository)}&amp;presentation=${encodeURIComponent(presentationId)}`;
-      return `<section class="lesson-support-card lesson-presentation-card" data-presentation-repository="${escapeHtml(repository)}" data-presentation-id="${escapeHtml(presentationId)}"><span class="lesson-support-icon" aria-hidden="true">S</span><span class="lesson-support-copy"><small>Prezentacja ChemDisk</small><strong>${escapeHtml(title)}</strong><span>${escapeHtml(description)}</span></span><a class="lesson-support-action" href="${href}">${escapeHtml(button)} <b aria-hidden="true">→</b></a></section>`;
+      return `<section class="lesson-support-card lesson-presentation-card" data-presentation-repository="${escapeHtml(repository)}" data-presentation-id="${escapeHtml(presentationId)}"><span class="lesson-support-icon" aria-hidden="true">S</span><span class="lesson-support-copy"><small>Prezentacja</small><strong>${escapeHtml(title)}</strong><span>${escapeHtml(description)}</span></span><a class="lesson-support-action" href="${href}">${escapeHtml(button)} <b aria-hidden="true">→</b></a></section>`;
     }
     if (type === 'quiz') {
       const repository = safeRepositoryId(values.repository || 'default');
       const quizId = String(values.quiz || '').trim().toLowerCase();
-      const title = String(values.title || 'Quiz ChemDisk').trim();
+      const title = String(values.title || 'Quiz').trim();
       const description = String(values.description || 'Rozwiąż quiz przygotowany do tej lekcji.').trim();
       const button = String(values.button || 'Otwórz quiz').trim();
       if (!repository || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(quizId) || !title || !button) {
@@ -1122,7 +1122,7 @@
       }
       const materialId = `quiz:${repository}:${quizId}`.slice(0, 128);
       const href = `/members/module/quiz/?repo=${encodeURIComponent(repository)}&amp;quiz=${encodeURIComponent(quizId)}&amp;material=${encodeURIComponent(materialId)}`;
-      return `<section class="lesson-support-card lesson-quiz-card" data-quiz-repository="${escapeHtml(repository)}" data-quiz-id="${escapeHtml(quizId)}" data-quiz-material="${escapeHtml(materialId)}"><span class="lesson-support-icon" aria-hidden="true">Q</span><span class="lesson-support-copy"><small>Quiz ChemDisk</small><strong>${escapeHtml(title)}</strong><span>${escapeHtml(description)}</span></span><a class="lesson-support-action" href="${href}">${escapeHtml(button)} <b aria-hidden="true">→</b></a></section>`;
+      return `<section class="lesson-support-card lesson-quiz-card" data-quiz-repository="${escapeHtml(repository)}" data-quiz-id="${escapeHtml(quizId)}" data-quiz-material="${escapeHtml(materialId)}"><span class="lesson-support-icon" aria-hidden="true">Q</span><span class="lesson-support-copy"><small>Quiz</small><strong>${escapeHtml(title)}</strong><span>${escapeHtml(description)}</span></span><a class="lesson-support-action" href="${href}">${escapeHtml(button)} <b aria-hidden="true">→</b></a></section>`;
     }
     if (type === 'pdf') {
       const protection = ['1', '2', '3', '4', '5'].includes(String(values.protection || values.type || '1'))
@@ -1150,7 +1150,7 @@
     if (type === 'aihelp') {
       const title = String(values.title || 'Masz pytanie do tego slajdu?').trim();
       const description = String(
-        values.description || 'Otwórz ChemDisk AI z treścią tego slajdu jako kontekstem.'
+        values.description || 'Otwórz asystenta AI z treścią tego slajdu jako kontekstem.'
       ).trim();
       const button = String(values.button || 'Zapytaj AI').trim();
       const rawPrompt = String(values.prompt || '').trim();
@@ -1224,7 +1224,7 @@
       const repository = safeRepositoryId(values.repository || 'default');
       const examId = String(values.exam || '').trim().toLowerCase();
       const title = String(values.title || 'Egzamin').trim();
-      const description = String(values.description || 'Rozwiąż egzamin i zapisz wynik w ChemDisk.').trim();
+      const description = String(values.description || 'Rozwiąż egzamin i zapisz wynik na platformie.').trim();
       const button = String(values.button || 'Otwórz egzamin').trim();
       const requirement = ['optional', 'completed', 'passed', 'minimum_score'].includes(values.requirement)
         ? values.requirement : 'optional';
@@ -1234,7 +1234,7 @@
       }
       const materialId = `exam:${repository}:${examId}`.slice(0, 128);
       const href = `/members/module/exam/?repo=${encodeURIComponent(repository)}&amp;exam=${encodeURIComponent(examId)}&amp;material=${encodeURIComponent(materialId)}`;
-      return `<section class="lesson-support-card lesson-exam-card" data-exam-repository="${escapeHtml(repository)}" data-exam-id="${escapeHtml(examId)}" data-exam-material="${escapeHtml(materialId)}" data-exam-requirement="${escapeHtml(requirement)}" data-exam-minimum-score="${minimumScore}"><span class="lesson-support-icon" aria-hidden="true">E</span><span class="lesson-support-copy"><small>Egzamin ChemDisk</small><strong>${escapeHtml(title)}</strong><span>${escapeHtml(description)}</span><em data-exam-state>Sprawdzanie wyniku…</em></span><a class="lesson-support-action" href="${href}">${escapeHtml(button)} <b aria-hidden="true">→</b></a></section>`;
+      return `<section class="lesson-support-card lesson-exam-card" data-exam-repository="${escapeHtml(repository)}" data-exam-id="${escapeHtml(examId)}" data-exam-material="${escapeHtml(materialId)}" data-exam-requirement="${escapeHtml(requirement)}" data-exam-minimum-score="${minimumScore}"><span class="lesson-support-icon" aria-hidden="true">E</span><span class="lesson-support-copy"><small>Egzamin</small><strong>${escapeHtml(title)}</strong><span>${escapeHtml(description)}</span><em data-exam-state>Sprawdzanie wyniku…</em></span><a class="lesson-support-action" href="${href}">${escapeHtml(button)} <b aria-hidden="true">→</b></a></section>`;
     }
     if (type === 'linkcard') {
       const url = safeLinkCardUrl(values.url);

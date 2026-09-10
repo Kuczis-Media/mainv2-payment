@@ -151,7 +151,7 @@
     clearTimer();
     setView('start');
     const metadata = state.definition.metadata;
-    document.title = `${metadata.name} — ChemDisk`;
+    window.NextMedBrand ? window.NextMedBrand.setTitle(metadata.name) : (document.title = metadata.name + " — NextMed");
     elements.title.textContent = metadata.name;
     elements.description.textContent = metadata.description;
     elements.description.hidden = !metadata.description;

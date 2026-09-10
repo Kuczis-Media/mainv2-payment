@@ -61,7 +61,7 @@
 
   const MODULE_DEFINITIONS = deepFreeze({
     presentation: {
-      label: 'Prezentacja ChemDisk',
+      label: 'Prezentacja',
       icon: '▥',
       path: 'presentation',
       presentationLabel: 'ID prezentacji z biblioteki'
@@ -103,7 +103,7 @@
       idLabel: 'ID formularza Google'
     },
     quiz: {
-      label: 'Quiz ChemDisk',
+      label: 'Quiz',
       icon: 'Q',
       path: 'quiz',
       quizLabel: 'ID quizu z biblioteki'

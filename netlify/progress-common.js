@@ -842,7 +842,7 @@ function aggregateUser(userInput, catalogInput) {
     const numerator = roots.reduce((sum, item) => sum + item.aggregate.progressPercent * item.node.progress.weight, 0);
     const percent = denominator > 0 ? clamp(numerator / denominator) : 0;
     course = {
-      materialId: 'course', title: 'ChemDisk', materialType: 'course', progressPercent: percent,
+      materialId: 'course', title: 'Kurs', materialType: 'course', progressPercent: percent,
       status: percent >= 100 ? 'completed' : percent > 0 ? 'in_progress' : 'not_started',
       opened: roots.some((item) => item.aggregate.opened), tracked: catalog.global.tracking === 'ON',
       showProgress: catalog.global.showProgress === 'ON',

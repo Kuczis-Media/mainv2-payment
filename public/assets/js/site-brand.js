@@ -18,12 +18,26 @@
     mutedColor: ['--muted', '--chem-muted', '--page-muted']
   };
   const titleNode = document.querySelector('title[data-brand-title]');
+  // Some players finish loading before this deferred script executes.
+  // Preserve their material title when the brand arrives later.
+  if (titleNode && / — (?:NextMed|ChemDisk)$/.test(document.title)) {
+    titleNode.dataset.brandTitle = document.title.replace(/ — (?:NextMed|ChemDisk)$/, '');
+  }
   const iconNode = document.querySelector('link[rel~="icon"]');
   const fallbackIcon = imageUrl(iconNode?.getAttribute('href') || iconNode?.href);
   const pendingLogos = new WeakMap();
   const fallbackMarks = new WeakMap();
   let currentRevision = -1;
   let publicationVersion = '';
+  let currentName = 'NextMed';
+  window.NextMedBrand = {
+    get name() { return currentName; },
+    setTitle(value) {
+      const label = text(value, 240);
+      if (titleNode) titleNode.dataset.brandTitle = label;
+      document.title = `${label} — ${currentName}`;
+    }
+  };
   // Reuse the already declared favicon immediately, even while the public
   // configuration is loading/offline. No separate logo/config endpoint.
   applyLogo(fallbackIcon, '');
@@ -84,6 +98,7 @@
   function apply(model) {
     const brand = model.branding;
     const name = text(brand.brandName, 120);
+    currentName = name;
     currentRevision = model.revision;
     setText('[data-brand-name]', name);
     setText('[data-company-name]', text(brand.companyName, 160) || name);
@@ -96,10 +111,14 @@
       link.href = favicon;
       link.removeAttribute('type');
     });
-    const scope = window.NextMedAppearance?.scopeForPath(window.location?.pathname);
-    if (plainObject(brand.palettes?.[scope])) document.documentElement?.setAttribute('data-site-palette', scope);
-    else document.documentElement?.removeAttribute('data-site-palette');
-    applyPalette(window.NextMedAppearance?.paletteFor(brand, scope) || brand);
+    // Players opt into identity only: their own question/theme colors must
+    // not accidentally inherit the landing palette.
+    if (document.documentElement?.dataset?.brandPalette !== 'preserve') {
+      const scope = window.NextMedAppearance?.scopeForPath(window.location?.pathname);
+      if (plainObject(brand.palettes?.[scope])) document.documentElement?.setAttribute('data-site-palette', scope);
+      else document.documentElement?.removeAttribute('data-site-palette');
+      applyPalette(window.NextMedAppearance?.paletteFor(brand, scope) || brand);
+    }
     // Small shell marks must always match the tab icon; logoUrl remains the
     // separate wide logo setting for the landing page.
     applyLogo(favicon, name);

@@ -244,7 +244,7 @@
     elements.title.textContent = quiz.metadata.title;
     elements.description.textContent = quiz.metadata.description;
     elements.description.hidden = !quiz.metadata.description;
-    document.title = `${quiz.metadata.title} — ChemDisk`;
+    window.NextMedBrand ? window.NextMedBrand.setTitle(quiz.metadata.title) : (document.title = quiz.metadata.title + " — NextMed");
     elements.questionCount.textContent = String(quiz.questions.length);
     elements.threshold.textContent = `${quiz.settings.passingScore}%`;
     elements.points.textContent = String(quiz.questions.reduce((sum, question) => (

@@ -11,7 +11,7 @@ function model(branding = {}) {
   return { version: 3, revision: 2, branding: { brandName: 'TestMed', companyName: 'Test Company', primaryColor: '#112233', faviconUrl: 'https://example.com/favicon.png', ...branding }, sections: ids.map((id) => ({ id })) };
 }
 
-async function run({ cache, response = null, route, pathname = '/members/', logoSlots = 0 } = {}) {
+async function run({ cache, response = null, route, pathname = '/members/', logoSlots = 0, initialTitle = 'Panel kursanta — NextMed', preservePalette = false } = {}) {
   const storage = new Map(Object.entries(cache || {}));
   const names = [{ textContent: 'NextMed' }];
   const company = [{ textContent: 'NextMed' }];
@@ -38,26 +38,27 @@ async function run({ cache, response = null, route, pathname = '/members/', logo
   const styles = [];
   const calls = [];
   const document = {
-    title: 'Panel kursanta — NextMed',
-    documentElement: { attributes: {}, setAttribute(key, value) { this.attributes[key] = value; }, removeAttribute(key) { delete this.attributes[key]; } },
+    title: initialTitle,
+    documentElement: { dataset: { brandPalette: preservePalette ? 'preserve' : '' }, attributes: {}, setAttribute(key, value) { this.attributes[key] = value; }, removeAttribute(key) { delete this.attributes[key]; } },
     querySelector: (selector) => selector === 'title[data-brand-title]' ? title : selector === 'link[rel~="icon"]' ? icon : null,
     querySelectorAll: (selector) => ({ '[data-brand-name]': names, '[data-company-name]': company, 'link[rel~="icon"]': [icon], '[data-brand-logo-slot]': slots }[selector] || []),
     getElementById: (id) => styles.find((entry) => entry.id === id),
     createElement: node,
     head: { append: (node) => styles.push(node) }
   };
+  const browser = { setTimeout, clearTimeout, location: { pathname }, NextMedAppearance: require('../public/assets/js/site-appearance.js'), ...(route ? { NextMedLandingSource: { ready: Promise.resolve(route) }, NextMedLandingDelivery: require('../public/assets/js/landing-delivery-model.js') } : {}) };
   vm.runInNewContext(script, {
     document, URL, AbortController, Date,
-    window: { setTimeout, clearTimeout, location: { pathname }, NextMedAppearance: require('../public/assets/js/site-appearance.js'), ...(route ? { NextMedLandingSource: { ready: Promise.resolve(route) }, NextMedLandingDelivery: require('../public/assets/js/landing-delivery-model.js') } : {}) },
+    window: browser,
     localStorage: { getItem: (key) => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
     fetch: async (url, options) => { calls.push({ url, options }); return { ok: true, json: async () => response }; }
   });
   await new Promise((resolve) => setImmediate(resolve));
-  return { document, names, company, icon, styles, calls, storage, slots, images };
+  return { document, names, company, icon, styles, calls, storage, slots, images, brand: browser.NextMedBrand, titleNode: title };
 }
 
 test('shell logos use the favicon instead of the landing logo, with late loads unable to overwrite it', async () => {
-  for (const pathname of ['/members/', '/members/module/studio/', '/purchase/', '/time']) {
+  for (const pathname of ['/members/', '/members/module/studio/', '/purchase/', '/time', '/members/module/exam/', '/members/module/quiz/', '/members/module/lesson/', '/members/module/chat/', '/members/module/presentation/']) {
     const result = await run({ pathname, logoSlots: 2, cache: { 'chem.landing.public.v3': JSON.stringify({ model: model({ logoUrl: 'https://example.com/wide-logo.svg' }), checkedAt: Date.now() }) } });
     const current = result.images.filter((image) => image.src === result.icon.href);
     assert.equal(current.length, 2);
@@ -205,4 +206,42 @@ test('an older GitHub revision does not replace a newer cached brand', async () 
   });
   assert.equal(result.names[0].textContent, 'Recent');
   assert.equal(result.storage.has('nextmed.site-brand.v1'), false);
+});
+
+test('dynamic material titles keep the configured brand, including materials loaded before branding', async () => {
+  const result = await run({ initialTitle: 'Budowa komórki — NextMed', response: { active: true, model: model() } });
+  assert.equal(result.document.title, 'Budowa komórki — TestMed');
+  result.brand.setTitle('Egzamin końcowy');
+  assert.equal(result.document.title, 'Egzamin końcowy — TestMed');
+  assert.equal(result.titleNode.dataset.brandTitle, 'Egzamin końcowy');
+  assert.equal(result.brand.name, 'TestMed');
+});
+
+test('all student modules load shared branding in dependency order and no longer hard-code the old name', () => {
+  const path = require('node:path');
+  const modules = path.join(__dirname, '../public/members/module');
+  for (const directory of fs.readdirSync(modules, { withFileTypes: true }).filter((entry) => entry.isDirectory() && entry.name !== 'studio')) {
+    const filename = path.join(modules, directory.name, 'index.html');
+    if (!fs.existsSync(filename)) continue;
+    const html = fs.readFileSync(filename, 'utf8');
+    assert.doesNotMatch(html, /\bChemDisk\b/, directory.name);
+    assert.match(html, /<title data-brand-title=/, directory.name);
+    assert.match(html, /data-brand-palette="preserve"/, directory.name);
+    const scripts = ['landing-delivery-model', 'landing-source', 'site-appearance', 'site-brand'];
+    const indices = scripts.map((name) => html.indexOf(`/assets/js/${name}.js`));
+    assert.ok(indices.every((index, i) => index >= 0 && (!i || index > indices[i - 1])), directory.name);
+    if (['exam', 'quiz', 'presentation', 'lesson', 'chat'].includes(directory.name)) {
+      assert.match(html, /data-brand-logo-slot/, directory.name);
+      const player = fs.readFileSync(path.join(modules, directory.name, 'script.js'), 'utf8');
+      assert.doesNotMatch(player, /(?:document\.title|<strong>).*ChemDisk/);
+      if (directory.name !== 'chat') assert.match(player, /NextMedBrand\.setTitle/);
+    }
+  }
+});
+
+test('student player branding leaves existing question and theme palettes untouched', async () => {
+  const result = await run({ pathname: '/members/module/exam/', preservePalette: true, response: { active: true, model: model() } });
+  assert.equal(result.styles.length, 0);
+  assert.equal(result.names[0].textContent, 'TestMed');
+  assert.equal(result.icon.href, 'https://example.com/favicon.png');
 });

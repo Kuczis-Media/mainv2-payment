@@ -84,7 +84,7 @@ exports.handler = async (event = {}, context = {}) => {
           currency: config.currency,
           unit_amount: amount,
           product_data: {
-            name: `ChemDisk — dostęp na ${plan.label.toLocaleLowerCase('pl')}`,
+            name: `Dostęp do kursu na ${plan.label.toLocaleLowerCase('pl')}`,
             description: plan.durationLabel,
             metadata: {
               plan: plan.id,

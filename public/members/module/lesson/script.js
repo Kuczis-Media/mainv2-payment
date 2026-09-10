@@ -496,7 +496,7 @@
       if (!progressLoaded || !isCurrentLessonLoad(requestId)) return;
       updateSequenceControl();
 
-      document.title = `${state.lesson.title} — ChemDisk`;
+      window.NextMedBrand ? window.NextMedBrand.setTitle(state.lesson.title) : (document.title = state.lesson.title + " — NextMed");
       elements.lessonTitle.textContent = state.lesson.title;
       buildOutline();
       elements.loading.hidden = true;
@@ -1372,7 +1372,7 @@
     if (status === 429) {
       if (code === 'AI_RATE_LIMITED') return 'Dostawca AI chwilowo ogranicza ruch. Spróbuj ponownie później.';
       if (code === 'AI_CONCURRENT_REQUEST_LIMIT_REACHED') return 'Trwa zbyt wiele równoległych analiz. Spróbuj ponownie za chwilę.';
-      if (/_LIMIT_REACHED$/.test(code)) return 'Wykorzystano dostępny limit AI w ChemDisk.';
+      if (/_LIMIT_REACHED$/.test(code)) return 'Wykorzystano dostępny limit AI na platformie.';
       return 'Przekroczono chwilowy limit AI. Spróbuj ponownie później.';
     }
     const messages = {

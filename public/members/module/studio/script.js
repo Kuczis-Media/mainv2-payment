@@ -653,11 +653,11 @@
       slides: ['Nowa prezentacja', 'Otwórz prezentację do tego działu.'],
       pdf: ['Dokument PDF', 'Materiał do czytania lub pobrania.'],
       film: ['Nagranie lekcji', 'Obejrzyj nagranie w odtwarzaczu kursowym.'],
-      yt: ['Film YouTube', 'Nagranie z własnymi kontrolkami ChemDisk.'],
+      yt: ['Film YouTube', 'Nagranie z własnymi kontrolkami odtwarzacza.'],
       lesson: ['Lekcja interaktywna', 'Przejdź przez prezentację i zadania.'],
       forms: ['Test wiedzy', 'Sprawdź swoją wiedzę w formularzu.'],
       quiz: ['Quiz', 'Sprawdź swoją wiedzę. Wynik i postępy zostaną zapisane.'],
-      exam: ['Egzamin', 'Rozwiąż egzamin i zapisz wynik w ChemDisk.'],
+      exam: ['Egzamin', 'Rozwiąż egzamin i zapisz wynik na platformie.'],
       chat: ['Asystent AI', 'Skorzystaj z przygotowanej pomocy.'],
       kalkulator: ['Kalkulator naukowy', 'Wykonuj obliczenia potrzebne w zadaniach.'],
       classic: ['Kalkulator klasyczny', 'Szybkie podstawowe obliczenia.'],
@@ -817,9 +817,9 @@
         : asset.kind === 'exam'
           ? 'Karta egzaminu jest gotowa w dashboardzie.'
           : asset.kind === 'presentation'
-            ? 'Karta prezentacji ChemDisk jest gotowa w dashboardzie.'
+            ? 'Karta prezentacji jest gotowa w dashboardzie.'
             : asset.kind === 'quiz'
-              ? 'Karta quizu ChemDisk jest gotowa w dashboardzie.'
+              ? 'Karta quizu jest gotowa w dashboardzie.'
             : 'Karta AI jest gotowa; dla pliku TXT sprawdź numer punktu.'
     );
   }
@@ -1456,7 +1456,7 @@
         const presentations = state.contentLibrary.presentations
           .filter((asset) => !node.repositoryId || asset.repositoryId === node.repositoryId);
         form.append(field(
-          'Prezentacja ChemDisk',
+          'Prezentacja',
           materialPicker(textInput(node.presentationId, 'presentationId', { placeholder: 'Wyszukaj prezentację…' }), presentations, {
             type: 'Prezentacja',
             icon: 'S',
@@ -1474,7 +1474,7 @@
         const quizzes = state.contentLibrary.quizzes
           .filter((asset) => !node.repositoryId || asset.repositoryId === node.repositoryId);
         form.append(field(
-          'Quiz ChemDisk',
+          'Quiz',
           materialPicker(textInput(node.quizId, 'quizId', { placeholder: 'Wyszukaj quiz…' }), quizzes, {
             type: 'Quiz',
             icon: 'Q',
@@ -2303,7 +2303,7 @@
     if (type === 'presentation') {
       const firstPresentation = state.contentLibrary.presentations[0];
       return lessonModelApi.createBlock('presentation', {
-        title: firstPresentation?.title || 'Prezentacja ChemDisk',
+        title: firstPresentation?.title || 'Prezentacja',
         description: 'Otwórz prezentację przygotowaną do tej lekcji.',
         button: 'Otwórz prezentację',
         repositoryId: state.contentLibrary.selectedRepositoryId,
@@ -2313,7 +2313,7 @@
     if (type === 'quiz') {
       const firstQuiz = state.contentLibrary.quizzes[0];
       return lessonModelApi.createBlock('quiz', {
-        title: firstQuiz?.title || 'Quiz ChemDisk',
+        title: firstQuiz?.title || 'Quiz',
         description: 'Rozwiąż quiz przygotowany do tej lekcji.',
         button: 'Otwórz quiz',
         repositoryId: state.contentLibrary.selectedRepositoryId,
@@ -2361,7 +2361,7 @@
     if (type === 'ai') {
       return lessonModelApi.createBlock('ai', {
         title: 'Masz pytanie do tego slajdu?',
-        description: 'Otwórz ChemDisk AI — treść slajdu zostanie dołączona jako kontekst.',
+        description: 'Otwórz asystenta AI — treść slajdu zostanie dołączona jako kontekst.',
         button: 'Zapytaj AI',
         repositoryId: state.contentLibrary.selectedRepositoryId,
         promptFile: '',
@@ -2740,8 +2740,8 @@
     if (block.type === 'accordion') return block.title || 'Harmonijka';
     if (block.type === 'youtube') return block.title || 'Film YouTube';
     if (block.type === 'slides') return block.title || 'Prezentacja Google Slides';
-    if (block.type === 'presentation') return block.title || 'Prezentacja ChemDisk';
-    if (block.type === 'quiz') return block.title || 'Quiz ChemDisk';
+    if (block.type === 'presentation') return block.title || 'Prezentacja';
+    if (block.type === 'quiz') return block.title || 'Quiz';
     if (block.type === 'pdf') return block.title || 'Dokument PDF';
     if (block.type === 'exam') return block.title || 'Egzamin';
     if (block.type === 'atonom') return block.title || `ATONOM: ${block.formula}`;
@@ -3825,7 +3825,7 @@
           { value: 'sky', label: 'Błękitne' },
           { value: 'lavender', label: 'Lawendowe' },
           { value: 'sand', label: 'Piaskowe' },
-          { value: 'gradient', label: 'Gradient ChemDisk' },
+          { value: 'gradient', label: 'Gradient platformy' },
           { value: 'night', label: 'Nocne laboratorium' },
           { value: 'custom', label: 'Własny kolor' }
         ]),
@@ -5590,9 +5590,7 @@
       mathJax.addEventListener('load', () => typesetMath(doc.body, doc.defaultView), { once: true });
       doc.head.append(mathJax);
     }
-    doc.title = mode === 'dashboard'
-      ? 'Pełny podgląd dashboardu — ChemDisk'
-      : 'Pełny podgląd lekcji — ChemDisk';
+    doc.title = `${mode === 'dashboard' ? 'Pełny podgląd dashboardu' : 'Pełny podgląd lekcji'} — ${window.NextMedBrand?.name || 'NextMed'}`;
   }
 
   function renderFullPreviewWindow(mode, popup) {

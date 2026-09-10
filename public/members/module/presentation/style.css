@@ -5,7 +5,7 @@ html, body { min-height: 100%; }
 body { margin: 0; color: var(--player-text); background: var(--player-bg); font-family: Inter, system-ui, sans-serif; }
 .presentation-player-topbar { position: sticky; top: 0; z-index: 20; display: flex; min-height: 64px; padding: 9px 20px; align-items: center; justify-content: space-between; gap: 16px; background: color-mix(in srgb, var(--player-surface) 92%, transparent); border-bottom: 1px solid var(--player-line); backdrop-filter: blur(14px); }
 .presentation-player-topbar a, .presentation-player-topbar > div { display: flex; align-items: center; gap: 9px; color: inherit; text-decoration: none; }
-.presentation-player-topbar a span { display: grid; width: 35px; height: 35px; place-items: center; color: var(--player-accent); background: color-mix(in srgb, var(--player-accent) 12%, transparent); border-radius: 10px; }
+.presentation-player-topbar a > span { display: grid; width: 35px; height: 35px; place-items: center; color: var(--player-accent); background: color-mix(in srgb, var(--player-accent) 12%, transparent); border-radius: 10px; }
 .presentation-player-topbar strong { font-size: .78rem; }
 .presentation-player-topbar > div > span { color: var(--player-muted); font-size: .65rem; }
 .presentation-player-topbar button { min-height: 36px; padding: 0 11px; color: var(--player-text); background: var(--player-surface); border: 1px solid var(--player-line); border-radius: 9px; font: inherit; font-size: .63rem; font-weight: 800; cursor: pointer; }

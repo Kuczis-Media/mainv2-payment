@@ -292,8 +292,8 @@ const LESSON_CONTEXT_MAX_CHARS = 12_000;
   // ---------- Messages UI ----------
   function messageEl(role, html){ const d=document.createElement('div'); d.className=`message ${role}`; d.innerHTML=html; return d; }
   function addUserMessage(text){ const el=messageEl('user',`<strong>Ty</strong><div class="md">${escapeHtml(text)}</div>`); els.chats.appendChild(el); updateConversationState(); typesetMath(el); scrollToBottom(); return el; }
-  function addAssistantMessage(initial = '') { const el = messageEl('assistant', `<strong>ChemDisk AI</strong><div class="md">${initial || '<span class="typing"><i></i><i></i><i></i><span class="sr-only">Generowanie odpowiedzi…</span></span>'}</div>`); els.chats.appendChild(el); updateConversationState(); typesetMath(el); scrollToBottom(); return el; }
-  function updateAssistantMessage(el, html) { el.innerHTML = `<strong>ChemDisk AI</strong><div class="md">${html}</div>`; typesetMath(el); scrollToBottom(); }
+  function addAssistantMessage(initial = '') { const el = messageEl('assistant', `<strong>Asystent AI</strong><div class="md">${initial || '<span class="typing"><i></i><i></i><i></i><span class="sr-only">Generowanie odpowiedzi…</span></span>'}</div>`); els.chats.appendChild(el); updateConversationState(); typesetMath(el); scrollToBottom(); return el; }
+  function updateAssistantMessage(el, html) { el.innerHTML = `<strong>Asystent AI</strong><div class="md">${html}</div>`; typesetMath(el); scrollToBottom(); }
   function scrollToBottom(){ requestAnimationFrame(()=>window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'})); }
   function clearChats(){ if(!state.messages.length && !els.chats?.children.length) return; if(!confirm('Wyczyścić całą rozmowę?')) return; els.chats.innerHTML=''; state.messages=[]; localStorage.removeItem('chem.messages'); updateConversationState(); els.promptInput?.focus(); }
   function updateConversationState(){ document.body.classList.toggle('has-conversation', !!els.chats?.children.length); }
@@ -570,9 +570,9 @@ const LESSON_CONTEXT_MAX_CHARS = 12_000;
       if (/^AI_(?:GLOBAL|USER|MODULE|PROVIDER|CONFIG)_[A-Z]+(?:_(?:INPUT_TOKEN|OUTPUT_TOKEN|TOKEN|COST))?_LIMIT_REACHED$/.test(detail)) {
         const period = { HOUR: 'godzinowy', DAY: 'dzienny', WEEK: 'tygodniowy', MONTH: 'miesięczny', LIFETIME: 'łączny' };
         const match = detail.match(/^AI_[A-Z]+_([A-Z]+)/);
-        throw new Error(`Wykorzystano ${period[match?.[1]] || ''} limit AI w ChemDisk. Spróbuj po rozpoczęciu nowego okresu albo skontaktuj się z administratorem.`);
+        throw new Error(`Wykorzystano ${period[match?.[1]] || ''} limit AI na platformie. Spróbuj po rozpoczęciu nowego okresu albo skontaktuj się z administratorem.`);
       }
-      throw new Error('Przekroczono limit AI w ChemDisk. Spróbuj ponownie później.');
+      throw new Error('Przekroczono limit AI na platformie. Spróbuj ponownie później.');
     }
     if(!res.ok) {
       const friendlyErrors = {

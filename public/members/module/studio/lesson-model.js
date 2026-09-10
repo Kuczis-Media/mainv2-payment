@@ -446,8 +446,8 @@
     if (type === 'presentation') {
       return {
         ...base,
-        title: oneLine(source.title) || 'Prezentacja ChemDisk',
-        description: oneLine(source.description) || 'Otwórz prezentację przygotowaną w ChemDisk.',
+        title: oneLine(source.title) || 'Prezentacja',
+        description: oneLine(source.description) || 'Otwórz prezentację przygotowaną na platformie.',
         button: oneLine(source.button) || 'Otwórz prezentację',
         repositoryId: oneLine(source.repositoryId || source.repository).toLowerCase(),
         presentationId: oneLine(source.presentationId || source.presentation).toLowerCase()
@@ -456,7 +456,7 @@
     if (type === 'quiz') {
       return {
         ...base,
-        title: oneLine(source.title) || 'Quiz ChemDisk',
+        title: oneLine(source.title) || 'Quiz',
         description: oneLine(source.description) || 'Rozwiąż quiz przygotowany do tej lekcji.',
         button: oneLine(source.button) || 'Otwórz quiz',
         repositoryId: oneLine(source.repositoryId || source.repository).toLowerCase(),
@@ -509,7 +509,7 @@
       return {
         ...base,
         title: oneLine(source.title) || 'Masz pytanie do tego slajdu?',
-        description: oneLine(source.description) || 'Otwórz ChemDisk AI z treścią tego slajdu jako kontekstem.',
+        description: oneLine(source.description) || 'Otwórz asystenta AI z treścią tego slajdu jako kontekstem.',
         button: oneLine(source.button) || 'Zapytaj AI',
         repositoryId: oneLine(source.repositoryId || source.repository).toLowerCase(),
         promptFile,
@@ -549,7 +549,7 @@
       return {
         ...base,
         title: oneLine(source.title) || 'Egzamin',
-        description: oneLine(source.description) || 'Rozwiąż egzamin w bezpiecznym odtwarzaczu ChemDisk.',
+        description: oneLine(source.description) || 'Rozwiąż egzamin w bezpiecznym odtwarzaczu egzaminów.',
         button: oneLine(source.button) || 'Otwórz egzamin',
         repositoryId: oneLine(source.repositoryId || source.repository).toLowerCase(),
         examId: oneLine(source.examId || source.exam).toLowerCase(),

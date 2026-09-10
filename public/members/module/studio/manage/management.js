@@ -169,7 +169,7 @@
     CONTENT_REPOSITORY_CONFIG_PENDING_DEPLOY: 'W Netlify jest już nowsza konfiguracja oczekująca na deploy. Uruchom deploy, poczekaj na jego zakończenie i odśwież stronę.',
     CONTENT_REPOSITORY_DEFAULT_REQUIRED: 'Wybierz dokładnie jedno repozytorium domyślne.',
     CONTENT_REPOSITORY_DEFAULT_ID_RESERVED: 'ID „default” jest zarezerwowane dla repozytorium domyślnego. Zaznacz ten wpis jako domyślny albo nadaj mu inne ID.',
-    CONTENT_REPOSITORY_PRODUCTION_REQUIRED: 'Repozytoria można zmieniać tylko z produkcyjnego wdrożenia ChemDisk. Otwórz główny adres witryny Netlify.',
+    CONTENT_REPOSITORY_PRODUCTION_REQUIRED: 'Repozytoria można zmieniać tylko z produkcyjnego wdrożenia platformy. Otwórz główny adres witryny Netlify.',
     CONTENT_REPOSITORY_ROOT_NOT_DIRECTORY: 'Wskazany katalog główny jest plikiem, a nie folderem. Popraw pole „Katalog główny”.',
     CONTENT_REPOSITORY_SHARED_TOKEN_CONFLICT: 'Repozytoria korzystające z tej samej zmiennej ENV otrzymały różne tokeny. Wklej ten sam token tylko raz albo użyj osobnych zmiennych GITHUB_CONTENT_TOKEN_*.',
     GITHUB_CONTENT_RATE_LIMITED: 'GitHub wyczerpał limit zapytań dla tego tokenu. Poczekaj na odnowienie limitu i spróbuj ponownie.',

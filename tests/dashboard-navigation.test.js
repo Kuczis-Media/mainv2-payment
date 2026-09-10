@@ -45,8 +45,8 @@ test('dashboard binds immediate click, scroll and browser-history navigation tra
   assert.doesNotMatch(script, /new IntersectionObserver/);
 });
 
-test('every published page uses the same GitHub CDN favicon', () => {
-  const canonical = 'https://cdn.jsdelivr.net/gh/Kuczis-Media/logo@main/benzene-ring.svg';
+test('every published page uses a neutral shared favicon until configured branding loads', () => {
+  const canonical = '/assets/brand-fallback.svg';
   const htmlFiles = [];
   const visit = (directory) => fs.readdirSync(directory, { withFileTypes: true }).forEach((entry) => {
     const target = path.join(directory, entry.name);
