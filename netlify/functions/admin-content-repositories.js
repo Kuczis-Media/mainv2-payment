@@ -11,7 +11,7 @@ const {
 const contentRepository = require('../content-repository.js');
 
 const NETLIFY_API_BASE = 'https://api.netlify.com/api/v1';
-const GITHUB_API_BASE = 'https://api.github.com';
+const git = require('../git-provider.js');
 // A save can make several sequential Netlify calls. Keep every individual
 // request bounded so the whole synchronous Function still has time to return
 // a useful JSON error instead of being terminated at the platform limit.
@@ -26,7 +26,7 @@ const SAFE_REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const SAFE_REPOSITORY_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const SAFE_REF = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/;
 const SAFE_ROOT = /^(?:[A-Za-z0-9][A-Za-z0-9_.-]*\/)*[A-Za-z0-9][A-Za-z0-9_.-]*$/;
-const SAFE_TOKEN_ENV = /^GITHUB_CONTENT_TOKEN(?:_[A-Z0-9][A-Z0-9_]*)?$/;
+const SAFE_TOKEN_ENV = /^(?:GITHUB_CONTENT_TOKEN|GITHUB_TOKEN|GITEA_TOKEN)(?:_[A-Z0-9][A-Z0-9_]*)?$/;
 let mutationQueue = Promise.resolve();
 
 exports.handler = async (event = {}, context = {}) => {
@@ -49,7 +49,10 @@ exports.handler = async (event = {}, context = {}) => {
   const auth = await requireAdmin(event, context);
   if (!auth.ok) return responseForFailure(auth);
 
-  if (method === 'GET') return json(settingsView());
+  if (method === 'GET') {
+    try { return json(settingsView()); }
+    catch (error) { return json({ error: error?.code || 'CONTENT_REPOSITORY_ADMIN_UNAVAILABLE' }, error?.status || 503); }
+  }
 
   const parsed = parseJsonBody(event);
   if (!parsed.ok) return responseForFailure(parsed);
@@ -70,7 +73,13 @@ function settingsView() {
     configurationInvalid: current.invalid,
     netlifyConfigured: Boolean(netlifyConfig()),
     limits: { repositories: MAX_REPOSITORIES },
-    tokenHelpUrl: 'https://github.com/settings/personal-access-tokens/new'
+    provider: git.providerName(),
+    repositoriesEnvKey: git.repositoriesEnvKey(),
+    tokenEnvBase: git.tokenEnv(),
+    // Public connection metadata only; never send environment or token values.
+    baseUrl: git.settings().baseUrl,
+    apiUrl: git.settings().apiUrl,
+    tokenHelpUrl: git.providerName() === 'gitea' ? `${git.settings().baseUrl}/user/settings/applications` : 'https://github.com/settings/personal-access-tokens/new'
   };
 }
 
@@ -162,9 +171,9 @@ function normalizeRepository(value, index, current) {
   const tokenEnv = existing && SAFE_TOKEN_ENV.test(existing.tokenEnv || '')
     ? existing.tokenEnv
     : (value.default === true && !current.some((entry) => (
-      entry.tokenEnv === 'GITHUB_CONTENT_TOKEN' && (entry.token || entry.repository)
+      entry.tokenEnv === git.tokenEnv() && (entry.token || entry.repository)
     ))
-      ? 'GITHUB_CONTENT_TOKEN'
+      ? git.tokenEnv()
       : tokenEnvironmentForId(id));
   if (
     !SAFE_REPOSITORY_ID.test(id) || !label || label.length > 80 || hasUnsafeControls(label) ||
@@ -257,30 +266,19 @@ function normalizedSecret(value) {
 
 function tokenEnvironmentForId(id) {
   const suffix = String(id || '').toUpperCase().replace(/-/g, '_');
-  const value = `GITHUB_CONTENT_TOKEN_${suffix}`;
+  const value = `${git.tokenEnv()}_${suffix}`;
   if (!SAFE_TOKEN_ENV.test(value)) throw apiError('INVALID_CONTENT_REPOSITORIES', 400);
   return value;
 }
 
 async function testGitHubRepository(repository, token) {
-  const [owner, name] = repository.repository.split('/');
-  const path = repository.root
-    ? `/contents/${repository.root.split('/').map(encodeURIComponent).join('/')}`
-    : '/contents';
-  const repositoryPath = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
-  const contentsUrl = new URL(`${GITHUB_API_BASE}${repositoryPath}${path}`);
-  contentsUrl.searchParams.set('ref', repository.ref);
-  const branchUrl = new URL(`${GITHUB_API_BASE}${repositoryPath}/branches/${encodeURIComponent(repository.ref)}`);
-  const headers = {
-    Accept: 'application/vnd.github+json',
-    Authorization: `Bearer ${token}`,
-    'User-Agent': 'ChemDisk-content-configurator',
-    'X-GitHub-Api-Version': contentRepository.GITHUB_API_VERSION
-  };
+  const config = { ...repository, ...git.settings(), token };
   const [branchResponse, response] = await Promise.all([
-    request(branchUrl, { headers }),
-    request(contentsUrl, { headers })
+    git.request(config, git.apiUrl(config, repository.ref, false, 'branches')),
+    git.request(config, git.apiUrl(config, repository.root))
   ]);
+  git.assertGiteaAccess(config, branchResponse);
+  git.assertGiteaAccess(config, response);
   assertGitHubAccessResponse(branchResponse, 'CONTENT_REPOSITORY_BRANCH_NOT_FOUND');
   assertGitHubAccessResponse(response, 'CONTENT_REPOSITORY_NOT_FOUND');
   let contents;
@@ -370,7 +368,7 @@ async function persistEnvironment(config, site, repositories, serializedConfigur
     config,
     site,
     existingKeys,
-    'GITHUB_CONTENT_REPOSITORIES',
+    git.repositoriesEnvKey(),
     serializedConfiguration,
     false
   );
@@ -452,8 +450,8 @@ function environmentVariableBody(site, key, value, secret) {
 }
 
 function assertNoPendingRepositoryConfiguration(variables) {
-  const entry = variables.find((variable) => clean(variable && variable.key) === 'GITHUB_CONTENT_REPOSITORIES');
-  const deployed = clean(process.env.GITHUB_CONTENT_REPOSITORIES);
+  const entry = variables.find((variable) => clean(variable && variable.key) === git.repositoriesEnvKey());
+  const deployed = clean(process.env[git.repositoriesEnvKey()]);
   if (!entry) {
     if (deployed) throw apiError('CONTENT_REPOSITORY_CONFIG_PENDING_DEPLOY', 409);
     return;

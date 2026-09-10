@@ -67,11 +67,24 @@
       row.querySelector('.env-label').textContent = entry.name || 'Nowa zmienna';
       row.querySelector('.env-description').textContent = entry.description || 'Własna zmienna środowiskowa.';
       const name = row.querySelector('.env-name');
-      const value = row.querySelector('.env-value');
+      let value = row.querySelector('.env-value');
+      if (entry.name === 'GIT_PROVIDER') {
+        name.readOnly = true;
+        const select = document.createElement('select');
+        select.className = value.className;
+        select.setAttribute('aria-label', 'Provider repozytoriów');
+        for (const choice of ['', 'gitea', 'github']) {
+          const option = document.createElement('option');
+          option.value = choice; option.textContent = choice === 'gitea' ? 'Gitea' : choice === 'github' ? 'GitHub' : 'Wybierz dostawcę';
+          select.append(option);
+        }
+        value.replaceWith(select);
+        value = select;
+      }
       const reveal = row.querySelector('.reveal-button');
       name.value = entry.name || '';
       value.value = entry.value || '';
-      value.type = entry.secret ? 'password' : 'text';
+      if (value.tagName !== 'SELECT') value.type = entry.secret ? 'password' : 'text';
       reveal.hidden = !entry.secret;
       name.addEventListener('input', () => {
         entry.name = name.value.trim();
@@ -182,6 +195,7 @@
   }
 
   function validationMessage(validation) {
+    if (validation.configurationErrors?.length) return validation.configurationErrors.join(' ');
     if (validation.tooMany) return `Lista ma ${validation.count} pozycji, a limit wynosi ${validation.max}. Usuń nadmiarowe wiersze.`;
     if (validation.missingNameRows.length) return `Wartość bez nazwy w wierszu: ${validation.missingNameRows.join(', ')}.`;
     if (validation.invalidNames.length) return `Niepoprawne nazwy: ${validation.invalidNames.join(', ')}.`;

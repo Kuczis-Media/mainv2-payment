@@ -282,7 +282,7 @@
       : state.scope === 'shared'
         ? 'To plik współdzielony. Może być używany przez wiele materiałów, których nie skanujemy automatycznie.\n\n'
         : '';
-    if (!root.confirm(`${warning}Usunąć „${asset.filename}” z prywatnego repozytorium? GitHub zachowa odwracalny commit.`)) return;
+    if (!root.confirm(`${warning}Usunąć „${asset.filename}” z prywatnego repozytorium? Poprzednia wersja pozostanie w historii zmian.`)) return;
     button.disabled = true;
     setStatus(`Usuwanie ${asset.filename}…`);
     try {
@@ -293,7 +293,7 @@
         repositoryId: state.options?.repositoryId || ''
       });
       state.assets = state.assets.filter((entry) => entry.sha !== asset.sha);
-      setStatus(`${asset.filename} usunięto. Commit w GitHubie można odwrócić.`);
+      setStatus(`${asset.filename} usunięto. Plik można przywrócić z historii repozytorium.`);
       renderAssets();
       state.options?.onDelete?.(asset);
     } catch (error) {

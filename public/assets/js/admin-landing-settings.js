@@ -18,13 +18,13 @@
     LANDING_PATH_RESERVED: 'landing/route.json w repozytorium ustawień jest zarezerwowany. Wybierz inny plik JSON.',
     LANDING_CONFLICT: 'Ustawienia zmieniły się w innej karcie. Wczytaj je ponownie przed zapisem.',
     LANDING_STATIC_CONFIG_INVALID: 'Docelowy plik istnieje, ale nie jest poprawnym landingiem. Niczego w nim nie nadpisano. Wybierz nową ścieżkę.',
-    SITE_ASSETS_NOT_CONFIGURED: 'Dodaj GITHUB_SITE_ASSETS_TOKEN w środowisku serwera i wykonaj deploy.',
-    SITE_ASSETS_TOKEN_REJECTED: 'Token GitHub nie ma dostępu do jednego z repozytoriów.',
-    SITE_ASSETS_WRITE_REJECTED: 'Token GitHub wymaga Contents: Read and write do obu repozytoriów.',
+    SITE_ASSETS_NOT_CONFIGURED: 'Skonfiguruj publiczne repozytorium i token wybranego dostawcy w środowisku serwera, a następnie wykonaj deploy.',
+    SITE_ASSETS_TOKEN_REJECTED: 'Token nie ma dostępu do jednego z repozytoriów.',
+    SITE_ASSETS_WRITE_REJECTED: 'Token wymaga uprawnień do odczytu i zapisu obu repozytoriów.',
     SITE_ASSETS_REPOSITORY_NOT_FOUND: 'Nie znaleziono repozytorium lub token nie ma do niego dostępu.',
     SITE_ASSETS_REPOSITORY_NOT_PUBLIC: 'Repozytorium JSON musi być publiczne.',
-    SITE_ASSETS_REF_NOT_FOUND: 'Nie znaleziono wskazanej gałęzi GitHuba.',
-    SITE_ASSETS_TIMEOUT: 'GitHub odpowiada zbyt długo. Spróbuj ponownie.'
+    SITE_ASSETS_REF_NOT_FOUND: 'Nie znaleziono wskazanej gałęzi repozytorium.',
+    SITE_ASSETS_TIMEOUT: 'Serwer repozytorium odpowiada zbyt długo. Spróbuj ponownie.'
   };
   function report(text, error = false) { status.textContent = text; status.dataset.state = error ? 'error' : 'success'; }
   function target() {
@@ -57,7 +57,7 @@
       return payload;
     } finally { window.clearTimeout(timer); }
   }
-  function message(error) { return errors[error.code] || 'Nie udało się zapisać lub wczytać ustawień. Sprawdź połączenie i uprawnienia GitHuba; możesz ponowić operację.'; }
+  function message(error) { return errors[error.code] || 'Nie udało się zapisać lub wczytać ustawień. Sprawdź połączenie i uprawnienia repozytorium; możesz ponowić operację.'; }
   async function load(force = false) {
     if (busy || (current && !force)) return;
     busy = true; fields.disabled = true; reload.disabled = true; report('Wczytuję ustawienia…');

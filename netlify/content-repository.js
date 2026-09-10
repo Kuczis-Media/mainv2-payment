@@ -1,8 +1,7 @@
 'use strict';
 
-const GITHUB_API_BASE = 'https://api.github.com';
-const GITHUB_API_VERSION = '2026-03-10';
-const REQUEST_TIMEOUT_MS = 10_000;
+const git = require('./git-provider.js');
+const { GITHUB_API_VERSION } = git;
 const LIST_CACHE_MS = 20_000;
 const MAX_PROMPT_CHARS = 10_000;
 const MAX_CATALOG_BYTES = 256 * 1024;
@@ -18,7 +17,7 @@ const MEDIA_READ_CACHE_MS = 5 * 60 * 1000;
 const MAX_MEDIA_READ_CACHE_BYTES = 24 * 1024 * 1024;
 const SAFE_REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const SAFE_REPOSITORY_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
-const SAFE_TOKEN_ENV = /^GITHUB_CONTENT_TOKEN(?:_[A-Z0-9][A-Z0-9_]*)?$/;
+const SAFE_TOKEN_ENV = /^(?:GITHUB_CONTENT_TOKEN|GITHUB_TOKEN|GITEA_TOKEN)(?:_[A-Z0-9][A-Z0-9_]*)?$/;
 const SAFE_REF = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/;
 const SAFE_ROOT = /^(?:[A-Za-z0-9][A-Za-z0-9_.-]*\/)*[A-Za-z0-9][A-Za-z0-9_.-]*$/;
 const SAFE_LESSON_FILENAME = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.md$/i;
@@ -55,7 +54,8 @@ class ContentRepositoryError extends Error {
 }
 
 function repositoryConfigs(env = process.env) {
-  const raw = cleanString(env.GITHUB_CONTENT_REPOSITORIES);
+  const provider = git.settings(env);
+  const raw = cleanString(env[git.repositoriesEnvKey(env)]);
   if (!raw) return [legacyRepositoryConfig(env)];
 
   let entries;
@@ -83,7 +83,7 @@ function repositoryConfigs(env = process.env) {
     const repository = cleanString(entry.repository);
     const ref = cleanString(entry.ref) || 'main';
     const root = cleanString(entry.root).replace(/^\/+|\/+$/g, '');
-    const tokenEnv = cleanString(entry.tokenEnv) || 'GITHUB_CONTENT_TOKEN';
+    const tokenEnv = cleanString(entry.tokenEnv) || git.tokenEnv(env);
     const isDefault = entry.default === true || (!index && !entries.some((item) => item && item.default === true));
     if (
       !SAFE_REPOSITORY_ID.test(id) ||
@@ -94,6 +94,7 @@ function repositoryConfigs(env = process.env) {
       !SAFE_REF.test(ref) ||
       (root && !SAFE_ROOT.test(root)) ||
       !SAFE_TOKEN_ENV.test(tokenEnv) ||
+      (provider.provider === 'gitea' ? !tokenEnv.startsWith('GITEA_TOKEN') : tokenEnv.startsWith('GITEA_TOKEN')) ||
       (entry.default != null && typeof entry.default !== 'boolean')
     ) {
       throw new ContentRepositoryError('CONTENT_REPOSITORIES_INVALID', 503);
@@ -105,7 +106,8 @@ function repositoryConfigs(env = process.env) {
       id,
       label,
       default: isDefault,
-      configured: Boolean(token),
+      ...provider,
+      configured: Boolean(token && provider.apiUrl),
       token,
       tokenEnv,
       repository,
@@ -120,24 +122,27 @@ function repositoryConfigs(env = process.env) {
 }
 
 function legacyRepositoryConfig(env) {
-  const token = cleanString(env.GITHUB_CONTENT_TOKEN);
-  const repository = cleanString(env.GITHUB_CONTENT_REPOSITORY);
-  const ref = cleanString(env.GITHUB_CONTENT_REF) || 'main';
-  const root = cleanString(env.GITHUB_CONTENT_ROOT).replace(/^\/+|\/+$/g, '');
+  const provider = git.settings(env);
+  const gitea = provider.provider === 'gitea';
+  const token = cleanString(gitea ? env.GITEA_TOKEN : env.GITHUB_CONTENT_TOKEN || env.GITHUB_TOKEN);
+  const repository = cleanString(gitea ? (env.GITEA_OWNER && env.GITEA_REPO ? `${env.GITEA_OWNER}/${env.GITEA_REPO}` : '') : env.GITHUB_CONTENT_REPOSITORY || (env.GITHUB_OWNER && env.GITHUB_REPO ? `${env.GITHUB_OWNER}/${env.GITHUB_REPO}` : ''));
+  const ref = cleanString(gitea ? env.GITEA_BRANCH : env.GITHUB_CONTENT_REF || env.GITHUB_BRANCH) || 'main';
+  const root = cleanString(gitea ? env.GITEA_CONTENT_ROOT : env.GITHUB_CONTENT_ROOT).replace(/^\/+|\/+$/g, '');
   return {
+    ...provider,
     id: 'default',
     label: repository && SAFE_REPOSITORY.test(repository)
       ? repository.split('/')[1]
       : 'Główne repozytorium',
     default: true,
     configured: Boolean(
-      token &&
+      token && provider.apiUrl &&
       SAFE_REPOSITORY.test(repository) &&
       SAFE_REF.test(ref) &&
       (!root || SAFE_ROOT.test(root))
     ),
     token,
-    tokenEnv: 'GITHUB_CONTENT_TOKEN',
+    tokenEnv: gitea ? 'GITEA_TOKEN' : env.GITHUB_CONTENT_TOKEN ? 'GITHUB_CONTENT_TOKEN' : env.GITHUB_TOKEN ? 'GITHUB_TOKEN' : 'GITHUB_CONTENT_TOKEN',
     repository,
     ref,
     root
@@ -161,6 +166,7 @@ function repositoryConfig(env = process.env, rawRepositoryId = '') {
 
 function publicConfig(config) {
   return {
+    provider: config.provider || 'github',
     configured: config.configured,
     tokenConfigured: Boolean(config.token),
     id: config.id,
@@ -259,49 +265,19 @@ function repositoryPath(config, relativePath) {
 }
 
 function apiUrl(config, relativePath, includeRef = true) {
-  const [owner, repository] = config.repository.split('/');
-  const path = repositoryPath(config, relativePath)
-    .split('/')
-    .map((part) => encodeURIComponent(part))
-    .join('/');
-  const url = new URL(
-    `${GITHUB_API_BASE}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/contents/${path}`
-  );
-  if (includeRef) url.searchParams.set('ref', config.ref);
-  return url;
-}
-
-function githubHeaders(config, raw) {
-  return {
-    Accept: raw ? 'application/vnd.github.raw+json' : 'application/vnd.github+json',
-    Authorization: `Bearer ${config.token}`,
-    'User-Agent': 'ChemDisk-content-library',
-    'X-GitHub-Api-Version': GITHUB_API_VERSION
-  };
+  return git.apiUrl(config, repositoryPath(config, relativePath), includeRef);
 }
 
 async function githubRequest(config, relativePath, options = {}) {
   if (!config.configured) {
     throw new ContentRepositoryError('CONTENT_REPOSITORY_NOT_CONFIGURED', 503);
   }
-  const fetchImpl = options.fetchImpl || fetch;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  const url = apiUrl(config, relativePath);
   let response;
   try {
-    response = await fetchImpl(url, {
-      method: 'GET',
-      headers: githubHeaders(config, Boolean(options.raw)),
-      signal: controller.signal
-    });
+    response = await git.request(config, apiUrl(config, relativePath), { ...options, raw: Boolean(options.raw) });
+    git.assertGiteaAccess(config, response);
   } catch (error) {
-    if (error && error.name === 'AbortError') {
-      throw new ContentRepositoryError('CONTENT_REPOSITORY_TIMEOUT', 504);
-    }
-    throw new ContentRepositoryError('CONTENT_REPOSITORY_UNAVAILABLE', 503);
-  } finally {
-    clearTimeout(timeout);
+    throw new ContentRepositoryError(error.code || 'CONTENT_REPOSITORY_UNAVAILABLE', error.status || 503);
   }
   if (response.status === 401 || response.status === 403) {
     throw new ContentRepositoryError('GITHUB_CONTENT_TOKEN_REJECTED', 503);
@@ -319,27 +295,12 @@ async function githubMutationRequest(config, relativePath, method, payload, opti
   if (!config.configured) {
     throw new ContentRepositoryError('CONTENT_REPOSITORY_NOT_CONFIGURED', 503);
   }
-  const fetchImpl = options.fetchImpl || fetch;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   let response;
   try {
-    response = await fetchImpl(apiUrl(config, relativePath, false), {
-      method,
-      headers: {
-        ...githubHeaders(config, false),
-        'Content-Type': 'application/json; charset=utf-8'
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal
-    });
+    response = await git.request(config, apiUrl(config, relativePath, false), { ...options, method, body: payload });
+    git.assertGiteaAccess(config, response);
   } catch (error) {
-    if (error && error.name === 'AbortError') {
-      throw new ContentRepositoryError('CONTENT_REPOSITORY_TIMEOUT', 504);
-    }
-    throw new ContentRepositoryError('CONTENT_REPOSITORY_UNAVAILABLE', 503);
-  } finally {
-    clearTimeout(timeout);
+    throw new ContentRepositoryError(error.code || 'CONTENT_REPOSITORY_UNAVAILABLE', error.status || 503);
   }
 
   if (response.status === 401 || response.status === 403) {
@@ -441,7 +402,7 @@ async function listAssets(kind, options = {}) {
   if (!config.configured) {
     throw new ContentRepositoryError('CONTENT_REPOSITORY_NOT_CONFIGURED', 503);
   }
-  const cacheKey = [config.id, config.repository, config.ref, config.root, kind].join(':');
+  const cacheKey = [git.cacheIdentity(config), config.id, kind].join(':');
   const cached = listCache.get(cacheKey);
   if (!options.force && cached && cached.expiresAt > Date.now()) {
     return cached.value.map((asset) => ({ ...asset, tags: [...asset.tags] }));
@@ -721,7 +682,7 @@ function mutationResult(data, fallbackSha = '') {
 }
 
 function enqueueMutation(config, task) {
-  const key = [config.repository, config.ref, config.root].join(':');
+  const key = git.cacheIdentity(config);
   const previous = mutationQueues.get(key) || Promise.resolve();
   const current = previous.catch(() => {}).then(task);
   mutationQueues.set(key, current);
@@ -820,7 +781,7 @@ function mediaMimeType(rawFilename) {
 }
 
 function mediaReadCacheKey(config, directory, filename) {
-  return `${config.repository}:${config.ref}:${config.root || ''}:${directory}/${filename}`;
+  return `${git.cacheIdentity(config)}:${directory}/${filename}`;
 }
 
 function removeMediaReadCache(key) {

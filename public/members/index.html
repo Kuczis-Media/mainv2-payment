@@ -332,7 +332,7 @@
       </div>
 
       <section class="admin-tab-panel" id="admin-panel-landing" role="tabpanel" aria-labelledby="admin-tab-landing" data-admin-panel="landing" hidden>
-        <div class="admin-guidance"><span aria-hidden="true">i</span><p>Ustaw stronę powitalną i miejsce publikacji JSON dla trybu GitHub. Tryb GitHub lub Netlify Blobs wybierasz w Landing Builderze. Logowanie, panel i kurs pozostają w tej aplikacji. Aktywne źródło i cennik korzystają z cache ograniczającego wywołania Functions.</p></div>
+        <div class="admin-guidance"><span aria-hidden="true">i</span><p>Ustaw stronę powitalną i miejsce publikacji JSON w repozytorium. Dostawcę GitHub lub Gitea określa GIT_PROVIDER. Publikację w repozytorium lub Netlify Blobs wybierasz w Landing Builderze. Logowanie, panel i kurs pozostają w tej aplikacji. Aktywne źródło i cennik korzystają z cache ograniczającego wywołania Functions.</p></div>
         <form id="landing-delivery-form" class="landing-delivery-form">
           <fieldset id="landing-delivery-fields" disabled>
             <legend>Strona powitalna</legend>
@@ -340,14 +340,14 @@
             <label>Adres zewnętrznego landingu<input class="text-field" id="landing-external-url" type="text" placeholder="start.netlify.app" maxlength="1000" aria-describedby="landing-external-hint"></label>
             <p class="field-hint" id="landing-external-hint">Włączone: strona główna przekieruje na podany adres HTTPS. Wyłączone: działa lokalny landing NextMed. Nie osadzamy obcej strony w ramce.</p>
             <label>Plik JSON — właściciel/repozytorium/ścieżka<input class="text-field" id="landing-config-location" type="text" placeholder="Kuczis-Media/repo/landing.json" maxlength="360" spellcheck="false"></label>
-            <label>Gałąź GitHuba<input class="text-field" id="landing-config-ref" type="text" value="main" maxlength="100" spellcheck="false"></label>
-            <p class="field-hint">Repozytorium musi być publiczne. Token GITHUB_SITE_ASSETS_TOKEN potrzebuje uprawnień do docelowego repozytorium i Kuczis-Media/logo (stały plik ustawień). Jeśli plik nie istnieje, skopiujemy aktualną publikację; istniejącego landingu nie nadpiszemy.</p>
+            <label>Gałąź repozytorium<input class="text-field" id="landing-config-ref" type="text" value="main" maxlength="100" spellcheck="false"></label>
+            <p class="field-hint">Repozytorium musi być publiczne. Token wybranego dostawcy potrzebuje uprawnień do docelowego repozytorium oraz repozytorium assetów wskazanego w ENV. Jeśli plik nie istnieje, skopiujemy aktualną publikację; istniejącego landingu nie nadpiszemy.</p>
             <label>Publiczny adres JSON<input class="text-field" id="landing-config-url" type="url" readonly aria-label="Publiczny adres konfiguracji JSON"></label>
             <div class="admin-editor-actions"><button class="button button-primary" type="submit">Zapisz ustawienia landingu</button><button class="button button-secondary" id="landing-config-copy" type="button">Kopiuj adres JSON</button><a class="button button-secondary" href="/members/module/studio/landing/">Otwórz edytor landingu</a></div>
           </fieldset>
           <button class="button button-secondary" id="landing-settings-reload" type="button">Wczytaj aktualne ustawienia</button>
           <p class="admin-status" id="landing-settings-status" role="status" aria-live="polite"></p>
-          <p class="field-hint">Zmiana jest widoczna po odświeżeniu cache GitHuba i przeglądarki. Zewnętrzna strona jest niezależna — aby czytała ten JSON, musi mieć odpowiedni kod odczytu (np. tę samą aplikację NextMed).</p>
+          <p class="field-hint">Zmiana jest widoczna po odświeżeniu cache serwera i przeglądarki. Zewnętrzna strona jest niezależna — aby czytała ten JSON, musi mieć odpowiedni kod odczytu (np. tę samą aplikację NextMed).</p>
         </form>
       </section>
 
@@ -497,7 +497,7 @@
       <section class="admin-tab-panel" id="admin-panel-content" role="tabpanel" aria-labelledby="admin-tab-content" data-admin-panel="content" hidden>
         <div class="admin-guidance admin-guidance-warning">
           <span aria-hidden="true">!</span>
-          <p><strong>Token GitHub jest przesyłany tylko podczas zapisu lub testu.</strong> Nie jest trwale zapisywany w aplikacji, nie wraca w odpowiedzi API ani nie trafia do kursantów. Automatyczny zapis PAT jako sekretu wymaga Netlify Personal lub wyższego; na Free utwórz token ENV ręcznie w Netlify i pozostaw pole tokenu puste. Konfigurator nigdy nie zapisze PAT jako zwykłej, jawnej zmiennej.</p>
+          <p><strong>Wpisany token repozytorium jest przesyłany tylko podczas zapisu lub testu.</strong> Nie jest trwale zapisywany w przeglądarce, nie wraca w odpowiedzi API ani nie trafia do kursantów. Automatyczny zapis PAT jako sekretu wymaga Netlify Personal lub wyższego; na Free utwórz token ENV ręcznie w Netlify i pozostaw pole tokenu puste. Konfigurator nigdy nie zapisze PAT jako zwykłej, jawnej zmiennej.</p>
         </div>
 
         <div class="admin-content-status-card">
@@ -517,18 +517,14 @@
           <summary>Ręczna konfiguracja awaryjna i zasady tokenu</summary>
           <ol>
             <li>Utwórz jedno lub kilka prywatnych repozytoriów z folderami <code>lessons</code> i <code>prompts</code>.</li>
-            <li>W GitHub utwórz fine-grained token ograniczony wyłącznie do wybranych repozytoriów. Nadaj mu tylko <strong>Contents: Read and write</strong>, aby Studio mogło dodawać, poprawiać i usuwać pliki.</li>
+            <li>Wybierz dostawcę przez <code>GIT_PROVIDER</code>. W Gitea utwórz token z <strong>write:repository</strong> na koncie mającym dostęp tylko do potrzebnych repozytoriów. W GitHub użyj fine-grained tokenu ograniczonego do wybranych repozytoriów z <strong>Contents: Read and write</strong>.</li>
             <li>Na Free dodaj token ręcznie jako site-level ENV w <strong>Project configuration → Environment variables</strong>. Secrets Controller i automatyczne oznaczenie tokenu jako sekretu są dostępne od planu Personal.</li>
             <li>Osobny zakres <strong>Functions</strong> jest dostępny na Pro/Enterprise. Na Free/Personal zmienne mają domyślny zakres wszystkich usług.</li>
-            <li>Dla kilku repozytoriów ustaw dodatkowo <code>GITHUB_CONTENT_REPOSITORIES</code> zgodnie z instrukcją w README. Uruchom nowy deploy Functions, a potem wybieraj repozytorium z listy.</li>
+            <li>Dla kilku repozytoriów ustaw <code>GITEA_CONTENT_REPOSITORIES</code> lub <code>GITHUB_CONTENT_REPOSITORIES</code>. Instrukcje: GITEA_SETUP.md i README. Po zmianie ENV uruchom nowy deploy Functions.</li>
           </ol>
-          <pre id="admin-content-env-template">GITHUB_CONTENT_TOKEN=
-GITHUB_CONTENT_REPOSITORIES=
-GITHUB_CONTENT_REPOSITORY=Kuczis-Media/chemdisk-content
-GITHUB_CONTENT_REF=main
-GITHUB_CONTENT_ROOT=</pre>
+          <pre id="admin-content-env-template">Wczytywanie nazw zmiennych wybranego dostawcy…</pre>
           <div class="admin-content-links">
-            <a class="button button-secondary" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">Utwórz token GitHub</a>
+            <a id="admin-content-token-help" class="button button-secondary" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">Utwórz token repozytorium</a>
             <a class="button button-secondary" href="https://app.netlify.com/" target="_blank" rel="noopener noreferrer">Otwórz Netlify</a>
             <a class="button button-secondary" href="/members/module/studio/env/">Otwórz generator .env</a>
             <button class="button button-secondary" id="admin-content-copy-env" type="button">Kopiuj nazwy zmiennych</button>
@@ -539,12 +535,12 @@ GITHUB_CONTENT_ROOT=</pre>
           <div class="admin-content-configurator-heading">
             <div>
               <span class="field-label">Konfigurator repozytoriów</span>
-              <h3 id="admin-content-configurator-title">Prywatne repozytoria GitHub</h3>
+              <h3 id="admin-content-configurator-title">Prywatne repozytoria materiałów</h3>
               <p>Dodaj maksymalnie 20 repozytoriów. Pusty token zachowuje istniejący sekret lub korzysta ze zmiennej utworzonej ręcznie.</p>
             </div>
             <button class="button button-secondary" id="admin-content-config-add" type="button">+ Dodaj repozytorium</button>
           </div>
-          <p class="admin-content-plan-note"><strong>Netlify:</strong> automatyczne sekrety PAT — Personal/Pro/Enterprise; osobny zakres Functions — Pro/Enterprise. Na Free najpierw utwórz wskazaną zmienną <code>GITHUB_CONTENT_TOKEN_*</code> ręcznie, wykonaj deploy, a następnie zapisz tutaj konfigurację z pustym polem tokenu.</p>
+          <p class="admin-content-plan-note"><strong>Netlify:</strong> automatyczne sekrety PAT — Personal/Pro/Enterprise; osobny zakres Functions — Pro/Enterprise. Na Free najpierw utwórz wskazaną zmienną <code id="admin-content-token-pattern">tokenu</code> ręcznie, wykonaj deploy, a następnie zapisz tutaj konfigurację z pustym polem tokenu.</p>
           <div class="admin-content-config-list" id="admin-content-config-list" aria-busy="false"></div>
           <div class="admin-status" id="admin-content-config-status" role="status" aria-live="polite"></div>
           <div class="admin-content-config-actions">

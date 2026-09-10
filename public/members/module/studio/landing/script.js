@@ -1186,24 +1186,24 @@
       INVALID_LANDING_EMAIL: 'Wpisz poprawny adres e-mail albo zostaw pole puste.',
       INVALID_LANDING_PHONE: 'Numer telefonu może zawierać cyfry, spacje, nawiasy, myślnik i znak +.',
       LANDING_STORAGE_UNAVAILABLE: 'Brakuje NETLIFY_API_TOKEN lub SITE_ID. Zmiany nadal są zachowane lokalnie.',
-      SITE_ASSETS_NOT_CONFIGURED: 'Do publikacji statycznej dodaj GITHUB_SITE_ASSETS_TOKEN z dostępem do repozytorium ustawień i docelowego JSON.',
+      SITE_ASSETS_NOT_CONFIGURED: 'Do publikacji statycznej dodaj token publicznych assetów wybranego dostawcy z dostępem do repozytorium ustawień i docelowego JSON.',
       LANDING_DESTINATION_CHANGED: 'Miejsce publikacji zmieniono w panelu admina. Zachowaj kopię JSON, odśwież Studio i sprawdź aktualną ścieżkę.',
-      SITE_ASSETS_TOKEN_REJECTED: 'Token GitHub nie ma dostępu do publicznego repozytorium landingu.',
-      SITE_ASSETS_WRITE_REJECTED: 'Token GitHub wymaga uprawnienia Contents: Read and write.',
-      LANDING_STATIC_PUBLISH_FAILED: 'GitHub odrzucił publikację statycznego pliku. Spróbuj ponownie.',
+      SITE_ASSETS_TOKEN_REJECTED: 'Token repozytorium nie ma dostępu do publicznego repozytorium landingu.',
+      SITE_ASSETS_WRITE_REJECTED: 'Token repozytorium wymaga uprawnienia Contents: Read and write.',
+      LANDING_STATIC_PUBLISH_FAILED: 'Serwer repozytorium odrzucił publikację statycznego pliku. Spróbuj ponownie.',
       LANDING_CONFLICT: 'Landing został zmieniony w innej karcie. Odśwież stronę, sprawdź treść i spróbuj ponownie.'
     });
   }
 
   async function requestAssets(method, body) {
     return authenticatedRequest(ASSET_API_URL, method, body, {
-      SITE_ASSETS_NOT_CONFIGURED: 'Dodaj w Netlify zmienną GITHUB_SITE_ASSETS_TOKEN dla publicznego repozytorium assetów.',
+      SITE_ASSETS_NOT_CONFIGURED: 'Dodaj w Netlify token publicznych assetów wybranego dostawcy dla publicznego repozytorium assetów.',
       SITE_ASSETS_REPOSITORY_NOT_PUBLIC: 'Repozytorium assetów musi być publiczne, aby jsDelivr mógł je odczytać.',
       SITE_ASSETS_REPOSITORY_NOT_FOUND: 'Nie znaleziono skonfigurowanego repozytorium assetów albo gałęzi.',
       SITE_ASSETS_REF_NOT_FOUND: 'Nie znaleziono gałęzi main w repozytorium Kuczis-Media/logo.',
-      SITE_ASSETS_RATE_LIMITED: 'GitHub chwilowo ograniczył liczbę zapytań. Odczekaj moment i spróbuj ponownie.',
-      SITE_ASSETS_TOKEN_REJECTED: 'Token GitHub nie ma dostępu do repozytorium assetów.',
-      SITE_ASSETS_WRITE_REJECTED: 'Token GitHub wymaga uprawnienia Contents: Read and write do repozytorium assetów.',
+      SITE_ASSETS_RATE_LIMITED: 'Serwer repozytorium chwilowo ograniczył liczbę zapytań. Odczekaj moment i spróbuj ponownie.',
+      SITE_ASSETS_TOKEN_REJECTED: 'Token repozytorium nie ma dostępu do repozytorium assetów.',
+      SITE_ASSETS_WRITE_REJECTED: 'Token repozytorium wymaga uprawnienia Contents: Read and write do repozytorium assetów.',
       SITE_ASSET_ALREADY_EXISTS: 'Plik o tej nazwie już istnieje. Spróbuj przesłać go ponownie.',
       SITE_ASSET_INVALID: 'Plik nie jest poprawnym obrazem albo ma niezgodne rozszerzenie.',
       MEDIA_SVG_UNSAFE: 'SVG zawiera aktywną lub zewnętrzną treść i nie może zostać zapisany.',

@@ -38,7 +38,11 @@ function installFetch(t, implementation) {
 }
 
 function installEnvironment(t, values = {}) {
-  const keys = Object.keys(process.env).filter((key) => key.startsWith('GITHUB_CONTENT_'));
+  const oldProvider = process.env.GIT_PROVIDER;
+  process.env.GIT_PROVIDER = 'github';
+  t.after(() => { if (oldProvider === undefined) delete process.env.GIT_PROVIDER; else process.env.GIT_PROVIDER = oldProvider; });
+  const isRepositoryKey = (key) => key.startsWith('GITHUB_CONTENT_') || key.startsWith('GITEA_');
+  const keys = Object.keys(process.env).filter(isRepositoryKey);
   const saved = new Map(keys.map((key) => [key, process.env[key]]));
   const netlifyToken = process.env.NETLIFY_API_TOKEN;
   const siteId = process.env.SITE_ID;
@@ -47,9 +51,9 @@ function installEnvironment(t, values = {}) {
   process.env.NETLIFY_API_TOKEN = values.netlifyToken === undefined ? NETLIFY_TOKEN : values.netlifyToken;
   process.env.SITE_ID = values.siteId === undefined ? SITE_ID : values.siteId;
   process.env.CONTEXT = values.context === undefined ? 'production' : values.context;
-  for (const [key, value] of Object.entries(values.github || {})) process.env[key] = value;
+  for (const [key, value] of Object.entries(values.git || values.github || {})) process.env[key] = value;
   t.after(() => {
-    Object.keys(process.env).filter((key) => key.startsWith('GITHUB_CONTENT_')).forEach((key) => { delete process.env[key]; });
+    Object.keys(process.env).filter(isRepositoryKey).forEach((key) => { delete process.env[key]; });
     saved.forEach((value, key) => { process.env[key] = value; });
     if (netlifyToken === undefined) delete process.env.NETLIFY_API_TOKEN;
     else process.env.NETLIFY_API_TOKEN = netlifyToken;
@@ -81,6 +85,60 @@ test('GET returns repository metadata but never returns GitHub or Netlify secret
   assert.equal(payload.repositories[0].tokenConfigured, true);
   assert.equal(payload.repositories[0].tokenEnv, 'GITHUB_CONTENT_TOKEN');
   assert.doesNotMatch(response.body, /super_secret|netlify-api-token/);
+});
+
+test('Gitea admin metadata, connection test and save use Gitea ENV without returning secrets', async (t) => {
+  installEnvironment(t, { git: {
+    GIT_PROVIDER: 'gitea', GITEA_BASE_URL: 'https://git.example',
+    GITEA_TOKEN: 'gitea_private_server_token_12345', GITEA_OWNER: 'school', GITEA_REPO: 'course'
+  } });
+  const requests = [];
+  installFetch(t, async (url, options = {}) => {
+    const request = { url: String(url), method: options.method || 'GET', ...options };
+    requests.push(request);
+    if (request.url.endsWith('/user')) return responseJson(canonicalAdmin);
+    if (request.url.startsWith('https://git.example/api/v1/')) {
+      assert.equal(options.headers.Authorization, 'token gitea_private_server_token_12345');
+      assert.equal(options.headers['X-GitHub-Api-Version'], undefined);
+      return responseJson(request.url.includes('/branches/') ? { commit: { id: 'a'.repeat(40) } } : []);
+    }
+    if (request.url === `https://api.netlify.com/api/v1/sites/${SITE_ID}`) return responseJson({ id: SITE_ID, account_id: 'account-id', plan: 'pro' });
+    if (request.url.includes('/accounts/account-id/env?')) {
+      if (request.method === 'GET') return responseJson([{ key: 'GITEA_TOKEN', is_secret: true }]);
+      assert.equal(request.method, 'POST');
+      const [variable] = JSON.parse(request.body);
+      assert.equal(variable.key, 'GITEA_CONTENT_REPOSITORIES');
+      assert.equal(variable.is_secret, false);
+      assert.equal(JSON.parse(variable.values[0].value)[0].tokenEnv, 'GITEA_TOKEN');
+      assert.doesNotMatch(variable.values[0].value, /gitea_private_server/);
+      return responseJson([variable], 201);
+    }
+    throw new Error(`Unexpected request ${request.method} ${request.url}`);
+  });
+  const view = await adminRepositories.handler(eventFor(), contextFor());
+  assert.equal(view.statusCode, 200);
+  const metadata = JSON.parse(view.body);
+  assert.equal(metadata.provider, 'gitea');
+  assert.equal(metadata.tokenHelpUrl, 'https://git.example/user/settings/applications');
+  assert.equal(metadata.repositories[0].tokenConfigured, true);
+  assert.doesNotMatch(view.body, /gitea_private_server|netlify-api-token/);
+  const repository = { id: 'default', label: 'Materiały', repository: 'school/course', ref: 'main', default: true };
+  for (const action of ['test', 'save']) {
+    const result = await adminRepositories.handler(eventFor({ httpMethod: 'POST', headers: mutationHeaders(),
+      body: JSON.stringify({ action, ...(action === 'test' ? { repository } : { repositories: [repository] }) }) }), contextFor());
+    assert.equal(result.statusCode, 200, result.body);
+    assert.doesNotMatch(result.body, /gitea_private_server|netlify-api-token/);
+  }
+  assert.equal(requests.filter((request) => request.url.startsWith('https://api.github.com')).length, 0);
+  assert.ok(requests.some((request) => request.url.includes('/env?') && request.method === 'POST'));
+});
+
+test('invalid Gitea ENV returns a safe admin JSON error rather than an unhandled exception', async (t) => {
+  installEnvironment(t, { git: { GIT_PROVIDER: 'gitea', GITEA_BASE_URL: 'https://secret@git.example' } });
+  installFetch(t, async () => responseJson(canonicalAdmin));
+  const response = await adminRepositories.handler(eventFor(), contextFor());
+  assert.equal(response.statusCode, 503);
+  assert.deepEqual(JSON.parse(response.body), { error: 'INVALID_GITEA_URL' });
 });
 
 test('save-and-deploy tests GitHub, writes scoped Netlify variables and queues a build', async (t) => {
@@ -168,7 +226,8 @@ test('save rejects missing default and performs no external mutation', async (t)
   assert.equal(requests.length, 1, 'only canonical Identity verification should run');
 });
 
-test('token names are deterministic and validation rejects duplicate IDs', () => {
+test('token names are deterministic and validation rejects duplicate IDs', (t) => {
+  installEnvironment(t);
   assert.equal(adminRepositories._test.tokenEnvironmentForId('chemia-organiczna'), 'GITHUB_CONTENT_TOKEN_CHEMIA_ORGANICZNA');
   assert.throws(() => adminRepositories._test.validateRepositorySet([
     { id: 'chemia', tokenEnv: 'GITHUB_CONTENT_TOKEN', default: true },

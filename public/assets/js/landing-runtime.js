@@ -44,6 +44,7 @@
       const route = await window.NextMedLandingSource.ready;
       publicationVersion = route.publication?.version || '';
       const blobPublication = route.publication?.mode === 'netlify-blobs' && usablePayload(route.publication);
+      if (route.unavailable && !blobPublication) return;
       resolvedConfigUrl = blobPublication ? FUNCTION_ENDPOINT : window.NextMedLandingDelivery.rawUrl(route.target);
       if (route.externalEnabled && route.externalUrl) {
         const target = new URL(route.externalUrl);

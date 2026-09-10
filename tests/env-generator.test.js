@@ -12,7 +12,7 @@ test('env generator serializes defaults and safely quotes complex values', () =>
   entries.find((entry) => entry.name === 'SITE_ID').value = 'abc-123';
   entries.push({ name: 'CUSTOM_VALUE', value: 'tekst ze spacją i #', secret: false });
   const output = model.serializeEnv(entries);
-  assert.match(output, /^NETLIFY_API_TOKEN=/);
+  assert.match(output, /^GIT_PROVIDER=gitea/);
   assert.match(output, /SITE_ID=abc-123/);
   assert.equal(dotenv.parse(output).CUSTOM_VALUE, 'tekst ze spacją i #');
   assert.doesNotMatch(output, /undefined|null/);

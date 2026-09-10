@@ -13,6 +13,10 @@ const PUBLIC_CACHE_HEADERS = Object.freeze({
 exports.handler = async (event = {}) => {
   if (String(event.httpMethod || '').toUpperCase() !== 'GET') return json({ error: 'METHOD_NOT_ALLOWED' }, 405, { Allow: 'GET' });
   try {
+    if (event.queryStringParameters?.source === 'route') {
+      const settings = await require('../site-assets.js').readPublicLandingRoute();
+      return json(settings, 200, PUBLIC_CACHE_HEADERS);
+    }
     const store = landing.getLandingStore();
     const publication = await landing.readPublication(store);
     if (publication.version) return json({

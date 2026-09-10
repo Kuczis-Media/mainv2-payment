@@ -1,10 +1,10 @@
 'use strict';
 
-const { decodeMediaUpload, GITHUB_API_VERSION } = require('./content-repository.js');
+const { decodeMediaUpload } = require('./content-repository.js');
 const landing = require('./landing-content.js');
 const deliveryModel = require('../public/assets/js/landing-delivery-model.js');
 
-const GITHUB_API_BASE = 'https://api.github.com';
+const git = require('./git-provider.js');
 const DEFAULT_REPOSITORY = 'Kuczis-Media/logo';
 const DEFAULT_REF = 'main';
 const LANDING_CONFIG_PATH = 'landing/config.json';
@@ -27,100 +27,66 @@ class SiteAssetsError extends Error {
 }
 
 function configuration(env = process.env) {
-  const directory = clean(env.GITHUB_SITE_ASSETS_DIRECTORY).replace(/^\/+|\/+$/g, '');
-  const token = clean(env.GITHUB_SITE_ASSETS_TOKEN);
-  const valid = !directory || SAFE_DIRECTORY.test(directory);
-  return {
-    repository: DEFAULT_REPOSITORY,
-    ref: DEFAULT_REF,
-    directory,
-    token,
-    configured: Boolean(valid && token),
-    cdnBaseUrl: valid ? cdnUrl({ repository: DEFAULT_REPOSITORY, ref: DEFAULT_REF, directory }, '', DEFAULT_REF).replace(/\/$/, '') : ''
-  };
+  const provider = git.settings(env), gitea = provider.provider === 'gitea';
+  const directory = clean(gitea ? env.GITEA_SITE_ASSETS_DIRECTORY : env.GITHUB_SITE_ASSETS_DIRECTORY).replace(/^\/+|\/+$/g, '');
+  const token = clean(gitea ? env.GITEA_SITE_ASSETS_TOKEN || env.GITEA_TOKEN : env.GITHUB_SITE_ASSETS_TOKEN || env.GITHUB_TOKEN);
+  const owner = clean(env.GITEA_OWNER), assetRepo = clean(env.GITEA_ASSETS_REPO);
+  const repository = clean(gitea ? env.GITEA_SITE_ASSETS_REPOSITORY || (owner && assetRepo ? `${owner}/${assetRepo}` : '') : env.GITHUB_SITE_ASSETS_REPOSITORY) || (gitea ? '' : DEFAULT_REPOSITORY);
+  const ref = clean(gitea ? env.GITEA_SITE_ASSETS_BRANCH || env.GITEA_BRANCH : env.GITHUB_SITE_ASSETS_REF) || DEFAULT_REF;
+  const valid = (!directory || SAFE_DIRECTORY.test(directory)) && /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository) && !repository.includes('..') && /^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/.test(ref) && !ref.includes('..');
+  const config = { ...provider, repository, ref, directory, token, configured: Boolean(valid && token && provider.apiUrl) };
+  config.cdnBaseUrl = valid && provider.apiUrl ? cdnUrl(config, '', ref).replace(/\/$/, '') : '';
+  return config;
+}
+
+function defaultTarget(env = process.env) {
+  const config = configuration(env);
+  return { repository: config.repository, ref: config.ref, path: clean(env.LANDING_CONFIG_PATH) || LANDING_CONFIG_PATH };
+}
+
+function publicTarget(target, config) {
+  return deliveryModel.target({ ...target, ...(config.provider === 'gitea' ? { provider: 'gitea', baseUrl: config.baseUrl } : { provider: 'github' }) });
+}
+
+async function readPublicLandingRoute(env = process.env, options = {}) {
+  const config = configuration(env);
+  const fallback = { ...deliveryModel.normalize({ target: defaultTarget(env) }) };
+  // No credentials here: a private route can never become public via this API.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const response = await (options.fetchImpl || fetch)(rawUrl(config, deliveryModel.ROUTE_PATH), { credentials: 'omit', redirect: 'error', signal: controller.signal });
+    if (!response.ok && response.status !== 404) throw new SiteAssetsError('SITE_ASSETS_UNAVAILABLE');
+    const settings = response.status === 404 ? fallback : deliveryModel.normalize(await response.json());
+    return { ...settings, target: publicTarget(settings.target, config) };
+  } finally { clearTimeout(timer); }
 }
 
 function publicConfiguration(env = process.env) {
   const config = configuration(env);
   return {
     configured: config.configured,
+    provider: config.provider,
     repository: config.repository,
     ref: config.ref,
     directory: !config.directory || SAFE_DIRECTORY.test(config.directory) ? config.directory : '',
     cdnBaseUrl: config.cdnBaseUrl,
-    landingConfigUrl: rawUrl(config, LANDING_CONFIG_PATH)
+    landingConfigUrl: config.cdnBaseUrl ? rawUrl(config, clean(env.LANDING_CONFIG_PATH) || LANDING_CONFIG_PATH) : ''
   };
 }
 
-function rawUrl(config, pathname) {
-  const [owner, repository] = config.repository.split('/');
-  const path = String(pathname || '').split('/').filter(Boolean).map(encodeURIComponent).join('/');
-  return `https://raw.githubusercontent.com/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/${encodeURIComponent(config.ref)}/${path}`;
-}
-
-function contentPath(config, filename = '') {
-  return [config.directory, filename].filter(Boolean).join('/');
-}
-
-function apiUrl(config, filename = '', includeRef = true) {
-  const [owner, repository] = config.repository.split('/');
-  const suffix = contentPath(config, filename)
-    .split('/')
-    .filter(Boolean)
-    .map(encodeURIComponent)
-    .join('/');
-  const url = new URL(`${GITHUB_API_BASE}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/contents${suffix ? `/${suffix}` : ''}`);
-  if (includeRef) url.searchParams.set('ref', config.ref);
-  return url;
-}
-
-function apiPathUrl(config, pathname, includeRef = true) {
-  const [owner, repository] = config.repository.split('/');
-  const suffix = String(pathname || '').split('/').filter(Boolean).map(encodeURIComponent).join('/');
-  const url = new URL(`${GITHUB_API_BASE}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/contents/${suffix}`);
-  if (includeRef) url.searchParams.set('ref', config.ref);
-  return url;
-}
-
-function repositoryUrl(config) {
-  const [owner, repository] = config.repository.split('/');
-  return new URL(`${GITHUB_API_BASE}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}`);
-}
-
-function branchUrl(config) {
-  const [owner, repository] = config.repository.split('/');
-  return new URL(`${GITHUB_API_BASE}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/branches/${encodeURIComponent(config.ref)}`);
-}
-
-function headers(config, json = false) {
-  return {
-    Accept: 'application/vnd.github+json',
-    Authorization: `Bearer ${config.token}`,
-    'User-Agent': 'NextMed-site-assets',
-    'X-GitHub-Api-Version': GITHUB_API_VERSION,
-    ...(json ? { 'Content-Type': 'application/json; charset=utf-8' } : {})
-  };
-}
+function rawUrl(config, pathname) { return git.rawUrl(config, pathname); }
+function contentPath(config, filename = '') { return [config.directory, filename].filter(Boolean).join('/'); }
+function apiUrl(config, filename = '', includeRef = true) { return git.apiUrl(config, contentPath(config, filename), includeRef); }
+function apiPathUrl(config, pathname, includeRef = true) { return git.apiUrl(config, pathname, includeRef); }
+function repositoryUrl(config) { return git.apiUrl(config, '', false, ''); }
+function branchUrl(config) { return git.apiUrl(config, config.ref, false, 'branches'); }
 
 async function githubFetch(url, config, options = {}) {
   if (!config.configured) throw new SiteAssetsError('SITE_ASSETS_NOT_CONFIGURED', 503);
-  const fetchImpl = options.fetchImpl || fetch;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   let response;
-  try {
-    response = await fetchImpl(url, {
-      method: options.method || 'GET',
-      headers: headers(config, Boolean(options.body)),
-      ...(options.body ? { body: JSON.stringify(options.body) } : {}),
-      signal: controller.signal
-    });
-  } catch (error) {
-    if (error && error.name === 'AbortError') throw new SiteAssetsError('SITE_ASSETS_TIMEOUT', 504);
-    throw new SiteAssetsError('SITE_ASSETS_UNAVAILABLE', 503);
-  } finally {
-    clearTimeout(timeout);
-  }
+  try { response = await git.request(config, url, options); }
+  catch (error) { throw new SiteAssetsError(error.code === 'CONTENT_REPOSITORY_TIMEOUT' ? 'SITE_ASSETS_TIMEOUT' : 'SITE_ASSETS_UNAVAILABLE', error.status || 503); }
   if (response.status === 403 && response.headers?.get?.('x-ratelimit-remaining') === '0') {
     throw new SiteAssetsError('SITE_ASSETS_RATE_LIMITED', 503);
   }
@@ -131,7 +97,7 @@ async function githubFetch(url, config, options = {}) {
 }
 
 async function ensurePublic(config, options = {}) {
-  const key = `${config.repository}:${config.ref}:${config.token.slice(-8)}`;
+  const key = git.cacheIdentity(config);
   if (!options.forcePublicCheck && publicCheckCache && publicCheckCache.key === key && publicCheckCache.expiresAt > Date.now()) {
     return publicCheckCache.commitSha;
   }
@@ -150,13 +116,14 @@ async function ensurePublic(config, options = {}) {
   let branch;
   try { branch = await branchResponse.json(); }
   catch { throw new SiteAssetsError('SITE_ASSETS_RESPONSE_INVALID', 503); }
-  const commitSha = clean(branch && branch.commit && branch.commit.sha);
+  const commitSha = clean(branch && branch.commit && (branch.commit.sha || branch.commit.id));
   if (!SAFE_SHA.test(commitSha)) throw new SiteAssetsError('SITE_ASSETS_RESPONSE_INVALID', 503);
   publicCheckCache = { key, commitSha, expiresAt: Date.now() + PUBLIC_CHECK_TTL_MS };
   return commitSha;
 }
 
 function cdnUrl(config, filename, version = config.ref) {
+  if (config.provider === 'gitea') return git.rawUrl(config, contentPath(config, filename), version, SAFE_SHA.test(version));
   const path = contentPath(config, filename)
     .split('/')
     .filter(Boolean)
@@ -254,7 +221,7 @@ async function uploadAsset(input = {}, env = process.env, options = {}) {
 }
 
 async function readLandingConfig(env = process.env, options = {}) {
-  const selected = deliveryModel.target(options.target || deliveryModel.DEFAULT_TARGET);
+  const selected = deliveryModel.target(options.target || defaultTarget(env));
   const config = { ...configuration(env), repository: selected.repository, ref: selected.ref, directory: '' };
   await ensurePublic(config, options);
   const response = await githubFetch(apiPathUrl(config, selected.path), config, options);
@@ -281,7 +248,7 @@ async function publishLandingConfig(raw, env = process.env, options = {}) {
   if (!Object.hasOwn(options, 'expectedSha') || (options.expectedSha !== null && !SAFE_SHA.test(options.expectedSha))) {
     throw new SiteAssetsError('LANDING_PUBLICATION_REQUIRED', 400);
   }
-  const selected = deliveryModel.target(options.target || deliveryModel.DEFAULT_TARGET);
+  const selected = deliveryModel.target(options.target || defaultTarget(env));
   const config = { ...configuration(env), repository: selected.repository, ref: selected.ref, directory: '', landingPath: selected.path };
   // Re-read the actual file; a caller may only replace the version they opened.
   // GitHub's file SHA condition then protects the read-to-write race as well.
@@ -333,7 +300,7 @@ function landingDelivery(config, sha, commitSha = '') {
     sha,
     rawUrl: rawUrl(config, config.landingPath || LANDING_CONFIG_PATH),
     cdnUrl: cdnUrl({ ...config, directory: '' }, config.landingPath || LANDING_CONFIG_PATH, commitSha || config.ref),
-    ...(commitSha ? { commitSha, commitUrl: `https://github.com/${config.repository}/commit/${commitSha}` } : {})
+    ...(commitSha ? { commitSha, commitUrl: git.webUrl(config, `/commit/${commitSha}`) } : {})
   };
 }
 
@@ -465,7 +432,7 @@ async function readLandingRoute(env = process.env, options = {}) {
   const config = configuration(env);
   await ensurePublic(config, options);
   const response = await githubFetch(apiPathUrl(config, deliveryModel.ROUTE_PATH), config, options);
-  if (response.status === 404) return { settings: deliveryModel.normalize(), sha: null };
+  if (response.status === 404) return { settings: deliveryModel.normalize({ target: publicTarget(defaultTarget(env), config) }), sha: null };
   if (!response.ok) throw new SiteAssetsError('SITE_ASSETS_UNAVAILABLE');
   try {
     const entry = await response.json();
@@ -474,12 +441,17 @@ async function readLandingRoute(env = process.env, options = {}) {
     const encoded = entry.content.replace(/\s/g, '');
     const bytes = Buffer.from(encoded, 'base64');
     if (bytes.length > 8000 || bytes.toString('base64') !== encoded) throw new Error('Invalid route encoding');
-    return { settings: deliveryModel.normalize(JSON.parse(bytes.toString('utf8'))), sha: entry.sha };
+    const settings = deliveryModel.normalize(JSON.parse(bytes.toString('utf8')));
+    return { settings: { ...settings, target: publicTarget(settings.target, config) }, sha: entry.sha };
   } catch { throw new SiteAssetsError('INVALID_LANDING_DELIVERY'); }
 }
 
 async function saveLandingRoute(raw, env = process.env, options = {}) {
-  const settings = deliveryModel.normalize(raw, options.origin || '');
+  const checked = deliveryModel.normalize(raw, options.origin || '');
+  const settings = { ...checked, target: publicTarget(checked.target, configuration(env)) };
+  const routeConfig = configuration(env);
+  if (settings.target.repository.toLowerCase() === routeConfig.repository.toLowerCase()
+    && settings.target.ref === routeConfig.ref && settings.target.path === deliveryModel.ROUTE_PATH) throw new SiteAssetsError('LANDING_PATH_RESERVED', 400);
   if (!Object.hasOwn(options, 'expectedSha') || (options.expectedSha !== null && !SAFE_SHA.test(options.expectedSha))) throw new SiteAssetsError('LANDING_PUBLICATION_REQUIRED', 400);
   const current = await readLandingRoute(env, { ...options, forcePublicCheck: true });
   if (current.sha !== options.expectedSha) throw new SiteAssetsError('LANDING_CONFLICT', 409);
@@ -509,6 +481,8 @@ async function saveLandingRoute(raw, env = process.env, options = {}) {
 module.exports = {
   readLandingRoute,
   saveLandingRoute,
+  defaultTarget,
+  readPublicLandingRoute,
   LANDING_CONFIG_PATH,
   SiteAssetsError,
   configuration,

@@ -158,7 +158,7 @@ for (const storageAvailable of [false, true]) {
 }
 
 async function sourceRun({ cache, publicationCache, publicationPayload = { active: false }, status = 200, payload = delivery.normalize({ target: custom }), offline = false, preview = false } = {}) {
-  const storage = new Map(cache ? [['nextmed.landing.route.v1', JSON.stringify(cache)]] : []);
+  const storage = new Map(cache ? [['nextmed.landing.route.v2', JSON.stringify(cache)]] : []);
   if (publicationCache) storage.set('nextmed.landing.publication.v1', JSON.stringify(publicationCache));
   const calls = [];
   const context = {
@@ -169,7 +169,7 @@ async function sourceRun({ cache, publicationCache, publicationPayload = { activ
   };
   context.window = context; context.parent = preview ? {} : context;
   vm.runInNewContext(fs.readFileSync(require.resolve('../public/assets/js/landing-source.js'), 'utf8'), context);
-  return { settings: await context.NextMedLandingSource.ready, calls, storage };
+  return { settings: JSON.parse(JSON.stringify(await context.NextMedLandingSource.ready)), calls, storage };
 }
 
 test('public route resolves alongside one cached publication request, without credentials or polling', async () => {
@@ -202,7 +202,7 @@ test('route loading handles old installations, network failure and editor previe
   assert.deepEqual((await sourceRun({ status: 404 })).settings, delivery.normalize());
   const settings = delivery.normalize({ target: custom });
   assert.deepEqual((await sourceRun({ offline: true, cache: { settings, checkedAt: Date.now() - 300_001 } })).settings, settings);
-  assert.deepEqual((await sourceRun({ offline: true })).settings, delivery.normalize());
+  assert.deepEqual((await sourceRun({ offline: true })).settings, { ...delivery.normalize(), unavailable: true });
   assert.equal((await sourceRun({ preview: true })).calls.length, 0);
 });
 
@@ -214,16 +214,16 @@ test('landing route and publication reuse the cache after one minute and refresh
   const expired = Date.now() - 300_001;
   const cold = await sourceRun({ cache: { settings, checkedAt: expired }, publicationCache: { publication: null, checkedAt: expired } });
   assert.equal(cold.calls.length, 2);
-  assert.equal(cold.calls.filter((call) => call.url.startsWith('/.netlify/functions/')).length, 1);
+  assert.equal(cold.calls.filter((call) => call.url.startsWith('/.netlify/functions/')).length, 2);
 });
 
 test('route and publication outages do not cause another request on each page navigation', async () => {
   const failed = await sourceRun({ offline: true });
   assert.equal(failed.calls.length, 2);
   const nextPage = await sourceRun({ offline: true,
-    cache: JSON.parse(failed.storage.get('nextmed.landing.route.v1')),
+    cache: JSON.parse(failed.storage.get('nextmed.landing.route.v2')),
     publicationCache: JSON.parse(failed.storage.get('nextmed.landing.publication.v1'))
   });
   assert.equal(nextPage.calls.length, 0);
-  assert.deepEqual(nextPage.settings, delivery.normalize());
+  assert.deepEqual(nextPage.settings, { ...delivery.normalize(), unavailable: true });
 });

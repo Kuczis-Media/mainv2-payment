@@ -2,13 +2,13 @@
   'use strict';
   const api = window.NextMedLandingDelivery;
   if (!api) return;
-  const CACHE_KEY = 'nextmed.landing.route.v1';
+  const CACHE_KEY = 'nextmed.landing.route.v2';
   const PUBLICATION_CACHE_KEY = 'nextmed.landing.publication.v1';
   const TTL = 5 * 60_000;
   let cached;
   try {
     const entry = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
-    if (entry && Number.isFinite(entry.checkedAt) && entry.checkedAt <= Date.now()) cached = { settings: api.normalize(entry.settings), checkedAt: entry.checkedAt };
+    if (entry && Number.isFinite(entry.checkedAt) && entry.checkedAt <= Date.now()) cached = { settings: { ...api.normalize(entry.settings), ...(entry.settings?.unavailable ? { unavailable: true } : {}) }, checkedAt: entry.checkedAt };
   } catch {}
   const preview = new URLSearchParams(location.search).get('landing-preview') === '1' && window.parent !== window;
   const exported = Boolean(document.querySelector('meta[name="nextmed-landing-export"]'));
@@ -24,7 +24,7 @@
       try { localStorage.setItem(CACHE_KEY, JSON.stringify({ settings, checkedAt: Date.now() })); } catch {}
       return settings;
     } catch {
-      const settings = cached?.settings || api.normalize();
+      const settings = cached?.settings || { ...api.normalize(), unavailable: true };
       try { localStorage.setItem(CACHE_KEY, JSON.stringify({ settings, checkedAt: Date.now() })); } catch {}
       return settings;
     }

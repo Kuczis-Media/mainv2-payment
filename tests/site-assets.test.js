@@ -70,21 +70,21 @@ test('site assets configuration exposes no token and builds a jsDelivr base', ()
   assert.doesNotMatch(JSON.stringify(visible), /github_pat_site_assets/);
 });
 
-test('site assets configuration ignores repository and ref overrides from the environment', () => {
-  const maliciousEnv = {
+test('site assets support configured repository and ref without exposing tokens', () => {
+  const customEnv = {
     ...env,
-    GITHUB_SITE_ASSETS_REPOSITORY: 'attacker/asset-takeover',
-    GITHUB_SITE_ASSETS_REF: '../../refs/heads/evil'
+    GITHUB_SITE_ASSETS_REPOSITORY: 'school/branding',
+    GITHUB_SITE_ASSETS_REF: 'release/site'
   };
-  const configured = siteAssets.configuration(maliciousEnv);
-  const visible = siteAssets.publicConfiguration(maliciousEnv);
+  const configured = siteAssets.configuration(customEnv);
+  const visible = siteAssets.publicConfiguration(customEnv);
 
-  assert.equal(configured.repository, 'Kuczis-Media/logo');
-  assert.equal(configured.ref, 'main');
-  assert.equal(visible.repository, 'Kuczis-Media/logo');
-  assert.equal(visible.ref, 'main');
-  assert.equal(visible.cdnBaseUrl, 'https://cdn.jsdelivr.net/gh/Kuczis-Media/logo@main/branding');
-  assert.doesNotMatch(JSON.stringify(visible), /attacker|evil/);
+  assert.equal(configured.repository, 'school/branding');
+  assert.equal(configured.ref, 'release/site');
+  assert.equal(visible.repository, 'school/branding');
+  assert.equal(visible.ref, 'release/site');
+  assert.equal(visible.cdnBaseUrl, 'https://cdn.jsdelivr.net/gh/school/branding@release%2Fsite/branding');
+  assert.doesNotMatch(JSON.stringify(visible), /github_pat/);
 });
 
 test('site asset library fails closed when the configured repository is private', async () => {

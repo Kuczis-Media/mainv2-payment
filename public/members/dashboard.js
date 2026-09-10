@@ -85,10 +85,14 @@
     CONTENT_CATALOG_INVALID: 'Plik catalog.json w repozytorium materiałów jest nieprawidłowy.',
     CONTENT_DIRECTORY_NOT_FOUND: 'W prywatnym repozytorium brakuje folderu lessons lub prompts.',
     CONTENT_REPOSITORIES_ENV_TOO_LARGE: 'Lista repozytoriów przekracza limit wartości ENV Netlify. Skróć nazwy lub katalogi albo zmniejsz liczbę pozycji.',
-    CONTENT_REPOSITORY_NOT_CONFIGURED: 'Dodaj zmienne GITHUB_CONTENT_* w Netlify.',
-    CONTENT_REPOSITORY_INVALID_RESPONSE: 'GitHub zwrócił nieprawidłową odpowiedź dla wskazanego repozytorium lub katalogu.',
+    CONTENT_REPOSITORY_NOT_CONFIGURED: 'Skonfiguruj Git / Content Provider w generatorze ENV i ustaw zmienne w Netlify.',
+    CONTENT_REPOSITORY_INVALID_RESPONSE: 'Serwer repozytorium zwrócił nieprawidłową odpowiedź dla wskazanego repozytorium lub katalogu.',
     CONTENT_REPOSITORY_NOT_FOUND: 'Nie znaleziono repozytorium, katalogu lub wybranej gałęzi.',
-    CONTENT_REPOSITORY_UNAVAILABLE: 'GitHub jest chwilowo niedostępny.',
+    CONTENT_REPOSITORY_AUTH_FAILED: 'Token Gitea jest nieprawidłowy lub wygasł. Administrator musi go zaktualizować.',
+    CONTENT_REPOSITORY_FORBIDDEN: 'Gitea odmawia dostępu. Sprawdź uprawnienia tokenu oraz blokady serwera.',
+    CONTENT_REPOSITORY_RATE_LIMITED: 'Serwer repozytorium ograniczył ruch. Spróbuj ponownie za chwilę.',
+    INVALID_GITEA_URL: 'Sprawdź GITEA_BASE_URL i GITEA_API_URL w konfiguracji serwera.',
+    CONTENT_REPOSITORY_UNAVAILABLE: 'Serwer repozytorium jest chwilowo niedostępny.',
     CONTENT_REPOSITORY_ADMIN_UNAVAILABLE: 'Konfigurator repozytoriów jest chwilowo niedostępny.',
     CONTENT_REPOSITORY_BRANCH_NOT_FOUND: 'Nie znaleziono wskazanej gałęzi w tym repozytorium. Sprawdź pole „Gałąź” (np. main).',
     CONTENT_REPOSITORY_CONFIG_PENDING_DEPLOY: 'W Netlify jest już nowsza konfiguracja oczekująca na deploy. Uruchom deploy, poczekaj na jego zakończenie i odśwież stronę.',
@@ -96,12 +100,12 @@
     CONTENT_REPOSITORY_DEFAULT_ID_RESERVED: 'ID „default” jest zarezerwowane dla repozytorium domyślnego. Zaznacz ten wpis jako domyślny albo nadaj mu inne ID.',
     CONTENT_REPOSITORY_PRODUCTION_REQUIRED: 'Repozytoria można zmieniać tylko z produkcyjnego wdrożenia platformy. Otwórz główny adres witryny Netlify.',
     CONTENT_REPOSITORY_ROOT_NOT_DIRECTORY: 'Wskazany katalog główny jest plikiem, a nie folderem. Popraw pole „Katalog główny”.',
-    CONTENT_REPOSITORY_SHARED_TOKEN_CONFLICT: 'Repozytoria korzystające z tej samej zmiennej ENV otrzymały różne tokeny. Wklej ten sam token tylko raz albo użyj osobnych zmiennych GITHUB_CONTENT_TOKEN_*.',
-    GITHUB_CONTENT_RATE_LIMITED: 'GitHub wyczerpał limit zapytań dla tego tokenu. Poczekaj na odnowienie limitu i spróbuj ponownie.',
+    CONTENT_REPOSITORY_SHARED_TOKEN_CONFLICT: 'Repozytoria korzystające z tej samej zmiennej ENV otrzymały różne tokeny. Wklej ten sam token tylko raz albo użyj osobnych zmiennych tokenów wybranego dostawcy.',
+    GITHUB_CONTENT_RATE_LIMITED: 'Serwer repozytorium wyczerpał limit zapytań dla tego tokenu. Poczekaj na odnowienie limitu i spróbuj ponownie.',
     INVALID_CONTENT_REPOSITORIES: 'Uzupełnij poprawnie ID, nazwę, owner/repo, gałąź i opcjonalny katalog każdego repozytorium.',
     INVALID_CONTENT_REPOSITORY_ACTION: 'Wybrano nieprawidłową operację repozytorium.',
-    INVALID_GITHUB_CONTENT_TOKEN: 'Token GitHub ma nieprawidłowy format.',
-    GITHUB_CONTENT_TOKEN_REQUIRED: 'Wklej token GitHub albo utwórz wskazaną zmienną GITHUB_CONTENT_TOKEN_* ręcznie w Netlify i wykonaj deploy.',
+    INVALID_GITHUB_CONTENT_TOKEN: 'Token repozytorium ma nieprawidłowy format.',
+    GITHUB_CONTENT_TOKEN_REQUIRED: 'Wklej token repozytorium albo utwórz wskazaną poniżej zmienną tokenu ręcznie w Netlify i wykonaj deploy.',
     CONTENT_WRITE_CONFLICT: 'Plik został w międzyczasie zmieniony. Wczytaj najnowszą wersję i spróbuj ponownie.',
     DASHBOARD_CONFLICT: 'Dashboard został w międzyczasie zmieniony. Wczytaj najnowszą wersję i ponów edycję.',
     DASHBOARD_INVALID: 'Treść dashboardu jest nieprawidłowa.',
@@ -115,8 +119,8 @@
     EXPECTED_ETAG_REQUIRED: 'Wczytaj dashboard ponownie przed zapisaniem zmian.',
     FIRST_AND_LAST_NAME_REQUIRED: 'Uzupełnij poprawne imię i nazwisko użytkownika.',
     FORM_NOT_FOUND: 'Nie znaleziono tego formularza.',
-    GITHUB_CONTENT_TOKEN_REJECTED: 'Token GitHub jest nieprawidłowy albo nie ma dostępu Contents do wskazanego repozytorium.',
-    GITHUB_CONTENT_WRITE_REJECTED: 'Token GitHub nie ma uprawnienia Contents: Read and write do wybranego repozytorium.',
+    GITHUB_CONTENT_TOKEN_REJECTED: 'Token repozytorium jest nieprawidłowy albo nie ma dostępu do wskazanego repozytorium.',
+    GITHUB_CONTENT_WRITE_REJECTED: 'Token repozytorium nie ma uprawnienia do zapisu w wybranym repozytorium.',
     IDENTITY_ADMIN_UNAVAILABLE: 'Administracja kontami jest chwilowo niedostępna.',
     IDENTITY_DELETE_FAILED: 'Nie udało się usunąć konta z Identity.',
     IDENTITY_INVITE_FAILED: 'Nie udało się wysłać zaproszenia przez Identity.',
@@ -154,7 +158,7 @@
     NETLIFY_CONTENT_CONFIG_WRITE_FAILED: 'Netlify nie zapisał zmiennych środowiskowych.',
     NETLIFY_CONTENT_SECRET_WRITE_FAILED: 'Netlify nie zapisał tokenu jako sekretu. Żadna jawna wersja PAT nie została utworzona; sprawdź ustawienia ENV i spróbuj ponownie.',
     NETLIFY_DEPLOY_START_FAILED: 'Netlify nie uruchomił deployu. Sprawdź stan projektu i spróbuj ponownie przyciskiem „Uruchom tylko deploy”.',
-    NETLIFY_SECRETS_CONTROLLER_REQUIRED: 'Automatyczny zapis PAT wymaga Netlify Secrets Controller (plan Personal lub wyższy). Na Free utwórz wskazaną zmienną GITHUB_CONTENT_TOKEN_* ręcznie, wykonaj deploy i pozostaw pole tokenu puste.',
+    NETLIFY_SECRETS_CONTROLLER_REQUIRED: 'Automatyczny zapis PAT wymaga Netlify Secrets Controller (plan Personal lub wyższy). Na Free utwórz wskazaną zmienną tokenu wskazaną poniżej ręcznie, wykonaj deploy i pozostaw pole tokenu puste.',
     NO_CHANGES: 'Nie wskazano żadnych zmian do zapisania.',
     INVALID_PAYMENT_ACTION: 'Wybrano nieprawidłową operację płatności.',
     INVALID_PAYMENT_ENABLED_SETTING: 'Ustawienie dostępności płatności jest nieprawidłowe.',
@@ -322,6 +326,7 @@
   let adminContentConfigPendingDeploy = false;
   let adminContentConfigDeployQueued = false;
   let adminContentConfigBaseTokenReserved = false;
+  let adminContentTokenEnvBase = 'GITHUB_CONTENT_TOKEN';
   let adminContentConfigBaseline = '';
   let adminContentConfigDrafts = [];
   let adminAiLoaded = false;
@@ -3051,7 +3056,7 @@
         elements.adminContentConnection.dataset.state = 'ready';
         setPanelStatus(
           elements.adminContentStatus,
-          'Lista jest pobierana na bieżąco z GitHuba. Zmiana pliku nie wymaga deployu aplikacji.',
+          'Lista jest pobierana na bieżąco z repozytorium. Zmiana pliku nie wymaga deployu aplikacji.',
           'info'
         );
       } else if (payload.connection === 'not_configured') {
@@ -3113,10 +3118,10 @@
   function contentTokenEnvironmentName(draft) {
     if (draft?.tokenEnv) return draft.tokenEnv;
     const id = String(draft?.id || '').trim().toUpperCase().replace(/-/g, '_');
-    if (draft?.default && !adminContentConfigBaseTokenReserved) return 'GITHUB_CONTENT_TOKEN';
+    if (draft?.default && !adminContentConfigBaseTokenReserved) return adminContentTokenEnvBase;
     return /^[A-Z0-9][A-Z0-9_]{0,39}$/.test(id)
-      ? `GITHUB_CONTENT_TOKEN_${id}`
-      : 'GITHUB_CONTENT_TOKEN_<ID>';
+      ? `${adminContentTokenEnvBase}_${id}`
+      : `${adminContentTokenEnvBase}_<ID>`;
   }
 
   function createContentConfigField(label, field, value, options = {}) {
@@ -3345,9 +3350,23 @@
     setPanelStatus(elements.adminContentConfigStatus, 'Wczytywanie konfiguracji repozytoriów…', 'loading');
     try {
       const payload = await contentConfiguratorRequest(null);
+      adminContentTokenEnvBase = payload?.provider === 'gitea' ? 'GITEA_TOKEN' : 'GITHUB_CONTENT_TOKEN';
+      const isGitea = payload?.provider === 'gitea';
+      if (elements.adminContentEnvTemplate) elements.adminContentEnvTemplate.textContent = isGitea
+        ? `GIT_PROVIDER=gitea\nGITEA_BASE_URL=${payload.baseUrl || ''}\nGITEA_API_URL=${payload.apiUrl || ''}\nGITEA_TOKEN=\nGITEA_OWNER=\nGITEA_REPO=\nGITEA_BRANCH=main\nGITEA_CONTENT_REPOSITORIES=\nGITEA_CONTENT_ROOT=`
+        : 'GIT_PROVIDER=github\nGITHUB_CONTENT_TOKEN=\nGITHUB_CONTENT_REPOSITORIES=\nGITHUB_CONTENT_REPOSITORY=\nGITHUB_CONTENT_REF=main\nGITHUB_CONTENT_ROOT=';
+      const tokenPattern = document.getElementById('admin-content-token-pattern');
+      if (tokenPattern) tokenPattern.textContent = `${adminContentTokenEnvBase}_*`;
+      const tokenHelp = document.getElementById('admin-content-token-help');
+      if (tokenHelp && /^https:\/\//.test(payload?.tokenHelpUrl || '')) {
+        tokenHelp.href = payload.tokenHelpUrl;
+        tokenHelp.textContent = payload.provider === 'gitea' ? 'Utwórz token Gitea' : 'Utwórz token repozytorium';
+      }
+      const configTitle = document.getElementById('admin-content-configurator-title');
+      if (configTitle) configTitle.textContent = `Prywatne repozytoria ${payload?.provider === 'gitea' ? 'Gitea' : 'GitHub'}`;
       const repositories = Array.isArray(payload?.repositories) ? payload.repositories : [];
       adminContentConfigBaseTokenReserved = repositories.some((repository) => (
-        repository?.tokenEnv === 'GITHUB_CONTENT_TOKEN' && (repository.tokenConfigured || repository.repository)
+        repository?.tokenEnv === adminContentTokenEnvBase && (repository.tokenConfigured || repository.repository)
       ));
       adminContentConfigDrafts = repositories.map(contentRepositoryDraft);
       if (!adminContentConfigDrafts.length) {
@@ -3360,7 +3379,7 @@
       adminContentConfigBaseline = contentConfigSignature(adminContentConfigDrafts);
       adminContentConfigLoaded = true;
       const message = payload?.configurationInvalid
-        ? 'Dotychczasowa zmienna GITHUB_CONTENT_REPOSITORIES jest nieprawidłowa. Popraw listę i zapisz ją ponownie.'
+        ? 'Lista repozytoriów w ENV jest nieprawidłowa. Popraw listę i zapisz ją ponownie.'
         : payload?.netlifyConfigured
           ? 'Konfigurator jest gotowy. Sekrety zapisane wcześniej nie są odczytywane do przeglądarki.'
           : 'Dodaj jednorazowo NETLIFY_API_TOKEN w ustawieniach Netlify, aby zapis i deploy działały z panelu.';
@@ -3444,7 +3463,7 @@
         }))
       });
       adminContentConfigDrafts = (payload.repositories || []).map(contentRepositoryDraft);
-      adminContentConfigBaseTokenReserved = adminContentConfigDrafts.some((repository) => repository.tokenEnv === 'GITHUB_CONTENT_TOKEN');
+      adminContentConfigBaseTokenReserved = adminContentConfigDrafts.some((repository) => repository.tokenEnv === adminContentTokenEnvBase);
       adminContentConfigPendingDeploy = true;
       adminContentConfigDeployQueued = Boolean(payload.deployment);
       adminContentConfigBaseline = contentConfigSignature(adminContentConfigDrafts);

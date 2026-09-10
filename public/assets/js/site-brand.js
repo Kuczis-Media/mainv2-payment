@@ -56,6 +56,7 @@
         try { localStorage.setItem(CACHE_KEY, JSON.stringify({ model: route.publication.model, checkedAt: Date.now(), configUrl: CONFIG_URL, publicationVersion })); } catch {}
         return;
       }
+      if (route.unavailable) return;
       CONFIG_URL = window.NextMedLandingDelivery.rawUrl(route.target);
       initialize();
     }).catch(initialize);

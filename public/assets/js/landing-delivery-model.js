@@ -16,6 +16,14 @@
     if (!/^[A-Za-z0-9][A-Za-z0-9_./-]{0,99}$/.test(ref) || ref.includes('..') || ref.includes('//') || ref.endsWith('/') || ref.endsWith('.lock')) fail('INVALID_LANDING_REF');
     if (path.length > 220 || !/^(?:[A-Za-z0-9][A-Za-z0-9_.-]*\/)*[A-Za-z0-9][A-Za-z0-9_.-]*\.json$/.test(path) || path.includes('..')) fail('INVALID_LANDING_PATH');
     if (repository.toLowerCase() === DEFAULT_TARGET.repository.toLowerCase() && ref === DEFAULT_TARGET.ref && path === ROUTE_PATH) fail('LANDING_PATH_RESERVED');
+    const provider = value.provider || 'github';
+    if (!['github', 'gitea'].includes(provider)) fail('INVALID_LANDING_DELIVERY');
+    if (provider === 'gitea') {
+      let base;
+      try { base = new URL(value.baseUrl); } catch { fail('INVALID_LANDING_DELIVERY'); }
+      if (base.protocol !== 'https:' || base.username || base.password || base.search || base.hash) fail('INVALID_LANDING_DELIVERY');
+      return { repository, ref, path, provider, baseUrl: base.href.replace(/\/+$/, '') };
+    }
     return { repository, ref, path };
   }
   function externalUrl(value, origin = '') {
@@ -38,8 +46,9 @@
   }
   function rawUrl(value) {
     const checked = target(value);
+    if (checked.provider === 'gitea') return `${checked.baseUrl}/${checked.repository}/raw/branch/${encodeURIComponent(checked.ref)}/${checked.path.split('/').map(encodeURIComponent).join('/')}`;
     return `https://raw.githubusercontent.com/${checked.repository}/${encodeURIComponent(checked.ref)}/${checked.path.split('/').map(encodeURIComponent).join('/')}`;
   }
-  const ROUTE_URL = `https://raw.githubusercontent.com/${DEFAULT_TARGET.repository}/${DEFAULT_TARGET.ref}/${ROUTE_PATH}`;
+  const ROUTE_URL = '/.netlify/functions/landing?source=route';
   return Object.freeze({ DEFAULT_TARGET, ROUTE_PATH, ROUTE_URL, target, externalUrl, normalize, rawUrl });
 });
