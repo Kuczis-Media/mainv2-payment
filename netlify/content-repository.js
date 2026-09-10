@@ -396,6 +396,38 @@ function titleFromFilename(filename) {
   return stem.charAt(0).toLocaleUpperCase('pl') + stem.slice(1);
 }
 
+async function verifyContentRoot(config, options = {}) {
+  // A missing material folder is normal for a new library. First establish
+  // that its parent exists so a bad token/repository/ref cannot look empty.
+  try {
+    const response = await githubRequest(config, '', { ...options, raw: false, notFoundCode: 'CONTENT_ROOT_NOT_FOUND' });
+    let entries;
+    try { entries = await response.json(); }
+    catch { throw new ContentRepositoryError('CONTENT_REPOSITORY_RESPONSE_INVALID'); }
+    if (!Array.isArray(entries)) throw new ContentRepositoryError('CONTENT_REPOSITORY_ROOT_NOT_DIRECTORY', 400);
+    return;
+  } catch (error) {
+    if (error.code !== 'CONTENT_ROOT_NOT_FOUND') throw error;
+  }
+  // Only a missing parent needs extra diagnosis. The normal empty-folder case
+  // above costs one shared read for the whole Studio bootstrap, not per kind.
+  for (const [resource, pathname, notFoundCode] of [
+    ['', '', 'CONTENT_REPOSITORY_NOT_FOUND'],
+    ['branches', config.ref, 'CONTENT_REPOSITORY_BRANCH_NOT_FOUND']
+  ]) {
+    try {
+      const response = await git.request(config, git.apiUrl(config, pathname, false, resource), { ...options, raw: false, method: 'GET' });
+      git.assertGiteaAccess(config, response);
+      if ([401, 403].includes(response.status)) throw new ContentRepositoryError('GITHUB_CONTENT_TOKEN_REJECTED');
+      if (response.status === 404) throw new ContentRepositoryError(notFoundCode, 404);
+      if (!response.ok) throw new ContentRepositoryError('CONTENT_REPOSITORY_UNAVAILABLE');
+    } catch (error) {
+      throw new ContentRepositoryError(error.code || 'CONTENT_REPOSITORY_UNAVAILABLE', error.status || 503);
+    }
+  }
+  throw new ContentRepositoryError('CONTENT_ROOT_NOT_FOUND', 404);
+}
+
 async function listAssets(kind, options = {}) {
   const definition = assetDefinition(kind);
   const config = configFromOptions(options);
@@ -411,9 +443,10 @@ async function listAssets(kind, options = {}) {
   const directoryRequest = githubRequest(config, definition.directory, {
     ...options,
     notFoundCode: 'CONTENT_DIRECTORY_NOT_FOUND'
-  }).catch((error) => {
-    if (definition.nestedFilename && error instanceof ContentRepositoryError && error.code === 'CONTENT_DIRECTORY_NOT_FOUND') return null;
-    throw error;
+  }).catch(async (error) => {
+    if (!(error instanceof ContentRepositoryError) || error.code !== 'CONTENT_DIRECTORY_NOT_FOUND') throw error;
+    await (options.verifyRoot ? options.verifyRoot() : verifyContentRoot(config, options));
+    return null;
   });
   const catalogRequest = typeof options.catalogLoader === 'function'
     ? options.catalogLoader()
@@ -515,9 +548,14 @@ async function listAssetBundle(rawKinds = STUDIO_ASSET_KINDS, rawOptions = {}) {
     if (!catalogRequest) catalogRequest = readCatalog(config, options);
     return catalogRequest;
   };
+  let rootCheck = null;
+  const verifyRoot = () => {
+    if (!rootCheck) rootCheck = verifyContentRoot(config, options);
+    return rootCheck;
+  };
   const entries = await Promise.all(normalizedKinds.map(async (kind) => [
     kind,
-    await listAssets(kind, { ...options, config, catalogLoader })
+    await listAssets(kind, { ...options, config, catalogLoader, verifyRoot })
   ]));
   return Object.fromEntries(entries);
 }

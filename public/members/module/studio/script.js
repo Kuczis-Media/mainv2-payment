@@ -7311,7 +7311,10 @@
         });
         files.append(material);
       });
-      if (!matches.length) files.append(create('p', 'content-explorer-empty', query ? 'Brak pasujących plików.' : 'Ten folder jest pusty.'));
+      if (!matches.length) files.append(create('p', 'content-explorer-empty',
+        state.contentLibrary.loading ? 'Wczytywanie…'
+          : state.contentLibrary.error ? 'Nie udało się wczytać plików.'
+            : query ? 'Brak pasujących plików.' : 'Nie ma jeszcze materiałów tego typu.'));
       else files.append(pagedListApi.controls(document, state.contentLibrary.paging, paged, {
         label: 'plików',
         onMore: renderContentExplorer
@@ -7330,7 +7333,7 @@
         : state.contentLibrary.error
           ? state.contentLibrary.error
           : state.contentLibrary.loaded
-            ? `${total} plików · ${selected?.label || selected?.repository || 'repozytorium'}`
+            ? `${total} plików · ${selected?.label || selected?.repository || 'repozytorium'}${total ? '' : '. Opublikuj pierwszy materiał lub sprawdź, czy skopiowano materiały do wybranego katalogu.'}`
             : 'Biblioteka nie została jeszcze wczytana.';
     }
   }
@@ -7559,6 +7562,21 @@
     state.contentLibrary.quizzes = Array.isArray(assets.quiz) ? assets.quiz : [];
   }
 
+  async function recoverRepositorySelector(library, requestId) {
+    // A broken default repository must not prevent choosing a working one.
+    // Metadata comes from server ENV only: no additional Git API request.
+    if (state.contentLibrary.repositories.length || typeof library.repositories !== 'function') return;
+    try {
+      const repositories = await library.repositories();
+      if (requestId !== state.contentLibrary.requestId || !Array.isArray(repositories)) return;
+      state.contentLibrary.repositories = repositories;
+      if (!selectedRepository()) {
+        state.contentLibrary.selectedRepositoryId = (repositories.find((entry) => entry.default) || repositories[0])?.id || '';
+      }
+      renderRepositorySelectors();
+    } catch { /* Keep the original content error visible; do not retry in a loop. */ }
+  }
+
   function loadRepositoryAssets(force) {
     const repositoryId = state.contentLibrary.selectedRepositoryId;
     if (state.contentLibrary.loadPromise && state.contentLibrary.loadRepositoryId === repositoryId) {
@@ -7643,6 +7661,10 @@
       if (state.mode === 'lesson') renderLessonInspector();
     } catch (error) {
       if (requestId !== state.contentLibrary.requestId) return;
+      if (!['AUTH_REQUIRED', 'AUTH_EXPIRED', 'SESSION_REPLACED', 'ADMIN_REQUIRED', 'ACCESS_REQUIRED', 'ACCESS_EXPIRED', 'SESSION_CHECK_UNAVAILABLE'].includes(error?.code)) {
+        await recoverRepositorySelector(library, requestId);
+        if (requestId !== state.contentLibrary.requestId) return;
+      }
       state.contentLibrary.loaded = false;
       state.contentLibrary.error = error && error.message
         ? error.message

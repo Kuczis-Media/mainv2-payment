@@ -251,6 +251,7 @@ test('an older repository without exams keeps lessons and prompts available', as
       return githubResponse([{ type: 'file', name: 'pomoc.txt', size: 80, sha: 'prompt-sha' }]);
     }
     if (value.includes('/contents/exams')) return githubResponse({ message: 'Not Found' }, { status: 404 });
+    if (/\/contents\?/.test(value)) return githubResponse([{ type: 'dir', name: 'lessons' }, { type: 'dir', name: 'prompts' }]);
     throw new Error(`Unexpected request: ${value}`);
   };
 
@@ -264,6 +265,29 @@ test('an older repository without exams keeps lessons and prompts available', as
   assert.equal(prompts[0].filename, 'pomoc.txt');
   assert.deepEqual(exams, []);
 });
+
+for (const provider of ['github', 'gitea']) {
+  test(`${provider}: missing optional material folders do not hide existing lessons or multiply root checks`, async () => {
+    repository._test.clearCache();
+    const config = { ...configured, provider, ...(provider === 'gitea' ? { apiUrl: 'https://git.example/api/v1', baseUrl: 'https://git.example' } : {}) };
+    const calls = [];
+    const fetchImpl = async (url) => {
+      calls.push(String(url));
+      const pathname = new URL(url).pathname;
+      if (pathname.endsWith('/contents/lessons')) return githubResponse([{ type: 'file', name: 'atom.md', size: 120, sha: 'a'.repeat(40) }]);
+      if (pathname.endsWith('/contents')) return githubResponse([{ type: 'dir', name: 'lessons' }]);
+      return githubResponse({}, { status: 404 });
+    };
+    const bundle = await repository.listAssetBundle({ config, fetchImpl });
+    assert.equal(bundle.lesson[0].filename, 'atom.md');
+    for (const kind of ['prompt', 'exam', 'presentation', 'quiz']) assert.deepEqual(bundle[kind], []);
+    assert.equal(calls.filter((url) => new URL(url).pathname.endsWith('/contents')).length, 1);
+    assert.equal(calls.filter((url) => new URL(url).pathname.endsWith('/catalog.json')).length, 1);
+    const count = calls.length;
+    await repository.listAssetBundle({ config, fetchImpl });
+    assert.equal(calls.length, count, 'Empty lists and existing lessons stay cached');
+  });
+}
 
 test('content repository lists a Studio bundle with one shared catalog request', async () => {
   repository._test.clearCache();

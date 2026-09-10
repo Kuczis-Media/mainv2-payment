@@ -392,6 +392,70 @@ test('Studio probes an unsupported bootstrap only once per page load', async () 
   assert.equal(calls, 1);
 });
 
+function repositoryLoadHarness(library) {
+  const script = read('public/members/module/studio/script.js');
+  const recovery = /  (async function recoverRepositorySelector\(library, requestId\) \{[\s\S]*?\n  \})\n\n  function loadRepositoryAssets/.exec(script);
+  const loader = /  (async function performLoadRepositoryAssets\(force\) \{[\s\S]*?\n  \})\n\n  async function refreshRepositoryAssetKind/.exec(script);
+  assert.ok(recovery && loader);
+  const state = { mode: 'home', contentLibrary: { repositories: [], selectedRepositoryId: '', requestId: 0, error: '', loaded: false, loading: false } };
+  const status = () => ({ textContent: '', classList: { add() {}, remove() {} } });
+  const elements = { dashboardAssetStatus: status(), lessonAssetStatus: status(), promptAssetStatus: status(), contentExplorerStatus: status() };
+  let selectorRenders = 0, assetRenders = 0;
+  const load = Function('state', 'window', 'elements', 'loadStudioBootstrap', 'selectedRepository',
+    'renderRepositorySelectors', 'renderContentExplorer', 'applyRepositoryAssetBundle', 'renderRepositoryAssets',
+    'updateRepositoryButtons', 'loadRepositoryAssetLists',
+    `'use strict';\n${recovery[1]}\n${loader[1]}\nreturn performLoadRepositoryAssets;`
+  )(state, { ChemContentLibrary: library }, elements,
+    (client, repositoryId, force) => client.studioBootstrap({ repositoryId, refresh: Boolean(force) }),
+    () => state.contentLibrary.repositories.find((entry) => entry.id === state.contentLibrary.selectedRepositoryId),
+    () => { selectorRenders++; }, () => {},
+    (assets) => { state.contentLibrary.assets = assets; }, () => { assetRenders++; }, () => {},
+    () => { throw new Error('No legacy list fan-out expected'); });
+  return { state, elements, load, counts: () => ({ selectorRenders, assetRenders }) };
+}
+
+test('Studio keeps the repository selector usable after a failed bootstrap and can load another repository', async () => {
+  const repositories = [{ id: 'glowne', label: 'Main', default: true }, { id: 'test', label: 'Test', default: false }];
+  let metadataReads = 0, bootstrapReads = 0;
+  const failure = Object.assign(new Error('Nie znaleziono gałęzi.'), { code: 'CONTENT_REPOSITORY_BRANCH_NOT_FOUND' });
+  const harness = repositoryLoadHarness({
+    async repositories() { metadataReads++; return repositories; },
+    async list() { throw new Error('No per-kind requests expected'); },
+    async studioBootstrap({ repositoryId }) {
+      bootstrapReads++;
+      if (repositoryId !== 'test') throw failure;
+      return { repositories, repository: repositories[1], assets: { lesson: [{ filename: 'cell.md' }], prompt: [], exam: [], presentation: [], quiz: [] } };
+    }
+  });
+  await harness.load(false);
+  assert.deepEqual(harness.state.contentLibrary.repositories, repositories);
+  assert.equal(harness.state.contentLibrary.selectedRepositoryId, 'glowne');
+  assert.equal(harness.elements.contentExplorerStatus.textContent, failure.message, 'The real error is preserved');
+  assert.equal(harness.state.contentLibrary.loaded, false);
+  assert.equal(harness.state.contentLibrary.loading, false);
+  assert.equal(metadataReads, 1);
+  assert.equal(harness.counts().selectorRenders, 1);
+  await harness.load(true);
+  assert.equal(metadataReads, 1, 'Metadata recovery must not be repeated once the selector is populated');
+  harness.state.contentLibrary.selectedRepositoryId = 'test';
+  await harness.load(false);
+  assert.equal(harness.state.contentLibrary.loaded, true);
+  assert.equal(harness.state.contentLibrary.error, '');
+  assert.equal(harness.state.contentLibrary.assets.lesson[0].filename, 'cell.md');
+  assert.equal(bootstrapReads, 3);
+});
+
+test('Studio does not request repository metadata after a session/access failure', async () => {
+  let metadataReads = 0;
+  const harness = repositoryLoadHarness({
+    async repositories() { metadataReads++; return []; },
+    async studioBootstrap() { throw Object.assign(new Error('Zaloguj się ponownie.'), { code: 'AUTH_REQUIRED' }); }
+  });
+  await harness.load(false);
+  assert.equal(metadataReads, 0);
+  assert.equal(harness.state.contentLibrary.error, 'Zaloguj się ponownie.');
+});
+
 test('lesson authoring extensions are rendered through strict, non-HTML directives', () => {
   const parser = read('public/members/module/lesson/lesson-parser.js');
   const player = read('public/members/module/lesson/script.js');

@@ -24,7 +24,11 @@ function server() {
     const content = files.get(path);
     if (options.method === 'GET') {
       assert.equal(url.searchParams.get('ref'), 'main');
-      if (path === 'lessons') return json([...files].filter(([key]) => key.startsWith('lessons/')).map(([key, value]) => ({ type: 'file', name: key.split('/')[1], sha: sha(value), size: value.length })));
+      if (!path) return json([...files.keys()].map((key) => ({ name: key.split('/')[0], type: key.includes('/') ? 'dir' : 'file' })));
+      if (path === 'lessons') {
+        const entries = [...files].filter(([key]) => key.startsWith('lessons/')).map(([key, value]) => ({ type: 'file', name: key.split('/')[1], sha: sha(value), size: value.length }));
+        return entries.length ? json(entries) : json({}, 404);
+      }
       return content ? json({ type: 'file', encoding: 'base64', content: content.toString('base64'), sha: sha(content) }) : json({}, 404);
     }
     const body = JSON.parse(options.body);
@@ -79,6 +83,86 @@ test('create, update, conflicts and delete use Gitea POST/PUT/DELETE with base64
   await repository.deleteAsset('lesson', 'new.md', updated.sha, options);
   assert.equal(remote.calls.at(-1).method, 'DELETE');
   assert.equal(remote.files.has('lessons/new.md'), false);
+});
+
+test('an initialized Gitea repo needs no material folders before publishing its first lesson', async () => {
+  const remote = server();
+  remote.files.clear();
+  remote.files.set('README.md', Buffer.from('# Course'));
+  const options = { env, fetchImpl: remote.fetchImpl };
+  const empty = await repository.listAssetBundle(options);
+  assert.ok(Object.values(empty).every((entries) => entries.length === 0));
+  assert.equal(remote.calls.filter((call) => call.url.pathname.endsWith('/contents')).length, 1);
+  assert.ok(remote.calls.every((call) => call.method === 'GET'), 'Opening the library must not create folders or commits');
+  await repository.saveAsset('lesson', 'first.md', '# First lesson\n', options);
+  assert.equal(remote.calls.at(-1).method, 'POST');
+  const loaded = await repository.listAssetBundle(options);
+  assert.equal(loaded.lesson[0].filename, 'first.md');
+});
+
+for (const initialized of [true, false]) {
+  test(`a second Gitea repo ${initialized ? 'without material folders' : 'without a first commit'} cannot block the default library`, async () => {
+    const remote = server();
+    const emptyCalls = [];
+    const multi = { ...env, GITEA_CONTENT_REPOSITORIES: JSON.stringify([
+      { id: 'glowne', label: 'Materiały lekcji', repository: 'school/course', ref: 'main', root: '', default: true },
+      { id: 'repo-testowe', label: 'Repo testowe', repository: 'school/empty', ref: 'main', root: '', default: false }
+    ]) };
+    const options = { env: multi, fetchImpl: async (url, requestOptions) => {
+      const pathname = new URL(url).pathname;
+      if (!pathname.startsWith('/api/v1/repos/school/empty')) return remote.fetchImpl(url, requestOptions);
+      emptyCalls.push(pathname);
+      assert.equal(requestOptions.method, 'GET');
+      if (pathname.endsWith('/repos/school/empty')) return json({ empty: !initialized });
+      if (initialized && pathname.endsWith('/contents')) return json([{ type: 'file', name: 'README.md' }]);
+      return json({}, 404);
+    } };
+
+    assert.equal(repository.publicConfigurations(multi).length, 2);
+    const main = await repository.listAssetBundle(options);
+    assert.equal(main.lesson[0].filename, 'cell.md');
+    assert.equal(main.lesson[0].repositoryId, 'glowne');
+    assert.equal(emptyCalls.length, 0, 'Default bootstrap must not read the other repository');
+
+    const mainCalls = remote.calls.length;
+    if (initialized) {
+      const empty = await repository.listAssetBundle({ ...options, repositoryId: 'repo-testowe' });
+      assert.ok(Object.values(empty).every((entries) => entries.length === 0));
+      assert.equal(emptyCalls.filter((pathname) => pathname.endsWith('/contents')).length, 1);
+    } else {
+      await assert.rejects(repository.listAssetBundle({ ...options, repositoryId: 'repo-testowe' }), {
+        code: 'CONTENT_REPOSITORY_BRANCH_NOT_FOUND'
+      });
+    }
+    assert.equal(remote.calls.length, mainCalls, 'Selecting another repository must not fetch the default one');
+    const cachedMain = await repository.listAssetBundle({ ...options, repositoryId: 'glowne' });
+    assert.equal(cachedMain.lesson[0].filename, 'cell.md', 'Empty results must not replace another repository’s cache');
+    assert.equal(remote.calls.length, mainCalls, 'Returning to the main repository uses its cache');
+    const refreshedMain = await repository.listAssetBundle({ ...options, repositoryId: 'glowne', force: true });
+    assert.equal(refreshedMain.lesson[0].filename, 'cell.md');
+  });
+}
+
+test('Gitea 404 diagnosis distinguishes missing repository, branch and configured root; errors never look empty', async () => {
+  for (const [repositoryStatus, branchStatus, code] of [
+    [404, 200, 'CONTENT_REPOSITORY_NOT_FOUND'],
+    [401, 200, 'CONTENT_REPOSITORY_AUTH_FAILED'],
+    [403, 200, 'CONTENT_REPOSITORY_FORBIDDEN'],
+    [200, 404, 'CONTENT_REPOSITORY_BRANCH_NOT_FOUND'],
+    [200, 200, 'CONTENT_ROOT_NOT_FOUND']
+  ]) {
+    repository._test.clearCache();
+    await assert.rejects(repository.listAssetBundle({ env: { ...env, GITEA_CONTENT_ROOT: 'missing' }, fetchImpl: async (url) => {
+      const pathname = new URL(url).pathname;
+      if (pathname.endsWith('/repos/school/course')) return json({}, repositoryStatus);
+      if (pathname.includes('/branches/')) return json({}, branchStatus);
+      return json({}, 404);
+    } }), { code });
+  }
+  repository._test.clearCache();
+  await assert.rejects(repository.listAssetBundle({ env: { ...env, GITEA_CONTENT_ROOT: 'README.md' }, fetchImpl: async (url) => {
+    return new URL(url).pathname.endsWith('/contents/README.md') ? json({ type: 'file' }) : json({}, 404);
+  } }), { code: 'CONTENT_REPOSITORY_ROOT_NOT_DIRECTORY' });
 });
 
 test('private course images are cached on the server and never expose a token URL', async () => {
