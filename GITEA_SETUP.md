@@ -121,10 +121,12 @@ Nie stwierdzono regresji GitHuba w testach lokalnych. Różnice wdrożeniowe to 
 Node co najmniej 20.12.2; zależności z `npm ci`. Testy nie wymagają prawdziwych tokenów:
 
 ```sh
-node --test tests/gitea-provider.test.js tests/admin-content-repositories.test.js tests/env-generator.test.js
-SITE_ID=ci-landing-test-site NETLIFY_API_TOKEN=ci-landing-test-placeholder npm run build
+npm test -- tests/gitea-provider.test.js tests/admin-content-repositories.test.js tests/env-generator.test.js
+npm run build
 git diff --check
 ```
+
+`npm test` i `npm run build` izolują proces testów od produkcyjnych ENV Netlify. Nie trzeba usuwać ani zmieniać `GIT_PROVIDER`, tokenów ani konfiguracji repo w panelu, żeby build przeszedł. Uruchamianie samego `node --test` omija zabezpieczenie — używaj powyższych komend. Jeśli wcześniejszy nieudany test wypisał token w logu, unieważnij go w Gitei, utwórz nowy, podmień wartość w Netlify i wykonaj ponowny deploy z poprawionym kodem.
 
 Lokalnie sprawdzono odpowiedzi API na atrapach: Markdown z parserem lekcji, JSON, katalogi, obrazy i cache, POST/PUT/DELETE/SHA/konflikty, publiczne i prywatne repo, brak sekretów w odpowiedziach, panel repozytoriów (test i zapis ENV), publikację i zmianę ścieżki landingu oraz import/eksport `.env`. Pełny zestaw obejmuje też istniejące kontrole dostępu i regresje GitHuba.
 

@@ -1278,7 +1278,9 @@ npm test
 npm run build
 ```
 
-Oba skrypty uruchamiają `node --test`; projekt nie ma osobnego etapu bundlowania zasobów. Testy obejmują między innymi hooki Identity, odporność sesji po uśpieniu i w wielu kartach, funkcje administracyjne, Stripe i księgi Blobs, bezpieczny odczyt i zapis prywatnego repo GitHub, parser dashboardu, centralny postęp, wspólny motyw, media, kalkulator klasyczny, parser chemiczny Atonom, odtwarzacz lekcji oraz modele Studio i Exam Engine. Netlify wykonuje tę samą bramkę `npm run build` przed publikacją katalogu `public`.
+Oba skrypty uruchamiają `node --test` przez `scripts/run-tests.cjs`, w osobnym procesie bez produkcyjnych ENV. Runner przepuszcza tylko ustawienia systemowe potrzebne do wykonania testów; nie przekazuje konfiguracji dostawcy, tokenów Gitei/GitHuba, AI, Stripe ani Netlify. Testy ustawiają własne fikcyjne dane i korzystają z atrap usług. Nie zmienia to zmiennych Netlify ani konfiguracji opublikowanych Functions. Do wybranych plików użyj np. `npm test -- tests/gitea-provider.test.js`; bezpośrednie `node --test` omija tę izolację i nie powinno być używane w środowisku z sekretami.
+
+Projekt nie ma osobnego etapu bundlowania zasobów frontendu. Testy obejmują między innymi hooki Identity, odporność sesji po uśpieniu i w wielu kartach, funkcje administracyjne, Stripe i księgi Blobs, bezpieczny odczyt i zapis prywatnych repo GitHub/Gitea, parser dashboardu, centralny postęp, wspólny motyw, media, kalkulator klasyczny, parser chemiczny Atonom, odtwarzacz lekcji oraz modele Studio i Exam Engine. Netlify wykonuje tę samą bramkę `npm run build` przed publikacją katalogu `public`; błąd testu nadal blokuje wdrożenie.
 
 Opcjonalna kontrola składni wszystkich plików JavaScript:
 
