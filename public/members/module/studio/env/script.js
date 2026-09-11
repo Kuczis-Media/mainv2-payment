@@ -59,6 +59,11 @@
   }
 
   function render() {
+    if (window.NextMedUI?.render('studio-env', elements.list, {
+      entries, looksSecret: modelApi.looksSecret,
+      onChange(entry, patch) { Object.assign(entry, patch); updateOutput(); },
+      onRemove(entry) { const index = entries.indexOf(entry); if (index >= 0) entries.splice(index, 1); render(); }
+    })) { applyFilter(); updateOutput(); return; }
     const fragment = document.createDocumentFragment();
     entries.forEach((entry, index) => {
       const row = elements.template.content.firstElementChild.cloneNode(true);

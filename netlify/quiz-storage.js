@@ -34,8 +34,8 @@ function readUserQuizIndex(store, repositoryId, quizId, userId, profile = {}) {
   return examStorage.readUserExamIndex(store, repositoryId, storageQuizId(quizId), userId, profile);
 }
 
-function readReport(store, repositoryId, quizId) {
-  return examStorage.readReport(store, repositoryId, storageQuizId(quizId));
+function readReport(store, repositoryId, quizId, options) {
+  return examStorage.readReport(store, repositoryId, storageQuizId(quizId), options);
 }
 
 function syncAttemptIndexes(store, attempt, profile = {}) {

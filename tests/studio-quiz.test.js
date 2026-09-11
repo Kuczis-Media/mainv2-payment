@@ -109,14 +109,14 @@ test('integrated Studio exposes the active Quiz Builder, shared media and AI man
   assert.match(html, /data-open-mode=["']quiz["']/);
   assert.match(html, /id=["']quiz-workspace["']/);
   assert.match(html, /data-studio-tool=["']media["']/);
-  assert.match(html, /href=["']\/members\/\?admin=ai["']/);
+  assert.match(html, /href=["']\/members\/module\/studio\/admin\/\?tab=ai["']/);
   assert.match(studio, /ChemQuizBuilder\?\.openAsset/);
   assert.match(builder, /library\.save\(['"]quiz['"]/);
   assert.match(builder, /ChemMediaManager\.open/);
   assert.match(builder, /previewImageObserver/);
   assert.match(builder, /rootMargin:\s*['"]320px 0px['"]/);
   assert.doesNotMatch(builder, /\.innerHTML\s*=/);
-  assert.match(dashboard, /searchParams\.get\(['"]admin['"]\)/);
+  assert.match(dashboard, /searchParams\.get\(STUDIO_ADMIN \? 'tab' : 'admin'\)/);
   assert.match(dashboardModel, /card\.module === ['"]quiz['"]/);
   assert.match(dashboardModel, /add\(['"]quiz['"], card\.quizId\)/);
   assert.match(endpoint, /requireCourseAccess/);
@@ -130,4 +130,25 @@ test('integrated Studio exposes the active Quiz Builder, shared media and AI man
   assert.match(player, /data-quiz-media-ref/);
   assert.match(player, /rootMargin:\s*['"]400px 0px['"]/);
   assert.doesNotMatch(player, /\.innerHTML\s*=/);
+});
+
+test('open questions publish without an AI key in manual/ungraded modes; AI is opt-in', () => {
+  for (const seed of [{}, { gradingMode: 'manual' }, { gradingMode: 'ungraded' }, { gradingMode: 'ai', points: 0 }, { gradingMode: 'ai', answerKey: 'Opis prawidłowej odpowiedzi' }]) {
+    const quiz = sampleQuiz();
+    const open = quizModel.createQuestion({ type: 'open', questionId: 'open-answer', prompt: 'Wyjaśnij zjawisko.', ...seed });
+    if (!seed.gradingMode) assert.equal(open.gradingMode, 'manual');
+    quiz.questions.push(open);
+    const serialized = quizModel.serialize(quiz);
+    assert.equal(quizModel.validate(quiz).valid, true);
+    assert.equal(quizCommon.validateDefinition(JSON.parse(serialized), quiz.quizId).valid, true);
+    assert.equal(contentRepository._test.validateAssetContent('quiz', quiz.quizId, serialized), serialized);
+    assert.deepEqual(quizModel.parse(serialized, quiz.quizId).questions.at(-1), open);
+  }
+  const quiz = sampleQuiz();
+  quiz.questions.push(quizModel.createQuestion({ type: 'open', questionId: 'ai-question', prompt: 'Wyjaśnij', gradingMode: 'ai', points: 5 }));
+  assert.equal(quizModel.validate(quiz).valid, false);
+  assert.equal(quizCommon.validateDefinition(quiz, quiz.quizId).valid, false);
+  quiz.metadata.status = 'draft';
+  assert.equal(quizModel.validate(quiz).valid, true);
+  assert.equal(quizCommon.validateDefinition(quiz, quiz.quizId).valid, true);
 });

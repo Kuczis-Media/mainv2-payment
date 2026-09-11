@@ -95,6 +95,7 @@
   window.addEventListener('scroll', scheduleScroll, { passive: true });
   window.addEventListener('resize', scheduleScroll, { passive: true });
   document.addEventListener('chemdisk-landing-applied', configureMotion);
+  document.addEventListener('nextmed-landing-mounted', configureMotion);
   motionPreference.addEventListener?.('change', configureMotion);
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) finishTyping();

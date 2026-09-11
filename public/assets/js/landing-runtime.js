@@ -22,6 +22,7 @@
   const exportMode = Boolean(document.querySelector('meta[name="nextmed-landing-export"]'));
   const exportOrigin = exportMode ? document.querySelector('meta[name="nextmed-landing-origin"]')?.content || '' : '';
   window.NextMedLanding = Object.freeze({ applyModel: safelyApply });
+  if (window.NextMedUI?.renderLanding(document.querySelector('main'))) document.dispatchEvent(new CustomEvent('nextmed-landing-mounted'));
 
   if (previewMode) {
     initializePreview();
@@ -165,8 +166,9 @@
   }
 
   function applyModel(model) {
-    applyBranding(model.branding || {});
     const main = document.querySelector('main');
+    const reactLanding = window.NextMedUI?.renderLanding(main, model);
+    applyBranding(model.branding || {});
     const ordered = [...model.sections].sort((left, right) => safeOrder(left.order) - safeOrder(right.order));
     const enabledSectionIds = new Set(ordered.filter((section) => section.enabled !== false).map((section) => section.id));
     ordered.forEach((config) => {
@@ -190,13 +192,15 @@
         });
       }
       const targets = COPY_TARGETS[config.id];
-      setText(section, targets.title, config.title);
-      setText(section, targets.subtitle, config.subtitle);
-      setText(section, targets.body, config.body);
-      applyImage(section, targets.image, config);
-      applyCta(section, targets.cta, config, enabledSectionIds);
+      if (!reactLanding) {
+        setText(section, targets.title, config.title);
+        setText(section, targets.subtitle, config.subtitle);
+        setText(section, targets.body, config.body);
+        applyImage(section, targets.image, config);
+        applyCta(section, targets.cta, config, enabledSectionIds);
+      }
       syncNavigation(config);
-      if (main) main.append(section);
+      if (main && !reactLanding) main.append(section);
     });
     reorderNavigation(ordered);
     const firstVisible = ordered.find((section) => section.enabled !== false);

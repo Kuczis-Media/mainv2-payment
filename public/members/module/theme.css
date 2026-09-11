@@ -65,3 +65,19 @@
   border-color: var(--chem-primary);
   outline: none;
 }
+/* Shared locally bundled React views; no remote assets or animation loop. */
+.react-list-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: .75rem;
+  padding: 1rem;
+  font-size: .875rem;
+}
+.react-list-more button { cursor: pointer; }
+[data-react-view="studio-quiz"] .quiz-question-card,
+[data-react-view="studio-exam-list"] .exam-question-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 130px;
+}

@@ -184,6 +184,35 @@
   }
 
   function renderSlides() {
+    if (root.NextMedUI?.render('studio-presentation-slides', elements.slides, {
+      slides: state.presentation.slides, selected: state.selectedSlideId,
+      onMove(sourceId, target) {
+        const from = state.presentation.slides.findIndex((entry) => entry.slideId === sourceId);
+        if (from < 0 || from === target || target < 0 || target >= state.presentation.slides.length) return;
+        mutate(() => { const [moved] = state.presentation.slides.splice(from, 1); state.presentation.slides.splice(target, 0, moved); });
+      },
+      onAction(action, id) {
+        const index = state.presentation.slides.findIndex((slide) => slide.slideId === id);
+        if (index < 0) return;
+        const slide = state.presentation.slides[index];
+        if (action === 'select') { state.selectedSlideId = id; state.selectedElementId = ''; render(); return; }
+        if (action === 'delete' && (state.presentation.slides.length < 2 || !root.confirm(`Usunąć slajd „${slide.title}”?`))) return;
+        mutate(() => {
+          if (action === 'up' || action === 'down') {
+            const target = index + (action === 'up' ? -1 : 1);
+            if (target < 0 || target >= state.presentation.slides.length) return;
+            state.presentation.slides.splice(index, 1); state.presentation.slides.splice(target, 0, slide);
+          } else if (action === 'duplicate') {
+            const copy = modelApi.duplicateSlide(slide);
+            state.presentation.slides.splice(index + 1, 0, copy); state.selectedSlideId = copy.slideId; state.selectedElementId = '';
+          } else if (action === 'delete') {
+            state.presentation.slides.splice(index, 1);
+            state.selectedSlideId = state.presentation.slides[Math.min(index, state.presentation.slides.length - 1)].slideId;
+            state.selectedElementId = '';
+          }
+        });
+      }
+    })) return;
     const rows = state.presentation.slides.map((slide, index) => {
       const row = create('article', `presentation-slide-row${slide.slideId === state.selectedSlideId ? ' is-selected' : ''}`);
       row.draggable = true;

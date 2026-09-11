@@ -347,6 +347,10 @@
   }
 
   function renderList() {
+    if (window.NextMedUI?.render('studio-landing-sections', elements.list, {
+      sections: model.sections, selected: selectedId, labels: SECTION_LABELS, onMove: moveTo, onReorder: reorder,
+      onSelect(id) { selectedId = id; renderAll(); renderPreview(true); }
+    })) return;
     const items = model.sections.map((section, index) => {
       const item = document.createElement('article');
       item.className = `section-item${section.id === selectedId ? ' is-selected' : ''}${section.enabled ? '' : ' is-disabled'}`;

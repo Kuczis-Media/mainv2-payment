@@ -59,6 +59,8 @@
     attemptReport: null,
     reportLoading: false
   };
+  let draftTimer = null;
+  let feedbackTimer = null;
 
   const create = (tag, className, text) => {
     const node = root.document.createElement(tag);
@@ -84,7 +86,18 @@
     try { root.localStorage.setItem(DRAFT_KEY, JSON.stringify(state.quiz)); } catch (_) {}
   }
 
-  function flush() { if (state.quiz) saveLocal(); }
+  function flush() {
+    root.clearTimeout(draftTimer); draftTimer = null;
+    if (state.quiz) saveLocal();
+  }
+
+  function scheduleFeedback() {
+    root.clearTimeout(feedbackTimer);
+    feedbackTimer = root.setTimeout(() => {
+      feedbackTimer = null;
+      renderValidation(); renderPreview();
+    }, 180);
+  }
 
   function loadDraft() {
     let value = null;
@@ -94,7 +107,8 @@
   }
 
   function markChanged(message = 'Niezapisane zmiany zapisano lokalnie.') {
-    saveLocal();
+    root.clearTimeout(draftTimer);
+    draftTimer = root.setTimeout(flush, 200);
     elements.badge.textContent = 'Szkic na tym urządzeniu';
     setStatus(message);
   }
@@ -233,6 +247,10 @@
   }
 
   function renderQuestions() {
+    if (root.NextMedUI?.render('studio-quiz', elements.questions, { questions: state.quiz.questions, renderOptions })) {
+      elements.questionCount.textContent = questionLabel(state.quiz.questions.length);
+      return;
+    }
     const fragment = root.document.createDocumentFragment();
     state.quiz.questions.forEach((question, index) => {
       const card = create('article', 'quiz-question-card');
@@ -434,8 +452,7 @@
       : `${scored.earned}/${scored.maximum} pkt · ${scored.percent}% · ${scored.passed ? 'zaliczony' : 'jeszcze niezaliczony'}`;
   }
 
-  function renderValidation() {
-    const validation = modelApi.validate(state.quiz);
+  function renderValidation(validation = modelApi.validate(state.quiz)) {
     elements.validation.replaceChildren();
     if (validation.valid) {
       const ok = create('div', 'quiz-validation-ok');
@@ -479,6 +496,7 @@
   }
 
   function render() {
+    root.clearTimeout(feedbackTimer); feedbackTimer = null;
     renderSettings();
     renderQuestions();
     renderValidation();
@@ -525,8 +543,16 @@
       list.append(button);
     });
     if (!state.report.attempts.length) list.append(create('p', '', 'Brak prób wymagających raportowania.'));
-    elements.reportStatus.textContent = state.report.truncated ? 'Pokazano najnowsze próby.' : 'Raport jest aktualny.';
+    elements.reportStatus.textContent = state.report.metricsScope === 'page' ? 'Statystyki dotyczą tej części raportu. Pozostałe próby wczytasz przyciskiem poniżej.' : 'Raport jest aktualny.';
     elements.reportBody.append(metrics, list);
+    const paging = create('div', 'react-list-more');
+    for (const [action, label, visible] of [['first', 'Od początku', state.report.requestCursor], ['next', 'Następna część', state.report.cursor]]) {
+      if (!visible) continue;
+      const button = create('button', 'button button-soft', label);
+      button.type = 'button'; button.dataset.quizReportAction = action; button.disabled = state.reportLoading;
+      paging.append(button);
+    }
+    elements.reportBody.append(paging);
     if (state.attemptReport) elements.reportBody.append(quizAttemptReport(state.attemptReport));
   }
 
@@ -562,11 +588,12 @@
     return section;
   }
 
-  async function loadReport() {
+  async function loadReport(cursor = '') {
     if (state.reportLoading || !state.remoteSha) return;
     state.reportLoading = true; renderReport();
     try {
-      state.report = await quizAdminRequest({ view: 'overview', repo: state.repositoryId, quiz: state.quiz.quizId });
+      state.report = await quizAdminRequest({ view: 'overview', repo: state.repositoryId, quiz: state.quiz.quizId, ...(cursor ? { cursor } : {}) });
+      state.report.requestCursor = cursor;
       if (state.attemptReport) {
         const selected = state.report.attempts.find((attempt) => attempt.attemptId === state.attemptReport.attemptId);
         if (!selected) state.attemptReport = null;
@@ -659,8 +686,7 @@
     state.quiz.settings.showFeedback = elements.showFeedback.checked;
     state.quiz.settings.allowRetry = elements.allowRetry.checked;
     markChanged();
-    renderValidation();
-    renderPreview();
+    scheduleFeedback();
     renderSettings();
   }
 
@@ -681,7 +707,7 @@
     else if (field === 'required') question.required = control.checked;
     else if (field === 'explanation') question.explanation = control.value;
     else if (field === 'acceptedAnswers') question.acceptedAnswers = control.value.split(/\r?\n/).map((value) => value.trim()).filter(Boolean).slice(0, 20);
-    else if (field === 'gradingMode') question.gradingMode = ['ai', 'manual', 'ungraded'].includes(control.value) ? control.value : 'ai';
+    else if (field === 'gradingMode') question.gradingMode = ['ai', 'manual', 'ungraded'].includes(control.value) ? control.value : 'manual';
     else if (field === 'answerKey') question.answerKey = control.value.slice(0, 10000);
     else if (field === 'aiInstruction') question.aiInstruction = control.value.slice(0, 2000);
     else if (field === 'multiline') question.multiline = control.checked;
@@ -695,7 +721,7 @@
     }
     markChanged();
     if (rerender) render();
-    else { renderValidation(); renderPreview(); }
+    else scheduleFeedback();
   }
 
   function moveQuestion(question, offset) {
@@ -777,10 +803,14 @@
   }
 
   async function save(publish) {
-    state.quiz.metadata.status = publish ? 'published' : 'draft';
-    const validation = modelApi.validate(state.quiz);
+    if (state.busy) return;
+    const before = JSON.stringify(state.quiz);
+    const candidate = clone(state.quiz);
+    candidate.metadata.status = publish ? 'published' : 'draft';
+    const validation = modelApi.validate(candidate);
     if (!validation.valid) {
-      renderValidation();
+      root.clearTimeout(feedbackTimer); feedbackTimer = null;
+      renderValidation(validation);
       setStatus(validation.errors[0].message, true);
       return;
     }
@@ -789,12 +819,13 @@
     setStatus(publish ? 'Publikowanie quizu…' : 'Zapisywanie szkicu…');
     try {
       const result = await library.save('quiz', {
-        filename: state.quiz.quizId,
-        content: modelApi.serialize(state.quiz),
-        expectedSha: state.remoteId === state.quiz.quizId ? state.remoteSha : '',
+        filename: candidate.quizId,
+        content: modelApi.serialize(candidate),
+        expectedSha: state.remoteId === candidate.quizId ? state.remoteSha : '',
         repositoryId: state.repositoryId
       });
-      state.remoteId = state.quiz.quizId;
+      if (JSON.stringify(state.quiz) === before) state.quiz = validation.quiz;
+      state.remoteId = candidate.quizId;
       state.remoteSha = result.sha;
       saveLocal();
       setStatus(publish ? 'Quiz opublikowano.' : 'Szkic quizu zapisano.');
@@ -807,6 +838,7 @@
     } finally {
       state.busy = false;
       renderSettings();
+      renderReport();
     }
   }
 
@@ -909,6 +941,8 @@
       if (!button) return;
       if (button.dataset.quizReportAction === 'open') void openQuizAttempt(button.dataset.userId, button.dataset.attemptId);
       if (button.dataset.quizReportAction === 'grade') void gradeQuizAttempt();
+      if (button.dataset.quizReportAction === 'first') void loadReport();
+      if (button.dataset.quizReportAction === 'next' && state.report?.cursor) void loadReport(state.report.cursor);
     });
   }
 
@@ -923,5 +957,6 @@
   }
 
   bind();
+  root.addEventListener('pagehide', flush);
   root.ChemQuizBuilder = Object.freeze({ activate, assetDeleted, flush, openAsset });
 })(typeof globalThis !== 'undefined' ? globalThis : window);

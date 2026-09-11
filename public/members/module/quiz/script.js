@@ -29,7 +29,8 @@
   };
   const state = {
     quiz: null, questions: [], materialId: '', attempts: 0, savedRecord: null,
-    urls: new Set(), lockedAfterAttempt: false, imageObserver: null, latestAttempt: null
+    urls: new Set(), lockedAfterAttempt: false, imageObserver: null, latestAttempt: null,
+    answers: {}, questionResults: {}, controlsLocked: false, mediaUrls: new Map()
   };
 
   const create = (tag, className, text) => {
@@ -252,9 +253,24 @@
     ), 0));
     if (quiz.metadata.cover.ref) void loadImage(elements.cover, quiz.metadata.cover.ref, true);
     state.questions = quiz.settings.shuffleQuestions ? shuffle(quiz.questions) : quiz.questions.slice();
-    elements.form.replaceChildren(...state.questions.map(renderQuestion));
+    if (!renderReactQuestions()) elements.form.replaceChildren(...state.questions.map(renderQuestion));
     elements.check.textContent = checkButtonLabel();
-    queueQuestionImages();
+    if (!elements.form.dataset.reactView) queueQuestionImages();
+  }
+
+  function reactImageUrl(reference) {
+    if (!state.mediaUrls.has(reference)) state.mediaUrls.set(reference, mediaBlob(reference).then((blob) => {
+      const url = URL.createObjectURL(blob); state.urls.add(url); return url;
+    }).catch((error) => { state.mediaUrls.delete(reference); throw error; }));
+    return state.mediaUrls.get(reference);
+  }
+
+  function renderReactQuestions(revealId) {
+    return window.NextMedUI?.render('quiz-questions', elements.form, {
+      questions: state.questions, answers: state.answers, results: state.questionResults,
+      locked: state.controlsLocked, revealId, getUrl: reactImageUrl,
+      onAnswer: (id, value) => { if (!state.controlsLocked) state.answers[id] = value; }
+    });
   }
 
   function checkButtonLabel() {
@@ -264,6 +280,7 @@
   }
 
   function answerFor(question) {
+    if (elements.form.dataset.reactView) return state.answers[question.questionId] ?? (['text', 'open'].includes(question.type) ? '' : []);
     const fieldset = elements.form.querySelector(`[data-question-id="${question.questionId}"]`);
     if (!fieldset) return [];
     if (['text', 'open'].includes(question.type)) return fieldset.querySelector('[data-answer-text]')?.value || '';
@@ -285,6 +302,12 @@
   }
 
   function lockControls(locked) {
+    state.controlsLocked = locked;
+    if (elements.form.dataset.reactView) {
+      renderReactQuestions();
+      elements.check.disabled = locked;
+      return;
+    }
     elements.form.querySelectorAll('input, textarea').forEach((input) => { input.disabled = locked; });
     elements.check.disabled = locked;
   }
@@ -339,25 +362,13 @@
     if (pending && result.attemptId) {
       const refresh = create('button', 'quiz-player-button is-secondary', 'Odśwież wynik');
       refresh.type = 'button';
-      refresh.addEventListener('click', async () => {
-        refresh.disabled = true;
-        refresh.textContent = 'Odświeżanie…';
-        try {
-          const updated = await requestStoredResult(result.attemptId);
-          updated.attemptId = result.attemptId;
-          renderQuestionResults(updated);
-          showResult(updated);
-          elements.save.textContent = updated.gradingStatus === 'pending_review'
-            ? 'Odpowiedzi zapisane — oczekują na ocenę' : 'Wynik zapisany';
-        } catch (error) {
-          elements.validation.textContent = error.message;
-          refresh.disabled = false;
-          refresh.textContent = 'Odśwież wynik';
-        }
-      });
+      refresh.addEventListener('click', () => refreshQuizResult(result, refresh));
       copy.append(refresh);
     }
-    elements.result.replaceChildren(score, copy);
+    if (!window.NextMedUI?.render('quiz-result', elements.result, {
+      score: score.textContent, title: copy.querySelector('h2').textContent, message: copy.querySelector('p').textContent,
+      onRefresh: pending && result.attemptId ? (button) => refreshQuizResult(result, button) : null
+    })) elements.result.replaceChildren(score, copy);
     elements.result.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
   }
 
@@ -395,7 +406,9 @@
       create('h2', '', passed ? 'Quiz został już zaliczony' : 'Quiz został już ukończony'),
       create('p', '', 'Autor wyłączył ponowne rozwiązywanie tego quizu. Wyświetlamy zapisany wynik.')
     );
-    elements.result.replaceChildren(score, copy);
+    if (!window.NextMedUI?.render('quiz-result', elements.result, {
+      score: score.textContent, title: copy.querySelector('h2').textContent, message: copy.querySelector('p').textContent
+    })) elements.result.replaceChildren(score, copy);
     elements.save.textContent = 'Wynik zapisany';
     elements.retry.hidden = true;
     state.lockedAfterAttempt = true;
@@ -403,6 +416,11 @@
   }
 
   function renderQuestionResults(result) {
+    if (elements.form.dataset.reactView) {
+      state.questionResults = Object.fromEntries((result.results || []).map((entry) => [entry.questionId, entry]));
+      renderReactQuestions();
+      return;
+    }
     (result.results || []).forEach((entry) => {
       const fieldset = elements.form.querySelector(`[data-question-id="${entry.questionId}"]`);
       const feedback = fieldset?.querySelector('.quiz-player-feedback');
@@ -424,18 +442,33 @@
     });
   }
 
+  async function refreshQuizResult(result, refresh) {
+    refresh.disabled = true;
+    refresh.textContent = 'Odświeżanie…';
+    try {
+      const updated = await requestStoredResult(result.attemptId);
+      updated.attemptId = result.attemptId;
+      renderQuestionResults(updated);
+      showResult(updated);
+      elements.save.textContent = updated.gradingStatus === 'pending_review'
+        ? 'Odpowiedzi zapisane — oczekują na ocenę' : 'Wynik zapisany';
+    } catch (error) { elements.validation.textContent = error.message; }
+    finally { refresh.disabled = false; refresh.textContent = 'Odśwież wynik'; }
+  }
+
   async function checkAnswers() {
-    if (state.lockedAfterAttempt) return;
+    if (state.lockedAfterAttempt || state.controlsLocked) return;
     const answers = Object.fromEntries(state.quiz.questions.map((question) => [question.questionId, answerFor(question)]));
     const unanswered = state.quiz.questions.filter((question) => question.required && !isAnswered(question, answers[question.questionId]));
     if (unanswered.length) {
+      if (elements.form.dataset.reactView) renderReactQuestions(unanswered[0].questionId);
       elements.validation.textContent = `Uzupełnij ${unanswered.length === 1 ? 'wymagane pytanie' : `${unanswered.length} wymagane pytania`}.`;
       elements.form.querySelector(`[data-question-id="${unanswered[0].questionId}"]`)?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
       return;
     }
     elements.validation.textContent = '';
     if (state.quiz.questions.some((question) => question.type === 'open')) {
-      elements.check.disabled = true;
+      lockControls(true);
       elements.check.textContent = 'Ocenianie odpowiedzi…';
       try {
         const payload = await submitForServerGrading(answers);
@@ -450,7 +483,7 @@
         await saveResult(result, payload.progressSaved === true);
       } catch (error) {
         elements.validation.textContent = error.message;
-        elements.check.disabled = false;
+        lockControls(false);
       } finally {
         elements.check.textContent = checkButtonLabel();
       }
@@ -461,6 +494,11 @@
     state.quiz.questions.forEach((question) => {
       const ok = correct(question, answers[question.questionId]);
       if (ok) earned += question.points;
+      if (elements.form.dataset.reactView) {
+        state.questionResults[question.questionId] = { correct: ok,
+          message: `${ok ? 'Poprawnie' : 'Niepoprawnie'}${state.quiz.settings.showFeedback && question.explanation ? ` — ${question.explanation}` : ''}` };
+        return;
+      }
       const fieldset = elements.form.querySelector(`[data-question-id="${question.questionId}"]`);
       const feedback = fieldset?.querySelector('.quiz-player-feedback');
       fieldset?.classList.toggle('is-correct', ok);
@@ -485,6 +523,11 @@
   function retry() {
     if (!state.quiz.settings.allowRetry) return;
     state.lockedAfterAttempt = false;
+    state.answers = {};
+    state.questionResults = {};
+    state.controlsLocked = false;
+    if (elements.form.dataset.reactView) renderReactQuestions();
+    else {
     elements.form.querySelectorAll('input, textarea').forEach((input) => {
       input.disabled = false;
       if (['checkbox', 'radio'].includes(input.type)) input.checked = false;
@@ -492,6 +535,7 @@
     });
     elements.form.querySelectorAll('.quiz-player-question').forEach((question) => question.classList.remove('is-correct', 'is-wrong'));
     elements.form.querySelectorAll('.quiz-player-feedback').forEach((feedback) => { feedback.hidden = true; });
+    }
     elements.result.hidden = true;
     elements.retry.hidden = true;
     elements.check.disabled = false;
@@ -542,8 +586,11 @@
     document.documentElement.dataset.theme = next;
     try { localStorage.setItem('chem.theme', next); } catch (_) {}
   });
-  window.addEventListener('pagehide', () => {
+  window.addEventListener('pagehide', (event) => {
+    if (event.persisted) return;
     state.imageObserver?.disconnect();
     state.urls.forEach((url) => URL.revokeObjectURL(url));
+    state.urls.clear();
+    state.mediaUrls.clear();
   });
 })();

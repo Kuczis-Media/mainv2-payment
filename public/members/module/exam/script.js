@@ -124,6 +124,7 @@
     elements.submit.addEventListener('click', submitAttempt);
     elements.flag.addEventListener('click', toggleFlag);
     elements.navigatorGrid.addEventListener('click', (event) => {
+      if (elements.navigatorGrid.dataset.reactView) return;
       const button = event.target.closest('[data-question-index]');
       if (button && !button.disabled) void navigateTo(Number(button.dataset.questionIndex));
     });
@@ -168,6 +169,8 @@
     [timing, `Próg ${metadata.passThreshold}%`, attemptLimitLabel()].forEach((label) => elements.facts.append(tag(label)));
     elements.cover.hidden = true;
     if (metadata.cover?.ref) void setBackgroundImage(elements.cover, metadata.cover.ref);
+    const reactHistory = window.NextMedUI?.render('exam-history', elements.history, { attempts: state.attempts, onResume: resumeAttempt, onResult: showStoredResult });
+    if (!reactHistory) {
     elements.history.replaceChildren();
     state.attempts.slice().reverse().forEach((attempt) => {
       const button = document.createElement('button');
@@ -186,6 +189,7 @@
       button.addEventListener('click', () => active ? resumeAttempt(attempt.attemptId) : showStoredResult(attempt.attemptId));
       elements.history.append(button);
     });
+    }
     const active = state.attempts.find((attempt) => attempt.status === 'active');
     elements.startButton.textContent = active ? 'Wznów aktywną próbę' : 'Rozpocznij egzamin';
     elements.startButton.dataset.attemptId = active?.attemptId || '';
@@ -364,7 +368,11 @@
   function renderQuestions() {
     disconnectImageObserver();
     const indices = visibleIndices();
-    elements.questionList.replaceChildren(...indices.map((index) => questionView(state.attempt.questions[index], index)));
+    const reactQuestions = window.NextMedUI?.render('exam-questions', elements.questionList, {
+      indices, attempt: state.attempt, getUrl: protectedImageUrl, onAnswer: recordAnswer,
+      onConfirm: confirmQuestion, typeLabel
+    });
+    if (!reactQuestions) elements.questionList.replaceChildren(...indices.map((index) => questionView(state.attempt.questions[index], index)));
     const first = indices[0] + 1;
     const last = indices.at(-1) + 1;
     elements.questionPosition.textContent = first === last ? `Pytanie ${first} z ${state.attempt.totalQuestions}` : `Pytania ${first}–${last} z ${state.attempt.totalQuestions}`;
@@ -517,12 +525,19 @@
   }
 
   function answerChanged(event) {
+    if (elements.questionList.dataset.reactView) return;
     const article = event.target.closest('[data-question-id]');
     if (!article) return;
     const questionId = article.dataset.questionId;
     const question = state.attempt.questions.find((candidate) => candidate.questionId === questionId);
     if (!question || state.attempt.confirmedQuestionIds?.includes(questionId)) return;
-    state.attempt.answers[questionId] = readAnswer(article, question);
+    recordAnswer(questionId, readAnswer(article, question));
+  }
+
+  function recordAnswer(questionId, answer) {
+    if (!state.attempt || state.attempt.status !== 'active' || state.attempt.confirmedQuestionIds?.includes(questionId)
+      || state.attempt.timedOutQuestionIds?.includes(questionId)) return;
+    state.attempt.answers[questionId] = answer;
     state.dirtyQuestions.add(questionId);
     state.answerVersions.set(questionId, (state.answerVersions.get(questionId) || 0) + 1);
     elements.saveState.textContent = 'Odpowiedź zapisana lokalnie';
@@ -763,6 +778,7 @@
   }
 
   function questionAction(event) {
+    if (elements.questionList.dataset.reactView) return;
     const confirm = event.target.closest('[data-confirm-question]');
     if (confirm) { void confirmQuestion(confirm.dataset.confirmQuestion); return; }
     orderingAction(event);
@@ -879,6 +895,9 @@
     elements.progressCopy.textContent = `${answered}/${state.attempt.totalQuestions}`;
     elements.progressBar.style.width = `${state.attempt.totalQuestions ? (answered / state.attempt.totalQuestions) * 100 : 0}%`;
     elements.navigator.hidden = !state.attempt.exam.navigation.allowFreeNavigation && state.attempt.exam.display.mode !== 'all';
+    if (window.NextMedUI?.render('exam-navigator', elements.navigatorGrid, {
+      attempt: state.attempt, visible: visibleIndices(), blocked: navigationBlocked(), answerPresent, onNavigate: navigateTo
+    })) return;
     if (state.navigatorAttemptId !== state.attempt.attemptId || elements.navigatorGrid.children.length !== state.attempt.questions.length) {
       elements.navigatorGrid.replaceChildren(...state.attempt.questions.map((question, index) => {
         const button = document.createElement('button'); button.type = 'button'; button.textContent = String(index + 1); button.dataset.questionIndex = String(index);
@@ -988,6 +1007,8 @@
     if (result.points != null) metric('Punkty', `${result.points}/${result.maxPoints}`);
     if (result.passed != null) metric('Status', result.passed ? 'Zaliczono' : 'Nie zaliczono');
     if (result.durationSeconds != null) metric('Czas', formatDuration(result.durationSeconds));
+    const reactResults = window.NextMedUI?.render('exam-results', elements.resultQuestions, { questions: result.questions || [] });
+    if (!reactResults) {
     elements.resultQuestions.replaceChildren();
     (result.questions || []).forEach((question, index) => {
       const item = document.createElement('article'); item.className = 'exam-result-question';
@@ -1004,6 +1025,7 @@
       if (question.explanation) item.append(formattedAnswer(question.explanation, 'div'));
       elements.resultQuestions.append(item);
     });
+    }
     void reloadAttemptHistory();
   }
 

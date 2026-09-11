@@ -173,7 +173,7 @@
       if (!button) return;
       state.tab = button.dataset.examTab;
       render();
-      if (state.tab === 'reports') void loadReport();
+      if (state.tab === 'reports' && !state.report) void loadReport();
       if (state.tab === 'access') void loadIdentityUsers(false);
     });
     elements.editor.addEventListener('input', handleInput);
@@ -373,6 +373,7 @@
       ? state.exam.status === 'published' ? 'Opublikowany' : 'Zapisany szkic'
       : 'Szkic na tym urządzeniu';
     elements.badge.dataset.status = state.exam.status;
+    window.NextMedUI?.releaseWithin(elements.editor);
     elements.editor.replaceChildren();
     const renderer = {
       information: renderInformation, questions: renderQuestions, bank: renderBank, display: renderDisplay,
@@ -579,12 +580,19 @@
     actions.append(add, create('span', 'exam-count-copy', `${state.exam.questions.length} własnych · ${state.exam.questionRefs.length} z banku`));
     header.append(actions);
     const list = create('div', 'exam-question-list');
-    state.exam.questions.forEach((question, index) => list.append(questionCard(question, index, false)));
-    state.exam.questionRefs.forEach((questionId, index) => {
+    const reactList = window.NextMedUI?.render('studio-exam-list', list, {
+      questions: [...state.exam.questions.map((question) => ({ question })), ...state.exam.questionRefs.map((questionId) => ({
+        question: state.bank.questions.find((candidate) => candidate.questionId === questionId) || { questionId, type: 'single_choice', prompt: 'Brak pytania w banku' }, reference: true
+      }))], selected: [state.selectedQuestionId, state.selectedBankQuestionId], labels: TYPE_LABELS
+    });
+    if (!reactList) {
+      state.exam.questions.forEach((question, index) => list.append(questionCard(question, index, false)));
+      state.exam.questionRefs.forEach((questionId, index) => {
       const question = state.bank.questions.find((candidate) => candidate.questionId === questionId);
       const card = questionCard(question || { questionId, type: 'single_choice', prompt: 'Brak pytania w banku' }, state.exam.questions.length + index, true);
       list.append(card);
-    });
+      });
+    }
     elements.editor.append(header, list);
     const selected = state.exam.questions.find((question) => question.questionId === state.selectedQuestionId);
     if (selected) elements.editor.append(renderQuestionEditor(selected, 'exam'));
@@ -692,7 +700,10 @@
     main.append(tools);
     const list = create('div', 'exam-question-list');
     list.dataset.bankList = '1';
-    state.bank.questions.forEach((question, index) => list.append(bankCard(question, index)));
+    if (!window.NextMedUI?.render('studio-exam-list', list, {
+      questions: state.bank.questions.map((question) => ({ question })), bank: true, references: state.exam.questionRefs,
+      selected: [state.selectedBankQuestionId], labels: TYPE_LABELS
+    })) state.bank.questions.forEach((question, index) => list.append(bankCard(question, index)));
     main.append(list);
     elements.editor.append(main);
     const selected = state.bank.questions.find((question) => question.questionId === state.selectedBankQuestionId);
@@ -961,6 +972,7 @@
 
   function reportView(report) {
     const wrapper = create('div', 'exam-report-view');
+    if (report.metricsScope === 'page') wrapper.append(create('p', 'exam-report-empty', 'Statystyki i analiza dotyczą tej części raportu. Kolejne próby znajdziesz poniżej.'));
     const metrics = create('div', 'exam-report-metrics');
     const values = [
       ['Uczestnicy', report.metrics.participants], ['Próby', report.metrics.attempts], ['Średnia', `${report.metrics.average}%`],
@@ -983,6 +995,14 @@
       line.append(create('span', '', attempt.profile?.name || attempt.profile?.email || attempt.userId), create('span', '', `Próba ${attempt.number} · ${score} · ${outcome}`));
       attempts.append(line);
     });
+    const paging = create('div', 'react-list-more');
+    for (const [action, label, visible] of [['first-report', 'Od początku', report.requestCursor], ['next-report', 'Następna część', report.cursor]]) {
+      if (!visible) continue;
+      const button = create('button', 'button button-soft', label);
+      button.type = 'button'; button.dataset.examAction = action; button.disabled = state.reportLoading;
+      paging.append(button);
+    }
+    attempts.append(paging);
     const distribution = create('section', 'exam-score-distribution');
     distribution.append(create('h4', '', 'Rozkład wyników'));
     const maximumBucket = Math.max(1, ...Object.values(report.metrics.distribution || {}).map(Number));
@@ -1485,6 +1505,8 @@
     else if (action === 'delete-bank-question') deleteQuestion(state.bank.questions, questionId, true);
     else if (action === 'use-bank-question') { if (!state.exam.questionRefs.includes(questionId)) state.exam.questionRefs.push(questionId); render(); }
     else if (action === 'refresh-report') void loadReport();
+    else if (action === 'first-report') void loadReport();
+    else if (action === 'next-report' && state.report?.cursor) void loadReport(state.report.cursor);
     else if (action === 'open-attempt-report') void openAttemptReport(button.dataset.userId, button.dataset.attemptId);
     else if (action === 'reset-attempt') void resetAttempt(button.dataset.userId, button.dataset.attemptId);
     else if (action === 'ai-grade-attempt') void aiGradeAttemptReport(button);
@@ -1669,11 +1691,13 @@
     render();
   }
 
-  async function loadReport() {
+  async function loadReport(cursor = '') {
     if (!state.remoteSha || state.reportLoading) return;
     state.reportLoading = true; render();
     try {
-      state.report = await adminRequest({ view: 'overview', repo: state.repositoryId, exam: state.exam.examId });
+      state.report = await adminRequest({ view: 'overview', repo: state.repositoryId, exam: state.exam.examId, ...(cursor ? { cursor } : {}) });
+      state.report.requestCursor = cursor;
+      if (state.attemptReport && !state.report.attempts.some((attempt) => attempt.attemptId === state.attemptReport.attemptId)) state.attemptReport = null;
     } catch (error) { elements.status.textContent = error.message || 'Nie udało się pobrać raportu.'; }
     finally { state.reportLoading = false; render(); }
   }

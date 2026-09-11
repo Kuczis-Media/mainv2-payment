@@ -1,7 +1,7 @@
 'use strict';
 
 const { getStore } = require('@netlify/blobs');
-const { storageConfig } = require('./progress-storage.js');
+const { storageConfig, listEntries } = require('./progress-storage.js');
 
 const STORE_NAME = 'chemdisk-exams';
 const MAX_WRITE_RETRIES = 8;
@@ -32,6 +32,35 @@ function userExamKey(repositoryId, examId, userId) {
 
 function reportKey(repositoryId, examId) {
   return `reports/${examKey(repositoryId, examId)}.json`;
+}
+
+function reportEntryKey(repositoryId, examId, summary) {
+  // Immutable creation-time prefix: grading updates the same small record.
+  const timestamp = Math.max(0, Date.parse(summary.startedAt || '') || 0);
+  return `report-entries/${examKey(repositoryId, examId)}/${String(9_999_999_999_999 - timestamp).padStart(13, '0')}-${encode(summary.attemptId)}.json`;
+}
+
+async function ensurePagedReport(store, repositoryId, examId) {
+  const key = reportKey(repositoryId, examId);
+  for (let retry = 0; retry < MAX_WRITE_RETRIES; retry++) {
+    const old = await readEntry(store, key);
+    if (old?.value.storage === 'entries-v2') return;
+    // Upgrade lazily on a write, never on a report GET. If interrupted, the old
+    // index stays authoritative. Revision checks make retries safe even when
+    // another writer updates the legacy index while its entries are copied.
+    const entries = Object.values(old?.value.attempts || {});
+    const legacyRevision = Number(old?.value.revision) || 0;
+    for (let offset = 0; offset < entries.length; offset += 12) {
+      await Promise.all(entries.slice(offset, offset + 12).map((summary) => updateJson(store,
+        reportEntryKey(repositoryId, examId, summary), null, (previous) => {
+          if (previous && (previous.migratedFromRevision == null || previous.migratedFromRevision > legacyRevision)) return { abort: true };
+          return { value: { ...summary, sourceRevision: 0, migratedFromRevision: legacyRevision } };
+        }, { userId: encode(summary.userId), updatedAt: summary.lastActivityAt || '' })));
+    }
+    const marker = { version: 2, storage: 'entries-v2', repositoryId, examId, migratedAt: new Date().toISOString() };
+    if (await conditionalSet(store, key, marker, old?.etag || null, {})) return;
+  }
+  const error = new Error('Concurrent report migration'); error.code = 'EXAM_CONFLICT'; throw error;
 }
 
 async function readEntry(store, key) {
@@ -212,31 +241,20 @@ async function syncAttemptIndexes(store, attempt, profile = {}) {
     index.profile = { ...index.profile, ...profile };
     index.attempts = Array.isArray(index.attempts) ? index.attempts : [];
     const position = index.attempts.findIndex((entry) => entry.attemptId === attempt.attemptId);
-    if (position >= 0) index.attempts[position] = summary;
-    else index.attempts.push(summary);
+    if (position >= 0 && Number(index.attempts[position].sourceRevision) > Number(attempt.revision || 0)) return { abort: true };
+    const indexedSummary = { ...summary, sourceRevision: Number(attempt.revision) || 0 };
+    if (position >= 0) index.attempts[position] = indexedSummary;
+    else index.attempts.push(indexedSummary);
     index.revision = Number(index.revision || 0) + 1;
     index.updatedAt = attempt.lastActivityAt;
     return { value: index };
   }, (index) => ({ userId: encode(attempt.userId), updatedAt: index.updatedAt || '' }));
 
-  const key = reportKey(attempt.repositoryId, attempt.examId);
-  return updateJson(store, key, emptyReport(attempt.repositoryId, attempt.examId), (report) => {
-    report.attempts = report.attempts && typeof report.attempts === 'object' ? report.attempts : {};
-    report.participants = report.participants && typeof report.participants === 'object' ? report.participants : {};
-    report.attempts[attempt.attemptId] = { ...summary, userId: attempt.userId, profile };
-    const participantAttempts = Object.values(report.attempts).filter((entry) => entry.userId === attempt.userId && entry.status !== 'reset');
-    report.participants[attempt.userId] = {
-      userId: attempt.userId,
-      profile,
-      attempts: participantAttempts.length,
-      lastActivityAt: participantAttempts.map((entry) => entry.lastActivityAt).filter(Boolean).sort().at(-1) || null,
-      bestScore: participantAttempts.reduce((best, entry) => Math.max(best, Number(entry.scorePercent) || 0), 0),
-      passed: participantAttempts.some((entry) => entry.passed === true)
-    };
-    report.revision = Number(report.revision || 0) + 1;
-    report.updatedAt = attempt.lastActivityAt;
-    return { value: report };
-  }, (report) => ({ exam: examKey(attempt.repositoryId, attempt.examId), updatedAt: report.updatedAt || '' }));
+  await ensurePagedReport(store, attempt.repositoryId, attempt.examId);
+  return updateJson(store, reportEntryKey(attempt.repositoryId, attempt.examId, summary), null, (previous) => {
+    if (Number(previous?.sourceRevision) > Number(attempt.revision || 0)) return { abort: true };
+    return { value: { ...summary, userId: attempt.userId, profile, sourceRevision: Number(attempt.revision) || 0 } };
+  }, { userId: encode(attempt.userId), updatedAt: attempt.lastActivityAt || '' });
 }
 
 async function readUserExamIndex(store, repositoryId, examId, userId, profile = {}) {
@@ -244,9 +262,34 @@ async function readUserExamIndex(store, repositoryId, examId, userId, profile = 
   return entry ? entry.value : emptyUserIndex(repositoryId, examId, userId, profile);
 }
 
-async function readReport(store, repositoryId, examId) {
+async function readReport(store, repositoryId, examId, options = {}) {
+  const limit = Math.max(1, Math.min(100, Number(options.limit) || 50));
+  if (options.cursor && !/^offset:\d{1,9}$/.test(options.cursor)) {
+    const error = new Error('Invalid report cursor'); error.code = 'INVALID_REPORT_CURSOR'; throw error;
+  }
   const entry = await readEntry(store, reportKey(repositoryId, examId));
-  return entry ? entry.value : emptyReport(repositoryId, examId);
+  const report = emptyReport(repositoryId, examId);
+  let rows, cursor;
+  if (entry?.value.storage === 'entries-v2') {
+    const page = await listEntries(store, { prefix: `report-entries/${examKey(repositoryId, examId)}/`, limit, cursor: options.cursor });
+    rows = page.entries.map((item) => item.value); cursor = page.cursor;
+  } else {
+    const all = Object.values(entry?.value.attempts || {}).sort((a, b) => Date.parse(b.startedAt || 0) - Date.parse(a.startedAt || 0));
+    const offset = Number(String(options.cursor || '').split(':')[1]) || 0;
+    rows = all.slice(offset, offset + limit); cursor = offset + limit < all.length ? `offset:${offset + limit}` : null;
+  }
+  for (const row of rows) {
+    report.attempts[row.attemptId] = row;
+    if (row.status === 'reset') continue;
+    const user = report.participants[row.userId] || { userId: row.userId, profile: row.profile, attempts: 0, bestScore: 0, passed: false };
+    user.attempts++; user.bestScore = Math.max(user.bestScore, Number(row.scorePercent) || 0); user.passed ||= row.passed === true;
+    user.lastActivityAt = [user.lastActivityAt, row.lastActivityAt].filter(Boolean).sort().at(-1) || null;
+    report.participants[row.userId] = user;
+  }
+  report.updatedAt = rows.map((row) => row.lastActivityAt).filter(Boolean).sort().at(-1) || null;
+  report.cursor = cursor;
+  report.metricsScope = options.cursor || cursor ? 'page' : 'all';
+  return report;
 }
 
 async function softResetAttempt(store, input) {
@@ -277,6 +320,7 @@ module.exports = {
   readAttempt,
   readEntry,
   readReport,
+  reportEntryKey,
   readUserExamIndex,
   reportKey,
   reserveAttempt,

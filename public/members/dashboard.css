@@ -4687,3 +4687,16 @@ html[data-theme="dark"] .admin-content-config-grid input {
     transition-duration: 0.01ms !important;
   }
 }
+.dashboard-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 20px 0 6px;
+  font-size: .875rem;
+}
+
+.dashboard-more .button {
+  min-height: 44px;
+}

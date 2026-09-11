@@ -91,7 +91,7 @@ test('admin UI exposes a no-Function env tool and protects it with the admin ses
   const html = fs.readFileSync(path.join(__dirname, '../public/members/module/studio/env/index.html'), 'utf8');
   const script = fs.readFileSync(path.join(__dirname, '../public/members/module/studio/env/script.js'), 'utf8');
   const studio = fs.readFileSync(path.join(__dirname, '../public/members/module/studio/index.html'), 'utf8');
-  const members = fs.readFileSync(path.join(__dirname, '../public/members/index.html'), 'utf8');
+  const members = fs.readFileSync(path.join(__dirname, '../public/members/module/studio/admin/index.html'), 'utf8');
   assert.match(html, /id="env-import"/);
   assert.match(html, /id="env-copy"/);
   assert.match(html, /id="env-download"/);

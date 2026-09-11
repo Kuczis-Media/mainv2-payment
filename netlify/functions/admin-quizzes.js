@@ -38,7 +38,7 @@ exports.handler = async function adminQuizzesHandler(event = {}, context = {}) {
 
 async function handleGet(event) {
   const query = event.queryStringParameters || {};
-  const allowed = new Set(['view', 'repo', 'quiz', 'attemptId', 'userId', 'limit']);
+  const allowed = new Set(['view', 'repo', 'quiz', 'attemptId', 'userId', 'limit', 'cursor']);
   if (Object.keys(query).some((key) => !allowed.has(key))) return json({ error: 'UNEXPECTED_QUERY' }, 400);
   const reference = validateReference(query);
   if (!reference.ok) return json({ error: reference.error }, 400);
@@ -50,15 +50,18 @@ async function handleGet(event) {
     return json({ attempt: adminAttempt(entry.value) });
   }
   if (query.view && query.view !== 'overview') return json({ error: 'INVALID_VIEW' }, 400);
-  const report = await quizStorage.readReport(store, reference.repositoryId, reference.quizId);
-  const limit = Math.max(1, Math.min(500, Number(query.limit) || 200));
+  if (query.cursor && !/^offset:\d{1,9}$/.test(query.cursor)) return json({ error: 'INVALID_REPORT_CURSOR' }, 400);
+  const limit = Math.max(1, Math.min(50, Number(query.limit) || 25));
+  const report = await quizStorage.readReport(store, reference.repositoryId, reference.quizId, { limit, cursor: query.cursor });
   const attempts = Object.values(report.attempts || {})
     .filter((attempt) => attempt.status !== 'reset')
     .sort((left, right) => Date.parse(right.lastActivityAt || 0) - Date.parse(left.lastActivityAt || 0));
   return json({
     metrics: reportMetrics(attempts),
     attempts: attempts.slice(0, limit),
-    truncated: attempts.length > limit,
+    cursor: report.cursor,
+    metricsScope: report.metricsScope,
+    truncated: Boolean(report.cursor),
     updatedAt: report.updatedAt
   });
 }

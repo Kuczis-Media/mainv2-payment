@@ -1002,6 +1002,13 @@
   }
 
   function renderDashboardCanvas() {
+    if (window.NextMedUI?.render('studio-dashboard', elements.dashboardCanvas, {
+      model: state.dashboard.model, selected: state.dashboard.selectedUid, collapsed: state.dashboard.collapsedNodes,
+      adapters: { title: dashboardNodeTitle, subtitle: dashboardNodeSubtitle, symbol: dashboardSymbol, moduleHref: dashboardModelApi.moduleHref }
+    })) {
+      elements.dashboardBlockCount.textContent = String(countDashboardBlocks());
+      return;
+    }
     elements.dashboardCanvas.replaceChildren();
     const sections = state.dashboard.model.sections;
     if (!sections.length) {
@@ -3052,6 +3059,10 @@
   }
 
   function renderLessonCanvas() {
+    if (window.NextMedUI?.render('studio-lesson', elements.lessonCanvas, {
+      model: state.lesson.model, selected: state.lesson.selectedId,
+      adapters: { title: lessonBlockTitle, subtitle: lessonBlockSubtitle, symbol: lessonBlockSymbol, nested: lessonNestedBlocks, slideTitle, slideSummary }
+    })) { elements.lessonSlideCount.textContent = String(state.lesson.model.slides.length); return; }
     elements.lessonCanvas.replaceChildren();
     state.lesson.model.slides.forEach((slide, index) => {
       elements.lessonCanvas.append(
@@ -6566,6 +6577,7 @@
   }
 
   function renderPromptPoints() {
+    if (window.NextMedUI?.render('studio-prompt', elements.promptPointsList, { points: state.prompt.model.points, maxLength: promptModelApi.MAX_PROMPT_CHARS })) return;
     const fragment = document.createDocumentFragment();
     state.prompt.model.points.forEach((point, index) => {
       const card = create('article', 'prompt-point');
@@ -7145,6 +7157,10 @@
 
   function renderPagedRepositoryAssets(container, assets, key, label, actionLabel, onClick) {
     const paged = pagedListApi.page(state.contentLibrary.paging, key, assets);
+    if (window.NextMedUI?.render('studio-assets', container, {
+      paged, label, actionLabel, onSelect: onClick,
+      onMore(page) { pagedListApi.more(state.contentLibrary.paging, page.key, page.total); renderRepositoryAssets(); }
+    })) return paged;
     container.replaceChildren(
       ...paged.items.map((asset) => repositoryAssetButton(asset, actionLabel, onClick))
     );
@@ -7228,7 +7244,17 @@
       { kind: 'quiz', title: 'Quizy', icon: 'Q', assets: state.contentLibrary.quizzes },
       { kind: 'prompt', title: 'Prompty', icon: 'P', assets: state.contentLibrary.prompts }
     ];
-    const roots = groups.map((group) => {
+    const reactLibrary = window.NextMedUI?.render('studio-library', elements.contentExplorerFolders, {
+      groups: groups.map((group) => ({ ...group, paged: pagedListApi.page(state.contentLibrary.paging, `explorer-${group.kind}`, library?.search ? library.search(group.assets, query) : group.assets) })),
+      loading: state.contentLibrary.loading, error: state.contentLibrary.error, query,
+      adapters: { repositoryId: state.contentLibrary.selectedRepositoryId, open: state.contentLibrary.explorerOpen,
+        mediaKey: explorerMediaKey, size: formatExplorerSize, renderMedia: renderExplorerMediaFolder, renderShared: renderSharedMediaRoot,
+        toggle(key, open) { if (open) state.contentLibrary.explorerOpen.add(key); else state.contentLibrary.explorerOpen.delete(key); },
+        loadMedia: loadExplorerMedia,
+        more(page) { pagedListApi.more(state.contentLibrary.paging, page.key, page.total); renderContentExplorer(); }
+      }
+    });
+    const roots = reactLibrary ? [] : groups.map((group) => {
       const matches = library?.search ? library.search(group.assets, query) : group.assets;
       const paged = pagedListApi.page(state.contentLibrary.paging, `explorer-${group.kind}`, matches);
       const folder = document.createElement('details');
@@ -7322,8 +7348,10 @@
       folder.append(summary, files);
       return folder;
     });
-    roots.push(renderSharedMediaRoot());
-    elements.contentExplorerFolders.replaceChildren(...roots);
+    if (!reactLibrary) {
+      roots.push(renderSharedMediaRoot());
+      elements.contentExplorerFolders.replaceChildren(...roots);
+    }
     if (elements.contentExplorerStatus) {
       const total = groups.reduce((sum, group) => sum + group.assets.length, 0);
       const selected = selectedRepository();
@@ -8172,6 +8200,10 @@
 
   function bindEvents() {
     document.addEventListener('studio-select-mode', (event) => switchMode(event.detail));
+    document.addEventListener('studio-open-media', () => {
+      if (!window.ChemMediaManager?.open) { toast('Media Manager jest niedostępny', 'Odśwież Studio i spróbuj ponownie.', 'error'); return; }
+      void window.ChemMediaManager.open({ scope: 'shared', repositoryId: state.contentLibrary.selectedRepositoryId });
+    });
     all('[data-open-mode]').forEach((button) => {
       button.addEventListener('click', () => switchMode(button.dataset.openMode));
     });

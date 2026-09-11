@@ -6440,3 +6440,5 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
   .project-card:hover, .project-card:is(:hover, :focus-visible) .project-arrow,
   .button:hover:not(:disabled), .mini-button:hover:not(:disabled), .icon-button:hover:not(:disabled) { transform: none; }
 }
+.studio-admin-navigation { display: flex; flex-wrap: wrap; gap: .75rem; margin: 1.25rem 0; }
+.studio-admin-navigation a { color: inherit; padding: .75rem 1rem; border: 1px solid var(--border, #ccd4df); border-radius: 12px; text-decoration: none; background: var(--surface, #fff); }

@@ -305,12 +305,14 @@ test('sequential dashboard path is compact, readable and responsive', () => {
 
 test('dashboard exposes user management only through the guarded admin workflow', () => {
   const html = fs.readFileSync(path.join(root, 'public', 'members', 'index.html'), 'utf8');
+  const admin = fs.readFileSync(path.join(root, 'public/members/module/studio/admin/index.html'), 'utf8');
   const script = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.js'), 'utf8');
 
   assert.match(html, /id=["']admin-panel-button["'][^>]*\bhidden\b/);
-  assert.match(html, /id=["']admin-dialog["']/);
-  assert.match(html, /id=["']admin-export-json["'][^>]*\bdisabled\b/);
-  assert.match(html, /id=["']admin-export-xml["'][^>]*\bdisabled\b/);
+  assert.doesNotMatch(html, /id=["']admin-dialog["']/);
+  assert.match(admin, /id=["']admin-dialog["']/);
+  assert.match(admin, /id=["']admin-export-json["'][^>]*\bdisabled\b/);
+  assert.match(admin, /id=["']admin-export-xml["'][^>]*\bdisabled\b/);
   assert.match(script, /appMetadata\.roles\.includes\('admin'\)/);
   assert.match(script, /\/\.netlify\/functions\/admin-users/);
   assert.match(script, /Authorization:\s*`Bearer \$\{token\}`/);
@@ -326,7 +328,7 @@ test('dashboard exposes user management only through the guarded admin workflow'
 });
 
 test('administrator UI covers users, Forms, dashboard and private content status', () => {
-  const html = fs.readFileSync(path.join(root, 'public', 'members', 'index.html'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'public/members/module/studio/admin/index.html'), 'utf8');
   const script = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.js'), 'utf8');
 
   for (const tab of ['users', 'forms', 'dashboard', 'content', 'ai', 'landing']) {

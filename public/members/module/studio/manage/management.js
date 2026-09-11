@@ -2,6 +2,7 @@
   'use strict';
 
   // Studio-only management: no course loading or background polling.
+  window.NextMedUI?.render('studio-price-fields', document.querySelector('.admin-prices-grid'), {});
   const elements = {
     adminTabs: Array.from(document.querySelectorAll('[data-admin-tab]')),
     adminPanels: Array.from(document.querySelectorAll('[data-admin-panel]')),
@@ -628,7 +629,10 @@
   function renderAdminProgressUsers() {
     const rows = filteredAdminProgressUsers();
     const visibleRows = rows.slice(0, adminProgressVisibleCount);
-    const cards = visibleRows.map((user) => {
+    const reactUsers = window.NextMedUI?.render('studio-progress-users', elements.adminProgressUserList, {
+      users: visibleRows, percent: adminProgressPercent, dateLabel: adminDateLabel, onSelect: loadAdminProgressUser
+    });
+    const cards = reactUsers ? [] : visibleRows.map((user) => {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'admin-progress-user';
@@ -649,7 +653,7 @@
       button.addEventListener('click', () => loadAdminProgressUser(user.id));
       return button;
     });
-    elements.adminProgressUserList?.replaceChildren(...cards);
+    if (!reactUsers) elements.adminProgressUserList?.replaceChildren(...cards);
     if (elements.adminProgressMore) {
       const hiddenRows = visibleRows.length < rows.length;
       elements.adminProgressMore.hidden = !hiddenRows && !adminProgressUsersCursor;
@@ -1583,10 +1587,15 @@
       ? adminAiUsageSettings.users[adminAiLimitSelection.id]?.mode || 'inherit'
       : '';
     const disabled = !limitSet || (adminAiLimitSelection.scope === 'user' && ['unlimited', 'disabled'].includes(selectedUserMode));
-    const table = document.createElement('table');
-    table.className = 'admin-ai-limit-table';
     const labels = { requests: 'Żądania', inputTokens: 'Tokeny wejścia', outputTokens: 'Tokeny wyjścia', totalTokens: 'Tokeny łącznie', estimatedCostMicros: 'Koszt (mikro)' };
     const periodLabels = { hour: 'Godzina', day: 'Dzień', week: 'Tydzień', month: 'Miesiąc', lifetime: 'Łącznie' };
+    const reactLimits = window.NextMedUI?.render('studio-ai-limit-grid', elements.adminAiLimitGrid, {
+      metrics: AI_LIMIT_METRICS, periods: AI_LIMIT_PERIODS, values: limitSet, disabled, labels, periodLabels,
+      selection: `${adminAiLimitSelection.scope}:${adminAiLimitSelection.id || ''}`
+    });
+    if (!reactLimits) {
+    const table = document.createElement('table');
+    table.className = 'admin-ai-limit-table';
     const head = document.createElement('thead');
     const header = document.createElement('tr');
     header.append(Object.assign(document.createElement('th'), { textContent: 'Metryka' }));
@@ -1616,6 +1625,7 @@
     });
     table.append(head, body);
     elements.adminAiLimitGrid.replaceChildren(table);
+    }
 
     const { scope, id } = adminAiLimitSelection;
     if (scope === 'user' && id) {
@@ -1670,6 +1680,10 @@
   }
 
   function renderAdminAiUsageTable(host, rows, options = {}) {
+    if (window.NextMedUI?.render('studio-ai-table', host, {
+      rows: rows || [], reset: options.reset, label: options.label, cost: formatAdminAiCost,
+      onLimits: openAdminAiUserLimits, onDetail: renderAdminAiUserDetail, onReset: resetAdminAiUserUsage
+    })) return;
     const table = document.createElement('table');
     table.className = 'admin-ai-usage-table';
     const head = document.createElement('thead');

@@ -41,13 +41,14 @@ exports.handler = async function adminExamsHandler(event = {}, context = {}) {
     console.error('admin-exams failed', error?.name || 'Error');
     if (error instanceof contentRepository.ContentRepositoryError) return json({ error: error.code }, error.status);
     if (error?.code === 'EXAM_CONFLICT') return json({ error: 'EXAM_CONFLICT' }, 409);
+    if (error?.code === 'INVALID_REPORT_CURSOR') return json({ error: error.code }, 400);
     return json({ error: 'EXAM_STORAGE_UNAVAILABLE' }, 503);
   }
 };
 
 async function handleGet(event) {
   const query = event.queryStringParameters || {};
-  const allowed = new Set(['view', 'repo', 'exam', 'attemptId', 'userId', 'limit']);
+  const allowed = new Set(['view', 'repo', 'exam', 'attemptId', 'userId', 'limit', 'cursor']);
   if (Object.keys(query).some((key) => !allowed.has(key))) return json({ error: 'UNEXPECTED_QUERY' }, 400);
   const reference = validateReference(query);
   if (!reference.ok) return json({ error: reference.error }, 400);
@@ -66,19 +67,28 @@ async function handleGet(event) {
     return json({ user: index });
   }
   if (view !== 'overview') return json({ error: 'INVALID_VIEW' }, 400);
-  const report = await examStorage.readReport(store, reference.repositoryId, reference.examId);
+  const limit = Math.max(1, Math.min(50, Number(query.limit) || 25));
+  const report = await examStorage.readReport(store, reference.repositoryId, reference.examId, { limit, cursor: query.cursor });
   const definition = await readDefinition(reference);
-  const limit = Math.max(1, Math.min(500, Number(query.limit) || 200));
   const summaries = Object.values(report.attempts || {})
     .filter((attempt) => attempt.status !== 'reset')
     .sort((left, right) => Date.parse(right.lastActivityAt || 0) - Date.parse(left.lastActivityAt || 0));
   const details = [];
   const selectedSummaries = summaries.slice(0, limit);
-  for (let offset = 0; offset < selectedSummaries.length; offset += 20) {
-    const batch = await Promise.all(selectedSummaries.slice(offset, offset + 20).map((summary) => (
+  for (let offset = 0; offset < selectedSummaries.length; offset += 4) {
+    const batch = await Promise.all(selectedSummaries.slice(offset, offset + 4).map((summary) => (
       examStorage.readAttempt(store, reference.repositoryId, reference.examId, summary.userId, summary.attemptId)
     )));
-    batch.forEach((entry) => { if (entry) details.push(entry.value); });
+    // Keep only bounded analysis fields, not every answer, event and full
+    // question snapshot from all attempts in this page at once.
+    batch.forEach((entry) => { if (entry) details.push({
+      questions: (entry.value.questions || []).map((question) => ({
+        questionId: question.questionId, type: question.type, prompt: String(question.prompt || '').slice(0, 500)
+      })),
+      result: { questionResults: (entry.value.result?.questionResults || []).map((result) => ({
+        questionId: result.questionId, reviewStatus: result.reviewStatus, correct: result.correct, answerLabel: answerLabel(result.answer)
+      })) }
+    }); });
   }
   return json({
     exam: { examId: definition.examId, name: definition.metadata.name, status: definition.status },
@@ -86,7 +96,9 @@ async function handleGet(event) {
     participants: Object.values(report.participants || {}),
     attempts: summaries,
     questionAnalysis: analyzeQuestions(details),
-    truncated: summaries.length > limit,
+    cursor: report.cursor,
+    metricsScope: report.metricsScope,
+    truncated: Boolean(report.cursor),
     updatedAt: report.updatedAt
   });
 }
@@ -520,7 +532,7 @@ function analyzeQuestions(attempts) {
       entry.answerCount += 1;
       if (result.correct) entry.correct += 1;
       else entry.incorrect += 1;
-      const key = answerLabel(result.answer);
+      const key = result.answerLabel ?? answerLabel(result.answer);
       entry.distribution[key] = (entry.distribution[key] || 0) + 1;
       if (!result.correct && key !== 'Brak odpowiedzi') {
         entry.wrongDistribution[key] = (entry.wrongDistribution[key] || 0) + 1;

@@ -41,6 +41,7 @@
   <script src="assessment-editor.js"></script>
   <script src="presentation-model.js"></script>
   <script src="quiz-model.js"></script>
+  <script defer src="/assets/build/dashboard-react.js"></script>
   <script src="exam-builder.js" defer></script>
   <script src="presentation-builder.js" defer></script>
   <script src="quiz-builder.js" defer></script>
@@ -90,6 +91,10 @@
           <option value="ai-usage">Limity AI</option>
           <option value="payments">Płatności</option>
           <option value="ai-settings">Konfiguracja AI</option>
+          <option value="users">Użytkownicy i dostęp</option>
+          <option value="forms">Formularze i wiadomości</option>
+          <option value="content-settings">Biblioteki materiałów</option>
+          <option value="landing-settings">Publikacja strony głównej</option>
           <option value="env">Generator .env</option>
         </optgroup>
       </select>
@@ -129,6 +134,7 @@
           <p>Twórz materiały, dopasuj wygląd platformy lub sprawdź, jak idzie uczestnikom. Wybierz narzędzie, aby zacząć.</p>
         </div>
 
+        <div id="studio-tools">
         <div class="tool-filters" role="group" aria-label="Znajdź narzędzie">
           <div class="tool-categories" role="group" aria-label="Kategorie narzędzi">
             <button type="button" data-tool-filter="all" aria-pressed="true">Wszystkie</button>
@@ -260,7 +266,7 @@
             <span class="project-arrow" aria-hidden="true">→</span>
           </a>
 
-          <a class="project-card project-card-ai" href="/members/?admin=ai" data-tool-group="management">
+          <a class="project-card project-card-ai" href="/members/module/studio/admin/?tab=ai" data-tool-group="management">
             <span class="project-icon" aria-hidden="true">
               <svg viewBox="0 0 40 40" width="40" height="40" focusable="false"><rect x="9" y="9" width="22" height="22" rx="4"></rect><path d="M15 4v5M25 4v5M15 31v5M25 31v5M4 15h5M4 25h5M31 15h5M31 25h5m-16-9 2 4 4 2-4 2-2 4-2-4-4-2 4-2Z"></path></svg>
             </span>
@@ -309,7 +315,14 @@
           </a>
         </div>
 
+        <nav class="studio-admin-navigation" aria-label="Pozostałe ustawienia platformy">
+          <a href="/members/module/studio/admin/?tab=users">Użytkownicy i dostęp</a>
+          <a href="/members/module/studio/admin/?tab=forms">Formularze i wiadomości</a>
+          <a href="/members/module/studio/admin/?tab=content">Biblioteki materiałów</a>
+          <a href="/members/module/studio/admin/?tab=landing">Publikacja strony głównej</a>
+        </nav>
         <p id="studio-tools-empty" class="tool-empty" hidden>Nie znaleziono narzędzia. Zmień wyszukiwanie lub wybierz inną kategorię.</p>
+        </div>
         <section class="content-explorer" id="content-explorer" aria-labelledby="content-explorer-title">
           <header class="content-explorer-heading">
             <div>

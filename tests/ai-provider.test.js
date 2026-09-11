@@ -41,7 +41,7 @@ test.afterEach(() => manager._test.resetStoreFactory());
 
 test('administrator UI exposes the AI manager without persisting keys in browser storage', () => {
   const root = path.join(__dirname, '..');
-  const html = fs.readFileSync(path.join(root, 'public', 'members', 'index.html'), 'utf8');
+  const html = fs.readFileSync(path.join(root, 'public/members/module/studio/admin/index.html'), 'utf8');
   const script = fs.readFileSync(path.join(root, 'public', 'members', 'dashboard.js'), 'utf8');
   assert.match(html, /data-admin-tab=["']ai["']/);
   assert.match(html, /data-admin-panel=["']ai["']/);

@@ -90,7 +90,7 @@
       .map((answer) => line(answer, 500))
       .filter(Boolean)
       .slice(0, 20);
-    const gradingMode = ['ai', 'manual', 'ungraded'].includes(seed.gradingMode) ? seed.gradingMode : 'ai';
+    const gradingMode = ['ai', 'manual', 'ungraded'].includes(seed.gradingMode) ? seed.gradingMode : 'manual';
     return {
       questionId: stable(seed.questionId, 'question'),
       type,
@@ -168,8 +168,8 @@
       if (question.type === 'text' && !question.acceptedAnswers.length) {
         errors.push({ code: 'QUIZ_TEXT_ANSWER_REQUIRED', message: `${label}: podaj co najmniej jedną akceptowaną odpowiedź.` });
       }
-      if (question.type === 'open' && question.gradingMode === 'ai' && !question.answerKey) {
-        errors.push({ code: 'QUIZ_OPEN_ANSWER_KEY_REQUIRED', message: `${label}: dodaj klucz odpowiedzi dla oceny AI.` });
+      if (quiz.metadata.status === 'published' && question.type === 'open' && question.points > 0 && question.gradingMode === 'ai' && !question.answerKey.trim()) {
+        errors.push({ code: 'QUIZ_OPEN_ANSWER_KEY_REQUIRED', message: `${label}: dodaj klucz odpowiedzi dla oceny AI albo wybierz ocenianie ręczne / bez punktów.` });
       }
     });
     return { valid: errors.length === 0, errors, quiz };

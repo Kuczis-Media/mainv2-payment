@@ -2,6 +2,7 @@
   'use strict';
 
   const CONTENT_URL = '/members/dashboard.md';
+  const STUDIO_ADMIN = document.body.hasAttribute('data-studio-admin');
   const LOGIN_URL = '/login/?loggedout=1';
   const ADMIN_USERS_URL = '/.netlify/functions/admin-users';
   const ADMIN_FORMS_URL = '/.netlify/functions/admin-forms';
@@ -309,6 +310,10 @@
   let navigationIntentTimeout = 0;
   let navigationInitialized = false;
   let dashboardLoadId = 0;
+  let dashboardViewVersion = 0;
+  let progressRequestVersion = 0;
+  let reactDashboard = null;
+  let reactDashboardFailed = false;
   let adminUsers = [];
   let adminForms = [];
   let adminSubmissions = [];
@@ -853,6 +858,9 @@
 
   function renderDashboard(model, forceProgress = false) {
     model = ensureRequiredDashboardModel(model);
+    const viewVersion = ++dashboardViewVersion;
+    reactDashboard?.destroy();
+    reactDashboard = null;
     elements.title.textContent = model.title;
     elements.intro.textContent = model.intro.length
       ? model.intro.join(' ')
@@ -866,6 +874,50 @@
       elements.message.hidden = true;
     }
 
+    // Studio continues publishing the same Markdown/model. Only the course
+    // content renderer changes; account/admin dialogs stay outside this root.
+    if (!reactDashboardFailed && window.NextMedDashboardReact?.mount
+      && new URL(window.location.href).searchParams.get('dashboardRenderer') !== 'legacy') {
+      try {
+        reactDashboard = window.NextMedDashboardReact.mount(elements.content, model, {
+          origin: window.location.origin, safeUrl, classifyResource, resourceLabel,
+          progressView: (value, options) => window.ChemProgress?.progressView(value, options),
+          resetButton: studentResetButton,
+          sendProgress: (value, options) => window.ChemProgress?.send(value, options),
+          openGroup: (value) => window.ChemProgress?.open(value),
+          navigate: (href) => window.location.assign(href),
+          onMessage: (message) => {
+            elements.message.hidden = false;
+            elements.message.className = 'dashboard-message';
+            elements.message.textContent = message;
+          },
+          onFiltered: (visible, total, filtering) => {
+            elements.emptySearch.hidden = !filtering || visible > 0;
+            elements.content.hidden = filtering && visible === 0;
+            updateResourceCount(visible, total, filtering);
+            requestNavigationSync();
+          },
+          onError: () => window.setTimeout(() => {
+            if (viewVersion !== dashboardViewVersion) return;
+            reactDashboardFailed = true;
+            renderDashboard(model);
+          }, 0)
+        });
+        totalResources = reactDashboard.total;
+        elements.content.dataset.renderer = 'react';
+        elements.content.setAttribute('aria-busy', 'false');
+        renderNavigation(reactDashboard.sections);
+        reactDashboard.search(elements.search.value, true);
+        setupSectionTracking();
+        hydrateDashboardProgress(model, forceProgress);
+        return;
+      } catch (_) {
+        reactDashboard?.destroy();
+        reactDashboard = null;
+        reactDashboardFailed = true;
+      }
+    }
+    elements.content.dataset.renderer = 'legacy';
     const fragment = document.createDocumentFragment();
     const usedIds = new Set();
     const renderedSections = model.sections.map((section, index) => createSection(section, index, usedIds));
@@ -934,45 +986,52 @@
   async function hydrateDashboardProgress(model, force) {
     const api = window.ChemProgress;
     if (!api) return;
+    const viewVersion = dashboardViewVersion;
+    const requestVersion = ++progressRequestVersion;
     try {
       const state = await api.load({ force: Boolean(force) });
-      const nodes = state?.aggregate?.nodes || {};
-      const records = state?.records || {};
-      const access = state?.access || {};
-      const materialProgress = (id) => nodes[id] || records[id] || null;
-      document.querySelectorAll('[data-sequence-parent]').forEach((card) => {
-        const id = card.dataset.progressId;
-        const index = Number(card.dataset.sequenceIndex) || 0;
-        const siblings = Array.from(document.querySelectorAll('[data-sequence-parent]'))
-          .filter((item) => item.dataset.sequenceParent === card.dataset.sequenceParent)
-          .sort((left, right) => Number(left.dataset.sequenceIndex) - Number(right.dataset.sequenceIndex));
-        const previous = siblings.slice(0, index);
-        const fallbackLocked = previous.some((item) => materialProgress(item.dataset.progressId)?.status !== 'completed');
-        const sequenceAccess = access[id];
-        const currentCatalogSequence = siblings.every((item, siblingIndex) => {
-          const itemAccess = access[item.dataset.progressId];
-          return itemAccess?.sequenceId === card.dataset.sequenceParent
-            && itemAccess.step === siblingIndex + 1
-            && itemAccess.totalSteps === siblings.length;
+      if (viewVersion !== dashboardViewVersion || requestVersion !== progressRequestVersion) return;
+      if (reactDashboard) {
+        reactDashboard.setProgress(state);
+      } else {
+        const nodes = state?.aggregate?.nodes || {};
+        const records = state?.records || {};
+        const access = state?.access || {};
+        const materialProgress = (id) => nodes[id] || records[id] || null;
+        document.querySelectorAll('[data-sequence-parent]').forEach((card) => {
+          const id = card.dataset.progressId;
+          const index = Number(card.dataset.sequenceIndex) || 0;
+          const siblings = Array.from(document.querySelectorAll('[data-sequence-parent]'))
+            .filter((item) => item.dataset.sequenceParent === card.dataset.sequenceParent)
+            .sort((left, right) => Number(left.dataset.sequenceIndex) - Number(right.dataset.sequenceIndex));
+          const previous = siblings.slice(0, index);
+          const fallbackLocked = previous.some((item) => materialProgress(item.dataset.progressId)?.status !== 'completed');
+          const sequenceAccess = access[id];
+          const currentCatalogSequence = siblings.every((item, siblingIndex) => {
+            const itemAccess = access[item.dataset.progressId];
+            return itemAccess?.sequenceId === card.dataset.sequenceParent
+              && itemAccess.step === siblingIndex + 1
+              && itemAccess.totalSteps === siblings.length;
+          });
+          const locked = currentCatalogSequence ? sequenceAccess?.allowed === false : fallbackLocked;
+          const prerequisite = (currentCatalogSequence ? sequenceAccess?.prerequisiteTitle : '')
+            || previous.find((item) => materialProgress(item.dataset.progressId)?.status !== 'completed')?.dataset.sequenceTitle
+            || '';
+          setSequenceCardState(card, locked, materialProgress(id), prerequisite);
         });
-        const locked = currentCatalogSequence ? sequenceAccess?.allowed === false : fallbackLocked;
-        const prerequisite = (currentCatalogSequence ? sequenceAccess?.prerequisiteTitle : '')
-          || previous.find((item) => materialProgress(item.dataset.progressId)?.status !== 'completed')?.dataset.sequenceTitle
-          || '';
-        setSequenceCardState(card, locked, materialProgress(id), prerequisite);
-      });
-      document.querySelectorAll('[data-progress-host]').forEach((host) => {
-        const id = host.dataset.progressHost;
-        const aggregate = materialProgress(id);
-        host.replaceChildren();
-        if (!aggregate || aggregate.tracked === false || aggregate.showProgress === false || aggregate.trackedCount <= 0) {
-          host.hidden = true;
-          return;
-        }
-        host.hidden = false;
-        host.append(api.progressView(aggregate.record || aggregate, { compact: true }));
-        if (aggregate.record) host.append(studentResetButton('Resetuj', id, aggregate.title));
-      });
+        document.querySelectorAll('[data-progress-host]').forEach((host) => {
+          const id = host.dataset.progressHost;
+          const aggregate = materialProgress(id);
+          host.replaceChildren();
+          if (!aggregate || aggregate.tracked === false || aggregate.showProgress === false || aggregate.trackedCount <= 0) {
+            host.hidden = true;
+            return;
+          }
+          host.hidden = false;
+          host.append(api.progressView(aggregate.record || aggregate, { compact: true }));
+          if (aggregate.record) host.append(studentResetButton('Resetuj', id, aggregate.title));
+        });
+      }
       const courseHost = document.getElementById('course-progress');
       const course = state?.aggregate?.course;
       if (courseHost) {
@@ -996,6 +1055,9 @@
   }
 
   function showContentError(error) {
+    dashboardViewVersion++;
+    reactDashboard?.destroy();
+    reactDashboard = null;
     elements.content.hidden = false;
     elements.emptySearch.hidden = true;
     elements.content.replaceChildren();
@@ -1099,6 +1161,10 @@
   }
 
   function filterResources() {
+    if (reactDashboard) {
+      reactDashboard.search(elements.search.value, !elements.search.value.trim());
+      return;
+    }
     const query = normalizeText(elements.search.value);
     let visibleCards = 0;
 
@@ -2062,9 +2128,11 @@
   function renderAdminUsers() {
     const query = normalizeText(elements.adminSearch.value);
     const filtered = adminUsers.filter((user) => !query || normalizeText(`${user.firstName} ${user.lastName} ${user.email}`).includes(query));
-    const fragment = document.createDocumentFragment();
-    filtered.forEach((user) => fragment.append(createAdminUserCard(user)));
-    elements.adminUserList.replaceChildren(fragment);
+    if (!window.NextMedUI?.render('studio-admin-users', elements.adminUserList, { users: filtered, query, renderUser: createAdminUserCard })) {
+      const fragment = document.createDocumentFragment();
+      filtered.forEach((user) => fragment.append(createAdminUserCard(user)));
+      elements.adminUserList.replaceChildren(fragment);
+    }
     elements.adminEmpty.hidden = filtered.length > 0;
     if (query) setAdminStatus(`${filtered.length} z ${adminUsers.length} kont`, 'info');
     else setAdminStatus(adminUsers.length ? `${adminUsers.length} kont w systemie` : '', 'info');
@@ -2148,6 +2216,7 @@
 
   async function loadAdminUsers() {
     elements.adminUserList.setAttribute('aria-busy', 'true');
+    window.NextMedUI?.releaseWithin(elements.adminUserList);
     elements.adminUserList.replaceChildren();
     elements.adminEmpty.hidden = true;
     elements.adminRefresh.disabled = true;
@@ -3939,9 +4008,14 @@
       || (auth && typeof auth.getUser === 'function' ? auth.getUser() : null)
       || (identity && typeof identity.currentUser === 'function' ? identity.currentUser() : null);
     if (!isAdminUser(user)) return;
+    if (!STUDIO_ADMIN) {
+      window.location.assign(`/members/module/studio/admin/?tab=${encodeURIComponent(event?.adminTab || 'users')}`);
+      return;
+    }
     lastAdminTrigger = event && event.currentTarget ? event.currentTarget : elements.adminButton;
     elements.adminSearch.value = '';
-    if (typeof elements.adminDialog.showModal === 'function') elements.adminDialog.showModal();
+    if (STUDIO_ADMIN) elements.adminDialog.setAttribute('open', '');
+    else if (typeof elements.adminDialog.showModal === 'function') elements.adminDialog.showModal();
     else elements.adminDialog.setAttribute('open', '');
     closeMenu();
     const requestedTab = event && typeof event.adminTab === 'string' ? event.adminTab : 'users';
@@ -3953,6 +4027,8 @@
   }
 
   function closeAdminPanel() {
+    if (STUDIO_ADMIN) { window.location.assign('/members/module/studio/'); return; }
+    if (!elements.adminDialog) return;
     if (typeof elements.adminDialog.close === 'function') elements.adminDialog.close();
     else elements.adminDialog.removeAttribute('open');
   }
@@ -4055,6 +4131,7 @@
     elements.profileResetProgress.addEventListener('click', resetProfileProgress);
     elements.logoutButton.addEventListener('click', logout);
     elements.adminButton.addEventListener('click', openAdminPanel);
+    if (elements.adminDialog) {
     elements.adminClose.addEventListener('click', closeAdminPanel);
     elements.adminRefresh.addEventListener('click', loadAdminUsers);
     elements.adminExportJson.addEventListener('click', () => downloadAdminContacts('json'));
@@ -4130,6 +4207,7 @@
       }
     });
 
+    }
     elements.profileDialog.addEventListener('click', (event) => {
       if (event.target === elements.profileDialog) closeProfile();
     });
@@ -4138,10 +4216,10 @@
       elements.profilePasswordMessage.textContent = '';
       if (lastProfileTrigger) lastProfileTrigger.focus();
     });
-    elements.adminDialog.addEventListener('click', (event) => {
-      if (event.target === elements.adminDialog) closeAdminPanel();
+    elements.adminDialog?.addEventListener('click', (event) => {
+      if (!STUDIO_ADMIN && event.target === elements.adminDialog) closeAdminPanel();
     });
-    elements.adminDialog.addEventListener('close', () => {
+    elements.adminDialog?.addEventListener('close', () => {
       if (lastAdminTrigger) lastAdminTrigger.focus();
     });
 
@@ -4151,7 +4229,7 @@
       if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key) && !isTyping) {
         cancelNavigationIntent();
       }
-      if (event.key === '/' && !isTyping && !elements.profileDialog.open && !elements.adminDialog.open) {
+      if (!STUDIO_ADMIN && event.key === '/' && !isTyping && !elements.profileDialog.open && !elements.adminDialog?.open) {
         event.preventDefault();
         elements.search.focus();
       }
@@ -4172,20 +4250,33 @@
     if (auth && auth.ready && typeof auth.ready.then === 'function') {
       try {
         const state = await auth.ready;
-        if (state && state.available && (!state.authenticated || !state.session || !state.session.ok)) return;
+        if (state && state.available && (!state.authenticated || !state.session || !state.session.ok)) {
+          const notice = document.getElementById('studio-admin-access');
+          if (STUDIO_ADMIN && notice) notice.textContent = 'Brak dostępu. Zaloguj się na konto administratora.';
+          return;
+        }
       } catch (_) {
         // Ochrona brzegowa Netlify nadal zabezpiecza plik Markdown.
       }
     }
-    const requestedAdminTab = new URL(window.location.href).searchParams.get('admin');
+    const requestedAdminTab = new URL(window.location.href).searchParams.get(STUDIO_ADMIN ? 'tab' : 'admin');
     const activeUser = auth && typeof auth.getUser === 'function' ? auth.getUser() : null;
+    if (STUDIO_ADMIN) {
+      const notice = document.getElementById('studio-admin-access');
+      if (!isAdminUser(activeUser)) { if (notice) notice.textContent = 'Brak dostępu. Zaloguj się na konto administratora.'; return; }
+      document.body.dataset.adminReady = 'true';
+      if (notice) notice.hidden = true;
+      updateProfileDisplay(activeUser, typeof auth.getProfile === 'function' ? auth.getProfile() : null);
+      openAdminPanel({ currentTarget: elements.adminButton, adminTab: requestedAdminTab || 'users' });
+      return;
+    }
     if (['progress', 'ai-usage', 'payments'].includes(requestedAdminTab) && isAdminUser(activeUser)) {
       window.location.replace(`/members/module/studio/manage/?tab=${encodeURIComponent(requestedAdminTab)}`);
       return;
     }
     if (requestedAdminTab && isAdminUser(activeUser)) {
-      updateProfileDisplay(activeUser, typeof auth.getProfile === 'function' ? auth.getProfile() : null);
-      openAdminPanel({ currentTarget: elements.adminButton, adminTab: requestedAdminTab });
+      window.location.replace(`/members/module/studio/admin/?tab=${encodeURIComponent(requestedAdminTab)}`);
+      return;
     }
     loadDashboard();
   }

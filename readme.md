@@ -68,6 +68,14 @@ To nie jest aplikacja SPA ani projekt wymagający własnego, stale uruchomionego
 
 ## Panel kursanta, motyw i nawigacja
 
+Drzewo materiałów dashboardu renderuje teraz React (`app/dashboard/`), zachowując dotychczasowy Markdown i publikowanie ze Studio. Zamknięte organizery nie tworzą kafelków, długie listy pokazują porcje po 24 elementy, a wyszukiwarka nadal przeszukuje całość. React obsługuje też pytania i wyniki egzaminów/quizów, główne widoki Studio oraz sekcje landingu. Złożone edytory i formularze zachowują sprawdzone kontrolery DOM w wydzielonych granicach komponentów — nie jest to pełne przepisanie całego projektu na JSX.
+
+Narzędzia administratora są w Studio: `/members/module/studio/admin/` (użytkownicy, formularze, konfiguracja dashboardu, biblioteki, modele AI, ustawienia publikacji) oraz `/members/module/studio/manage/` (postępy, limity AI, płatności). Dashboard kursanta zawiera wyłącznie odsyłacz widoczny administratorowi. Generator `.env` pozostaje lokalnym narzędziem Studio, bez wysyłania wpisanych sekretów na serwer.
+
+`npm run build` uruchamia testy i buduje statyczny `public/assets/build/dashboard-react.js`. Plik nie jest commitowany i nie wymaga nowych Functions ani SSR. Przy ręcznym deployu katalogu `public` trzeba go wcześniej zbudować. `npm run dev` wykonuje build przed startem Netlify Dev, a `npm run watch:dashboard` przebudowuje komponenty podczas pracy.
+
+Instrukcja, wyniki testów i dalsze kroki: [PLATFORM_REACT_MIGRATION.md](PLATFORM_REACT_MIGRATION.md), szczegóły dashboardu: [DASHBOARD_REACT_MIGRATION.md](DASHBOARD_REACT_MIGRATION.md). Tymczasowy stary widok można włączyć adresem `/members/?dashboardRenderer=legacy`; inne zintegrowane widoki mają przełącznik `?uiRenderer=legacy`.
+
 Panel buduje działy, harmonijki i karty z aktywnego Markdownu. Wyszukiwarka filtruje nazwy i opisy bez przeładowania strony; klawisz `/` przenosi do pola wyszukiwania. Po kliknięciu działu, ręcznym przewijaniu, zmianie hasha albo dojściu do końca strony właściwa pozycja menu jest zaznaczana od razu. Sekcje ukryte przez wyszukiwanie nie wpływają na wybór aktywnej pozycji.
 
 Na komputerze przycisk menu całkowicie chowa sidebar i zapamiętuje stan w `localStorage` pod kluczem `chem.sidebar`. Sama kolumna pozostaje przewijalna kółkiem, gładzikiem i klawiaturą, ale jej wewnętrzny scrollbar jest wizualnie ukryty. Na ekranach mobilnych ten sam przycisk otwiera menu jako warstwę nad treścią. Motyw jasny lub ciemny jest wspólny dla dashboardu, stron płatności i aplikacji modułów; wybór trafia do `chem.theme`, a bez zapisanego wyboru używane jest ustawienie systemowe. Zmiana w jednej karcie jest przekazywana pozostałym otwartym kartom przez zdarzenie `storage`.

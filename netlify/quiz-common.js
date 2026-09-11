@@ -60,7 +60,7 @@ function validateDefinition(value, expectedQuizId = '') {
       if (question.options.length !== 0 || question.acceptedAnswers.length !== 0) return invalid();
       if (!openAnswerGrader.GRADING_MODES.includes(question.gradingMode)) return invalid();
       if (!string(question.answerKey, 10_000) || !string(question.aiInstruction, 2_000) || typeof question.multiline !== 'boolean') return invalid();
-      if (question.gradingMode === 'ai' && !question.answerKey.trim()) return invalid();
+      if (value.metadata.status === 'published' && question.points > 0 && question.gradingMode === 'ai' && !question.answerKey.trim()) return invalid();
     }
     if (!['text', 'open'].includes(question.type) && question.acceptedAnswers.length !== 0) return invalid();
   }
