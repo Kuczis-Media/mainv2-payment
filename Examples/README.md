@@ -1,89 +1,82 @@
-# ChemDisk — kompletne przykłady z chemii organicznej
+# NextMed — warsztat wszystkich rodzajów materiałów
 
-Katalog zawiera spójny zestaw gotowy do importu. Lekcja, quiz, egzamin i natywna prezentacja używają stabilnych identyfikatorów, które są już ze sobą poprawnie powiązane:
+Gotowy zestaw demonstracyjny do otwarcia w Studio i przetestowania jako uczeń. Pliki są materiałami kursu, nie konfiguracją serwera. Nie zmieniają limitów AI, uprawnień ani ustawień Twojej platformy.
 
-- lekcja: `lekcja-chemia-organiczna.md`;
-- quiz: `quiz-chemia-organiczna`;
-- egzamin: `egzamin-chemia-organiczna`;
-- prezentacja ChemDisk: `prezentacja-aldehydy`.
+## Zacznij tutaj
 
-Nie zmieniaj pojedynczej nazwy bez równoczesnej zmiany odwołań w lekcji. Nazwa folderu quizu, egzaminu i prezentacji musi być identyczna z odpowiednio `quizId`, `examId` i `presentationId` w JSON.
+1. Skopiuj zawartość katalogów `lessons`, `quizzes`, `exams`, `presentations`, `prompts` i `assets` do biblioteki treści, zachowując ścieżki. Nie dodawaj dodatkowego poziomu `Examples/`, jeśli nie wskazujesz go jako katalogu głównego biblioteki.
+2. W Studio wybierz tę bibliotekę i odśwież listę materiałów. Możesz też importować pojedynczy MD/JSON w odpowiednim edytorze; obrazy wgraj osobno pod wskazane ścieżki.
+3. Otwórz główną lekcję `lekcja-chemia-organiczna.md`. Swobodna nawigacja pozwala zobaczyć każdy przykład bez zaliczania poprzednich zadań.
+4. Przejrzyj [mapę funkcji](FEATURES.md). Warianty wykluczających się ustawień są osobnymi materiałami.
+5. Opcjonalnie zaimportuj `dashboard.md` w edytorze dashboardu. To propozycja katalogu kursu; nie zastępuj swojego dashboardu bez zachowania jego kopii.
 
-## Co pokazują pliki
+Odwołania między materiałami używają identyfikatora biblioteki **`repo-testowe`**. Nie jest to nazwa właściciela ani repozytorium GitHub/Gitea. Jeśli Twoja biblioteka ma inne ID, zmień wszystkie wystąpienia `repo-testowe` w importowanej kopii. Pola `repo` i `repository` muszą wskazywać to samo ID.
 
-- `lessons/lekcja-chemia-organiczna.md` — wszystkie 25 typów klocków lekcji, wszystkie 6 typów zadań, pytania otwarte i omówienia, tryb płynny i canvas, multimedia, AI, ustawienia wyglądu, postępu i nawigacji;
-- `quizzes/quiz-chemia-organiczna/quiz.json` — wszystkie 4 typy pytań quizu: `single`, `multiple`, `true_false`, `text`;
-- `exams/egzamin-chemia-organiczna/exam.json` — wszystkie 8 typów pytań egzaminu oraz kompletną konfigurację egzaminu;
-- `presentations/prezentacja-aldehydy/presentation.json` — natywną prezentację ChemDisk ze stabilnymi ID slajdów i elementów;
-- `assets/shared/example-diagram.svg` — diagram grup funkcyjnych współdzielony przez materiały;
-- `lessons/lekcja-chemia-organiczna/photos/example-photo.svg` — lokalne medium lekcji ilustrujące próbę Tollensa;
-- `prompts/example-prompt.txt` — prompt używany przez klocek AI.
+Główne identyfikatory pozostają niezmienione: `lekcja-chemia-organiczna.md`, `quiz-chemia-organiczna`, `egzamin-chemia-organiczna`, `prezentacja-aldehydy`. Nazwa katalogu quizu/egzaminu/prezentacji musi pasować do ID w JSON. Powiązane materiały opublikuj przed udostępnieniem lekcji uczniom.
 
-## Jak wgrać do repozytorium treści
+## Zawartość
 
-Skopiuj pliki z zachowaniem dokładnych ścieżek:
-
-```text
-lessons/lekcja-chemia-organiczna.md
-lessons/lekcja-chemia-organiczna/photos/example-photo.svg
-quizzes/quiz-chemia-organiczna/quiz.json
-exams/egzamin-chemia-organiczna/exam.json
-presentations/prezentacja-aldehydy/presentation.json
-assets/shared/example-diagram.svg
-prompts/example-prompt.txt
-```
-
-Zestaw jest przygotowany dla repozytorium skonfigurowanego w ChemDisk pod ID `repo-testowe` (`Kuczis-Media/test`). Lekcja, prezentacja, quiz, egzamin, prompt i media współdzielone używają tego samego stabilnego ID, dlatego nie wymagają ręcznej poprawy po wgraniu do tego repozytorium. Jeżeli świadomie wybierzesz inne ID, zmień wszystkie wystąpienia `repo-testowe` w lekcji, prezentacji i linkach dashboardu.
-
-Do dashboardu dodaj dokładnie:
-
-```markdown
-- [Chemia organiczna — lekcja](/members/module/lesson/?repo=repo-testowe&file=lekcja-chemia-organiczna.md) — Kompletna lekcja o grupach funkcyjnych, aldehydach i ketonach.
-```
-
-## Rzeczywiste materiały Google i YouTube
-
-Przykłady używają przekazanych identyfikatorów:
-
-- Google Slides o aldehydach: `1rxPm5CJl2LDzrzq89fogz-_PWwO_BbqF`;
-- PDF o cykloaddycji: `1qKkDarVM8qn1GHkNalt9f8n7IXNUawZF`;
-- Google Forms o szybkości reakcji: `1FAIpQLSeKEXX7ooRB7ZaPJ8UwnqNlPsucgjwnQFzmSlZ3OvrdFlURsA`;
-- YouTube: `sU6epNBjvzo`, `PG6fB57aAoA`, `kOoRildWO0s`.
-
-ID jest poprawnie wyodrębnione z podanych linków. Osadzenie zadziała tylko wtedy, gdy właściciel materiału zezwolił osobom z linkiem na wyświetlanie; dla Google Slides przydatna jest także publikacja prezentacji w internecie. To ustawienie należy wykonać po stronie Google.
-
-## Typy i warianty lekcji
-
-Lekcja zawiera wszystkie typy klocków:
-
-```text
-heading, text, list, table, image, quote, callout, code, style,
-accordion, youtube, slides, presentation, quiz, pdf, atonom,
-formula, link, ai, board, contact, exam, flashcards,
-student-answer, answer-review
-```
-
-oraz wszystkie typy zadań:
-
-```text
-text, number, choice, abcd, gaps, gaps-text
-```
-
-Wybrane ustawienia są wzajemnie wykluczające, dlatego materiał demonstruje je na różnych krokach:
-
-| Obszar | Pokazane możliwości |
+| Materiał | Co pokazuje |
 | --- | --- |
-| Nawigacja lekcji | `sequential`; dostępny jest też `free` |
-| Widoczność kroku | `ON`, `OFF`, `INHERIT`; krok wymagany i opcjonalny |
-| Warunki kroku | kliknięcie dalej, poprzedni krok, materiał, quiz, poprawna odpowiedź, ukończenie/zaliczenie/wynik egzaminu |
-| Przejścia | `none`, `fade`, `rise`, `slide`, `zoom` |
-| Tła i dekoracje | wszystkie tła systemowe, własny kolor i dekoracje |
-| Układ | płynny oraz pozycjonowany `canvas` |
-| Luki | lista rozwijana oraz ręczne wpisywanie; nowe linie zapisane jawnie przez autora w `text_json` |
-| Pytanie otwarte | wielo- i jednowierszowe, wymagane lub opcjonalne, zapis do postępu lub tylko sesyjny |
-| Omówienie | odpowiedź ucznia albo klucz jako pierwszy, AI włączone lub wyłączone |
-| Google Slides | kontrolki włączone i wyłączone dla tej samej prawdziwej prezentacji |
-| PDF | wszystkie obsługiwane tryby otwierania tego samego prawdziwego pliku |
-| Egzamin | karta opcjonalna, wymagane ukończenie, zaliczenie i własny próg |
+| `lessons/lekcja-chemia-organiczna.md` | 32 kroki: 25 rodzajów bloków, 6 rodzajów zadań, media, AI, odpowiedzi otwarte, style, canvas i Entery |
+| `lessons/lekcja-sekwencyjna.md` | Blokowanie następnego kroku, wielowierszowe ABCD, odpowiedź z blokadą edycji, sam klucz bez AI |
+| `quizzes/quiz-chemia-organiczna/quiz.json` | 7 pytań: 5 rodzajów, w tym otwarte ręczne, AI i niepunktowane |
+| `quizzes/quiz-bez-ai/quiz.json` | Wynik automatyczny, losowa kolejność, bez ponawiania i informacji zwrotnej do pytań |
+| `quizzes/quiz-refleksja/quiz.json` | Odpowiedź otwarta bez punktów i oczekiwania na ocenę |
+| `exams/egzamin-chemia-organiczna/exam.json` | 11 pytań: wszystkie 9 rodzajów, formatowanie, wzory, ręczne punkty i AI na polecenie |
+| Pozostałe katalogi `exams/egzamin-…` | Wynik od razu, pytania po kolei, zegary, losowanie, bank pytań, refleksja |
+| `exams/question-bank.json` | Pytania współdzielone z wariantem `egzamin-z-banku` |
+| `presentations/prezentacja-aldehydy/presentation.json` | 15 slajdów: 10 typów elementów, 11 układów, 17 czcionek, media, wzory i warstwy |
+| Prezentacje `jasna`, `ciemna`, `minimalna` | Motywy, proporcje 16:9/4:3 i trzy sposoby liczenia postępu |
+| `prompts/example-prompt.txt` | 4 osobne instrukcje wybierane numerem punktu |
+| `prompts/example-prompt.json` | Jedna instrukcja JSON |
+| `dashboard.md` | Katalog modułów i linki do materiałów |
+| `assets/shared/example-diagram.svg` | Wspólna ilustracja; jeden plik używany w wielu materiałach |
+| `lessons/lekcja-chemia-organiczna/photos/example-photo.svg` | Ilustracja lokalna przypisana do lekcji |
 
-JSON nie obsługuje komentarzy, dlatego opisy wariantów znajdują się tutaj, a pliki materiałów pozostają gotowe do importu.
+## Sprawdzanie egzaminu
+
+Otwórz **Studio → Egzamin → zapisany egzamin → Sprawdzanie**.
+
+- Lista ma filtr „Do sprawdzenia”, „Wszyscy” i „Ocenione”. Wyszukiwanie obejmuje wczytaną część listy; przycisk „Wczytaj kolejnych” pobiera następne próby.
+- Wybierz osobę, a następnie jej próbę. Pytania otwarte są od razu rozwinięte.
+- Odpowiedź ucznia, klucz i kryteria są opisane osobno. Przy mniejszej szerokości odpowiedź i klucz ustawiają się jeden pod drugim.
+- Wpisz punkty i komentarz, kliknij „Zapisz punkty za pytania otwarte”. Możesz zapisać część ocen; puste pola punktów nie oznaczają zera.
+- Niezapisane punkty i komentarze pozostają w pamięci przy przełączaniu prób. Nie przetrwają zamknięcia strony — przeglądarka ostrzeże przed opuszczeniem jej z niezapisanymi zmianami.
+- Przycisk AI dotyczy oczekujących pytań ustawionych jako AI. Otwarcie listy lub odpowiedzi nie korzysta z AI. Najpierw zapisz ręczne zmiany.
+- Uprawnienia są sprawdzane na serwerze. Ten panel wymaga konta z dostępem administracyjnym; samo posiadanie linku nie daje dostępu do cudzych odpowiedzi.
+
+Główny egzamin ma pytania oczekujące na ocenę. Dlatego nie jest przykładem „wyniku od razu” — do tego służy `egzamin-natychmiastowy`. Warianty egzaminów są zapisane jako **szkice**, aby przypadkiem nie uruchomić uczniowi limitu czasu lub zakończenia próby przy opuszczeniu strony. Opublikuj wybrane warianty świadomie.
+
+## Entery w lekcji
+
+Enter w treści pytania zachowuje nowy wiersz. Pusty wiersz tworzy osobny akapit. Dotyczy to podglądu w Studio i odtwarzacza ucznia.
+
+Opcje ABCD i zwykłego wyboru mają pola wielowierszowe. Zapis nie rozbija jednej odpowiedzi na kilka. Pola `label_json`, `options_json`, `answer_json`, `hint_json` i `success_json` zachowują Entery w pliku MD. Studio generuje ten zapis automatycznie; nadal wczytuje starsze pola `label:`, `options:`, `answer:`, `hint:` i `success:`.
+
+Przykład:
+
+```text
+:::task
+type: abcd
+options_json: ["Etanal\nCH₃CHO","Etanol\nCH₃CH₂OH","Propanon\nCH₃COCH₃","Metan\nCH₄"]
+answer: A
+success_json: "Poprawnie!\nPrzejdź do następnego kroku."
+:::
+```
+
+Listy rozwijane w lukach korzystają z natywnego kontrolera przeglądarki — wielowierszowe są polecenie i tekst wokół luk, a wygląd samych pozycji listy zależy od przeglądarki.
+
+## Zależności i koszty
+
+Samo przeglądanie przykładu nie powinno uruchamiać oceny AI. W quizie ocenę wywołuje uczeń przy sprawdzaniu; w egzaminie — sprawdzający przyciskiem. Potrzebne są skonfigurowany model, uprawnienia i dostępny limit.
+
+Materiały prywatne oraz zapis postępów nadal korzystają z mechanizmów serwera. Przykłady nie oznaczają zerowego zużycia Functions. Lista sprawdzania pobiera krótkie podsumowania partiami, nie pełne odpowiedzi wszystkich uczniów; szczegóły pobiera po wyborze osoby.
+
+Zewnętrzne Google Slides, PDF, Forms i YouTube zachowują identyfikatory przekazane przez autora. Ich dostępność, zgoda na osadzenie, publikacja i uprawnienia muszą być ustawione w usłudze źródłowej. Testy lokalne tego nie potwierdzają. Tablica BitPaper i formularz kontaktowy również wymagają odpowiedniej konfiguracji.
+
+## Sprawdzenie plików
+
+`npm test -- tests/examples.test.js tests/studio-lesson.test.js tests/platform-react.test.js tests/exam-engine.test.js`
+
+Testy obejmują poprawność formatów i wariantów, lokalne ścieżki mediów, odwołania do banku pytań, typy elementów, Entery oraz działanie panelu sprawdzania. Pełne `npm run build` najpierw buduje wymagany pakiet React, a potem uruchamia cały zestaw testów.

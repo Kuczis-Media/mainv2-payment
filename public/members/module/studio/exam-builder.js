@@ -197,6 +197,7 @@
     elements.editor.addEventListener('keydown', handleMediaKeydown);
     elements.repository.addEventListener('change', async () => {
       state.repositoryId = elements.repository.value;
+      clearReviewSelection();
       state.remoteSha = '';
       state.remoteExamId = '';
       state.bankSha = '';
@@ -326,6 +327,7 @@
     try {
       const result = await library.readExam(examId, { repositoryId: state.repositoryId });
       state.exam = modelApi.createExam(JSON.parse(result.content));
+      clearReviewSelection();
       state.remoteSha = result.sha || '';
       state.remoteExamId = state.exam.examId;
       state.selectedQuestionId = state.exam.questions[0]?.questionId || '';
@@ -363,6 +365,7 @@
   function newExam() {
     if (!window.confirm('Utworzyć nowy egzamin? Bieżący szkic na tym urządzeniu zostanie zastąpiony. Zapisz go najpierw, jeśli chcesz zachować zmiany.')) return;
     state.exam = modelApi.createExam();
+    clearReviewSelection();
     state.remoteSha = '';
     state.remoteExamId = '';
     state.selectedQuestionId = state.exam.questions[0]?.questionId || '';
@@ -376,6 +379,7 @@
 
   function render() {
     if (!state.exam || !elements.editor) return;
+    elements.editor.closest('.exam-workspace')?.classList.toggle('is-reviewing', state.tab === 'review');
     state.mediaObjectUrls.splice(0).forEach((url) => URL.revokeObjectURL(url));
     elements.tabs.querySelectorAll('[data-exam-tab]').forEach((button) => {
       const active = button.dataset.examTab === state.tab;
@@ -974,6 +978,14 @@
   }
 
   function reviewScope() { return `${state.repositoryId}:${state.exam.examId}`; }
+  function clearReviewSelection() {
+    state.attemptRequest++;
+    state.attemptLoading = false;
+    state.attemptReport = null;
+    state.reviewUser = null;
+    state.reviewQueue = null;
+    state.report = null;
+  }
   function gradeDraftKey(attempt) { return `${attempt.repositoryId || state.repositoryId}:${attempt.examId || state.exam.examId}:${attempt.userId}:${attempt.attemptId}`; }
   function renderReview() {
     const main = section('Sprawdzanie egzaminu', 'Wybierz ucznia, następnie jego próbę. Punkty i komentarze zapisujesz samodzielnie; AI działa wyłącznie na Twoje polecenie.');
@@ -1045,8 +1057,14 @@
       const all = new Map((more ? state.reviewQueue?.attempts || [] : []).map((item) => [item.attemptId, item]));
       result.attempts.forEach((item) => all.set(item.attemptId, item));
       state.reviewQueue = { scope, attempts: [...all.values()], cursor: result.cursor };
-    } catch (error) { elements.status.textContent = error.message || 'Nie udało się wczytać kolejki.'; }
-    finally { state.reviewLoading = false; if (state.tab === 'review') render(); }
+    } catch (error) { if (scope === reviewScope()) elements.status.textContent = error.message || 'Nie udało się wczytać kolejki.'; }
+    finally {
+      state.reviewLoading = false;
+      if (state.tab === 'review') {
+        render();
+        if (scope !== reviewScope()) void loadReviewQueue();
+      }
+    }
   }
 
   async function openReviewUser(userId) {
@@ -1158,6 +1176,7 @@
     );
     const reset = create('button', 'button button-danger', 'Resetuj próbę');
     reset.type = 'button'; reset.dataset.examAction = 'reset-attempt'; reset.dataset.userId = attempt.userId; reset.dataset.attemptId = attempt.attemptId;
+    reset.disabled = state.gradingBusy || state.aiGrading;
     heading.append(copy, reset); report.append(heading);
     const signalTypes = new Set(['cursor_leave', 'copy', 'paste', 'context_menu']);
     const signals = (attempt.events || []).filter((entry) => signalTypes.has(entry.type));
@@ -1181,6 +1200,7 @@
       const summary = document.createElement('summary');
       const prompt = create('span');
       window.ChemAssessmentText.render(prompt, `${index + 1}. ${question.prompt || question.template}`, question.promptFormat);
+      prompt.style.fontSize = 'inherit';
       summary.append(
         prompt,
         create('strong', '', `${graded?.points ?? '—'}/${graded?.maxPoints ?? question.points} pkt`)
@@ -1262,7 +1282,7 @@
     const entries = Array.isArray(values) ? values.filter((value) => typeof value === 'string' && value.trim()) : [];
     if (!entries.length) card.append(create('p', 'assessment-answer-empty', key ? 'Nie podano klucza.' : 'Brak odpowiedzi.'));
     else for (const value of entries) {
-      const content = create('p'); window.ChemAssessmentText.render(content, value); card.append(content);
+      const content = create('p'); window.ChemAssessmentText.render(content, value); content.style.fontSize = 'inherit'; card.append(content);
     }
     return card;
   }
@@ -1838,12 +1858,22 @@
   }
 
   async function resetAttempt(userId, attemptId) {
+    if (state.gradingBusy || state.aiGrading) return;
     if (!window.confirm('Zresetować tę próbę? Pozostałe próby ucznia zostaną zachowane, a postęp egzaminu przeliczony ponownie.')) return;
+    const scope = reviewScope();
+    const draftKey = gradeDraftKey({ userId, attemptId });
+    state.gradingBusy = true; render();
     try {
       await adminMutation({ repositoryId: state.repositoryId, examId: state.exam.examId, targetUserId: userId, attemptId, operationId: `admin-reset:${cryptoId()}` });
+      state.gradeDrafts.delete(draftKey);
+      if (scope !== reviewScope()) return;
       state.attemptReport = null;
-      await loadReport();
+      state.reviewUser = null;
+      state.report = null;
+      if (state.tab === 'review') await loadReviewQueue();
+      else await loadReport();
     } catch (error) { elements.status.textContent = error.message || 'Nie udało się zresetować próby.'; }
+    finally { state.gradingBusy = false; render(); }
   }
 
   async function gradeAttemptReport() {
@@ -1867,7 +1897,11 @@
         targetUserId: attempt.userId, attemptId: attempt.attemptId, revision: attempt.revision,
         operationId: `admin-grade:${cryptoId()}`, grades
       });
-      state.gradeDrafts.delete(gradeDraftKey(attempt));
+      const drafts = state.gradeDrafts.get(gradeDraftKey(attempt));
+      if (drafts) {
+        grades.forEach((grade) => delete drafts[grade.questionId]);
+        if (!Object.keys(drafts).length) state.gradeDrafts.delete(gradeDraftKey(attempt));
+      }
       if (scope !== reviewScope()) return;
       acceptGradedAttempt(payload.attempt);
       elements.status.classList.remove('is-error');

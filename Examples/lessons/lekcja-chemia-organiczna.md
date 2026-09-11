@@ -1,4 +1,4 @@
-<!-- chemdisk-lesson:{"navigation":"sequential"} -->
+<!-- chemdisk-lesson:{"navigation":"free"} -->
 
 <!-- chemdisk-step:{"id":"example-intro","includeInLesson":"ON","requiredToAdvance":true,"condition":{"type":"next_click","materialId":"","minimumScore":0}} -->
 
@@ -9,11 +9,13 @@ decoration: molecules
 text_tone: auto
 :::
 
-# Chemia organiczna — kompletna lekcja interaktywna
+# Chemia organiczna — kompletny warsztat NextMed
 
 ## Wprowadzenie
 
-Ta lekcja prowadzi od rozpoznawania grup funkcyjnych do reakcji aldehydów i ketonów. Jednocześnie jest kompletnym, gotowym do importu wzorcem Lesson Buildera ChemDisk.
+To katalog funkcji: swobodna nawigacja pozwala obejrzeć każdy przykład. Osobna lekcja `lekcja-sekwencyjna.md` pokazuje wymagane kroki. Ukończenie kroku powiązanego z quizem lub egzaminem wymaga rozwiązania materiału, nie samego otwarcia.
+
+Ta lekcja prowadzi od rozpoznawania grup funkcyjnych do reakcji aldehydów i ketonów. Jest także katalogiem możliwości edytora lekcji NextMed.
 
 ### W tym przykładzie znajdziesz
 
@@ -127,7 +129,7 @@ CH3CHO → CH3COOH
 
 ---
 
-<!-- chemdisk-step:{"id":"example-media","includeInLesson":"INHERIT","requiredToAdvance":true,"condition":{"type":"material_completed","materialId":"image:example-diagram","minimumScore":0}} -->
+<!-- chemdisk-step:{"id":"example-media","includeInLesson":"INHERIT","requiredToAdvance":true,"condition":{"type":"next_click","materialId":"","minimumScore":0}} -->
 
 :::slide
 transition: zoom
@@ -297,7 +299,7 @@ right: produkty
 
 ---
 
-<!-- chemdisk-step:{"id":"example-video-model","includeInLesson":"INHERIT","requiredToAdvance":true,"condition":{"type":"material_completed","materialId":"youtube:sU6epNBjvzo","minimumScore":0}} -->
+<!-- chemdisk-step:{"id":"example-video-model","includeInLesson":"INHERIT","requiredToAdvance":true,"condition":{"type":"material_completed","materialId":"yt:sU6epNBjvzo","minimumScore":0}} -->
 
 :::slide
 transition: rise
@@ -368,12 +370,12 @@ decoration: molecules
 text_tone: dark
 :::
 
-## Materiały ChemDisk wewnątrz lekcji
+## Materiały NextMed wewnątrz lekcji
 
 :::presentation
 repository: repo-testowe
 presentation: prezentacja-aldehydy
-title: Aldehydy — prezentacja ChemDisk
+title: Aldehydy — prezentacja NextMed
 description: Otwiera dołączoną prezentację `prezentacja-aldehydy/presentation.json` i zapisuje jej postęp.
 button: Otwórz prezentację
 :::
@@ -388,7 +390,7 @@ button: Rozpocznij quiz
 
 ---
 
-<!-- chemdisk-step:{"id":"example-pdfs","includeInLesson":"INHERIT","requiredToAdvance":true,"condition":{"type":"material_completed","materialId":"pdf:example","minimumScore":0}} -->
+<!-- chemdisk-step:{"id":"example-pdfs","includeInLesson":"INHERIT","requiredToAdvance":true,"condition":{"type":"material_completed","materialId":"pdf:1qKkDarVM8qn1GHkNalt9f8n7IXNUawZF","minimumScore":0}} -->
 
 :::slide
 transition: none
@@ -452,6 +454,20 @@ text_tone: dark
 :::
 
 ## AI z pełnym kontekstem
+
+AI nie uruchamia się od oglądania slajdu. Wywołanie następuje po wysłaniu pytania; wymaga dostępnego modelu i limitu w platformie.
+
+:::aihelp
+title: Jeden prompt JSON
+description: Osobny wariant instrukcji — plik JSON zamiast punktów TXT.
+button: Otwórz asystenta
+repository: repo-testowe
+prompt: example-prompt.json
+point: 1
+include_slide: true
+include_task: false
+context_json: "Pomóż porównać etanal i propanon.\nNie znasz wyników ucznia ani zawartości osadzonych plików."
+:::
 
 :::aihelp
 title: Zapytaj AI o treść, obraz i zadanie
@@ -580,7 +596,7 @@ text_tone: dark
 ## Tablice i kontakt
 
 :::board
-title: Biała tablica ChemDisk
+title: Biała tablica NextMed
 description: Szkicuj wzory i rozwiązania bez wychodzenia z lekcji.
 button: Otwórz tablicę
 variant: whiteboard
@@ -987,4 +1003,138 @@ description: Wyślij wiadomość do prowadzącego bez opuszczania platformy.
 button: Napisz do prowadzącego
 internal: Pytanie dotyczące kompletnego przykładu lekcji.
 new_tab: false
+:::
+
+---
+
+<!-- chemdisk-step:{"id":"example-enters-text","includeInLesson":"ON","requiredToAdvance":false,"condition":{"type":"next_click","materialId":"","minimumScore":0}} -->
+
+# Nowa lekcja
+
+## Entery w pytaniu: text
+
+:::question
+Pierwszy wiersz: rozpoznaj aldehyd.
+Drugi wiersz: odwołaj się do grupy CH~3~CHO.
+
+Nowy akapit z **wyróżnieniem**.
+:::
+
+:::task
+type: text
+label_json: "Twoja odpowiedź\nWybierz lub wpisz poniżej."
+answer: etanal
+hint_json: "Końcówka nazwy: -al.\nW zadaniu liczbowym podaj liczbę atomów węgla w etanalu: 2."
+success_json: "Poprawnie!\nZachowaliśmy nowe wiersze."
+:::
+
+---
+
+<!-- chemdisk-step:{"id":"example-enters-number","includeInLesson":"ON","requiredToAdvance":false,"condition":{"type":"next_click","materialId":"","minimumScore":0}} -->
+
+## Entery w pytaniu: number
+
+:::question
+Pierwszy wiersz: rozpoznaj aldehyd.
+Drugi wiersz: odwołaj się do grupy CH~3~CHO.
+
+Nowy akapit z **wyróżnieniem**.
+:::
+
+:::task
+type: number
+label_json: "Twoja odpowiedź\nWybierz lub wpisz poniżej."
+answer: 2
+hint_json: "Końcówka nazwy: -al.\nW zadaniu liczbowym podaj liczbę atomów węgla w etanalu: 2."
+success_json: "Poprawnie!\nZachowaliśmy nowe wiersze."
+:::
+
+---
+
+<!-- chemdisk-step:{"id":"example-enters-choice","includeInLesson":"ON","requiredToAdvance":false,"condition":{"type":"next_click","materialId":"","minimumScore":0}} -->
+
+## Entery w pytaniu: choice
+
+:::question
+Pierwszy wiersz: rozpoznaj aldehyd.
+Drugi wiersz: odwołaj się do grupy CH~3~CHO.
+
+Nowy akapit z **wyróżnieniem**.
+:::
+
+:::task
+type: choice
+label_json: "Twoja odpowiedź\nWybierz lub wpisz poniżej."
+options_json: ["Etanal\nCH₃CHO","Propanon\nCH₃COCH₃","Etanol\nCH₃CH₂OH","Metan\nCH₄"]
+answer_json: ["Etanal\nCH₃CHO"]
+hint_json: "Końcówka nazwy: -al.\nW zadaniu liczbowym podaj liczbę atomów węgla w etanalu: 2."
+success_json: "Poprawnie!\nZachowaliśmy nowe wiersze."
+:::
+
+---
+
+<!-- chemdisk-step:{"id":"example-enters-abcd","includeInLesson":"ON","requiredToAdvance":false,"condition":{"type":"next_click","materialId":"","minimumScore":0}} -->
+
+## Entery w pytaniu: abcd
+
+:::question
+Pierwszy wiersz: rozpoznaj aldehyd.
+Drugi wiersz: odwołaj się do grupy CH~3~CHO.
+
+Nowy akapit z **wyróżnieniem**.
+:::
+
+:::task
+type: abcd
+label_json: "Twoja odpowiedź\nWybierz lub wpisz poniżej."
+options_json: ["Etanal\nCH₃CHO","Propanon\nCH₃COCH₃","Etanol\nCH₃CH₂OH","Metan\nCH₄"]
+answer: A
+hint_json: "Końcówka nazwy: -al.\nW zadaniu liczbowym podaj liczbę atomów węgla w etanalu: 2."
+success_json: "Poprawnie!\nZachowaliśmy nowe wiersze."
+:::
+
+---
+
+<!-- chemdisk-step:{"id":"example-enters-gaps","includeInLesson":"ON","requiredToAdvance":false,"condition":{"type":"next_click","materialId":"","minimumScore":0}} -->
+
+## Entery w pytaniu: gaps
+
+:::question
+Pierwszy wiersz: rozpoznaj aldehyd.
+Drugi wiersz: odwołaj się do grupy CH~3~CHO.
+
+Nowy akapit z **wyróżnieniem**.
+:::
+
+:::task
+type: gaps
+label_json: "Twoja odpowiedź\nWybierz lub wpisz poniżej."
+options_json: ["Etanal\nCH₃CHO","Propanon\nCH₃COCH₃","Etanol\nCH₃CH₂OH","Metan\nCH₄"]
+text_json: "Związek CH₃CHO to {{nazwa}}.\nTa linia pozostaje osobnym wierszem."
+answer_json: ["Etanal\nCH₃CHO"]
+hint_json: "Końcówka nazwy: -al.\nW zadaniu liczbowym podaj liczbę atomów węgla w etanalu: 2."
+success_json: "Poprawnie!\nZachowaliśmy nowe wiersze."
+:::
+
+---
+
+<!-- chemdisk-step:{"id":"example-enters-gaps-text","includeInLesson":"ON","requiredToAdvance":false,"condition":{"type":"next_click","materialId":"","minimumScore":0}} -->
+
+## Entery w pytaniu: gaps-text
+
+:::question
+Pierwszy wiersz: rozpoznaj aldehyd.
+Drugi wiersz: odwołaj się do grupy CH~3~CHO.
+
+Nowy akapit z **wyróżnieniem**.
+:::
+
+:::task
+type: gaps-text
+label_json: "Twoja odpowiedź\nWybierz lub wpisz poniżej."
+text_json: "Związek CH₃CHO to {{nazwa}}.\nTa linia pozostaje osobnym wierszem."
+check_mode: all
+answer: etanal
+hint_json: "Końcówka nazwy: -al.\nW zadaniu liczbowym podaj liczbę atomów węgla w etanalu: 2."
+success_json: "Poprawnie!\nZachowaliśmy nowe wiersze."
 :::

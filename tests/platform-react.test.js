@@ -452,3 +452,105 @@ test('actual Studio exam report pages on demand without accumulating rows or sen
   h.d.querySelector('[data-exam-action="first-report"]').click(); await tick();
   assert.deepEqual(reads, [null, 'offset:25', null]);
 });
+
+test('exam review selects students and attempts, keeps drafts, grades partially and never starts AI on opening', async (t) => {
+  const model = require('../public/members/module/studio/exam-model');
+  const exam = model.createExam({ examId: 'review-test', questions: ['one', 'two'].map((questionId) => ({ questionId, type: 'open_answer', gradingMode: 'ai', answerKey: 'Klucz\nDrugi wiersz', points: 4, prompt: 'Wyjaśnij.\nUzasadnij.' })) });
+  const h = await studio(t, { readExam: async () => ({ content: JSON.stringify(exam), sha: 'saved' }) });
+  h.w.CSS = { escape: (value) => value };
+  await input(h.w, h.d.getElementById('studio-tool-select'), 'exam');
+  await h.w.ChemExamBuilder.openAsset({ filename: exam.examId, repositoryId: 'glowne' });
+  const row = (userId, attemptId) => ({ userId, attemptId, number: 1, profile: { name: userId === 'a' ? 'Łucja' : 'Bartosz', email: `${userId}@example.com` }, status: 'submitted', gradingStatus: 'pending_review', startedAt: '2026-01-01T12:00:00Z' });
+  const rows = [row('a', 'a-latest'), row('b', 'b-latest')];
+  const report = (userId, attemptId) => ({ ...row(userId, attemptId), repositoryId: 'glowne', examId: exam.examId, revision: 1, durationSeconds: 10,
+    questions: exam.questions.map((q) => ({ ...q, answerDisplay: ['Uczeń: pierwszy wiersz\nDrugi wiersz'], correctAnswerDisplay: [q.answerKey] })),
+    result: { gradingStatus: 'pending_review', pendingQuestionIds: ['one', 'two'], questionResults: exam.questions.map((q) => ({ questionId: q.questionId, points: null, maxPoints: 4, reviewStatus: 'pending' })) } });
+  const requests = []; let completeGrade;
+  h.w.fetch = async (url, options = {}) => {
+    const params = new URL(url, h.w.location.origin).searchParams;
+    if (options.method === 'POST') {
+      const body = JSON.parse(options.body); requests.push(body);
+      assert.equal(body.action, 'grade', 'Only an explicit manual save may mutate');
+      return new Promise((resolve) => { completeGrade = () => { const attempt = report(body.targetUserId, body.attemptId); attempt.revision++;
+        attempt.result.questionResults[0] = { questionId: 'one', points: 2.5, maxPoints: 4, reviewStatus: 'graded', feedback: 'Dobrze\nDodaj przykład' };
+        attempt.result.pendingQuestionIds = ['two']; resolve(new Response(JSON.stringify({ attempt }))); }; });
+    }
+    const view = params.get('view'); requests.push({ view, cursor: params.get('cursor') });
+    if (view === 'review') return new Response(JSON.stringify({ attempts: params.get('cursor') ? [rows[1]] : [rows[0]], cursor: params.get('cursor') ? null : 'offset:25' }));
+    if (view === 'user') return new Response(JSON.stringify({ user: { attempts: [row(params.get('userId'), `${params.get('userId')}-latest`), row(params.get('userId'), `${params.get('userId')}-older`)] } }));
+    assert.equal(view, 'attempt');
+    return new Response(JSON.stringify({ attempt: report(params.get('userId'), params.get('attemptId')) }));
+  };
+  h.d.querySelector('[data-exam-tab="review"]').click(); await tick();
+  assert.equal(requests.length, 1);
+  h.d.querySelector('[data-review-more]').click(); await tick();
+  assert.equal(h.d.querySelectorAll('[data-review-user]').length, 2);
+  await input(h.w, h.d.querySelector('[data-review-search]'), 'lucja');
+  assert.equal(h.d.querySelectorAll('[data-review-user]').length, 1);
+  h.d.querySelector('[data-review-user="a"]').click(); await tick(); await tick();
+  assert.equal(h.d.querySelectorAll('[data-review-attempt] option').length, 2);
+  assert.equal(h.d.querySelector('.exam-attempt-question').open, true);
+  assert.equal(h.d.querySelector('.assessment-answer-card p').style.fontSize, 'inherit');
+  assert.match(h.d.querySelector('.assessment-answer-card p').innerHTML, /<br>/);
+  await input(h.w, h.d.querySelector('[data-exam-grade-points="one"]'), '2.5');
+  await input(h.w, h.d.querySelector('[data-exam-grade-feedback="one"]'), 'Dobrze\nDodaj przykład');
+  await input(h.w, h.d.querySelector('[data-exam-grade-feedback="two"]'), 'Jeszcze nieskończony komentarz');
+  await input(h.w, h.d.querySelector('[data-review-attempt]'), 'a-older'); await tick();
+  await input(h.w, h.d.querySelector('[data-review-attempt]'), 'a-latest'); await tick();
+  assert.equal(h.d.querySelector('[data-exam-grade-points="one"]').value, '2.5');
+  h.d.querySelector('[data-exam-action="grade-attempt"]').click(); await tick();
+  assert.equal(h.d.querySelector('[data-exam-action="reset-attempt"]').disabled, true, h.d.getElementById('exam-builder-status').textContent);
+  assert.equal(h.d.querySelector('[data-exam-grade-points="one"]').disabled, true);
+  const post = requests.find((r) => r.action);
+  assert.deepEqual(post.grades, [{ questionId: 'one', points: 2.5, feedback: 'Dobrze\nDodaj przykład' }]);
+  completeGrade(); await tick();
+  assert.equal(h.d.querySelector('[data-exam-grade-feedback="two"]').value, 'Jeszcze nieskończony komentarz', 'Unsubmitted draft comments are retained');
+  assert.equal(requests.filter((r) => r.action).length, 1);
+  assert.equal(requests.filter((r) => r.view === 'review').length, 2, 'No automatic refresh or polling after saving a grade');
+  assert.equal(requests.some((r) => r.view === 'overview' || r.action === 'ai-grade'), false);
+});
+
+test('actual lesson builder uses multiline options and the same line breaks in saved Markdown and preview', async (t) => {
+  const h = await studio(t);
+  await input(h.w, h.d.getElementById('studio-tool-select'), 'lesson');
+  h.d.querySelector('[data-lesson-add="task-abcd"]').click(); await tick();
+  const option = h.d.querySelector('[data-lesson-field="optionItem"]');
+  assert.equal(option.tagName, 'TEXTAREA');
+  await input(h.w, option, 'Pierwsza odpowiedź\nJej uzasadnienie');
+  await input(h.w, h.d.querySelector('[data-lesson-field="question"]'), 'Wiersz pierwszy\nWiersz drugi\n\nOsobny akapit.');
+  h.d.querySelector('[data-lesson-panel="preview"]').click(); await tick();
+  assert.equal(h.d.querySelector('.preview-choice-copy').textContent, 'Pierwsza odpowiedź\nJej uzasadnienie');
+  assert.match(h.d.querySelector('.lesson-preview-body').innerHTML, /Wiersz pierwszy<br>Wiersz drugi/);
+  h.w.dispatchEvent(new h.w.Event('pagehide'));
+  const saved = JSON.parse(h.w.localStorage.getItem('chemdisk.studio.lesson.v1'));
+  const markdown = h.w.ChemLessonStudioModel.serializeLesson(saved);
+  assert.match(markdown, /options_json:/);
+  const student = h.w.ChemLesson.parseLesson(markdown, 'entery.md').slides.find((slide) => slide.task);
+  assert.equal(student.task.options[0], 'Pierwsza odpowiedź\nJej uzasadnienie');
+  assert.match(student.html, /Wiersz pierwszy<br>Wiersz drugi/);
+});
+
+test('review ignores late responses from a previously selected student', async (t) => {
+  const model = require('../public/members/module/studio/exam-model');
+  const exam = model.createExam({ examId: 'race-test' });
+  const h = await studio(t, { readExam: async () => ({ content: JSON.stringify(exam), sha: 'saved' }) });
+  await input(h.w, h.d.getElementById('studio-tool-select'), 'exam');
+  await h.w.ChemExamBuilder.openAsset({ filename: exam.examId, repositoryId: 'glowne' });
+  let firstResponse;
+  const row = (id) => ({ userId: id, attemptId: `attempt-${id}`, number: 1, gradingStatus: 'pending_review', status: 'submitted', startedAt: '2026-01-01T12:00:00Z' });
+  h.w.fetch = async (url) => {
+    const params = new URL(url).searchParams; const userId = params.get('userId');
+    if (params.get('view') === 'review') return new Response(JSON.stringify({ attempts: [row('a'), row('b')], cursor: null }));
+    if (params.get('view') === 'user') return new Response(JSON.stringify({ user: { attempts: [row(userId)] } }));
+    const value = { attempt: { ...row(userId), questions: [], answers: {}, result: { gradingStatus: 'pending_review' } } };
+    if (userId === 'a') return new Promise((resolve) => { firstResponse = () => resolve(new Response(JSON.stringify(value))); });
+    return new Response(JSON.stringify(value));
+  };
+  h.d.querySelector('[data-exam-tab="review"]').click(); await tick();
+  h.d.querySelector('[data-review-user="a"]').click(); await tick();
+  h.d.querySelector('[data-review-user="b"]').click(); await tick();
+  assert.match(h.d.querySelector('.exam-attempt-report h3').textContent, /^b /);
+  firstResponse(); await tick();
+  assert.match(h.d.querySelector('.exam-attempt-report h3').textContent, /^b /);
+  assert.equal(h.d.querySelector('[data-review-attempt]').value, 'attempt-b');
+});

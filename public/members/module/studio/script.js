@@ -3277,7 +3277,8 @@
       } else {
         row.append(create('span', 'task-option-letter', String.fromCharCode(65 + index)));
       }
-      const input = lessonInput(option, 'optionItem', {
+      const input = lessonTextarea(option, 'optionItem', {
+        rows: 2,
         maxLength: 240,
         placeholder: `Odpowiedź ${String.fromCharCode(65 + index)}`
       });
@@ -3498,7 +3499,7 @@
     form.append(
       field('Treść pytania', lessonTextarea(task.question, 'question', { rows: 3, maxLength: 900 })),
       scientificNotationToolbar(),
-      field('Etykieta pola', lessonInput(task.label, 'label', { maxLength: 160 }))
+      field('Etykieta pola', lessonTextarea(task.label, 'label', { rows: 2, maxLength: 160 }))
     );
     if (task.type !== 'gaps' && task.type !== 'gaps-text') {
       form.append(field('Placeholder', lessonInput(task.placeholder, 'placeholder', { maxLength: 160 })));

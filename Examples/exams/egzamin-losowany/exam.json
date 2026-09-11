@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "examId": "egzamin-chemia-organiczna",
+  "examId": "egzamin-losowany",
   "metadata": {
-    "name": "Chemia organiczna — wszystkie typy pytań",
-    "description": "Pokaz NextMed: 9 typów pytań, formatowanie i 3 tryby pytań otwartych. Każde pytanie jest widoczne. Pozostałe ustawienia pokazują osobne warianty opisane w Examples/FEATURES.md.",
-    "instruction": "Wypróbuj nawigację i flagi. Pytania otwarte opisują sposób oceniania. Po zakończeniu egzaminator otwiera Studio → Egzamin → Sprawdzanie, wybiera ucznia i jego próbę.",
+    "name": "Losowanie i próby — raport bez ujawniania klucza",
+    "description": "Wariant konfiguracji. Przeczytaj Examples/FEATURES.md, sprawdź ustawienia i opublikuj, gdy chcesz przetestować go jako uczeń.",
+    "instruction": "Losowanie i próby — raport bez ujawniania klucza. To osobny materiał demonstracyjny.",
     "cover": {
       "ref": "assets/shared/example-diagram.svg",
       "alt": "Schemat grup funkcyjnych alkoholu, aldehydu, ketonu i kwasu karboksylowego"
     },
     "beforeStartMessage": "Przygotuj kartkę do zapisywania wzorów półstrukturalnych. Egzamin pokazuje wszystkie dostępne sposoby konstruowania pytań.",
-    "afterFinishMessage": "Odpowiedzi zapisano. Pytania ręczne i AI czekają na sprawdzającego; AI nie uruchamia się automatycznie. Pytanie bez punktów nie opóźnia wyniku.",
+    "afterFinishMessage": "Sprawdź rezultat zgodny z wybranym wariantem w Studio → Egzamin → Sprawdzanie.",
     "passThreshold": 70,
     "tags": [
       "przykład",
@@ -25,11 +25,11 @@
       "reakcje"
     ]
   },
-  "status": "published",
+  "status": "draft",
   "availability": {
-    "mode": "always",
+    "mode": "until",
     "from": null,
-    "until": null,
+    "until": "2099-12-31T23:59:59.000Z",
     "audienceMode": "all",
     "userIds": []
   },
@@ -45,16 +45,25 @@
     "allowFlagging": true
   },
   "timing": {
-    "mode": "none",
-    "limitSeconds": 2700,
+    "mode": "exam",
+    "limitSeconds": 1800,
     "questionLimitSeconds": 120,
-    "display": "hidden"
+    "display": "countup"
   },
   "randomization": {
-    "questionOrder": false,
-    "answerOrder": false,
-    "totalQuestions": null,
-    "categoryQuotas": []
+    "questionOrder": true,
+    "answerOrder": true,
+    "totalQuestions": 5,
+    "categoryQuotas": [
+      {
+        "category": "aldehydy",
+        "count": 2
+      },
+      {
+        "category": "reakcje",
+        "count": 1
+      }
+    ]
   },
   "scoring": {
     "equalPoints": false,
@@ -65,25 +74,25 @@
     "multipleChoiceStrategy": "correct_minus_incorrect"
   },
   "attempts": {
-    "mode": "unlimited",
+    "mode": "limited",
     "maxAttempts": 3,
-    "cooldownSeconds": 0,
-    "resultStrategy": "best"
+    "cooldownSeconds": 60,
+    "resultStrategy": "average"
   },
   "security": {
-    "leavePolicy": "allow_resume"
+    "leavePolicy": "warn"
   },
   "resultVisibility": {
-    "feedbackMode": "after_submit",
-    "studentResultVisible": true,
-    "scorePercent": true,
-    "points": true,
-    "passFail": true,
-    "ownAnswers": true,
-    "correctAnswers": true,
-    "errors": true,
-    "explanations": true,
-    "time": true
+    "feedbackMode": "never",
+    "studentResultVisible": false,
+    "scorePercent": false,
+    "points": false,
+    "passFail": false,
+    "ownAnswers": false,
+    "correctAnswers": false,
+    "errors": false,
+    "explanations": false,
+    "time": false
   },
   "questions": [
     {
@@ -264,7 +273,7 @@
     {
       "questionId": "exam-number-methylpropanal",
       "type": "number",
-      "prompt": "Oblicz masę molową etanalu C~2~H~4~O.\nPrzyjmij M(C)=12,01; M(H)=1,008; M(O)=16,00 g/mol.\nZapisz wynik w g/mol (tolerancja ±0,05).\nDefinicja masy molowej: \\(M = \\frac{m}{n}\\).",
+      "prompt": "Oblicz masę molową etanalu C~2~H~4~O.\nPrzyjmij M(C)=12,01; M(H)=1,008; M(O)=16,00 g/mol.\nZapisz wynik w g/mol (tolerancja ±0,05).",
       "images": [],
       "tags": [
         "liczenie-atomów"
@@ -427,87 +436,6 @@
         "size": "xlarge",
         "bold": false
       }
-    },
-    {
-      "questionId": "exam-open-manual",
-      "type": "open_answer",
-      "prompt": "**Ocena ręczna — 4 punkty**\nWyjaśnij, dlaczego endoglukanazy ułatwiają działanie egzoglukanaz.\n1. Opisz miejsce cięcia.\n2. Powiąż budowę substratu z szybkością reakcji.",
-      "promptFormat": {
-        "color": "#155e75",
-        "align": "left",
-        "font": "sans",
-        "size": "normal",
-        "bold": false
-      },
-      "points": 4,
-      "negativePoints": 0,
-      "images": [],
-      "tags": [
-        "otwarte",
-        "ręczne"
-      ],
-      "categories": [
-        "reakcje"
-      ],
-      "gradingMode": "manual",
-      "multiline": true,
-      "answerKey": "Endoglukanazy przecinają wiązania wewnątrz łańcucha celulozy.\nPowstają krótsze fragmenty i więcej wolnych końców.\nEgzoglukanazy odszczepiają jednostki od końców, więc mają więcej dostępnych miejsc działania.",
-      "aiInstruction": "1 pkt — wiązania wewnątrz łańcucha.\n1 pkt — krótsze fragmenty.\n1 pkt — więcej wolnych końców.\n1 pkt — związek z działaniem egzoglukanaz.\nPrzyznawaj częściowe punkty; nie wymagaj dosłownego brzmienia klucza.",
-      "explanation": "Egzaminator może zapisać część ocen, wrócić do pozostałych i dodać osobny komentarz."
-    },
-    {
-      "questionId": "exam-open-ai",
-      "type": "open_answer",
-      "prompt": "**AI na polecenie egzaminatora — 3 punkty**\nUzupełnij opis reakcji i wyjaśnij zmianę stopnia utlenienia srebra:\n\\(\\ce{Ag+ + e- -> Ag}\\)\nW odpowiedzi użyj także wzoru CH~3~CHO.",
-      "promptFormat": {
-        "color": "#155e75",
-        "align": "left",
-        "font": "sans",
-        "size": "normal",
-        "bold": false
-      },
-      "points": 3,
-      "negativePoints": 0,
-      "images": [],
-      "tags": [
-        "otwarte",
-        "AI",
-        "indeksy"
-      ],
-      "categories": [
-        "aldehydy",
-        "reakcje"
-      ],
-      "gradingMode": "ai",
-      "multiline": true,
-      "answerKey": "Ag^+^ przyjmuje elektron i redukuje się do Ag^0^.\nStopień utlenienia zmienia się z +I na 0.\nEtanal CH~3~CHO ulega utlenieniu.",
-      "aiInstruction": "Po 1 punkcie za redukcję srebra, poprawne stopnie utlenienia i utlenianie etanalu. Oceniaj treść chemiczną, nie styl.",
-      "explanation": "Samo wysłanie egzaminu nie wywołuje AI. Uprawniony sprawdzający musi kliknąć przycisk w zakładce Sprawdzanie."
-    },
-    {
-      "questionId": "exam-open-ungraded",
-      "type": "open_answer",
-      "prompt": "**Refleksja — bez punktów**\nCo powtórzysz przed następną lekcją? Wystarczy jedno zdanie.\nTa odpowiedź nie wchodzi do wyniku i nie czeka na ocenę.",
-      "promptFormat": {
-        "color": "#155e75",
-        "align": "left",
-        "font": "sans",
-        "size": "normal",
-        "bold": false
-      },
-      "points": 0,
-      "negativePoints": 0,
-      "images": [],
-      "tags": [
-        "otwarte",
-        "bez-punktów"
-      ],
-      "categories": [],
-      "gradingMode": "ungraded",
-      "multiline": false,
-      "answerKey": "",
-      "aiInstruction": "",
-      "explanation": "Informacja dla nauczyciela, nie test wiedzy."
     }
   ],
   "questionRefs": []

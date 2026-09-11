@@ -674,7 +674,7 @@
     const text = oneLine(direct);
     if (/^[A-D]$/i.test(text)) return text.toUpperCase();
     const optionIndex = options.findIndex((option) => (
-      option.toLocaleLowerCase('pl') === text.toLocaleLowerCase('pl')
+      oneLine(option).toLocaleLowerCase('pl') === text.toLocaleLowerCase('pl')
     ));
     return optionIndex >= 0 ? String.fromCharCode(65 + optionIndex) : text;
   }
@@ -686,18 +686,19 @@
     if (!TASK_TYPES.includes(type)) {
       throw new StudioLessonError('UNKNOWN_TASK', `Nieznany typ pytania: ${type}.`, 'task.type');
     }
-    const options = (Array.isArray(source.options) ? source.options : []).map(oneLine).filter(Boolean);
+    const multiline = (value) => normalizeNewlines(value).trim();
+    const options = (Array.isArray(source.options) ? source.options : []).map(multiline).filter(Boolean);
     const answers = type === 'abcd'
       ? [resolveAbcdAnswer(source, options)].filter(Boolean)
       : (Array.isArray(source.answers) ? source.answers : [source.answer])
-        .map(oneLine)
+        .map(multiline)
         .filter(Boolean);
     return {
       id: oneLine(source.id) || nextId('task'),
       type,
       question: normalizeNewlines(source.question).trim(),
       text: normalizeNewlines(source.text || source.gapText).trim(),
-      label: oneLine(source.label) || (
+      label: multiline(source.label) || (
         ['choice', 'abcd', 'gaps'].includes(type)
           ? 'Wybierz odpowiedź'
           : type === 'gaps-text' ? 'Wpisz odpowiedzi w luki' : 'Twoja odpowiedź'
@@ -707,8 +708,8 @@
       answers,
       caseSensitive: Boolean(source.caseSensitive),
       checkMode: source.checkMode === 'each' ? 'each' : 'all',
-      hint: oneLine(source.hint),
-      feedback: oneLine(source.feedback ?? source.success) || 'Dobrze! Możesz przejść dalej.'
+      hint: multiline(source.hint),
+      feedback: multiline(source.feedback ?? source.success) || 'Dobrze! Możesz przejść dalej.'
     };
   }
 
@@ -1440,21 +1441,23 @@
   function serializeTask(input) {
     const task = createTask(input);
     const lines = [':::task', `type: ${task.type}`];
-    if (task.label) lines.push(`label: ${task.label}`);
+    const writeText = (key, value) => { if (value) lines.push(/\n/.test(value) ? `${key}_json: ${JSON.stringify(value)}` : `${key}: ${value}`); };
+    const writeList = (key, values) => lines.push(values.some((value) => /[\n|]/.test(value)) ? `${key}_json: ${JSON.stringify(values)}` : `${key}: ${values.join(' | ')}`);
+    writeText('label', task.label);
     if (task.placeholder) lines.push(`placeholder: ${task.placeholder}`);
     if (task.type === 'choice' || task.type === 'abcd' || task.type === 'gaps') {
-      lines.push(`options: ${task.options.join(' | ')}`);
+      writeList('options', task.options);
     }
     if (task.type === 'gaps' || task.type === 'gaps-text') {
       lines.push(/\n/.test(task.text) ? `text_json: ${JSON.stringify(task.text)}` : `text: ${task.text}`);
     }
     if (task.type === 'gaps-text') lines.push(`check_mode: ${task.checkMode}`);
-    lines.push(`answer: ${task.answers.join(' | ')}`);
+    writeList('answer', task.answers);
     if (task.caseSensitive && (task.type === 'text' || task.type === 'gaps-text')) {
       lines.push('case_sensitive: true');
     }
-    if (task.hint) lines.push(`hint: ${task.hint}`);
-    if (task.feedback) lines.push(`success: ${task.feedback}`);
+    writeText('hint', task.hint);
+    writeText('success', task.feedback);
     lines.push(':::');
     return lines.join('\n');
   }
@@ -1553,6 +1556,7 @@
 
   function parseTaskLines(lines) {
     const aliases = {
+      options_json: 'optionsJson', answer_json: 'answerJson', label_json: 'labelJson', hint_json: 'hintJson', success_json: 'feedbackJson',
       answer: 'answer',
       answers: 'answer',
       odpowiedz: 'answer',
@@ -1590,6 +1594,15 @@
       }
       values[key] = match[2];
     });
+    for (const [field, list] of [['options', true], ['answer', true], ['label', false], ['hint', false], ['feedback', false]]) {
+      if (values[`${field}Json`] === undefined) continue;
+      let decoded;
+      try { decoded = JSON.parse(values[`${field}Json`]); } catch (_) { /* validation below */ }
+      if (list ? !Array.isArray(decoded) || decoded.some((value) => typeof value !== 'string') : typeof decoded !== 'string') {
+        throw new StudioLessonError('INVALID_TASK_FIELD', `Niepoprawny zapis pola ${field}_json.`, 'task');
+      }
+      values[field] = decoded;
+    }
     let taskText = values.text || '';
     if (values.textJson !== undefined) {
       try { taskText = JSON.parse(values.textJson); }
@@ -1604,8 +1617,9 @@
         : rawType === 'wybor' ? 'choice'
           : ['gaps_text', 'luki_tekstowe'].includes(rawType) ? 'gaps-text'
             : rawType;
-    const options = String(values.options || '').split('|').map(oneLine).filter(Boolean);
-    const answers = String(values.answer || '').split('|').map(oneLine).filter(Boolean);
+    const readList = (value) => (Array.isArray(value) ? value : String(value || '').split('|')).map((item) => normalizeNewlines(item).trim()).filter(Boolean);
+    const options = readList(values.options);
+    const answers = readList(values.answer);
     return createTask({
       type,
       label: values.label,

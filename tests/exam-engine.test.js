@@ -554,7 +554,19 @@ test('admin exam reports require fresh admin role and expose answer keys only to
 
   const denied = await adminExamsFunction.handler(eventFor('GET', undefined, { view: 'overview', repo: 'default', exam: 'egzamin-testowy' }), contextFor(canonical));
   assert.equal(denied.statusCode, 403);
+  const deniedReview = await adminExamsFunction.handler(eventFor('GET', undefined, { view: 'review', repo: 'default', exam: 'egzamin-testowy' }), contextFor(canonical));
+  assert.equal(deniedReview.statusCode, 403);
   canonical = { id: ADMIN, email: 'admin@example.com', app_metadata: { roles: ['admin'] } };
+  const readKeys = [];
+  const originalGet = examStore.getWithMetadata.bind(examStore);
+  examStore.getWithMetadata = async (key, ...rest) => { readKeys.push(key); return originalGet(key, ...rest); };
+  contentRepository.readAsset = async () => { throw new Error('Review must not read repository definitions'); };
+  const review = await adminExamsFunction.handler(eventFor('GET', undefined, { view: 'review', repo: 'default', exam: 'egzamin-testowy' }), contextFor(canonical));
+  assert.equal(review.statusCode, 200);
+  assert.equal(bodyOf(review).attempts[0].userId, USER_A);
+  assert.doesNotMatch(JSON.stringify(bodyOf(review)), /correctAnswer|answerKey|questionAnalysis|definitionSnapshot/);
+  assert.ok(!readKeys.some((key) => key.startsWith('attempts/')), 'The queue reads only paged summaries, not full attempts');
+  contentRepository.readAsset = async () => ({ content: JSON.stringify(storedDefinition), sha: 'a'.repeat(40) });
   const overview = await adminExamsFunction.handler(eventFor('GET', undefined, { view: 'overview', repo: 'default', exam: 'egzamin-testowy' }), contextFor(canonical));
   assert.equal(overview.statusCode, 200);
   assert.equal(bodyOf(overview).metrics.average, 100);

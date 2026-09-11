@@ -7,6 +7,37 @@ const root = path.join(__dirname, '..');
 const studio = require(path.join(root, 'public', 'members', 'module', 'studio', 'lesson-model.js'));
 const lessonParser = require(path.join(root, 'public', 'members', 'module', 'lesson', 'lesson-parser.js'));
 
+test('lesson Enter key survives model, Markdown, student rendering and answer checking for every task type', () => {
+  for (const type of studio.TASK_TYPES) {
+    const options = ['Pierwsza\nDrugi wiersz', 'Druga', 'Trzecia', 'Czwarta'];
+    const source = studio.createLesson({ filename: 'entery.md', slides: [{
+      blocks: [{ type: 'heading', text: 'Zadanie', level: 1 }],
+      task: { type, question: 'Wiersz **jeden**\nWiersz dwa\n\nOsobny akapit z H~2~O.',
+        label: 'Etykieta\nDrugi wiersz', options,
+        answers: type === 'abcd' ? ['A'] : type === 'choice' || type === 'gaps' ? [options[0]] : type === 'number' ? ['2'] : ['tak'],
+        text: 'Pierwszy wiersz {{luka}}\nDrugi wiersz.', hint: 'Podpowiedź\nDrugi wiersz', feedback: 'Brawo!\nDrugi wiersz' }
+    }] });
+    const markdown = studio.serializeLesson(source);
+    const restored = studio.parseLesson(markdown, 'entery.md');
+    assert.equal(restored.slides[0].task.question, source.slides[0].task.question, type);
+    for (const field of ['label', 'hint', 'feedback']) assert.equal(restored.slides[0].task[field], source.slides[0].task[field], `${type}.${field}`);
+    const student = lessonParser.parseLesson(markdown, 'entery.md').slides[0];
+    assert.match(student.html, /<strong>jeden<\/strong><br>Wiersz dwa/);
+    assert.match(student.html, /<p>Osobny akapit/);
+    if (['abcd', 'choice', 'gaps'].includes(type)) {
+      assert.deepEqual(restored.slides[0].task.options, options);
+      assert.deepEqual(student.task.options, options);
+      if (type !== 'gaps') assert.equal(lessonParser.checkAnswer(student.task, type === 'abcd' ? 'A' : options[0]), true);
+    }
+  }
+  for (const invalid of ['options_json: [1,2]', 'label_json: {}', 'answer_json: "a"']) {
+    const source = `# Test\n\n:::task\ntype: text\nanswer: a\n${invalid}\n:::`;
+    assert.throws(() => studio.parseLesson(source, 'test.md'));
+    assert.throws(() => lessonParser.parseLesson(source, 'test.md'));
+  }
+  assert.match(lessonParser.renderMarkdown('Tekst\n<script>alert(1)</script>'), /&lt;script&gt;/);
+});
+
 test('studio creates an editable starter lesson for a new or empty GitHub file', () => {
   const lesson = studio.parseEditableLesson('', 'lekcja.md');
   const markdown = studio.serializeLesson(lesson);

@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "quizId": "quiz-chemia-organiczna",
+  "quizId": "quiz-bez-ai",
   "metadata": {
-    "title": "Chemia organiczna — quiz przekrojowy",
-    "description": "Wszystkie 5 typów pytań, odpowiedzi ręczne, AI i bez punktów. Przykłady mają czytelne opisy sposobu oceniania. AI uruchamia uczeń przy sprawdzaniu quizu, nigdy podczas samego otwarcia.",
+    "title": "Szybki wynik — quiz bez AI",
+    "description": "Wyłącznie automatycznie oceniane pytania zamknięte. Pomieszana kolejność, bez ponowienia i bez informacji zwrotnej do poszczególnych pytań.",
     "status": "published",
     "tags": [
       "przykład",
@@ -17,10 +17,10 @@
     }
   },
   "settings": {
-    "passingScore": 70,
-    "shuffleQuestions": false,
-    "showFeedback": true,
-    "allowRetry": true
+    "passingScore": 50,
+    "shuffleQuestions": true,
+    "showFeedback": false,
+    "allowRetry": false
   },
   "questions": [
     {
@@ -134,60 +134,6 @@
         "Etanal"
       ],
       "explanation": "CH₃CHO to etanal. Nazwa zwyczajowa tego związku to aldehyd octowy (acetaldehyd)."
-    },
-    {
-      "questionId": "quiz-open-manual",
-      "type": "open",
-      "prompt": "**Odpowiedź ręczna — 3 pkt**\nPorównaj aldehyd i keton.\nWskaż położenie grupy C=O i podaj przykład każdego związku.",
-      "points": 3,
-      "required": true,
-      "image": {
-        "ref": "",
-        "alt": ""
-      },
-      "options": [],
-      "acceptedAnswers": [],
-      "gradingMode": "manual",
-      "multiline": true,
-      "answerKey": "Aldehyd: grupa końcowa –CHO, np. etanal.\nKeton: grupa C=O wewnątrz łańcucha, np. propanon.",
-      "aiInstruction": "",
-      "explanation": "Ta odpowiedź czeka na sprawdzającego."
-    },
-    {
-      "questionId": "quiz-open-ai",
-      "type": "open",
-      "prompt": "**Sprawdzenie AI — 2 pkt**\nDlaczego próba Tollensa pozwala odróżnić etanal od propanonu?\nAI użyjesz dopiero po naciśnięciu sprawdzania quizu.",
-      "points": 2,
-      "required": false,
-      "image": {
-        "ref": "",
-        "alt": ""
-      },
-      "options": [],
-      "acceptedAnswers": [],
-      "gradingMode": "ai",
-      "multiline": true,
-      "answerKey": "Etanal daje dodatni wynik: lustro srebrne.\nPropanon w typowych warunkach szkolnych nie redukuje odczynnika Tollensa.",
-      "aiInstruction": "Po 1 pkt za poprawny opis wyniku dla etanalu i propanonu. Nie dodawaj punktów za samą długość odpowiedzi.",
-      "explanation": "Wymaga skonfigurowanego AI i dostępnego limitu użytkownika."
-    },
-    {
-      "questionId": "quiz-open-ungraded",
-      "type": "open",
-      "prompt": "**Refleksja — bez punktów**\nJaki temat chcesz jeszcze przećwiczyć?",
-      "points": 0,
-      "required": false,
-      "image": {
-        "ref": "",
-        "alt": ""
-      },
-      "options": [],
-      "acceptedAnswers": [],
-      "gradingMode": "ungraded",
-      "multiline": false,
-      "answerKey": "",
-      "aiInstruction": "",
-      "explanation": "Nie wpływa na wynik ani oczekiwanie na ocenę."
     }
   ]
 }

@@ -1898,8 +1898,12 @@ fieldset:focus-within {
 
 .choice-copy {
   min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   line-height: 1.35;
 }
+
+.task-label, .choice-grid legend, .task-feedback { white-space: pre-wrap; overflow-wrap: anywhere; }
 
 .choice-grid label:has(input:checked) {
   border-color: var(--accent);

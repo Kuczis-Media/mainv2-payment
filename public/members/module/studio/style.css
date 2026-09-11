@@ -6447,9 +6447,34 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
 .exam-review-columns { display: grid; grid-template-columns: minmax(220px, 290px) minmax(0, 1fr); gap: 20px; align-items: start; }
 .exam-review-roster { display: grid; gap: 10px; max-height: 70vh; overflow: auto; padding: 4px; }
 .exam-review-detail { min-width: 0; }
-.exam-review-user { display: grid; gap: 5px; padding: 14px; text-align: left; border: 1px solid var(--border); border-radius: 14px; color: inherit; background: var(--surface); cursor: pointer; overflow-wrap: anywhere; }
-.exam-review-user.is-selected { border-color: var(--accent, #0d7a6a); box-shadow: inset 3px 0 var(--accent, #0d7a6a); }
-.exam-review-user:focus-visible { outline: 2px solid var(--accent, #0d7a6a); outline-offset: 2px; }
-.exam-review-user span, .exam-review-user small, .exam-review-hint, .exam-review-count { font-size: .85rem; color: var(--muted); }
-.exam-review-detail .exam-manual-grade { padding: 14px; border: 1px solid var(--border); border-radius: 12px; }
+.exam-review-user { display: grid; gap: 5px; width: 100%; padding: 14px; text-align: left; border: 1px solid var(--chem-line); border-radius: 14px; color: var(--chem-text); background: var(--chem-surface); cursor: pointer; overflow-wrap: anywhere; }
+.exam-review-user.is-selected { border-color: var(--chem-primary, #0d7a6a); box-shadow: inset 3px 0 var(--chem-primary, #0d7a6a); }
+.exam-review-user:focus-visible { outline: 2px solid var(--chem-primary, #0d7a6a); outline-offset: 2px; }
+.exam-review-user strong { font-size: 14px; line-height: 1.45; }
+.exam-review-user span, .exam-review-user small, .exam-review-hint, .exam-review-count { font-size: 13px; line-height: 1.5; color: var(--chem-muted); }
+.exam-review-detail .exam-manual-grade { padding: 14px; border: 1px solid var(--chem-line); border-radius: 12px; }
 @media (max-width: 1100px) { .exam-review-columns { grid-template-columns: minmax(0, 1fr); } .exam-review-roster { max-height: 280px; } }
+
+/* Reading long answers takes priority over the editor's navigation sidebar. */
+.exam-workspace.is-reviewing .exam-builder-shell { grid-template-columns: minmax(0, 1fr); }
+.exam-workspace.is-reviewing .exam-builder-navigation { display: grid; grid-template-columns: minmax(180px, 240px) minmax(0, 1fr); align-items: start; gap: 16px; border-right: 0; border-bottom: 1px solid var(--chem-line); }
+.exam-workspace.is-reviewing .exam-tab-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.exam-workspace.is-reviewing .repository-library-body { max-height: 180px; overflow: auto; }
+.exam-attempt-report { min-width: 0; font-size: 15px; line-height: 1.6; }
+.exam-attempt-report > header { flex-wrap: wrap; }
+.exam-attempt-report h3 { font-size: 18px; line-height: 1.4; overflow-wrap: anywhere; }
+.exam-attempt-question { min-width: 0; padding: 0 12px 12px; }
+.exam-attempt-question > summary { align-items: start; font-size: 15px; line-height: 1.6; padding: 14px 0; }
+.exam-attempt-question > summary > span { min-width: 0; overflow-wrap: anywhere; }
+.exam-attempt-question > summary > strong { flex: 0 0 auto; font-size: 13px; }
+.exam-attempt-report .assessment-answer-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); align-items: start; }
+.exam-attempt-report .assessment-answer-card { font-size: 15px; line-height: 1.65; overflow-wrap: anywhere; }
+.exam-attempt-report .assessment-answer-card p { line-height: inherit; }
+.exam-attempt-report .assessment-answer-card h4 { font-size: 11px; line-height: 1.5; }
+.exam-attempt-report .exam-manual-grade { margin: 12px 0 0; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); }
+.preview-choice-copy, .preview-quiz-title, .preview-choice-grid legend, .preview-quiz-feedback { white-space: pre-wrap; overflow-wrap: anywhere; }
+.task-option-editor-row textarea { width: 100%; min-width: 0; resize: vertical; font: inherit; line-height: 1.5; }
+@media (max-width: 760px) {
+  .exam-workspace.is-reviewing .exam-builder-navigation { grid-template-columns: minmax(0, 1fr); }
+  .exam-attempt-report { padding: 12px; }
+}

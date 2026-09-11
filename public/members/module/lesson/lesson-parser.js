@@ -278,6 +278,7 @@
 
   function parseTask(lines, slideNumber) {
     const aliases = {
+      options_json: 'optionsJson', answer_json: 'answerJson', label_json: 'labelJson', hint_json: 'hintJson', success_json: 'successJson',
       answer: 'answer',
       answers: 'answer',
       odpowiedz: 'answer',
@@ -323,6 +324,15 @@
       }
       values[key] = match[2].trim();
     }
+    for (const [field, list] of [['options', true], ['answer', true], ['label', false], ['hint', false], ['success', false]]) {
+      if (values[`${field}Json`] === undefined) continue;
+      let decoded;
+      try { decoded = JSON.parse(values[`${field}Json`]); } catch (_) { /* validation below */ }
+      if (list ? !Array.isArray(decoded) || decoded.some((value) => typeof value !== 'string') : typeof decoded !== 'string') {
+        throw new LessonFormatError('INVALID_TASK_FIELD', `Slajd ${slideNumber}: niepoprawny zapis pola ${field}_json.`);
+      }
+      values[field] = decoded;
+    }
 
     let taskText = values.text || '';
     if (values.textJson !== undefined) {
@@ -358,8 +368,7 @@
     const type = requestedType === 'abcd' ? 'choice' : requestedType;
     const choiceStyle = requestedType === 'abcd' ? 'abcd' : 'default';
 
-    const options = String(values.options || '')
-      .split('|')
+    const options = (Array.isArray(values.options) ? values.options : String(values.options || '').split('|'))
       .map((option) => option.trim())
       .filter(Boolean);
     if ((type === 'choice' || type === 'gaps') && options.length < 2) {
@@ -375,8 +384,7 @@
       );
     }
 
-    const answers = String(values.answer || '')
-      .split('|')
+    const answers = (Array.isArray(values.answer) ? values.answer : String(values.answer || '').split('|'))
       .map((answer) => answer.trim())
       .filter(Boolean)
       .map((answer) => {
@@ -1355,7 +1363,7 @@
     };
     const closeParagraph = () => {
       if (!paragraph.length) return;
-      html += `<p>${paragraph.map((line) => renderInline(line.trim())).join(' ')}</p>`;
+      html += `<p>${paragraph.map((line) => renderInline(line.trim())).join('<br>')}</p>`;
       paragraph = [];
     };
     const closeBlocks = () => {
