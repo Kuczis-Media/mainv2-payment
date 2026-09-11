@@ -219,7 +219,8 @@ test('production bundle is local, does not embed ENV, and loads before dashboard
   const html = fs.readFileSync(path.join(project, 'public/members/index.html'), 'utf8');
   const pkg = require('../package.json');
   assert.ok(html.indexOf('/assets/build/dashboard-react.js') < html.indexOf('/members/dashboard.js'));
-  assert.match(pkg.scripts.build, /run-tests\.cjs && npm run build:dashboard/);
+  assert.equal(pkg.scripts.build, 'npm run build:dashboard && node scripts/run-tests.cjs', 'Generate published assets before checking HTML references, including on a clean Netlify checkout');
+  assert.equal(pkg.scripts.pretest, 'npm run build:dashboard', 'npm test also needs fresh generated assets on a clean checkout');
   assert.equal(buildOptions.sourcemap, false);
   assert.deepEqual(buildOptions.define, { 'process.env.NODE_ENV': '"production"' });
   assert.doesNotMatch(bundle, /GITEA_TOKEN|GITHUB_CONTENT_TOKEN|NETLIFY_API_TOKEN|OPENAI_API_KEY/);

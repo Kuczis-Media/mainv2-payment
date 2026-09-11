@@ -48,7 +48,7 @@ npm run dev
 npm run watch:dashboard
 ```
 
-Build tworzy ignorowany przez Git `public/assets/build/dashboard-react.js`: 282572 bajty, około 276 KiB (85 KiB gzip). Nie wstawia wartości ENV do kodu przeglądarki. Przy ręcznym wysyłaniu `public` należy najpierw wykonać build. Eksport samodzielnego landingu pozostaje statycznym HTML z dotychczasowym runtime, bez obowiązku dołączania Reacta.
+Build najpierw tworzy ignorowany przez Git `public/assets/build/dashboard-react.js`, a dopiero później uruchamia testy sprawdzające obecność zasobów HTML. `npm test` generuje go przez `pretest`, także dla wybranych plików testowych. Bundle ma 282572 bajty, około 276 KiB (85 KiB gzip). Nie wstawia wartości ENV do kodu przeglądarki. Przy ręcznym wysyłaniu `public` należy najpierw wykonać build. Eksport samodzielnego landingu pozostaje statycznym HTML z dotychczasowym runtime, bez obowiązku dołączania Reacta.
 
 Tryby porównawcze: `/members/?dashboardRenderer=legacy` oraz `?uiRenderer=legacy` w pozostałych zintegrowanych widokach. Zmieniają widok, nie uprawnienia. Po migracji zapisów `entries-v2` nie należy cofać całego backendu do wersji nieznającej tego formatu; sam przełącznik starego interfejsu jest niezależny od storage.
 

@@ -24,7 +24,7 @@ Cel: przyspieszyć duże dashboardy, zachowując edycję i publikowanie w Studio
 
 ```sh
 npm ci
-npm run build                         # wszystkie testy + produkcyjny JS
+npm run build                         # produkcyjny JS, następnie wszystkie testy
 npm test -- tests/dashboard-react.test.js
 npm run dev                           # buduje JS, następnie netlify dev
 npm run watch:dashboard               # osobny terminal przy edycji komponentów

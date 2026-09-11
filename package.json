@@ -8,9 +8,10 @@
   },
   "scripts": {
     "dev": "npm run build:dashboard && netlify dev",
-    "build": "node scripts/run-tests.cjs && npm run build:dashboard",
+    "build": "npm run build:dashboard && node scripts/run-tests.cjs",
     "build:dashboard": "node scripts/build-dashboard.cjs",
     "watch:dashboard": "node scripts/build-dashboard.cjs --watch",
+    "pretest": "npm run build:dashboard",
     "test": "node scripts/run-tests.cjs",
     "start": "npm run dev"
   },
