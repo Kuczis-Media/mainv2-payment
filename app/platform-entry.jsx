@@ -7,6 +7,7 @@ import './studio/builders.jsx';
 import './studio/settings.jsx';
 import './studio/tools.jsx';
 import './studio/library.jsx';
+import './studio/review.jsx';
 import { renderLanding } from './landing/landing.jsx';
 
 window.NextMedDashboardReact = Object.freeze({ mount: mountDashboard });

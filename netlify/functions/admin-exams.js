@@ -66,13 +66,16 @@ async function handleGet(event) {
     const index = await examStorage.readUserExamIndex(store, reference.repositoryId, reference.examId, query.userId);
     return json({ user: index });
   }
-  if (view !== 'overview') return json({ error: 'INVALID_VIEW' }, 400);
+  if (!['overview', 'review'].includes(view)) return json({ error: 'INVALID_VIEW' }, 400);
   const limit = Math.max(1, Math.min(50, Number(query.limit) || 25));
   const report = await examStorage.readReport(store, reference.repositoryId, reference.examId, { limit, cursor: query.cursor });
-  const definition = await readDefinition(reference);
   const summaries = Object.values(report.attempts || {})
     .filter((attempt) => attempt.status !== 'reset')
     .sort((left, right) => Date.parse(right.lastActivityAt || 0) - Date.parse(left.lastActivityAt || 0));
+  // The examiner's queue needs only summaries. Do not fetch the definition,
+  // full answers or question analysis until a specific student is opened.
+  if (view === 'review') return json({ attempts: summaries, cursor: report.cursor, updatedAt: report.updatedAt });
+  const definition = await readDefinition(reference);
   const details = [];
   const selectedSummaries = summaries.slice(0, limit);
   for (let offset = 0; offset < selectedSummaries.length; offset += 4) {

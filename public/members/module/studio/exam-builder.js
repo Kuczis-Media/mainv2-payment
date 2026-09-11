@@ -20,7 +20,7 @@
   const TAB_LABELS = {
     information: 'Informacje', questions: 'Pytania', bank: 'Bank pytań', display: 'Wyświetlanie',
     navigation: 'Nawigacja', time: 'Czas', randomization: 'Losowanie', scoring: 'Punktacja',
-    attempts: 'Próby', access: 'Dostęp', security: 'Bezpieczeństwo', results: 'Wyniki', reports: 'Raporty'
+    attempts: 'Próby', access: 'Dostęp', security: 'Bezpieczeństwo', results: 'Wyniki', review: 'Sprawdzanie', reports: 'Raporty'
   };
   const byId = (id) => document.getElementById(id);
   const elements = {};
@@ -45,6 +45,15 @@
     reportLoading: false,
     aiGrading: false,
     attemptReport: null,
+    reviewQueue: null,
+    reviewLoading: false,
+    reviewQuery: '',
+    reviewFilter: 'pending',
+    reviewUser: null,
+    attemptLoading: false,
+    attemptRequest: 0,
+    gradeDrafts: new Map(),
+    gradingBusy: false,
     users: [],
     usersPage: 0,
     usersHasMore: true,
@@ -174,6 +183,7 @@
       state.tab = button.dataset.examTab;
       render();
       if (state.tab === 'reports' && !state.report) void loadReport();
+      if (state.tab === 'review' && !state.reviewQueue) void loadReviewQueue();
       if (state.tab === 'access') void loadIdentityUsers(false);
     });
     elements.editor.addEventListener('input', handleInput);
@@ -207,6 +217,10 @@
     elements.preview.addEventListener('click', previewExam);
     elements.remove.addEventListener('click', deleteExam);
     window.addEventListener('pagehide', saveDrafts);
+    window.addEventListener('beforeunload', (event) => {
+      if (!state.gradeDrafts.size) return;
+      event.preventDefault(); event.returnValue = '';
+    });
   }
 
   async function activate() {
@@ -378,7 +392,7 @@
     const renderer = {
       information: renderInformation, questions: renderQuestions, bank: renderBank, display: renderDisplay,
       navigation: renderNavigation, time: renderTime, randomization: renderRandomization, scoring: renderScoring,
-      attempts: renderAttempts, access: renderAccess, security: renderSecurity, results: renderResults, reports: renderReports
+      attempts: renderAttempts, access: renderAccess, security: renderSecurity, results: renderResults, review: renderReview, reports: renderReports
     }[state.tab] || renderInformation;
     renderer();
     renderSummary();
@@ -959,6 +973,100 @@
     elements.editor.append(main);
   }
 
+  function reviewScope() { return `${state.repositoryId}:${state.exam.examId}`; }
+  function gradeDraftKey(attempt) { return `${attempt.repositoryId || state.repositoryId}:${attempt.examId || state.exam.examId}:${attempt.userId}:${attempt.attemptId}`; }
+  function renderReview() {
+    const main = section('Sprawdzanie egzaminu', 'Wybierz ucznia, następnie jego próbę. Punkty i komentarze zapisujesz samodzielnie; AI działa wyłącznie na Twoje polecenie.');
+    elements.editor.append(main);
+    if (!state.remoteSha || state.remoteExamId !== state.exam.examId) {
+      main.append(create('p', 'exam-report-empty', 'Najpierw zapisz egzamin lub otwórz go z biblioteki.')); return;
+    }
+    if (state.reviewQueue?.scope !== reviewScope()) state.reviewQueue = null;
+    const toolbar = create('div', 'exam-review-toolbar');
+    const search = create('input'); search.type = 'search'; search.placeholder = 'Imię, nazwisko lub e-mail'; search.value = state.reviewQuery; search.dataset.reviewSearch = '1';
+    const filter = create('select'); filter.dataset.reviewFilter = '1';
+    for (const [value, label] of [['pending', 'Do sprawdzenia'], ['all', 'Wszyscy'], ['graded', 'Ocenione']]) {
+      const option = create('option', '', label); option.value = value; filter.append(option);
+    }
+    filter.value = state.reviewFilter;
+    const refresh = create('button', 'button button-soft', 'Odśwież listę'); refresh.type = 'button'; refresh.dataset.examAction = 'refresh-review'; refresh.disabled = state.reviewLoading;
+    toolbar.append(field('Szukaj we wczytanej liście', search), field('Pokaż', filter), refresh); main.append(toolbar);
+    main.append(create('p', 'exam-review-hint', 'Lista jest wczytywana partiami. Nie widzisz ucznia? Wczytaj kolejną część. Wybór osoby udostępni wszystkie jej próby w tym egzaminie.'));
+    const columns = create('div', 'exam-review-columns');
+    const roster = create('aside', 'exam-review-roster'); roster.dataset.reviewRoster = '1'; roster.setAttribute('aria-label', 'Uczniowie do sprawdzenia');
+    const detail = create('div', 'exam-review-detail');
+    columns.append(roster, detail); main.append(columns); renderReviewRoster();
+    if (state.reviewUser?.scope === reviewScope()) {
+      const selector = create('select'); selector.dataset.reviewAttempt = '1'; selector.disabled = state.attemptLoading || state.gradingBusy || state.aiGrading;
+      for (const attempt of state.reviewUser.attempts) {
+        const option = create('option', '', `Próba ${attempt.number} · ${new Date(attempt.startedAt).toLocaleString('pl-PL')} · ${attempt.gradingStatus === 'pending_review' ? 'do sprawdzenia' : attempt.status === 'active' ? 'w trakcie' : 'zakończona'}`);
+        option.value = attempt.attemptId; selector.append(option);
+      }
+      selector.value = state.attemptReport?.userId === state.reviewUser.userId ? state.attemptReport.attemptId : '';
+      detail.append(field('Próba wybranego ucznia', selector));
+    }
+    if (state.attemptLoading) detail.append(create('p', 'exam-report-empty', 'Wczytuję odpowiedzi ucznia…'));
+    else if (state.attemptReport && state.reviewUser?.scope === reviewScope() && state.attemptReport.userId === state.reviewUser.userId) detail.append(attemptReportView(state.attemptReport));
+    else detail.append(create('p', 'exam-report-empty', 'Wybierz ucznia z listy, aby otworzyć odpowiedzi i przyznać punkty.'));
+  }
+
+  function renderReviewRoster() {
+    const host = elements.editor.querySelector('[data-review-roster]'); if (!host) return;
+    const normalize = (value) => String(value || '').toLocaleLowerCase('pl').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ł/g, 'l');
+    const groups = new Map();
+    for (const attempt of state.reviewQueue?.attempts || []) {
+      const pending = attempt.gradingStatus === 'pending_review';
+      if (state.reviewFilter === 'pending' && !pending) continue;
+      if (state.reviewFilter === 'graded' && (pending || !['submitted', 'timed_out'].includes(attempt.status) || attempt.gradingStatus === 'not_scored')) continue;
+      if (!normalize(`${attempt.profile?.name || ''} ${attempt.profile?.email || ''} ${attempt.userId}`).includes(normalize(state.reviewQuery).trim())) continue;
+      const user = groups.get(attempt.userId) || { userId: attempt.userId, profile: attempt.profile, count: 0, pending: 0 };
+      user.count++; if (pending) user.pending++; groups.set(user.userId, user);
+    }
+    const props = { users: [...groups.values()], selected: state.reviewUser?.userId, busy: state.gradingBusy || state.aiGrading, loading: state.reviewLoading, more: Boolean(state.reviewQueue?.cursor),
+      onOpen: (id) => void openReviewUser(id), onMore: () => void loadReviewQueue(true) };
+    if (window.NextMedUI?.render('studio-exam-review-roster', host, props)) return;
+    host.replaceChildren();
+    for (const user of props.users) {
+      const button = create('button', 'exam-review-user', `${user.profile?.name || user.profile?.email || user.userId} · do sprawdzenia: ${user.pending}`);
+      button.type = 'button'; button.disabled = props.busy; button.onclick = () => props.onOpen(user.userId); host.append(button);
+    }
+    if (!props.users.length) host.append(create('p', '', props.loading ? 'Wczytywanie…' : 'Brak pasujących prób w tej części listy.'));
+    if (props.more) { const more = create('button', 'button button-soft', 'Wczytaj kolejnych'); more.type = 'button'; more.disabled = props.loading; more.onclick = props.onMore; host.append(more); }
+  }
+
+  async function loadReviewQueue(more = false) {
+    if (!state.remoteSha || state.reviewLoading) return;
+    const scope = reviewScope(); const cursor = more ? state.reviewQueue?.cursor : '';
+    if (more && !cursor) return;
+    state.reviewLoading = true; if (state.tab === 'review') render();
+    try {
+      const result = await adminRequest({ view: 'review', repo: state.repositoryId, exam: state.exam.examId, ...(cursor ? { cursor } : {}) });
+      if (scope !== reviewScope()) return;
+      const all = new Map((more ? state.reviewQueue?.attempts || [] : []).map((item) => [item.attemptId, item]));
+      result.attempts.forEach((item) => all.set(item.attemptId, item));
+      state.reviewQueue = { scope, attempts: [...all.values()], cursor: result.cursor };
+    } catch (error) { elements.status.textContent = error.message || 'Nie udało się wczytać kolejki.'; }
+    finally { state.reviewLoading = false; if (state.tab === 'review') render(); }
+  }
+
+  async function openReviewUser(userId) {
+    if (state.gradingBusy || state.aiGrading) return;
+    const request = ++state.attemptRequest; const scope = reviewScope();
+    state.attemptLoading = true; state.attemptReport = null; state.reviewUser = null; render();
+    try {
+      const payload = await adminRequest({ view: 'user', repo: state.repositoryId, exam: state.exam.examId, userId });
+      if (request !== state.attemptRequest || scope !== reviewScope()) return;
+      const attempts = (payload.user.attempts || []).filter((attempt) => attempt.status !== 'reset').sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
+      state.reviewUser = { scope, userId, attempts };
+      const selected = attempts.find((attempt) => attempt.gradingStatus === 'pending_review') || attempts[0];
+      if (selected) await openAttemptReport(userId, selected.attemptId);
+      else { state.attemptLoading = false; render(); }
+    } catch (error) {
+      if (request !== state.attemptRequest || scope !== reviewScope()) return;
+      state.attemptLoading = false; elements.status.textContent = error.message || 'Nie udało się wczytać prób ucznia.'; render();
+    }
+  }
+
   function renderReports() {
     const main = section('Raport egzaminu', 'Sprawdź wyniki i odpowiedzi uczestników. Otwórz szczegóły próby, aby ocenić pytania otwarte.');
     const refresh = create('button', 'button button-soft', state.reportLoading ? 'Pobieranie…' : '↻ Odśwież raport');
@@ -1069,6 +1177,7 @@
     (attempt.questions || []).forEach((question, index) => {
       const graded = attempt.result?.questionResults?.find((entry) => entry.questionId === question.questionId);
       const details = document.createElement('details'); details.className = 'exam-attempt-question';
+      details.open = state.tab === 'review' && question.type === 'open_answer';
       const summary = document.createElement('summary');
       const prompt = create('span');
       window.ChemAssessmentText.render(prompt, `${index + 1}. ${question.prompt || question.template}`, question.promptFormat);
@@ -1086,10 +1195,12 @@
       if (graded?.feedback) details.append(answerCard('Informacja zwrotna', [graded.feedback], false));
       if (finished && question.type === 'open_answer' && question.gradingMode !== 'ungraded' && Number(question.points) > 0) {
         const grading = create('div', 'exam-manual-grade');
-        const points = input('', graded?.points ?? '', { type: 'number', min: 0, max: graded?.maxPoints ?? question.points, step: .1 });
+        const draft = state.gradeDrafts.get(gradeDraftKey(attempt))?.[question.questionId];
+        const points = input('', draft?.points ?? graded?.points ?? '', { type: 'number', min: 0, max: graded?.maxPoints ?? question.points, step: .1 });
         points.removeAttribute('data-exam-path');
         points.dataset.examGradePoints = question.questionId;
-        const feedback = textarea('', graded?.feedback || '', { rows: 3, maxLength: 2000, placeholder: 'Krótka informacja zwrotna dla ucznia' });
+        const feedback = textarea('', draft?.feedback ?? graded?.feedback ?? '', { rows: 3, maxLength: 2000, placeholder: 'Krótka informacja zwrotna dla ucznia' });
+        points.disabled = feedback.disabled = state.gradingBusy || state.aiGrading;
         feedback.removeAttribute('data-exam-path');
         feedback.dataset.examGradeFeedback = question.questionId;
         grading.append(
@@ -1115,12 +1226,13 @@
     if (pendingAi) {
       const aiGrade = create('button', 'button button-soft', '✦ Sprawdź oczekujące odpowiedzi za pomocą AI');
       aiGrade.type = 'button'; aiGrade.dataset.examAction = 'ai-grade-attempt';
-      aiGrade.disabled = state.aiGrading;
+      aiGrade.disabled = state.aiGrading || state.gradingBusy;
       report.append(aiGrade);
     }
     if (finished && (attempt.questions || []).some((question) => question.type === 'open_answer' && question.gradingMode !== 'ungraded' && Number(question.points) > 0)) {
       const saveGrades = create('button', 'button button-primary', 'Zapisz punkty za pytania otwarte');
       saveGrades.type = 'button'; saveGrades.dataset.examAction = 'grade-attempt';
+      saveGrades.disabled = state.gradingBusy || state.aiGrading;
       report.append(saveGrades);
     }
     return report;
@@ -1180,6 +1292,15 @@
   }
 
   function handleInput(event) {
+    if (event.target.dataset.reviewSearch) { state.reviewQuery = event.target.value; renderReviewRoster(); return; }
+    if (event.target.dataset.reviewFilter) { state.reviewFilter = event.target.value; renderReviewRoster(); return; }
+    if (event.target.dataset.reviewAttempt && event.type === 'change') { void openAttemptReport(state.reviewUser.userId, event.target.value); return; }
+    const gradeId = event.target.dataset.examGradePoints || event.target.dataset.examGradeFeedback;
+    if (gradeId && state.attemptReport) {
+      const key = gradeDraftKey(state.attemptReport); const drafts = state.gradeDrafts.get(key) || {};
+      drafts[gradeId] = { ...drafts[gradeId], [event.target.dataset.examGradePoints ? 'points' : 'feedback']: event.target.value };
+      state.gradeDrafts.set(key, drafts); return;
+    }
     const control = event.target.closest('[data-exam-path]');
     if (!control || !control.dataset.examPath) {
       if (event.target.dataset.bankSearch) filterBank(event.target.value);
@@ -1505,6 +1626,7 @@
     else if (action === 'delete-bank-question') deleteQuestion(state.bank.questions, questionId, true);
     else if (action === 'use-bank-question') { if (!state.exam.questionRefs.includes(questionId)) state.exam.questionRefs.push(questionId); render(); }
     else if (action === 'refresh-report') void loadReport();
+    else if (action === 'refresh-review') void loadReviewQueue();
     else if (action === 'first-report') void loadReport();
     else if (action === 'next-report' && state.report?.cursor) void loadReport(state.report.cursor);
     else if (action === 'open-attempt-report') void openAttemptReport(button.dataset.userId, button.dataset.attemptId);
@@ -1703,11 +1825,16 @@
   }
 
   async function openAttemptReport(userId, attemptId) {
+    if (state.gradingBusy || state.aiGrading) return;
+    const request = ++state.attemptRequest; const scope = reviewScope();
+    state.attemptLoading = true;
+    if (state.tab === 'review') render();
     try {
       const payload = await adminRequest({ view: 'attempt', repo: state.repositoryId, exam: state.exam.examId, userId, attemptId });
+      if (request !== state.attemptRequest || scope !== reviewScope()) return;
       state.attemptReport = payload.attempt;
-      render();
-    } catch (error) { elements.status.textContent = error.message || 'Nie udało się pobrać próby.'; }
+    } catch (error) { if (request === state.attemptRequest && scope === reviewScope()) elements.status.textContent = error.message || 'Nie udało się pobrać próby.'; }
+    finally { if (request === state.attemptRequest && scope === reviewScope()) { state.attemptLoading = false; render(); } }
   }
 
   async function resetAttempt(userId, attemptId) {
@@ -1721,39 +1848,54 @@
 
   async function gradeAttemptReport() {
     const attempt = state.attemptReport;
-    if (!attempt) return;
-    const grades = Array.from(elements.editor.querySelectorAll('[data-exam-grade-points]')).map((control) => ({
+    if (!attempt || state.gradingBusy || state.aiGrading) return;
+    const scope = reviewScope();
+    const grades = Array.from(elements.editor.querySelectorAll('[data-exam-grade-points]')).filter((control) => control.value !== '').map((control) => ({
       questionId: control.dataset.examGradePoints,
       points: control.value === '' ? NaN : Number(control.value),
       feedback: elements.editor.querySelector(`[data-exam-grade-feedback="${CSS.escape(control.dataset.examGradePoints)}"]`)?.value || ''
     }));
     if (!grades.length || grades.some((grade) => !Number.isFinite(grade.points))) {
-      elements.status.textContent = 'Wpisz liczbę punktów dla każdego ocenianego pytania otwartego.';
+      elements.status.textContent = 'Wpisz punkty dla co najmniej jednego pytania. Puste pola pozostaną do oceny.';
       elements.status.classList.add('is-error');
       return;
     }
+    state.gradingBusy = true; render();
     try {
       const payload = await adminGrade({
         action: 'grade', repositoryId: state.repositoryId, examId: state.exam.examId,
         targetUserId: attempt.userId, attemptId: attempt.attemptId, revision: attempt.revision,
         operationId: `admin-grade:${cryptoId()}`, grades
       });
-      state.attemptReport = payload.attempt;
+      state.gradeDrafts.delete(gradeDraftKey(attempt));
+      if (scope !== reviewScope()) return;
+      acceptGradedAttempt(payload.attempt);
       elements.status.classList.remove('is-error');
       const warning = payload.warnings?.length ? ' Ocena jest zapisana; synchronizacja raportu dokończy się później.' : '';
       elements.status.textContent = payload.attempt.result?.gradingStatus === 'pending_review'
         ? `Punkty zapisano. Niektóre odpowiedzi nadal czekają na ocenę.${warning}`
         : `Punkty zapisano, a wynik ucznia został przeliczony.${warning}`;
-      await loadReport();
+      if (state.tab !== 'review') await loadReport();
     } catch (error) {
       elements.status.textContent = error.message || 'Nie udało się zapisać punktów.';
       elements.status.classList.add('is-error');
-    }
+    } finally { state.gradingBusy = false; render(); }
+  }
+
+  function acceptGradedAttempt(attempt) {
+    state.attemptReport = attempt;
+    const update = (item) => item.attemptId === attempt.attemptId && (!item.userId || item.userId === attempt.userId)
+      ? { ...item, gradingStatus: attempt.result?.gradingStatus, scorePercent: attempt.result?.scorePercent, passed: attempt.result?.passed, pendingQuestionCount: attempt.result?.pendingQuestionIds?.length || 0 } : item;
+    if (state.reviewQueue?.scope === reviewScope()) state.reviewQueue.attempts = state.reviewQueue.attempts.map(update);
+    if (state.reviewUser?.scope === reviewScope()) state.reviewUser.attempts = state.reviewUser.attempts.map(update);
+    state.report = null;
   }
 
   async function aiGradeAttemptReport(button) {
     const attempt = state.attemptReport;
-    if (!attempt || state.aiGrading) return;
+    if (!attempt || state.aiGrading || state.gradingBusy) return;
+    if (state.gradeDrafts.has(gradeDraftKey(attempt))) { elements.status.textContent = 'Najpierw zapisz ręczne punkty i komentarze, zanim uruchomisz AI.'; return; }
+    const scope = reviewScope();
     state.aiGrading = true;
     if (button) {
       button.disabled = true;
@@ -1761,23 +1903,26 @@
     }
     elements.status.classList.remove('is-error');
     elements.status.textContent = 'AI ocenia oczekujące odpowiedzi. Zwykle jest to jedno zbiorcze wywołanie…';
+    render();
     try {
       const payload = await adminGrade({
         action: 'ai-grade', repositoryId: state.repositoryId, examId: state.exam.examId,
         targetUserId: attempt.userId, attemptId: attempt.attemptId, revision: attempt.revision,
         operationId: `admin-ai-grade:${cryptoId()}`
       });
-      state.attemptReport = payload.attempt;
+      if (scope !== reviewScope()) return;
+      acceptGradedAttempt(payload.attempt);
       const warning = payload.warnings?.length ? ' Ocena jest zapisana; synchronizacja raportu dokończy się później.' : '';
       elements.status.textContent = payload.attempt.result?.gradingStatus === 'pending_review'
         ? `AI oceniło ${payload.aiGradedCount || 0} odpowiedzi. Pozostałe można ocenić ręcznie.${warning}`
         : `AI oceniło odpowiedzi, a wynik ucznia został przeliczony.${warning}`;
-      await loadReport();
+      if (state.tab !== 'review') await loadReport();
     } catch (error) {
       elements.status.textContent = error.message || 'Nie udało się uruchomić oceny AI.';
       elements.status.classList.add('is-error');
     } finally {
       state.aiGrading = false;
+      render();
       // loadReport may have replaced the clicked button while grading a batch.
       elements.editor.querySelectorAll('[data-exam-action="ai-grade-attempt"]').forEach((control) => {
         control.disabled = false;

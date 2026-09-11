@@ -6442,3 +6442,14 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
 }
 .studio-admin-navigation { display: flex; flex-wrap: wrap; gap: .75rem; margin: 1.25rem 0; }
 .studio-admin-navigation a { color: inherit; padding: .75rem 1rem; border: 1px solid var(--border, #ccd4df); border-radius: 12px; text-decoration: none; background: var(--surface, #fff); }
+.exam-review-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+.exam-review-toolbar .exam-field { flex: 1 1 180px; }
+.exam-review-columns { display: grid; grid-template-columns: minmax(220px, 290px) minmax(0, 1fr); gap: 20px; align-items: start; }
+.exam-review-roster { display: grid; gap: 10px; max-height: 70vh; overflow: auto; padding: 4px; }
+.exam-review-detail { min-width: 0; }
+.exam-review-user { display: grid; gap: 5px; padding: 14px; text-align: left; border: 1px solid var(--border); border-radius: 14px; color: inherit; background: var(--surface); cursor: pointer; overflow-wrap: anywhere; }
+.exam-review-user.is-selected { border-color: var(--accent, #0d7a6a); box-shadow: inset 3px 0 var(--accent, #0d7a6a); }
+.exam-review-user:focus-visible { outline: 2px solid var(--accent, #0d7a6a); outline-offset: 2px; }
+.exam-review-user span, .exam-review-user small, .exam-review-hint, .exam-review-count { font-size: .85rem; color: var(--muted); }
+.exam-review-detail .exam-manual-grade { padding: 14px; border: 1px solid var(--border); border-radius: 12px; }
+@media (max-width: 1100px) { .exam-review-columns { grid-template-columns: minmax(0, 1fr); } .exam-review-roster { max-height: 280px; } }
