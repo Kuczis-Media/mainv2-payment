@@ -15,6 +15,7 @@
     player: document.getElementById('quiz-player'),
     title: document.getElementById('quiz-player-title'),
     description: document.getElementById('quiz-player-description'),
+    checkingMode: document.getElementById('quiz-player-checking-mode'),
     cover: document.getElementById('quiz-player-cover'),
     questionCount: document.getElementById('quiz-player-question-count'),
     threshold: document.getElementById('quiz-player-threshold'),
@@ -245,6 +246,9 @@
     elements.title.textContent = quiz.metadata.title;
     elements.description.textContent = quiz.metadata.description;
     elements.description.hidden = !quiz.metadata.description;
+    if (elements.checkingMode) elements.checkingMode.textContent = quiz.questions.some((question) => question.type === 'open')
+      ? 'Quiz zawiera pytania otwarte — ich ocenianie zależy od ustawień autora.'
+      : 'Sprawdzanie na Twoim urządzeniu — wynik od razu, bez AI. Po ukończeniu zapisujemy postęp.';
     window.NextMedBrand ? window.NextMedBrand.setTitle(quiz.metadata.title) : (document.title = quiz.metadata.title + " — NextMed");
     elements.questionCount.textContent = String(quiz.questions.length);
     elements.threshold.textContent = `${quiz.settings.passingScore}%`;
@@ -494,9 +498,12 @@
     state.quiz.questions.forEach((question) => {
       const ok = correct(question, answers[question.questionId]);
       if (ok) earned += question.points;
+      const correctAnswers = ok ? [] : question.type === 'text'
+        ? question.acceptedAnswers.slice()
+        : question.options.filter((option) => option.correct).map((option) => option.text);
+      const message = `${ok ? 'Poprawnie' : 'Niepoprawnie'} · ${ok ? question.points : 0}/${question.points} pkt${state.quiz.settings.showFeedback && question.explanation ? ` — ${question.explanation}` : ''}`;
       if (elements.form.dataset.reactView) {
-        state.questionResults[question.questionId] = { correct: ok,
-          message: `${ok ? 'Poprawnie' : 'Niepoprawnie'}${state.quiz.settings.showFeedback && question.explanation ? ` — ${question.explanation}` : ''}` };
+        state.questionResults[question.questionId] = { correct: ok, correctAnswers, message };
         return;
       }
       const fieldset = elements.form.querySelector(`[data-question-id="${question.questionId}"]`);
@@ -506,14 +513,22 @@
       if (feedback) {
         feedback.hidden = false;
         feedback.className = `quiz-player-feedback ${ok ? 'is-correct' : 'is-wrong'}`;
-        feedback.textContent = `${ok ? 'Poprawnie' : 'Niepoprawnie'}${state.quiz.settings.showFeedback && question.explanation ? ` — ${question.explanation}` : ''}`;
+        feedback.textContent = message;
+      }
+      if (correctAnswers.length && fieldset) {
+        const key = create('div', 'quiz-player-answer-key');
+        key.dataset.localAnswerKey = '1';
+        key.append(create('strong', '', question.type === 'text' ? 'Akceptowane odpowiedzi' : 'Poprawne odpowiedzi'));
+        const list = create('ul');
+        correctAnswers.forEach((answer) => list.append(create('li', '', answer)));
+        key.append(list); fieldset.append(key);
       }
     });
-    const percent = maximum ? Math.round((earned / maximum) * 100) : null;
+    const percent = maximum ? Math.round((earned / maximum) * 10_000) / 100 : null;
     const passed = percent == null ? null : percent >= state.quiz.settings.passingScore;
     const gradingStatus = maximum > 0 ? 'graded' : 'not_scored';
     state.attempts += 1;
-    showResult({ earned, maximum, percent, passed, gradingStatus, pendingQuestionCount: 0 });
+    showResult({ earned: Math.round(earned * 100) / 100, maximum: Math.round(maximum * 100) / 100, percent, passed, gradingStatus, pendingQuestionCount: 0 });
     state.lockedAfterAttempt = true;
     lockControls(true);
     elements.retry.hidden = !state.quiz.settings.allowRetry;
@@ -535,6 +550,7 @@
     });
     elements.form.querySelectorAll('.quiz-player-question').forEach((question) => question.classList.remove('is-correct', 'is-wrong'));
     elements.form.querySelectorAll('.quiz-player-feedback').forEach((feedback) => { feedback.hidden = true; });
+    elements.form.querySelectorAll('[data-local-answer-key]').forEach((key) => key.remove());
     }
     elements.result.hidden = true;
     elements.retry.hidden = true;

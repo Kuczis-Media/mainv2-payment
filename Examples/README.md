@@ -21,7 +21,7 @@ Główne identyfikatory pozostają niezmienione: `lekcja-chemia-organiczna.md`, 
 | `lessons/lekcja-chemia-organiczna.md` | 32 kroki: 25 rodzajów bloków, 6 rodzajów zadań, media, AI, odpowiedzi otwarte, style, canvas i Entery |
 | `lessons/lekcja-sekwencyjna.md` | Blokowanie następnego kroku, wielowierszowe ABCD, odpowiedź z blokadą edycji, sam klucz bez AI |
 | `quizzes/quiz-chemia-organiczna/quiz.json` | 7 pytań: 5 rodzajów, w tym otwarte ręczne, AI i niepunktowane |
-| `quizzes/quiz-bez-ai/quiz.json` | Wynik automatyczny, losowa kolejność, bez ponawiania i informacji zwrotnej do pytań |
+| `quizzes/quiz-bez-ai/quiz.json` | Wynik lokalny, losowa kolejność, bez ponawiania i dodatkowych wyjaśnień; poprawne odpowiedzi po sprawdzeniu |
 | `quizzes/quiz-refleksja/quiz.json` | Odpowiedź otwarta bez punktów i oczekiwania na ocenę |
 | `exams/egzamin-chemia-organiczna/exam.json` | 11 pytań: wszystkie 9 rodzajów, formatowanie, wzory, ręczne punkty i AI na polecenie |
 | Pozostałe katalogi `exams/egzamin-…` | Wynik od razu, pytania po kolei, zegary, losowanie, bank pytań, refleksja |
@@ -68,6 +68,8 @@ success_json: "Poprawnie!\nPrzejdź do następnego kroku."
 Listy rozwijane w lukach korzystają z natywnego kontrolera przeglądarki — wielowierszowe są polecenie i tekst wokół luk, a wygląd samych pozycji listy zależy od przeglądarki.
 
 ## Zależności i koszty
+
+Quiz bez pytań otwartych pobiera pełny zestaw pytań i poprawnych odpowiedzi po sprawdzeniu dostępu do kursu. Przeglądarka liczy punkty lokalnie i pokazuje klucz przy błędnych odpowiedziach. Ponowne sprawdzenie nie pobiera definicji ponownie i nie wywołuje funkcji oceniania ani AI; zapis postępu nadal korzysta z serwera. Taki quiz służy do ćwiczeń, a nie do zabezpieczonego sprawdzianu — klucz jest dostępny na urządzeniu ucznia. Egzaminy zachowują ocenianie i ochronę klucza po stronie serwera.
 
 Samo przeglądanie przykładu nie powinno uruchamiać oceny AI. W quizie ocenę wywołuje uczeń przy sprawdzaniu; w egzaminie — sprawdzający przyciskiem. Potrzebne są skonfigurowany model, uprawnienia i dostępny limit.
 

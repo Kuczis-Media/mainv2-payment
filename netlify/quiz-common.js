@@ -118,6 +118,9 @@ function gradeQuiz(definition, answers = {}, gradingOptions = {}) {
 }
 
 function publicDefinition(definition) {
+  // Objective quizzes are practice materials: the browser receives their full
+  // key and grades locally. Only open-answer rubrics remain server-side.
+  // Do not reuse this contract for exams, which have a separate safeQuestion.
   const result = structuredClone(definition);
   result.questions.forEach((question) => {
     if (question.type !== 'open') return;

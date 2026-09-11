@@ -91,6 +91,11 @@ body {
 .quiz-player-hero dd { margin: 0; font-weight: 850; }
 
 .quiz-player-form { display: grid; gap: 16px; }
+.quiz-player-checking-mode { color: var(--chem-muted, #637083); font-size: .85rem; line-height: 1.6; }
+.quiz-player-answer-key { padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--quiz-success) 28%, var(--chem-line, #d7e0e8)); border-radius: 12px; background: color-mix(in srgb, var(--quiz-success) 6%, var(--chem-surface, #fff)); line-height: 1.6; }
+.quiz-player-answer-key strong { font-size: .8rem; color: var(--quiz-success); }
+.quiz-player-answer-key ul { margin: 8px 0 0; padding-left: 20px; }
+.quiz-player-answer-key li { white-space: pre-wrap; overflow-wrap: anywhere; }
 .quiz-player-question { display: grid; margin: 0; padding: clamp(20px, 4vw, 32px); gap: 13px; }
 .quiz-player-question legend { width: 100%; padding: 0; font-size: clamp(1rem, 2vw, 1.2rem); font-weight: 780; line-height: 1.5; }
 .quiz-player-question-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }

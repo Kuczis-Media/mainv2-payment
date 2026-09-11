@@ -82,6 +82,44 @@ test('Quiz preview scores single, multiple, true/false and normalized text answe
   assert.equal(partial.passed, false);
 });
 
+test('student objective quiz definition includes the full key without changing the source', () => {
+  const quiz = sampleQuiz();
+  const downloaded = quizCommon.publicDefinition(quiz);
+  assert.deepEqual(downloaded, quiz, 'Closed quiz is a complete download, including correct options and accepted answers');
+  downloaded.questions[0].options[0].correct = false;
+  assert.equal(quiz.questions[0].options[0].correct, true);
+});
+
+test('closed quiz endpoint downloads the key without attempt storage and retains access restrictions', async (t) => {
+  const endpoint = require('../netlify/functions/quiz.js');
+  const quiz = sampleQuiz();
+  let reads = 0, storageCalls = 0;
+  const user = { id: 'student-quiz-local', app_metadata: { roles: ['active'] } };
+  t.mock.method(global, 'fetch', async () => new Response(JSON.stringify(user)));
+  t.mock.method(contentRepository, 'readAsset', async (kind, id, options) => {
+    reads++;
+    assert.equal(kind, 'quiz'); assert.equal(id, quiz.quizId);
+    assert.equal(options.repositoryId, 'default');
+    return { content: JSON.stringify(quiz), sha: 'saved' };
+  });
+  endpoint._test.setStoreFactory(() => { storageCalls++; throw new Error('Closed quiz must not open attempt storage'); });
+  t.after(() => endpoint._test.setStoreFactory(null));
+  const event = { httpMethod: 'GET', headers: { authorization: 'Bearer test-token' }, queryStringParameters: { quiz: quiz.quizId } };
+  const context = { clientContext: { user, identity: { url: 'https://course.example/.netlify/identity' } } };
+  const downloaded = await endpoint.handler(event, context);
+  assert.equal(downloaded.statusCode, 200, downloaded.body);
+  assert.deepEqual(JSON.parse(downloaded.body).quiz, quiz);
+  assert.equal(reads, 1);
+  assert.equal(storageCalls, 0);
+  assert.equal((await endpoint.handler(event, {})).statusCode, 401, 'Anonymous visitors cannot download private material');
+  assert.equal((await endpoint.handler({ ...event, queryStringParameters: { ...event.queryStringParameters, preview: '1' } }, context)).statusCode, 403);
+  quiz.metadata.status = 'draft';
+  assert.equal((await endpoint.handler(event, context)).statusCode, 404, 'Students cannot download drafts');
+  user.app_metadata.roles = [];
+  assert.equal((await endpoint.handler(event, context)).statusCode, 403, 'An account without course access cannot download the key');
+  assert.equal(reads, 2, 'Denied requests do not read the repository');
+});
+
 test('quiz definitions reject folder mismatches, duplicate IDs and unsafe media references', () => {
   const quiz = sampleQuiz();
   assert.throws(() => quizModel.parse(quizModel.serialize(quiz), 'inny-folder'), /nie pasuje do folderu/i);

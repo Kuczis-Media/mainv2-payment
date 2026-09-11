@@ -380,6 +380,10 @@
   function render() {
     if (!state.exam || !elements.editor) return;
     elements.editor.closest('.exam-workspace')?.classList.toggle('is-reviewing', state.tab === 'review');
+    // Keep save/error messages reachable when review hides the definition summary.
+    const statusHost = state.tab === 'review' ? elements.editor.parentElement : elements.summary.closest('.exam-summary-panel');
+    if (statusHost && elements.status.parentElement !== statusHost) statusHost.append(elements.status);
+    byId('exam-editor-eyebrow').textContent = state.tab === 'review' ? 'Odpowiedzi uczestników' : 'Definicja egzaminu';
     state.mediaObjectUrls.splice(0).forEach((url) => URL.revokeObjectURL(url));
     elements.tabs.querySelectorAll('[data-exam-tab]').forEach((button) => {
       const active = button.dataset.examTab === state.tab;

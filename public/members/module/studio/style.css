@@ -6455,11 +6455,13 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
 .exam-review-detail .exam-manual-grade { padding: 14px; border: 1px solid var(--chem-line); border-radius: 12px; }
 @media (max-width: 1100px) { .exam-review-columns { grid-template-columns: minmax(0, 1fr); } .exam-review-roster { max-height: 280px; } }
 
-/* Reading long answers takes priority over the editor's navigation sidebar. */
-.exam-workspace.is-reviewing .exam-builder-shell { grid-template-columns: minmax(0, 1fr); }
-.exam-workspace.is-reviewing .exam-builder-navigation { display: grid; grid-template-columns: minmax(180px, 240px) minmax(0, 1fr); align-items: start; gap: 16px; border-right: 0; border-bottom: 1px solid var(--chem-line); }
-.exam-workspace.is-reviewing .exam-tab-list { display: flex; flex-wrap: wrap; gap: 4px; }
-.exam-workspace.is-reviewing .repository-library-body { max-height: 180px; overflow: auto; }
+/* Keep the navigation and answer panel side by side in the fixed-height
+   desktop workspace. A third summary panel must not create an implicit row. */
+.exam-workspace.is-reviewing .exam-builder-shell { grid-template-columns: minmax(200px, 230px) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+.exam-workspace.is-reviewing .exam-summary-panel { display: none; }
+.exam-workspace.is-reviewing .exam-builder-navigation { min-width: 0; }
+.exam-workspace.is-reviewing .exam-editor-panel { min-width: 0; min-height: 0; }
+.exam-workspace.is-reviewing .exam-editor-panel > #exam-builder-status { margin: 16px 0 0; overflow-wrap: anywhere; }
 .exam-attempt-report { min-width: 0; font-size: 15px; line-height: 1.6; }
 .exam-attempt-report > header { flex-wrap: wrap; }
 .exam-attempt-report h3 { font-size: 18px; line-height: 1.4; overflow-wrap: anywhere; }
@@ -6475,6 +6477,5 @@ html[data-theme="dark"] .exam-validation.is-error { color: #ffb6bd; background: 
 .preview-choice-copy, .preview-quiz-title, .preview-choice-grid legend, .preview-quiz-feedback { white-space: pre-wrap; overflow-wrap: anywhere; }
 .task-option-editor-row textarea { width: 100%; min-width: 0; resize: vertical; font: inherit; line-height: 1.5; }
 @media (max-width: 760px) {
-  .exam-workspace.is-reviewing .exam-builder-navigation { grid-template-columns: minmax(0, 1fr); }
   .exam-attempt-report { padding: 12px; }
 }

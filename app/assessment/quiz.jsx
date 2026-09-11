@@ -25,6 +25,10 @@ function QuizQuestion({ question: q, index, answers, results, locked, onAnswer, 
         <span>{option.text}</span></label>)}
     <p className={`quiz-player-feedback ${tone}`} hidden={!result}>{result && (pending ? 'Odpowiedź zapisana — oczekuje na ocenę.' : ungraded ? 'Odpowiedź zapisana — to pytanie nie wpływa na wynik.'
       : result.message || `${result.correct ? 'Poprawnie' : 'Ocena częściowa lub niepoprawna'} · ${result.points}/${result.maximum} pkt${result.feedback ? ` — ${result.feedback}` : result.explanation ? ` — ${result.explanation}` : ''}`)}</p>
+    {result?.correctAnswers?.length > 0 && <div className="quiz-player-answer-key" data-local-answer-key="1">
+      <strong>{q.type === 'text' ? 'Akceptowane odpowiedzi' : 'Poprawne odpowiedzi'}</strong>
+      <ul>{result.correctAnswers.map((answer, index) => <li key={index}>{answer}</li>)}</ul>
+    </div>}
   </fieldset>;
 }
 register('quiz-questions', ({ questions, revealId, ...props }) => {

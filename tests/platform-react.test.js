@@ -147,6 +147,59 @@ test('real quiz player submits open answers only on request, locks during gradin
   assert.equal(posts, 1);
 });
 
+for (const react of [true, false]) test(`closed quiz is checked locally with its downloaded key (${react ? 'React' : 'native fallback'})`, async (t) => {
+  const h = setup(t, 'members/module/quiz/index.html', '?quiz=local-test&repo=glowne');
+  if (!react) h.w.NextMedUI = { ...h.w.NextMedUI, render: () => false };
+  const model = require('../public/members/module/studio/quiz-model');
+  const common = require('../netlify/quiz-common');
+  const quiz = model.createQuiz({ quizId: 'local-test', metadata: { status: 'published' }, settings: { showFeedback: true, shuffleQuestions: false, passingScore: 60, allowRetry: true }, questions: [
+    { questionId: 'single', type: 'single', points: 2, options: [{ optionId: 's-a', text: 'Poprawna', correct: true }, { optionId: 's-b', text: 'Błędna', correct: false }] },
+    { questionId: 'multiple', type: 'multiple', points: 2, options: [{ optionId: 'm-a', text: 'Tlen', correct: true }, { optionId: 'm-b', text: 'Wodór', correct: true }, { optionId: 'm-c', text: 'Woda', correct: false }] },
+    { questionId: 'boolean', type: 'true_false', points: 1 },
+    { questionId: 'text', type: 'text', acceptedAnswers: ['tlen', 'O'], points: 1, explanation: 'To symbol pierwiastka.' }
+  ] });
+  const requests = [], progress = [];
+  h.w.fetch = async (url, options = {}) => {
+    requests.push({ url: String(url), method: options.method || 'GET' });
+    assert.equal(options.method || 'GET', 'GET', 'No grading or AI request for an objective quiz');
+    return new Response(JSON.stringify({ quiz: common.publicDefinition(quiz), repositoryId: 'glowne' }));
+  };
+  h.w.ChemProgress = { load: async () => {}, materialId: () => 'quiz:glowne:local-test', record: () => null, update: async (value) => { progress.push(plain(value)); return {}; } };
+  h.evalFile('members/module/quiz/script.js'); await tick();
+  assert.equal(requests.length, 1);
+  assert.match(h.d.getElementById('quiz-player-checking-mode').textContent, /na Twoim urządzeniu/);
+  h.d.getElementById('quiz-player-check').click(); await tick();
+  assert.equal(progress.length, 1, 'Missing required answers do not save a result');
+  const field = (id) => h.d.querySelector(`[data-question-id="${id}"]`);
+  field('single').querySelector('input[value="s-b"]').click();
+  field('multiple').querySelector('input[value="m-a"]').click();
+  field('multiple').querySelector('input[value="m-b"]').click();
+  field('boolean').querySelector('input').click();
+  await input(h.w, field('text').querySelector('input'), 'azot');
+  h.d.getElementById('quiz-player-check').click(); await tick();
+  assert.equal(h.d.querySelector('#quiz-player-result > strong').textContent, '50%');
+  assert.equal(field('single').querySelector('[data-local-answer-key] li').textContent, 'Poprawna');
+  assert.match(field('text').querySelector('[data-local-answer-key]').textContent, /tlen.*O/);
+  assert.match(field('text').querySelector('.quiz-player-feedback').textContent, /To symbol pierwiastka/);
+  assert.equal(requests.length, 1);
+  assert.equal(progress.length, 2);
+  assert.equal(progress[1].details.attempts, 1);
+  assert.equal(progress[1].details.scorePercent, 50);
+  assert.equal(progress[1].details.completed, true);
+  h.d.getElementById('quiz-player-retry').click(); await tick();
+  assert.equal(h.d.querySelector('[data-local-answer-key]'), null);
+  assert.equal(field('text').querySelector('input').value, '');
+  field('single').querySelector('input[value="s-b"]').click();
+  field('multiple').querySelector('input[value="m-a"]').click();
+  field('boolean').querySelector('input').click();
+  await input(h.w, field('text').querySelector('input'), 'azot');
+  h.d.getElementById('quiz-player-check').click(); await tick();
+  const expected = common.gradeQuiz(quiz, { single: ['s-b'], multiple: ['m-a'], boolean: [quiz.questions[2].options[0].optionId], text: 'azot' });
+  assert.equal(h.d.querySelector('#quiz-player-result > strong').textContent, `${expected.percent}%`);
+  assert.equal(progress[2].details.attempts, 2);
+  assert.equal(requests.length, 1, 'Retry uses the same in-memory definition and answer key');
+});
+
 test('lazy media does not fetch offscreen or reload after a normal React update', async (t) => {
   const h = setup(t);
   const observers = [];
@@ -483,6 +536,9 @@ test('exam review selects students and attempts, keeps drafts, grades partially 
   };
   h.d.querySelector('[data-exam-tab="review"]').click(); await tick();
   assert.equal(requests.length, 1);
+  assert.equal(h.d.querySelector('.exam-workspace').classList.contains('is-reviewing'), true);
+  assert.equal(h.d.getElementById('exam-builder-status').parentElement.classList.contains('exam-editor-panel'), true, 'Review messages remain in the answer panel, not the hidden summary');
+  assert.equal(h.d.getElementById('exam-editor-eyebrow').textContent, 'Odpowiedzi uczestników');
   h.d.querySelector('[data-review-more]').click(); await tick();
   assert.equal(h.d.querySelectorAll('[data-review-user]').length, 2);
   await input(h.w, h.d.querySelector('[data-review-search]'), 'lucja');
@@ -508,6 +564,10 @@ test('exam review selects students and attempts, keeps drafts, grades partially 
   assert.equal(requests.filter((r) => r.action).length, 1);
   assert.equal(requests.filter((r) => r.view === 'review').length, 2, 'No automatic refresh or polling after saving a grade');
   assert.equal(requests.some((r) => r.view === 'overview' || r.action === 'ai-grade'), false);
+  h.d.querySelector('[data-exam-tab="questions"]').click(); await tick();
+  assert.equal(h.d.querySelector('.exam-workspace').classList.contains('is-reviewing'), false);
+  assert.equal(h.d.getElementById('exam-builder-status').parentElement.classList.contains('exam-summary-panel'), true, 'Leaving review restores the normal definition layout and status');
+  assert.equal(h.d.getElementById('exam-editor-eyebrow').textContent, 'Definicja egzaminu');
 });
 
 test('actual lesson builder uses multiline options and the same line breaks in saved Markdown and preview', async (t) => {
