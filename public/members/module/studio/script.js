@@ -651,6 +651,7 @@
     const defaults = {
       presentation: ['Nowa prezentacja', 'Otwórz prezentację i kontynuuj naukę od ostatniego slajdu.'],
       slides: ['Nowa prezentacja', 'Otwórz prezentację do tego działu.'],
+      google: ['Materiał Google', 'Otwórz plik lub nagranie w skalowalnym podglądzie.'],
       pdf: ['Dokument PDF', 'Materiał do czytania lub pobrania.'],
       film: ['Nagranie lekcji', 'Obejrzyj nagranie w odtwarzaczu kursowym.'],
       yt: ['Film YouTube', 'Nagranie z własnymi kontrolkami odtwarzacza.'],
@@ -1053,6 +1054,8 @@
     input.type = options && options.type ? options.type : 'text';
     input.value = value == null ? '' : String(value);
     input.dataset.dashboardField = fieldName;
+    if (options && options.min !== undefined) input.min = options.min;
+    if (options && options.max !== undefined) input.max = options.max;
     if (options && options.placeholder) input.placeholder = options.placeholder;
     if (options && options.maxLength) input.maxLength = options.maxLength;
     if (options && options.readOnly) input.readOnly = true;
@@ -1401,6 +1404,13 @@
         field('Krótki opis', textareaInput(node.description, 'description', { rows: 3, maxLength: 420 }))
       );
       const definition = dashboardModelApi.MODULE_DEFINITIONS[node.module] || dashboardModelApi.MODULE_DEFINITIONS.link;
+      if (node.module === 'google') {
+        form.append(
+          field('Link do pliku lub notatnika Google', textInput(node.id, 'id', { maxLength: 2000, placeholder: 'https://drive.google.com/file/d/…/view' }), 'Pliki MP3, filmy, PDF, dokumenty i foldery. Plik musi być udostępniony uczestnikom. Notebook Google otwiera się w nowej karcie.'),
+          field('Szerokość podglądu (%)', textInput(String(node.embedWidth), 'embedWidth', { type: 'number', min: 20, max: 100 })),
+          field('Wysokość podglądu (px)', textInput(String(node.embedHeight), 'embedHeight', { type: 'number', min: 160, max: 1200 }), 'Np. 200 dla audio, 480 dla wideo, 720 dla dokumentu. Uczeń może powiększyć podgląd.')
+        );
+      }
       if (['slides', 'pdf', 'film', 'yt', 'forms'].includes(node.module)) {
         const directWebMode = ['slides', 'pdf'].includes(node.module)
           && ['4', '5'].includes(String(node.protection));
@@ -2307,6 +2317,7 @@
         title: 'Prezentacja Google Slides'
       });
     }
+    if (type === 'google') return lessonModelApi.createBlock('google', { title: 'Materiał Google', url: '', width: 100, height: 480 });
     if (type === 'presentation') {
       const firstPresentation = state.contentLibrary.presentations[0];
       return lessonModelApi.createBlock('presentation', {
@@ -2717,6 +2728,7 @@
       accordion: '⌄',
       youtube: 'YT',
       slides: 'GS',
+      google: '▱',
       presentation: 'S',
       quiz: 'Q',
       pdf: 'PDF',
@@ -2747,6 +2759,7 @@
     if (block.type === 'accordion') return block.title || 'Harmonijka';
     if (block.type === 'youtube') return block.title || 'Film YouTube';
     if (block.type === 'slides') return block.title || 'Prezentacja Google Slides';
+    if (block.type === 'google') return block.title || 'Materiał Google';
     if (block.type === 'presentation') return block.title || 'Prezentacja';
     if (block.type === 'quiz') return block.title || 'Quiz';
     if (block.type === 'pdf') return block.title || 'Dokument PDF';
@@ -2773,6 +2786,7 @@
     if (block.type === 'image') return block.ref || block.url || 'Wybierz obraz';
     if (block.type === 'youtube') return block.video || 'Uzupełnij link lub ID filmu';
     if (block.type === 'slides') return block.presentation || 'Uzupełnij link lub ID prezentacji';
+    if (block.type === 'google') return `${block.url || 'Wklej link do pliku Google'} · ${block.width}% / ${block.height}px`;
     if (block.type === 'presentation') return block.presentationId || 'Wybierz prezentację';
     if (block.type === 'quiz') return block.quizId || 'Wybierz quiz';
     if (block.type === 'pdf') return `${block.pdfId || 'Uzupełnij ID lub adres PDF'} · tryb ${block.protection}`;
@@ -4090,6 +4104,13 @@
           lessonInput(block.title, 'title', { maxLength: 180 }),
           'AI rozpozna tytuł, ale nie może odczytać zawartości iframe Google. Treść slajdów możesz opisać w klocku „Zapytaj AI”.'
         )
+      );
+    } else if (block.type === 'google') {
+      form.append(
+        field('Tytuł materiału', lessonInput(block.title, 'title', { maxLength: 180 })),
+        field('Link do pliku lub notatnika Google', lessonInput(block.url, 'url', { maxLength: 2000, placeholder: 'https://drive.google.com/file/d/…/view' }), 'Obsługuje podgląd plików MP3, filmów, PDF, dokumentów i folderów Google. Udostępnij plik uczestnikom. Notebook Google nie pozwala na iframe — kafelek otworzy go w nowej karcie.'),
+        field('Szerokość (%)', lessonInput(block.width, 'width', { type: 'number', min: 20, max: 100 })),
+        field('Wysokość (px)', lessonInput(block.height, 'height', { type: 'number', min: 160, max: 1200 }), 'Audio: np. 200 px; wideo: 480 px; dokument: 720 px. Podgląd można też powiększyć lub otworzyć na pełnym ekranie.')
       );
     } else if (block.type === 'presentation') {
       syncInspectorRepository(block.repositoryId);
@@ -5586,6 +5607,8 @@
       ...existingMathJaxStyles,
       ...(mode === 'lesson' && existingMathJax ? [existingMathJax] : [])
     );
+    const googleStyles = doc.createElement('link');
+    googleStyles.rel = 'stylesheet'; googleStyles.href = '/assets/css/google-media.css'; doc.head.append(googleStyles);
     if (
       mode === 'lesson'
       && !existingMathJax
@@ -5674,6 +5697,7 @@
       main.append(slides);
     }
     doc.body.replaceChildren(header, main);
+    window.NextMedGoogleMedia?.bind(doc);
     if (mode === 'lesson') {
       void hydrateStudioLessonMedia(main, previewUrls);
       preparePreviewYouTube(main);
@@ -6349,6 +6373,8 @@
         block.order = raw === 'key-first' ? 'key-first' : 'student-first';
       } else if (block.type === 'answer-review' && fieldName === 'aiInstruction') {
         block.aiInstruction = String(raw).slice(0, 2000);
+      } else if (block.type === 'google' && ['width', 'height'].includes(fieldName)) {
+        block[fieldName] = window.NextMedGoogleMedia.dimensions({ [fieldName]: raw })[fieldName];
       } else if (fieldName === 'width' && block.type === 'image') {
         block.width = Math.max(20, Math.min(100, Number(raw) || 100));
       } else if (fieldName === 'useColor') {

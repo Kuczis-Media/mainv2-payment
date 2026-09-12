@@ -10,7 +10,7 @@ Główny plik: `lessons/lekcja-chemia-organiczna.md`. Nazwy `example-…` to sta
 | --- | --- |
 | `example-intro`, `example-table-callouts` | Nagłówki, akapity, listy zwykłe/numerowane, cytat, 4 rodzaje wyróżnień, tabele z podpisem i wyrównaniem |
 | `example-styles` | Wszystkie 9 czcionek lekcji, 4 rozmiary, kolor tekstu/tła, pogrubienie, wyrównanie do lewej/środka/prawej |
-| `example-media` | Media wspólne i lokalne, właściciel obrazu, szerokość, ALT, wyrównanie, zewnętrzny HTTPS, blok kodu |
+| `example-media` | Media wspólne i lokalne, właściciel obrazu, szerokość, ALT, wyrównanie, zewnętrzny HTTPS, blok kodu, skalowalny podgląd Google na kliknięcie |
 | `example-containers` | Harmonijka zamknięta/otwarta, tekst i lista wewnątrz, fiszki, kolor fiszek |
 | `example-formulas` | Matematyka i chemia, indeksy, reagent po obu stronach, wszystkie strzałki, opis nad/pod strzałką |
 | `example-video-model` | Filmy YouTube i model ATONOM |

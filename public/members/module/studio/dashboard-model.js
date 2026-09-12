@@ -6,6 +6,8 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createDashboardStudioModel() {
   'use strict';
 
+  const googleMedia = typeof module === 'object' && module.exports ? require('../../../assets/js/google-media.js') : globalThis.NextMedGoogleMedia;
+
   const ADMIN_DASHBOARD_URL = '/.netlify/functions/admin-dashboard';
   const STATIC_DASHBOARD_URL = '/members/dashboard.md';
   const MAX_MARKDOWN_BYTES = 256 * 1024;
@@ -45,6 +47,7 @@
   const MODULE_ORDER = Object.freeze([
     'presentation',
     'slides',
+    'google',
     'pdf',
     'film',
     'yt',
@@ -60,6 +63,7 @@
   ]);
 
   const MODULE_DEFINITIONS = deepFreeze({
+    google: { label: 'Plik Google / Notebook', icon: '▱', path: 'google', idLabel: 'Link do pliku, folderu lub notatnika Google' },
     presentation: {
       label: 'Prezentacja',
       icon: '▥',
@@ -333,6 +337,7 @@
       title: singleLine(source.title) || definition.label,
       description: singleLine(source.description),
       id: singleLine(source.id || source.resourceId),
+      ...(canonical.module === 'google' ? { embedWidth: googleMedia.dimensions({ width: source.embedWidth }).width, embedHeight: googleMedia.dimensions({ height: source.embedHeight }).height } : {}),
       protection,
       source: sourceMode,
       prompt,
@@ -532,6 +537,10 @@
     if (['slides', 'pdf', 'film', 'yt', 'forms'].includes(parsed.module)) {
       parsed.id = take('id');
     }
+    if (parsed.module === 'google') {
+      parsed.id = take('id'); parsed.embedWidth = take('width'); parsed.embedHeight = take('height');
+      take('title');
+    }
     if (PROTECTION_OPTIONS[parsed.module]) {
       parsed.protection = allowedProtection(parsed.module, take('type'));
     }
@@ -591,6 +600,9 @@
 
     if (['slides', 'pdf', 'film', 'yt', 'forms'].includes(card.module)) {
       add('id', card.id);
+    }
+    if (card.module === 'google') {
+      add('id', card.id); add('width', card.embedWidth); add('height', card.embedHeight); add('title', card.title);
     }
     if (PROTECTION_OPTIONS[card.module]) add('type', card.protection);
     if (card.module === 'chat') {
@@ -758,7 +770,7 @@
 
   function runtimeMaterialType(block) {
     return ({
-      lesson: 'lesson', presentation: 'presentation', slides: 'presentation', film: 'video', yt: 'video', pdf: 'pdf', forms: 'quiz', quiz: 'quiz', exam: 'exam', chat: 'script'
+      lesson: 'lesson', presentation: 'presentation', slides: 'presentation', google: 'embed', film: 'video', yt: 'video', pdf: 'pdf', forms: 'quiz', quiz: 'quiz', exam: 'exam', chat: 'script'
     })[block.module] || (block.module === 'link' ? 'embed' : 'other');
   }
 
@@ -1159,6 +1171,9 @@
         if (block.kind !== 'module') return;
         moduleCount += 1;
         if (!singleLine(block.title)) addError('MODULE_TITLE_REQUIRED', 'Karta wymaga tytułu.', block);
+        if (block.module === 'google' && !googleMedia.resolve(block.id)) {
+          addError('GOOGLE_MEDIA_REQUIRED', 'Wklej link do pliku lub folderu Google Drive, dokumentu Google albo notatnika Google.', block);
+        }
         if (
           ['slides', 'pdf', 'film', 'yt', 'forms'].includes(block.module)
           && !safeResourceReference(block.id, block.module, block.protection)

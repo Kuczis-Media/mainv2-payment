@@ -1,6 +1,8 @@
 (function (root) {
   'use strict';
 
+  const googleMedia = typeof module === 'object' && module.exports ? require('../../../assets/js/google-media.js') : root.NextMedGoogleMedia;
+
   const MAX_SOURCE_CHARS = 512 * 1024;
   const MAX_SLIDES = 100;
   const SAFE_FILENAME = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\.md$/i;
@@ -22,7 +24,7 @@
   const STYLE_START = /^\s*:::style(?:\s+(.+?))?\s*$/i;
   const ACCORDION_START = /^\s*:::accordion(?:\s+(.+?))?\s*$/i;
   const LAYOUT_START = /^\s*:::layout(?:\s+(.+?))?\s*$/i;
-  const STRUCTURAL_CONTAINER_START = /^\s*:::(?:task|zadanie|question|slide|style|accordion|layout|youtube|googleslides|presentation|quiz|pdf|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image|studentanswer|answerreview)(?:\s+.*?)?\s*$/i;
+  const STRUCTURAL_CONTAINER_START = /^\s*:::(?:task|zadanie|question|slide|style|accordion|layout|youtube|googleslides|googlemedia|presentation|quiz|pdf|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image|studentanswer|answerreview)(?:\s+.*?)?\s*$/i;
   const RICH_CONTAINER_END = /^\s*:::\s*$/;
   const SAFE_STYLE_COLOR = /^#[0-9a-f]{6}$/i;
   const LINK_ICONS = new Set(['link', 'book', 'video', 'chemistry', 'math', 'file', 'external']);
@@ -53,7 +55,7 @@
     'sin', 'cos', 'tan', 'log', 'ln', 'partial', 'nabla', 'rightarrow', 'leftarrow',
     'leftrightarrow', 'text', 'mathrm', 'mathbf', 'overline', 'vec', 'left', 'right'
   ]);
-  const INTERACTIVE_START = /^\s*:::(youtube|googleslides|presentation|quiz|pdf|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image|studentanswer|answerreview)\s*$/i;
+  const INTERACTIVE_START = /^\s*:::(youtube|googleslides|googlemedia|presentation|quiz|pdf|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image|studentanswer|answerreview)\s*$/i;
 
   class LessonFormatError extends Error {
     constructor(code, message) {
@@ -1107,6 +1109,7 @@
       const source = `${base}/embed?start=false&amp;loop=false&amp;delayms=3000${controls ? '' : '&amp;rm=minimal'}`;
       return `<figure class="lesson-embed lesson-google-slides"><iframe src="${source}" title="${escapeHtml(title)}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-forms allow-presentation" allow="fullscreen" allowfullscreen></iframe><figcaption>${escapeHtml(title)}</figcaption></figure>`;
     }
+    if (type === 'googlemedia') return googleMedia.html(values);
     if (type === 'presentation') {
       const repository = safeRepositoryId(values.repository || 'default');
       const presentationId = String(values.presentation || '').trim().toLowerCase();

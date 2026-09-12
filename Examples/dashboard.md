@@ -48,6 +48,7 @@ Prawdziwe identyfikatory przekazane do zestawu demonstracyjnego.
 
 ### Dokumenty i formularze
 
+- [Podgląd pliku Google](/members/module/google/?id=1qKkDarVM8qn1GHkNalt9f8n7IXNUawZF&width=100&height=720&title=Podgl%C4%85d%20pliku%20Google) — Skalowalny podgląd pliku z Dysku Google; ten sam klocek obsługuje również udostępnione audio i wideo.
 - [Cykloaddycja — PDF](/members/module/pdf/?id=1qKkDarVM8qn1GHkNalt9f8n7IXNUawZF&type=1) — Dokument Google Drive otwierany w chronionym podglądzie.
 - [Szybkość reakcji chemicznych — Google Forms](/members/module/forms/?id=1FAIpQLSeKEXX7ooRB7ZaPJ8UwnqNlPsucgjwnQFzmSlZ3OvrdFlURsA) — Przykładowy test Google Forms.
 - [Aldehydy — Google Slides](/members/module/slides/?id=1rxPm5CJl2LDzrzq89fogz-_PWwO_BbqF&type=1) — Zwykły podgląd prezentacji Google.

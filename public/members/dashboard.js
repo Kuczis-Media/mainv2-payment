@@ -491,6 +491,7 @@
   }
 
   function classifyResource(pathname) {
+    if (/\/google\//.test(pathname)) return { kind: 'document', icon: '▱' };
     if (/\/(?:film|yt)\//.test(pathname)) return { kind: 'video', icon: '▶' };
     if (/\/slides\//.test(pathname)) return { kind: 'document', icon: '▤' };
     if (/\/pdf\//.test(pathname)) return { kind: 'document', icon: 'PDF' };

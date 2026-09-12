@@ -1,6 +1,8 @@
 (function (root) {
   'use strict';
 
+  const googleMedia = typeof module === 'object' && module.exports ? require('../../../assets/js/google-media.js') : root.NextMedGoogleMedia;
+
   const SCHEMA_VERSION = 1;
   const MAX_SOURCE_CHARS = 512 * 1024;
   const MAX_SLIDES = 100;
@@ -18,7 +20,7 @@
   const TASK_START = /^\s*:::(?:task|zadanie)\s*$/i;
   const QUESTION_START = /^\s*:::question\s*$/i;
   const SLIDE_SETTINGS_START = /^\s*:::slide\s*$/i;
-  const CONTAINER_START = /^\s*:::(style|accordion|layout|youtube|googleslides|presentation|quiz|pdf|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image|studentanswer|answerreview)(?:\s+(.*?))?\s*$/i;
+  const CONTAINER_START = /^\s*:::(style|accordion|layout|youtube|googleslides|googlemedia|presentation|quiz|pdf|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image|studentanswer|answerreview)(?:\s+(.*?))?\s*$/i;
   const CONTAINER_END = /^\s*:::\s*$/;
   const STYLE_FONTS = Object.freeze([
     'sans',
@@ -63,6 +65,7 @@
     'accordion',
     'youtube',
     'slides',
+    'google',
     'presentation',
     'quiz',
     'pdf',
@@ -251,7 +254,7 @@
       .split('\n')
       .map((line) => {
         if (/^\s*---\s*$/.test(line)) return '`---`';
-        if (/^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|googleslides|presentation|quiz|pdf|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image|studentanswer|answerreview)?(?:\s+.*?)?\s*$/i.test(line)) {
+        if (/^\s*:::(?:task|zadanie|question|slide|style|accordion|youtube|googleslides|googlemedia|presentation|quiz|pdf|atonom|formula|linkcard|aihelp|board|contactform|flashcards|table|exam|image|studentanswer|answerreview)?(?:\s+.*?)?\s*$/i.test(line)) {
           return `\`${line.trim()}\``;
         }
         return line.replace(/\s+$/g, '');
@@ -442,6 +445,10 @@
         controls,
         title: oneLine(source.title) || 'Prezentacja Google Slides'
       };
+    }
+    if (type === 'google') {
+      const url = oneLine(source.url || source.resourceId);
+      return { ...base, title: oneLine(source.title) || 'Materiał Google', url: googleMedia.resolve(url)?.href || url, ...googleMedia.dimensions(source) };
     }
     if (type === 'presentation') {
       return {
@@ -906,6 +913,9 @@
     if (block.type === 'slides' && !googleSlidesReference(block.presentation)) {
       errors.push({ code: 'INVALID_GOOGLE_SLIDES', path: `${path}.presentation`, message: 'Podaj prawidłowy link lub ID prezentacji Google Slides.' });
     }
+    if (block.type === 'google' && !googleMedia.resolve(block.url)) {
+      errors.push({ code: 'INVALID_GOOGLE_MEDIA', path: `${path}.url`, message: 'Wklej link do pliku lub folderu Google Drive, dokumentu Google albo notatnika Google.' });
+    }
     if (block.type === 'presentation' && (
       !SAFE_REPOSITORY_ID.test(block.repositoryId || '')
       || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(block.presentationId || '')
@@ -1249,6 +1259,9 @@
         `title: ${cleanDirectiveValue(block.title)}`,
         ':::'
       ].join('\n');
+    }
+    if (block.type === 'google') {
+      return [':::googlemedia', `url: ${cleanDirectiveValue(block.url)}`, `title: ${cleanDirectiveValue(block.title)}`, `width: ${block.width}`, `height: ${block.height}`, ':::'].join('\n');
     }
     if (block.type === 'presentation') {
       return [
@@ -1776,6 +1789,9 @@
               controls: values.controls,
               title: values.title
             }));
+          } else if (type === 'googlemedia') {
+            const values = parseDirectiveFields(bodyLines);
+            blocks.push(createBlock({ type: 'google', url: values.url || values.id, title: values.title, width: values.width, height: values.height }));
           } else if (type === 'presentation') {
             const values = parseDirectiveFields(bodyLines);
             blocks.push(createBlock({
@@ -2318,6 +2334,7 @@
     styledContainers: true,
     youtube: true,
     googleSlides: true,
+    googleMedia: true,
     presentations: true,
     quizzes: true,
     pdfs: true,

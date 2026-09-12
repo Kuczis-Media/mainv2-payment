@@ -292,7 +292,7 @@ async function studio(t, libraryOverrides = {}) {
     list: async () => [], search: (items, query) => items.filter((item) => `${item.title} ${item.filename}`.includes(query)),
     readQuestionBank: async () => ({ bank: { questions: [] }, sha: '' }), ...libraryOverrides
   };
-  const files = ['members/dashboard-parser.js', 'members/module/lesson/lesson-parser.js', 'assets/js/assessment-text.js',
+  const files = ['assets/js/google-media.js', 'members/dashboard-parser.js', 'members/module/lesson/lesson-parser.js', 'assets/js/assessment-text.js',
     ...['paged-list', 'dashboard-model', 'lesson-model', 'answer-fields', 'prompt-model', 'exam-model', 'assessment-editor', 'presentation-model', 'quiz-model', 'exam-builder', 'presentation-builder', 'quiz-builder', 'script', 'tool-picker'].map((file) => `members/module/studio/${file}.js`)];
   files.forEach(h.evalFile);
   h.d.dispatchEvent(new h.w.Event('DOMContentLoaded')); await tick();
@@ -568,6 +568,35 @@ test('exam review selects students and attempts, keeps drafts, grades partially 
   assert.equal(h.d.querySelector('.exam-workspace').classList.contains('is-reviewing'), false);
   assert.equal(h.d.getElementById('exam-builder-status').parentElement.classList.contains('exam-summary-panel'), true, 'Leaving review restores the normal definition layout and status');
   assert.equal(h.d.getElementById('exam-editor-eyebrow').textContent, 'Definicja egzaminu');
+});
+
+test('Studio adds and edits Google cards in both builders and preserves the student preview', async (t) => {
+  const h = await studio(t);
+  const url = 'https://drive.google.com/file/d/1ExampleFile12345/view';
+  await input(h.w, h.d.getElementById('studio-tool-select'), 'lesson');
+  h.d.querySelector('[data-lesson-add="google"]').click(); await tick();
+  await input(h.w, h.d.querySelector('[data-lesson-field="url"]'), url);
+  await input(h.w, h.d.querySelector('[data-lesson-field="title"]'), 'Nagranie do lekcji');
+  await input(h.w, h.d.querySelector('[data-lesson-field="width"]'), '80');
+  await input(h.w, h.d.querySelector('[data-lesson-field="height"]'), '200');
+  h.d.querySelector('[data-lesson-panel="preview"]').click(); await tick();
+  const preview = h.d.querySelector('.lesson-preview-body [data-google-media]');
+  assert.ok(preview);
+  assert.equal(preview.style.getPropertyValue('--google-media-height'), '200px');
+  assert.equal(preview.querySelector('iframe'), null);
+  preview.querySelector('[data-google-load]').click();
+  assert.equal(preview.querySelector('iframe').src, url.replace('/view', '/preview'));
+  await input(h.w, h.d.getElementById('studio-tool-select'), 'dashboard');
+  h.d.querySelector('[data-dashboard-add="google"]').click(); await tick();
+  await input(h.w, h.d.querySelector('[data-dashboard-field="id"]'), url);
+  await input(h.w, h.d.querySelector('[data-dashboard-field="embedWidth"]'), '75');
+  await input(h.w, h.d.querySelector('[data-dashboard-field="embedHeight"]'), '240');
+  h.w.dispatchEvent(new h.w.Event('pagehide'));
+  const stored = JSON.parse(h.w.localStorage.getItem('chemdisk.studio.dashboard.v1'));
+  const source = h.w.ChemDashboardStudioModel.serialize(stored);
+  assert.match(source, /\/members\/module\/google\/\?id=/);
+  assert.match(source, /width=75&height=240/);
+  assert.equal(h.w.ChemDashboardStudioModel.validate(stored).valid, true);
 });
 
 test('actual lesson builder uses multiline options and the same line breaks in saved Markdown and preview', async (t) => {

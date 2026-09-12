@@ -105,6 +105,7 @@ test('studio exposes every requested dashboard block with the runtime protection
   assert.deepEqual(studio.MODULE_ORDER, [
     'presentation',
     'slides',
+    'google',
     'pdf',
     'film',
     'yt',

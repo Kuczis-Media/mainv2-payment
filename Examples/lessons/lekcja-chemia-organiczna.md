@@ -138,7 +138,16 @@ decoration: none
 text_tone: auto
 :::
 
-## Obrazy i kod
+## Obrazy, pliki Google i kod
+
+:::googlemedia
+url: https://drive.google.com/file/d/1qKkDarVM8qn1GHkNalt9f8n7IXNUawZF/view
+title: Plik Google — skalowalny podgląd
+width: 100
+height: 600
+:::
+
+Ten sam klocek przyjmuje link do audio MP3, filmu, dokumentu lub folderu Google. Wklej własny udostępniony plik w ustawieniach. Link do notatnika Google otworzy nową kartę, ponieważ Google blokuje osadzanie notatników.
 
 :::image
 ref: assets/shared/example-diagram.svg
