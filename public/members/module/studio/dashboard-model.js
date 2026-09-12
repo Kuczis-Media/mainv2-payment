@@ -337,7 +337,7 @@
       title: singleLine(source.title) || definition.label,
       description: singleLine(source.description),
       id: singleLine(source.id || source.resourceId),
-      ...(canonical.module === 'google' ? { embedWidth: googleMedia.dimensions({ width: source.embedWidth }).width, embedHeight: googleMedia.dimensions({ height: source.embedHeight }).height } : {}),
+      ...(canonical.module === 'google' ? { embedWidth: googleMedia.dimensions({ width: source.embedWidth }).width, embedHeightPercent: googleMedia.dimensions({ height: source.embedHeight, heightPercent: source.embedHeightPercent }).heightPercent } : {}),
       protection,
       source: sourceMode,
       prompt,
@@ -538,7 +538,7 @@
       parsed.id = take('id');
     }
     if (parsed.module === 'google') {
-      parsed.id = take('id'); parsed.embedWidth = take('width'); parsed.embedHeight = take('height');
+      parsed.id = take('id'); parsed.embedWidth = take('width'); parsed.embedHeight = take('height'); parsed.embedHeightPercent = take('heightPercent') || undefined;
       take('title');
     }
     if (PROTECTION_OPTIONS[parsed.module]) {
@@ -602,7 +602,7 @@
       add('id', card.id);
     }
     if (card.module === 'google') {
-      add('id', card.id); add('width', card.embedWidth); add('height', card.embedHeight); add('title', card.title);
+      add('id', card.id); add('width', card.embedWidth); add('heightPercent', card.embedHeightPercent); add('title', card.title);
     }
     if (PROTECTION_OPTIONS[card.module]) add('type', card.protection);
     if (card.module === 'chat') {

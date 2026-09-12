@@ -1408,7 +1408,7 @@
         form.append(
           field('Link do pliku lub notatnika Google', textInput(node.id, 'id', { maxLength: 2000, placeholder: 'https://drive.google.com/file/d/…/view' }), 'Pliki MP3, filmy, PDF, dokumenty i foldery. Plik musi być udostępniony uczestnikom. Notebook Google otwiera się w nowej karcie.'),
           field('Szerokość podglądu (%)', textInput(String(node.embedWidth), 'embedWidth', { type: 'number', min: 20, max: 100 })),
-          field('Wysokość podglądu (px)', textInput(String(node.embedHeight), 'embedHeight', { type: 'number', min: 160, max: 1200 }), 'Np. 200 dla audio, 480 dla wideo, 720 dla dokumentu. Uczeń może powiększyć podgląd.')
+          field('Wysokość podglądu (% okna)', textInput(String(node.embedHeightPercent), 'embedHeightPercent', { type: 'number', min: 20, max: 150 }), 'Np. 25% dla audio, 60% dla wideo, 90% dla dokumentu. Podgląd otwiera się od razu po wejściu z kafelka.')
         );
       }
       if (['slides', 'pdf', 'film', 'yt', 'forms'].includes(node.module)) {
@@ -2317,7 +2317,7 @@
         title: 'Prezentacja Google Slides'
       });
     }
-    if (type === 'google') return lessonModelApi.createBlock('google', { title: 'Materiał Google', url: '', width: 100, height: 480 });
+    if (type === 'google') return lessonModelApi.createBlock('google', { title: 'Materiał Google', url: '', width: 100, heightPercent: 60 });
     if (type === 'presentation') {
       const firstPresentation = state.contentLibrary.presentations[0];
       return lessonModelApi.createBlock('presentation', {
@@ -2786,7 +2786,7 @@
     if (block.type === 'image') return block.ref || block.url || 'Wybierz obraz';
     if (block.type === 'youtube') return block.video || 'Uzupełnij link lub ID filmu';
     if (block.type === 'slides') return block.presentation || 'Uzupełnij link lub ID prezentacji';
-    if (block.type === 'google') return `${block.url || 'Wklej link do pliku Google'} · ${block.width}% / ${block.height}px`;
+    if (block.type === 'google') return `${block.url || 'Wklej link do pliku Google'} · ${block.width}% / ${block.heightPercent}%`;
     if (block.type === 'presentation') return block.presentationId || 'Wybierz prezentację';
     if (block.type === 'quiz') return block.quizId || 'Wybierz quiz';
     if (block.type === 'pdf') return `${block.pdfId || 'Uzupełnij ID lub adres PDF'} · tryb ${block.protection}`;
@@ -4110,7 +4110,7 @@
         field('Tytuł materiału', lessonInput(block.title, 'title', { maxLength: 180 })),
         field('Link do pliku lub notatnika Google', lessonInput(block.url, 'url', { maxLength: 2000, placeholder: 'https://drive.google.com/file/d/…/view' }), 'Obsługuje podgląd plików MP3, filmów, PDF, dokumentów i folderów Google. Udostępnij plik uczestnikom. Notebook Google nie pozwala na iframe — kafelek otworzy go w nowej karcie.'),
         field('Szerokość (%)', lessonInput(block.width, 'width', { type: 'number', min: 20, max: 100 })),
-        field('Wysokość (px)', lessonInput(block.height, 'height', { type: 'number', min: 160, max: 1200 }), 'Audio: np. 200 px; wideo: 480 px; dokument: 720 px. Podgląd można też powiększyć lub otworzyć na pełnym ekranie.')
+        field('Wysokość (% okna)', lessonInput(block.heightPercent, 'heightPercent', { type: 'number', min: 20, max: 150 }), 'Audio: np. 25%; wideo: 60%; dokument: 90%. 100% oznacza wysokość okna przeglądarki. Podgląd można też otworzyć na pełnym ekranie.')
       );
     } else if (block.type === 'presentation') {
       syncInspectorRepository(block.repositoryId);
@@ -6373,7 +6373,7 @@
         block.order = raw === 'key-first' ? 'key-first' : 'student-first';
       } else if (block.type === 'answer-review' && fieldName === 'aiInstruction') {
         block.aiInstruction = String(raw).slice(0, 2000);
-      } else if (block.type === 'google' && ['width', 'height'].includes(fieldName)) {
+      } else if (block.type === 'google' && ['width', 'heightPercent'].includes(fieldName)) {
         block[fieldName] = window.NextMedGoogleMedia.dimensions({ [fieldName]: raw })[fieldName];
       } else if (fieldName === 'width' && block.type === 'image') {
         block.width = Math.max(20, Math.min(100, Number(raw) || 100));

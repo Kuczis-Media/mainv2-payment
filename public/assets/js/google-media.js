@@ -4,7 +4,13 @@
   const UUID = '[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}';
   const bound = new WeakSet();
   const clamp = (value, min, max, fallback) => value != null && Number.isFinite(Number(value)) && String(value).trim() ? Math.round(Math.max(min, Math.min(max, Number(value)))) : fallback;
-  const dimensions = (value = {}) => ({ width: clamp(value.width, 20, 100, 100), height: clamp(value.height, 160, 1200, 480) });
+  function dimensions(value = {}) {
+    const requested = value.heightPercent ?? value.height_percent;
+    // Old materials used pixels. Convert against the original 800px reference
+    // viewport; all new settings and serialized values are percentages.
+    const legacy = value.height != null && String(value.height).trim() && Number.isFinite(Number(value.height)) ? Number(value.height) / 8 : 60;
+    return { width: clamp(value.width, 20, 100, 100), heightPercent: clamp(requested ?? legacy, 20, 150, 60) };
+  }
 
   // Only known Google preview endpoints, never arbitrary HTML or iframe code.
   function resolve(value) {
@@ -56,23 +62,42 @@
     const note = media.kind === 'notebook'
       ? 'Google nie pozwala osadzić tego notatnika. Otwórz materiał w nowej karcie. Audio możesz pobrać z notatnika i udostępnić jako plik na Dysku Google.'
       : 'Podgląd wczyta się po kliknięciu. Jeśli Google nie obsługuje formatu lub wymaga logowania, otwórz plik w nowej karcie.';
-    return `<section class="google-media" data-google-media style="--google-media-width:${size.width}%;--google-media-height:${size.height}px">
+    return `<section class="google-media" data-google-media data-google-height="${size.heightPercent}" style="--google-media-width:${size.width}%;--google-media-height:${size.heightPercent}vh">
       <header class="google-media-heading"><span aria-hidden="true">▱</span><strong>${title}</strong></header>
       <p class="google-media-note">${note}</p>
       <div class="google-media-actions">
         ${media.embedUrl ? `<button type="button" data-google-load data-google-url="${escape(media.href)}" aria-expanded="false">Pokaż materiał</button>` : ''}
         <a href="${escape(media.href)}" target="_blank" rel="noopener noreferrer" data-google-outside>Otwórz w Google ↗</a>
-        ${media.embedUrl ? '<button type="button" data-google-size="-120" hidden aria-label="Zmniejsz wysokość podglądu">−</button><button type="button" data-google-size="120" hidden aria-label="Zwiększ wysokość podglądu">+</button><button type="button" data-google-fullscreen hidden>Pełny ekran</button>' : ''}
+        ${media.embedUrl ? '<button type="button" data-google-size="-10" hidden aria-label="Zmniejsz wysokość podglądu o 10 punktów procentowych">−</button><button type="button" data-google-size="10" hidden aria-label="Zwiększ wysokość podglądu o 10 punktów procentowych">+</button><button type="button" data-google-fullscreen hidden>Pełny ekran</button>' : ''}
       </div>
       <div class="google-media-viewport" hidden></div><span class="google-media-status" role="status"></span>
     </section>`;
   }
 
-  function mount(host, value) {
+  function mount(host, value, options = {}) {
     const template = host.ownerDocument.createElement('template');
     template.innerHTML = html(value);
     host.replaceChildren(template.content.cloneNode(true));
     bind(host.ownerDocument);
+    if (options.autoOpen === true) open(host.querySelector('[data-google-media]'));
+  }
+
+  function open(card) {
+    const button = card?.querySelector('[data-google-load]');
+    const viewport = card?.querySelector('.google-media-viewport');
+    if (!button || !viewport || viewport.querySelector('iframe')) return;
+    const media = resolve(button.dataset.googleUrl);
+    if (!media?.embedUrl) return;
+    const frame = card.ownerDocument.createElement('iframe');
+    frame.src = media.embedUrl; frame.title = card.querySelector('strong').textContent;
+    frame.loading = 'eager'; frame.referrerPolicy = 'strict-origin-when-cross-origin';
+    frame.setAttribute('allow', 'fullscreen; picture-in-picture'); frame.allowFullscreen = true;
+    // Google supplies its own cross-origin player. Additional iframe sandboxing
+    // can break its authentication/player flow. URLs remain strictly allowlisted.
+    viewport.replaceChildren(frame); viewport.hidden = false;
+    button.textContent = 'Zamknij podgląd'; button.setAttribute('aria-expanded', 'true');
+    card.querySelector('.google-media-note').textContent = 'Jeśli Google nie może wyświetlić pliku lub wymaga logowania, wybierz „Otwórz w Google”.';
+    card.querySelectorAll('[data-google-size], [data-google-fullscreen]').forEach((node) => { node.hidden = false; });
   }
 
   function bind(doc) {
@@ -87,22 +112,17 @@
         if (viewport.querySelector('iframe')) {
           viewport.replaceChildren(); viewport.hidden = true;
           button.textContent = 'Pokaż materiał'; button.setAttribute('aria-expanded', 'false');
+          card.querySelector('.google-media-status').textContent = '';
           card.querySelectorAll('[data-google-size], [data-google-fullscreen]').forEach((node) => { node.hidden = true; });
           return;
         }
-        const media = resolve(button.dataset.googleUrl);
-        if (!media?.embedUrl) return;
-        const frame = doc.createElement('iframe');
-        frame.src = media.embedUrl; frame.title = card.querySelector('strong').textContent;
-        frame.loading = 'lazy'; frame.referrerPolicy = 'strict-origin-when-cross-origin';
-        frame.setAttribute('allow', 'fullscreen; picture-in-picture'); frame.allowFullscreen = true;
-        frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-downloads');
-        viewport.replaceChildren(frame); viewport.hidden = false;
-        button.textContent = 'Zamknij podgląd'; button.setAttribute('aria-expanded', 'true');
-        card.querySelectorAll('[data-google-size], [data-google-fullscreen]').forEach((node) => { node.hidden = false; });
+        open(card);
       } else if (button.hasAttribute('data-google-size')) {
-        const current = viewport.getBoundingClientRect().height || parseFloat(card.style.getPropertyValue('--google-media-height')) || 480;
-        viewport.style.height = `${dimensions({ height: current + Number(button.dataset.googleSize) }).height}px`;
+        const current = Number(card.dataset.googleHeight) || 60;
+        const next = dimensions({ heightPercent: current + Number(button.dataset.googleSize) }).heightPercent;
+        card.dataset.googleHeight = String(next);
+        viewport.style.height = `${next}vh`;
+        card.querySelector('.google-media-status').textContent = `Wysokość: ${next}% okna.`;
       } else {
         try {
           if (doc.fullscreenElement === card) await doc.exitFullscreen();

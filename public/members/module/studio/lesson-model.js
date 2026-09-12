@@ -1261,7 +1261,7 @@
       ].join('\n');
     }
     if (block.type === 'google') {
-      return [':::googlemedia', `url: ${cleanDirectiveValue(block.url)}`, `title: ${cleanDirectiveValue(block.title)}`, `width: ${block.width}`, `height: ${block.height}`, ':::'].join('\n');
+      return [':::googlemedia', `url: ${cleanDirectiveValue(block.url)}`, `title: ${cleanDirectiveValue(block.title)}`, `width: ${block.width}`, `height_percent: ${block.heightPercent}`, ':::'].join('\n');
     }
     if (block.type === 'presentation') {
       return [
@@ -1791,7 +1791,7 @@
             }));
           } else if (type === 'googlemedia') {
             const values = parseDirectiveFields(bodyLines);
-            blocks.push(createBlock({ type: 'google', url: values.url || values.id, title: values.title, width: values.width, height: values.height }));
+            blocks.push(createBlock({ type: 'google', url: values.url || values.id, title: values.title, width: values.width, height: values.height, heightPercent: values.height_percent }));
           } else if (type === 'presentation') {
             const values = parseDirectiveFields(bodyLines);
             blocks.push(createBlock({

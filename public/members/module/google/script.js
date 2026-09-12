@@ -15,8 +15,8 @@
       materialType: 'embed', action: 'open', opened: true
     }, { immediate: true });
     media.mount(document.getElementById('google-viewer-content'), {
-      url: reference.href, title: params.get('title') || 'Materiał Google', width: params.get('width'), height: params.get('height')
-    });
+      url: reference.href, title: params.get('title') || 'Materiał Google', width: params.get('width'), heightPercent: params.get('heightPercent'), height: params.get('height')
+    }, { autoOpen: true });
     status.hidden = true;
   } catch (error) {
     status.textContent = error.code === 'SEQUENCE_LOCKED'
