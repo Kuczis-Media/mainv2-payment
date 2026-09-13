@@ -27,7 +27,7 @@ function setup(t, file, query = '') {
   w.ChemAuth = { ready: Promise.resolve({ authenticated: true, session: { ok: true } }), getUser: () => ({ id: 'admin', app_metadata: { roles: ['admin'] } }), getAccessToken: async () => 'test-token' };
   w.ChemAssessmentText = { render(node, text) { node.textContent = text || ''; } };
   if (file === 'members/module/quiz/index.html') {
-    ['members/module/lesson/lesson-parser.js', 'assets/js/assessment-text.js', 'assets/js/quiz-practice.js', 'assets/js/quiz-flashcards.js'].forEach((name) => w.eval(read(name)));
+    ['members/module/lesson/lesson-parser.js', 'assets/js/assessment-text.js', 'assets/js/quiz-practice.js', 'assets/js/quiz-occlusion-model.js', 'assets/js/quiz-flashcards.js', 'assets/js/quiz-occlusion.js'].forEach((name) => w.eval(read(name)));
   }
   w.eval(bundle);
   t.after(() => { w.NextMedUI.releaseWithin(w.document.body); w.close(); assert.deepEqual(errors, []); });
@@ -296,7 +296,7 @@ async function studio(t, libraryOverrides = {}) {
     list: async () => [], search: (items, query) => items.filter((item) => `${item.title} ${item.filename}`.includes(query)),
     readQuestionBank: async () => ({ bank: { questions: [] }, sha: '' }), ...libraryOverrides
   };
-  const files = ['assets/js/google-media.js', 'members/dashboard-parser.js', 'members/module/lesson/lesson-parser.js', 'assets/js/assessment-text.js', 'assets/js/quiz-practice.js', 'assets/js/quiz-flashcards.js',
+  const files = ['assets/js/google-media.js', 'members/dashboard-parser.js', 'members/module/lesson/lesson-parser.js', 'assets/js/assessment-text.js', 'assets/js/quiz-practice.js', 'assets/js/quiz-occlusion-model.js', 'assets/js/quiz-flashcards.js', 'assets/js/quiz-occlusion.js',
     ...['paged-list', 'dashboard-model', 'lesson-model', 'answer-fields', 'prompt-model', 'exam-model', 'assessment-editor', 'presentation-model', 'quiz-model', 'exam-builder', 'presentation-builder', 'quiz-builder', 'script', 'tool-picker'].map((file) => `members/module/studio/${file}.js`)];
   files.forEach(h.evalFile);
   h.d.dispatchEvent(new h.w.Event('DOMContentLoaded')); await tick();
@@ -444,6 +444,77 @@ test('Studio fx targets every quiz educational field and publishes a mixed deck 
   assert.ok(value.questions[3].acceptedAnswers[0].startsWith(`\\(${formula}\\)`));
   assert.equal(value.questions[3].textCompare.maxTypos, 2);
   assert.equal(require('../netlify/quiz-common').validateDefinition(value).valid, true);
+});
+
+test('Studio publishes occlusion through the existing image picker, previews masks and confirms replacement', async (t) => {
+  const writes = [], images = [];
+  const h = await studio(t, { save: async (kind, value) => { writes.push({ kind, ...plain(value) }); return { sha: 'c'.repeat(40) }; }, readMediaBlob: async (value) => { images.push(value); return new Blob(['fixture']); } });
+  h.w.MathJax = { typesetClear() {}, typesetPromise: async () => {} };
+  h.w.URL.createObjectURL = () => 'blob:https://course.example/masks'; h.w.URL.revokeObjectURL = () => {};
+  h.w.fetch = async () => new Response(JSON.stringify({ catalog: { nodes: [{ id: 'course', type: 'course', title: 'Histologia' }] } }));
+  let media;
+  h.w.ChemMediaManager = { open: async (options) => { media = options; } };
+  await input(h.w, h.d.getElementById('studio-tool-select'), 'quiz');
+  h.d.getElementById('quiz-new-deck-button').click(); await tick();
+  await input(h.w, h.d.getElementById('quiz-course'), 'course');
+  h.d.querySelector('[data-quiz-add="image_occlusion"]').click(); await tick();
+  await input(h.w, h.d.querySelector('[data-quiz-field="frontText"]'), 'Wstęp');
+  await input(h.w, h.d.querySelector('[data-quiz-field="backText"]'), 'Powtórka');
+  h.d.querySelector('.io-editor .io-toolbar button').click(); await tick();
+  assert.equal(media.scope, 'shared');
+  media.onSelect({ reference: 'assets/shared/histologia.webp', filename: 'Tkanka' }); await tick();
+  h.d.querySelector('[data-io-add]').click(); await tick();
+  await input(h.w, h.d.querySelector('[data-io-coordinate="x"]'), '22');
+  h.d.querySelector('[data-io-coordinate="x"]').dispatchEvent(new h.w.Event('change', { bubbles: true })); await tick();
+  const answer = h.d.querySelector('[aria-label="Odpowiedź maski (opcjonalnie)"]');
+  await input(h.w, answer, 'Jądro komórkowe: '); answer.focus(); answer.setSelectionRange(answer.value.length, answer.value.length);
+  answer.closest('.quiz-math-field').querySelector('.assessment-equation-trigger').click(); await tick();
+  const dialog = h.d.querySelector('.assessment-equation-dialog');
+  await input(h.w, dialog.querySelector('textarea[aria-label="Wzór matematyczny"]'), '\\alpha + \\beta');
+  dialog.querySelector('[aria-label="Wstaw do wybranego pola"]').click(); await tick();
+  await input(h.w, h.d.querySelector('[aria-label="Wyjaśnienie maski (opcjonalnie)"]'), '**Opis**\nDrugi wiersz.');
+  await input(h.w, h.d.querySelector('[data-occlusion-mode]'), 'all');
+  h.d.getElementById('quiz-publish-button').click(); await tick();
+  assert.equal(writes.length, 1, h.d.getElementById('quiz-builder-status').textContent);
+  const value = JSON.parse(writes[0].content), q = value.questions[1];
+  assert.equal(q.type, 'image_occlusion'); assert.equal(q.image.ref, 'assets/shared/histologia.webp');
+  assert.equal(q.occlusion.masks[0].x, .22); assert.equal(q.occlusion.mode, 'all');
+  assert.equal(q.occlusion.masks[0].answer, 'Jądro komórkowe: \\(\\alpha + \\beta\\)');
+  assert.equal(require('../netlify/quiz-common').validateDefinition(value).valid, true);
+  assert.ok(images.some((image) => image.reference === 'assets/shared/histologia.webp'));
+  h.w.confirm = () => false;
+  h.d.querySelector('.io-editor .io-toolbar button').click(); await tick();
+  media.onSelect({ reference: 'assets/shared/new.webp', filename: 'Nowy' }); await tick();
+  h.w.ChemQuizBuilder.flush();
+  let draft = JSON.parse(h.w.localStorage.getItem('chemdisk.studio.quiz.v1'));
+  assert.equal(draft.questions[1].image.ref, q.image.ref); assert.equal(draft.questions[1].occlusion.masks.length, 1);
+  h.w.confirm = () => true;
+  media.onSelect({ reference: 'assets/shared/new.webp', filename: 'Nowy' }); await tick();
+  h.w.ChemQuizBuilder.flush(); draft = JSON.parse(h.w.localStorage.getItem('chemdisk.studio.quiz.v1'));
+  assert.equal(draft.questions[1].image.ref, 'assets/shared/new.webp'); assert.deepEqual(draft.questions[1].occlusion.masks, []);
+});
+
+test('React keeps the random mask and revealed answer when the surrounding quiz updates or expands', async (t) => {
+  const h = setup(t, 'members/module/quiz/index.html');
+  h.w.MathJax = { typesetPromise: async () => {}, typesetClear() {} };
+  let choices = 0;
+  h.w.Math.random = () => { choices++; return .8; };
+  const q = require('../public/members/module/studio/quiz-model').createQuestion({
+    type: 'image_occlusion', image: { ref: 'photos/tkanka.png' }, occlusion: { mode: 'random', masks: [
+      { maskId: 'a', x: .2, y: .2, width: .1, height: .1, answer: 'A' },
+      { maskId: 'b', x: .6, y: .6, width: .1, height: .1, answer: 'B' }
+    ] }
+  });
+  const props = { questions: [q, ...Array.from({ length: 25 }, (_, i) => ({ questionId: `t${i}`, type: 'text', prompt: 'Tekst', image: {}, points: 1 }))], answers: {}, results: {}, getUrl: async () => 'blob:fixture', onAnswer() {} };
+  const host = h.d.getElementById('quiz-player-form');
+  h.render('quiz-questions', props, host); await tick();
+  const card = host.querySelector('.io-card');
+  card.querySelector('[data-flashcard-reveal]').click();
+  assert.equal(choices, 1); assert.equal(card.querySelector('.is-revealed').dataset.maskId, 'b');
+  h.render('quiz-questions', { ...props, locked: true }, host); await tick();
+  host.querySelector('.react-list-more button').click(); await tick();
+  assert.equal(host.querySelector('.io-card'), card); assert.equal(choices, 1);
+  assert.equal(card.querySelector('[data-mask-answer]').textContent.includes('B'), true);
 });
 
 test('React library paginates without fetching and only loads media after opening material', async (t) => {

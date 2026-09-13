@@ -1,8 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { register, LazyImage, LimitedList, Widget } from '../shared/runtime.jsx';
 
 function EducationalText({ value, getUrl }) {
   return window.ChemQuizFlashcards ? <Widget factory={() => window.ChemQuizFlashcards.text(value, getUrl)} revision={value} /> : <span>{value}</span>;
+}
+function ImageOcclusion({ question, getUrl }) {
+  // Loading more quiz questions must not redraw a random mask or hide an
+  // answer already uncovered in this card.
+  const factory = useCallback(() => window.ChemQuizOcclusion.player(question, getUrl), [question, getUrl]);
+  return <Widget factory={factory} revision={question.questionId} />;
 }
 function QuizQuestion({ question: q, index, answers, results, locked, onAnswer, getUrl, showExplanation = true }) {
   const incoming = answers[q.questionId] ?? (['open', 'text'].includes(q.type) ? '' : []);
@@ -15,6 +21,7 @@ function QuizQuestion({ question: q, index, answers, results, locked, onAnswer, 
   function change(next) { if (locked) return; setValue(next); onAnswer(q.questionId, next); }
   const text = ['open', 'text'].includes(q.type);
   const Tag = q.type === 'text' || (q.type === 'open' && q.multiline !== false) ? 'textarea' : 'input';
+  if (q.type === 'image_occlusion') return <ImageOcclusion question={q} getUrl={getUrl} />;
   if (q.type === 'flashcard') return <Widget factory={() => window.ChemQuizFlashcards.card(q, getUrl)} revision={q.questionId} />;
   return <fieldset className={`quiz-player-question ${tone}`} data-question-id={q.questionId}>
     <div className="quiz-player-question-heading"><span>Pytanie {index + 1}</span><span>{q.type === 'open' && q.gradingMode === 'ungraded' ? 'bez punktów' : `${q.points} pkt`}</span></div>

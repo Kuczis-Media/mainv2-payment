@@ -4,7 +4,7 @@
   if (root) root.ChemQuizPractice = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
-  const DECK_TYPES = Object.freeze(['flashcard', 'single', 'multiple', 'text']);
+  const DECK_TYPES = Object.freeze(['flashcard', 'single', 'multiple', 'text', 'image_occlusion']);
   function settings(value = {}) {
     return {
       ignoreCase: value?.ignoreCase !== false,

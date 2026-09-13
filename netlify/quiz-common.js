@@ -2,11 +2,12 @@
 
 const openAnswerGrader = require('./open-answer-grader.js');
 const practice = require('../public/assets/js/quiz-practice.js');
+const occlusion = require('../public/assets/js/quiz-occlusion-model.js');
 
 const SAFE_ID = /^[a-z0-9][a-z0-9-]{0,79}$/;
 const SAFE_STABLE_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
 const SAFE_MEDIA_REF = /^(?:photos\/|assets\/shared\/)[A-Za-z0-9][A-Za-z0-9_.-]{0,99}\.(?:png|jpe?g|webp|gif|svg)$/i;
-const QUESTION_TYPES = new Set(['single', 'multiple', 'true_false', 'text', 'open', 'flashcard']);
+const QUESTION_TYPES = new Set(['single', 'multiple', 'true_false', 'text', 'open', 'flashcard', 'image_occlusion']);
 
 function object(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -52,6 +53,10 @@ function validateDefinition(value, expectedQuizId = '') {
     if (!validImage(question.image) || !string(question.explanation, 3000)) return invalid();
     if (!Array.isArray(question.options) || question.options.length > 12 || !Array.isArray(question.acceptedAnswers) || question.acceptedAnswers.length > 20) return invalid();
     if (question.acceptedAnswers.some((answer) => !string(answer, 500, true))) return invalid();
+    if (question.type === 'image_occlusion') {
+      if (question.points !== 0 || question.required !== false || question.options.length || question.acceptedAnswers.length || !occlusion.valid(question.occlusion, value.metadata.status === 'published')) return invalid();
+      if (value.metadata.status === 'published' && !question.image.ref) return invalid();
+    }
     if (value.mode === 'deck' && question.options.length > 6) return invalid();
     if (question.textCompare !== undefined) {
       const config = question.textCompare;
@@ -108,7 +113,7 @@ function objectiveGrade(question, answer) {
 function gradeQuiz(definition, answers = {}, gradingOptions = {}) {
   const results = definition.questions.map((question) => {
     const answer = answers && Object.hasOwn(answers, question.questionId) ? answers[question.questionId] : null;
-    if (question.type === 'flashcard') return { questionId: question.questionId, answer: null, correct: null, points: 0, maxPoints: 0, gradingMode: 'ungraded', reviewStatus: 'not_scored', feedback: '' };
+    if (['flashcard', 'image_occlusion'].includes(question.type)) return { questionId: question.questionId, answer: null, correct: null, points: 0, maxPoints: 0, gradingMode: 'ungraded', reviewStatus: 'not_scored', feedback: '' };
     if (question.type !== 'open') return objectiveGrade(question, answer);
     return {
       answer,

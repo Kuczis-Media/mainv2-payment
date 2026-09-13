@@ -1,17 +1,18 @@
 (function exposeQuizModel(root, factory) {
-  const api = factory(typeof module === 'object' && module.exports ? require('../../../assets/js/quiz-practice.js') : root.ChemQuizPractice);
+  const api = factory(typeof module === 'object' && module.exports ? require('../../../assets/js/quiz-practice.js') : root.ChemQuizPractice,
+    typeof module === 'object' && module.exports ? require('../../../assets/js/quiz-occlusion-model.js') : root.ChemQuizOcclusionModel);
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.ChemQuizStudioModel = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function createQuizModel(practice) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createQuizModel(practice, occlusion) {
   'use strict';
 
   const SAFE_ID = /^[a-z0-9][a-z0-9-]{0,79}$/;
   const SAFE_STABLE_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
   const SAFE_MEDIA_REF = /^(?:photos\/|assets\/shared\/)[A-Za-z0-9][A-Za-z0-9_.-]{0,99}\.(?:png|jpe?g|webp|gif|svg)$/i;
-  const QUESTION_TYPES = Object.freeze(['single', 'multiple', 'true_false', 'text', 'open', 'flashcard']);
+  const QUESTION_TYPES = Object.freeze(['single', 'multiple', 'true_false', 'text', 'open', 'flashcard', 'image_occlusion']);
   // Persist the established lower-case quiz types. Future types can extend this
   // discriminator without a second question store or changing existing IDs.
-  const CARD_TYPES = Object.freeze({ FLASHCARD: 'flashcard', SINGLE_CHOICE: 'single', MULTIPLE_CHOICE: 'multiple', TEXT_COMPARE: 'text' });
+  const CARD_TYPES = Object.freeze({ FLASHCARD: 'flashcard', SINGLE_CHOICE: 'single', MULTIPLE_CHOICE: 'multiple', TEXT_COMPARE: 'text', IMAGE_OCCLUSION: 'image_occlusion' });
   let sequence = 0;
 
   function id(prefix) {
@@ -71,6 +72,11 @@
 
   function createQuestion(seed = {}) {
     const type = QUESTION_TYPES.includes(seed.type) ? seed.type : 'single';
+    if (type === 'image_occlusion') return {
+      questionId: stable(seed.questionId, 'question'), type, prompt: text(seed.prompt, 3000) || 'Co kryje zaznaczony fragment?',
+      points: 0, required: false, image: image(seed.image), options: [], acceptedAnswers: [],
+      explanation: text(seed.explanation, 3000), occlusion: occlusion.normalize(seed.occlusion, (value) => stable(value, 'mask'))
+    };
     if (type === 'flashcard') {
       const face = (value = {}) => ({
         text: text(value?.text, 10000),
@@ -164,6 +170,9 @@
   function validate(value) {
     const quiz = createQuiz(value);
     const errors = [];
+    for (const question of value?.questions || []) if (question.type === 'image_occlusion' && !occlusion.valid(question.occlusion, value.metadata?.status === 'published')) {
+      errors.push({ code: 'QUIZ_OCCLUSION_INVALID', message: 'Sprawdź maski: położenie musi mieścić się na obrazie, a publikacja wymaga co najmniej jednej maski.' });
+    }
     if (value?.mode && !['quiz', 'deck'].includes(value.mode)) errors.push({ code: 'QUIZ_MODE_INVALID', message: 'Nieobsługiwany tryb quizu.' });
     if (Array.isArray(value?.questions) && value.questions.some((question) => !QUESTION_TYPES.includes(question.type))) {
       errors.push({ code: 'QUIZ_TYPE_INVALID', message: 'Nieobsługiwany rodzaj pytania. Nie zapisano zmian.' });
@@ -172,7 +181,7 @@
       errors.push({ code: 'QUIZ_COURSE_REQUIRED', message: 'Wybierz kurs dla puli fiszek.' });
     }
     if (quiz.mode === 'deck' && quiz.questions.some((question) => !practice.DECK_TYPES.includes(question.type))) {
-      errors.push({ code: 'QUIZ_DECK_TYPE_INVALID', message: 'Pula nauki obsługuje fiszki, pojedynczy i wielokrotny wybór oraz porównywanie tekstu.' });
+      errors.push({ code: 'QUIZ_DECK_TYPE_INVALID', message: 'Pula nauki obsługuje fiszki, obrazy z maskami, pojedynczy i wielokrotny wybór oraz porównywanie tekstu.' });
     }
     if (!SAFE_ID.test(quiz.quizId)) {
       errors.push({ code: 'QUIZ_ID_INVALID', message: 'ID quizu może zawierać tylko małe litery, cyfry i myślniki.' });
@@ -184,6 +193,10 @@
       const label = `Pytanie ${index + 1}`;
       if (ids.has(question.questionId)) errors.push({ code: 'QUIZ_QUESTION_ID_DUPLICATE', message: `${label} ma powtórzony identyfikator.` });
       ids.add(question.questionId);
+      if (question.type === 'image_occlusion') {
+        if (quiz.metadata.status === 'published' && !question.image.ref) errors.push({ code: 'QUIZ_OCCLUSION_IMAGE_REQUIRED', message: `${label}: wybierz obraz źródłowy.` });
+        return;
+      }
       if (question.type === 'flashcard') {
         if (quiz.metadata.status === 'published') {
           for (const [side, name] of [['front', 'przód'], ['back', 'tył']]) {
@@ -229,6 +242,7 @@
     }
     const quiz = createQuiz(parsed);
     if (parsed.questions?.some((question) => !QUESTION_TYPES.includes(question.type))) throw new Error('Nieobsługiwany rodzaj pytania. Zaktualizuj aplikację przed edycją.');
+    if (parsed.questions?.some((q) => q.type === 'image_occlusion' && !occlusion.valid(q.occlusion))) throw new Error('Nieprawidłowe współrzędne lub dane masek.');
     if (quizId && quiz.quizId !== quizId) throw new Error('ID quizu nie pasuje do folderu.');
     return quiz;
   }
@@ -253,7 +267,7 @@
     ), 0);
     const results = quiz.questions.map((question) => {
       const raw = rawAnswers[question.questionId];
-      if (question.type === 'flashcard') return { questionId: question.questionId, correct: null, points: 0, maximum: 0, reviewStatus: 'not_scored' };
+      if (['flashcard', 'image_occlusion'].includes(question.type)) return { questionId: question.questionId, correct: null, points: 0, maximum: 0, reviewStatus: 'not_scored' };
       if (question.type === 'open') {
         if (question.gradingMode === 'ungraded') {
           return { questionId: question.questionId, correct: null, points: 0, maximum: 0, reviewStatus: 'not_scored' };

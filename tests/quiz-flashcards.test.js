@@ -49,7 +49,7 @@ test('flashcard validation supports image-only faces and drafts but rejects unsa
   value.metadata.status = 'draft';
   assert.equal(common.validateDefinition(value).valid, true);
   assert.equal(model.validate(value).valid, true);
-  value.questions[0].type = 'image_occlusion';
+  value.questions[0].type = 'future_unsupported_card';
   assert.equal(common.validateDefinition(value).valid, false);
   assert.equal(model.validate(value).valid, false);
   assert.throws(() => model.parse(JSON.stringify(value)), /Nieobsługiwany rodzaj/);

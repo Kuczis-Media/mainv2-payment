@@ -215,7 +215,7 @@
       ['multiple', 'Wiele odpowiedzi'],
       ['true_false', 'Prawda / fałsz'],
       ['text', 'Odpowiedź tekstowa'],
-      ['open', 'Pytanie otwarte'], ['flashcard', 'Fiszka']
+      ['open', 'Pytanie otwarte'], ['flashcard', 'Fiszka'], ['image_occlusion', 'Obraz z maskami']
     ].forEach(([value, label]) => {
       const option = create('option', '', label);
       option.value = value;
@@ -338,7 +338,7 @@
   }
 
   function renderQuestions() {
-    if (root.NextMedUI?.render('studio-quiz', elements.questions, { questions: state.quiz.questions, renderOptions, renderFlashcard, deck: state.quiz.mode === 'deck' })) {
+    if (root.NextMedUI?.render('studio-quiz', elements.questions, { questions: state.quiz.questions, renderOptions, renderFlashcard, renderOcclusion, deck: state.quiz.mode === 'deck' })) {
       elements.questionCount.textContent = questionLabel(state.quiz.questions.length);
       return;
     }
@@ -348,7 +348,7 @@
       card.dataset.questionId = question.questionId;
       const heading = create('header', 'quiz-question-card-heading');
       const title = create('div');
-      title.append(create('small', '', `${question.type === 'flashcard' ? 'Fiszka' : 'Pytanie'} ${index + 1}`), create('strong', '', question.type === 'flashcard' || state.quiz.mode === 'deck' ? 'Nauka bez punktów' : `${question.points} ${question.points === 1 ? 'punkt' : 'pkt'}`));
+      title.append(create('small', '', `${question.type === 'flashcard' ? 'Fiszka' : 'Pytanie'} ${index + 1}`), create('strong', '', ['flashcard', 'image_occlusion'].includes(question.type) || state.quiz.mode === 'deck' ? 'Nauka bez punktów' : `${question.points} ${question.points === 1 ? 'punkt' : 'pkt'}`));
       const actions = create('div', 'quiz-question-actions');
       const up = create('button', 'mini-button', '↑'); up.type = 'button'; up.title = 'Przenieś wyżej'; up.dataset.quizAction = 'up'; up.disabled = index === 0;
       const down = create('button', 'mini-button', '↓'); down.type = 'button'; down.title = 'Przenieś niżej'; down.dataset.quizAction = 'down'; down.disabled = index === state.quiz.questions.length - 1;
@@ -358,6 +358,9 @@
       heading.append(title, actions);
       if (question.type === 'flashcard') {
         card.append(heading, renderFlashcard(question)); fragment.append(card); return;
+      }
+      if (question.type === 'image_occlusion') {
+        card.append(heading, renderOcclusion(question)); fragment.append(card); return;
       }
 
       const controls = create('div', 'quiz-question-controls');
@@ -394,6 +397,13 @@
     });
     elements.questions.replaceChildren(fragment);
     elements.questionCount.textContent = questionLabel(state.quiz.questions.length);
+  }
+
+  function renderOcclusion(question) {
+    return root.ChemQuizOcclusion.editor(question, {
+      getUrl: previewImageUrl, onImage: () => openMediaManager(question),
+      onChange: () => { markChanged(); scheduleFeedback(); }
+    });
   }
 
   function renderFlashcard(question) {
@@ -513,6 +523,7 @@
   }
 
   function previewQuestion(question, index) {
+    if (question.type === 'image_occlusion') return root.ChemQuizOcclusion.player(question, previewImageUrl);
     if (question.type === 'flashcard') return root.ChemQuizFlashcards.card(question, previewImageUrl);
     const fieldset = create('fieldset', 'quiz-preview-question');
     fieldset.dataset.previewQuestion = question.questionId;
@@ -953,6 +964,10 @@
       openMediaManager(question);
       return;
     } else if (action === 'remove-media') {
+      if (question.type === 'image_occlusion' && question.occlusion.masks.length) {
+        if (!root.confirm('Usunąć obraz wraz z maskami z tego pytania? Plik pozostanie w bibliotece.')) return;
+        question.occlusion.masks = [];
+      }
       question.image = { ref: '', alt: '' };
     } else return;
     markChanged();
@@ -981,6 +996,10 @@
       repositoryId: state.repositoryId,
       onSelect(asset) {
         if (state.quiz !== owner || (question && !state.quiz.questions.includes(question))) return;
+        if (question?.type === 'image_occlusion' && question.image.ref !== asset.reference && question.occlusion.masks.length) {
+          if (!root.confirm('Podmiana obrazu usunie jego maski, aby nie zasłaniały niewłaściwych miejsc. Kontynuować?')) return;
+          question.occlusion.masks = [];
+        }
         const selected = {
           ref: asset.reference,
           alt: String(asset.filename || 'Ilustracja').replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').slice(0, 300)
@@ -1037,9 +1056,13 @@
         expectedSha: state.remoteId === candidate.quizId ? state.remoteSha : '',
         repositoryId: state.repositoryId
       });
-      if (JSON.stringify(state.quiz) === before) state.quiz = validation.quiz;
+      const replaceDraft = JSON.stringify(state.quiz) === before;
+      if (replaceDraft) state.quiz = validation.quiz;
       state.remoteId = candidate.quizId;
       state.remoteSha = result.sha;
+      // Rich widgets retain the question objects they edit. Rebind them when
+      // publication replaces the draft with its normalized definition.
+      if (replaceDraft) { renderQuestions(); renderPreview(); }
       saveLocal();
       setStatus(publish ? 'Quiz opublikowano.' : 'Szkic quizu zapisano.');
       await loadLibrary(true);

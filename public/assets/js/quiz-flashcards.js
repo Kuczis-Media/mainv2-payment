@@ -224,26 +224,28 @@
     return node;
   }
   function study({ questions, getUrl, onComplete, preview = false }) {
+    const sourceQuestions = questions;
+    questions = root.ChemQuizOcclusionModel ? root.ChemQuizOcclusionModel.expand(sourceQuestions) : questions;
     const node = create('section', 'quiz-deck-study');
     let index = 0, finished = false;
-    const ratings = new Map(); // Session-only, bounded by the quiz's 200 cards.
+    const ratings = new Map(); // Session-only; at most 200 questions × 50 masks, no image duplication.
     const answers = new Map();
     function advance(rating) {
       if (finished) return;
-      ratings.set(questions[index].questionId, rating);
+      ratings.set(questions[index].studyKey || questions[index].questionId, rating);
       if (ratings.size === questions.length) { void finish(); return; }
-      index = questions.findIndex((q, i) => i > index && !ratings.has(q.questionId));
-      if (index < 0) index = questions.findIndex((q) => !ratings.has(q.questionId));
+      index = questions.findIndex((q, i) => i > index && !ratings.has(q.studyKey || q.questionId));
+      if (index < 0) index = questions.findIndex((q) => !ratings.has(q.studyKey || q.questionId));
       render();
       node.querySelector('[data-flashcard-reveal], textarea, input')?.focus({ preventScroll: true });
     }
     function render() {
       root.MathJax?.typesetClear?.([node]);
-      const question = questions[index], flashcard = question.type === 'flashcard';
+      const question = questions[index], flashcard = ['flashcard', 'image_occlusion'].includes(question.type);
       const heading = create('p', 'quiz-deck-position', `Karta ${index + 1} z ${questions.length} · przejrzano ${ratings.size}`);
       const actions = create('div', 'quiz-flashcard-ratings'); actions.hidden = true;
       const record = answers.get(question.questionId) || {};
-      const current = flashcard ? card(question, getUrl) : practiceCard(question, getUrl, {
+      const current = question.type === 'image_occlusion' ? root.ChemQuizOcclusion.card(question, getUrl) : flashcard ? card(question, getUrl) : practiceCard(question, getUrl, {
         ...record, onAnswer: (answer) => answers.set(question.questionId, { answer, checked: false }),
         onCheck: (answer) => { answers.set(question.questionId, { answer, checked: true }); actions.hidden = false; }
       });
@@ -270,7 +272,7 @@
       node.replaceChildren(create('h2', '', 'Pula przejrzana'), create('p', '', `Ukończono ${ratings.size} kart.${preview ? ' To podgląd — postęp nie jest zapisywany.' : ''}`));
       try { if (!preview) await onComplete?.(); }
       catch (_) { node.append(create('p', '', 'Nie udało się zapisać postępu.')); }
-      const restart = button('Ucz się ponownie', () => { ratings.clear(); answers.clear(); index = 0; finished = false; render(); });
+      const restart = button('Ucz się ponownie', () => { ratings.clear(); answers.clear(); questions = root.ChemQuizOcclusionModel ? root.ChemQuizOcclusionModel.expand(sourceQuestions) : sourceQuestions; index = 0; finished = false; render(); });
       node.append(restart);
     }
     if (questions.length) render();

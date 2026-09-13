@@ -176,6 +176,7 @@
   }
 
   function renderQuestion(question, index) {
+    if (question.type === 'image_occlusion') return window.ChemQuizOcclusion.player(question, reactImageUrl);
     if (question.type === 'flashcard') return window.ChemQuizFlashcards.card(question, reactImageUrl);
     const fieldset = create('fieldset', 'quiz-player-question');
     fieldset.dataset.questionId = question.questionId;
@@ -267,6 +268,7 @@
       elements.threshold.parentElement.hidden = true; elements.points.parentElement.hidden = true;
       document.querySelector('.quiz-player-eyebrow').textContent = 'Pula nauki';
       elements.questionCount.previousElementSibling.textContent = 'Karty';
+      elements.questionCount.textContent = String(quiz.questions.reduce((count, q) => count + (q.type === 'image_occlusion' && q.occlusion.mode === 'one_per_mask' ? Math.max(1, q.occlusion.masks.length) : 1), 0));
       elements.checkingMode.textContent = 'Odpowiadaj na pytania i odsłaniaj fiszki. Sprawdzanie działa na Twoim urządzeniu — bez AI i bez punktacji. Po ukończeniu zapisujemy postęp.';
       const props = {
         questions: state.questions, getUrl: state.deckImageCache.get, preview,
@@ -306,7 +308,7 @@
   }
 
   function answerFor(question) {
-    if (question.type === 'flashcard') return [];
+    if (['flashcard', 'image_occlusion'].includes(question.type)) return [];
     if (elements.form.dataset.reactView) return state.answers[question.questionId] ?? (['text', 'open'].includes(question.type) ? '' : []);
     const fieldset = elements.form.querySelector(`[data-question-id="${question.questionId}"]`);
     if (!fieldset) return [];
@@ -520,7 +522,7 @@
       // Keep long text quizzes responsive without making grading requests.
       if (index && index % 8 === 0) await new Promise((resolve) => window.setTimeout(resolve, 0));
       const question = state.quiz.questions[index];
-      if (question.type === 'flashcard') continue;
+      if (['flashcard', 'image_occlusion'].includes(question.type)) continue;
       const evaluated = window.ChemQuizPractice.evaluate(question, answers[question.questionId]);
       const ok = evaluated.correct;
       if (ok) earned += question.points;
