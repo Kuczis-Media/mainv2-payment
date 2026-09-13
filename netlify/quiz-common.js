@@ -1,11 +1,12 @@
 'use strict';
 
 const openAnswerGrader = require('./open-answer-grader.js');
+const practice = require('../public/assets/js/quiz-practice.js');
 
 const SAFE_ID = /^[a-z0-9][a-z0-9-]{0,79}$/;
 const SAFE_STABLE_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
 const SAFE_MEDIA_REF = /^(?:photos\/|assets\/shared\/)[A-Za-z0-9][A-Za-z0-9_.-]{0,99}\.(?:png|jpe?g|webp|gif|svg)$/i;
-const QUESTION_TYPES = new Set(['single', 'multiple', 'true_false', 'text', 'open']);
+const QUESTION_TYPES = new Set(['single', 'multiple', 'true_false', 'text', 'open', 'flashcard']);
 
 function object(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -28,9 +29,14 @@ function validateDefinition(value, expectedQuizId = '') {
   const invalid = () => ({ valid: false, errors: [{ code: 'QUIZ_FILE_INVALID' }] });
   if (!object(value) || value.version !== 1 || !SAFE_ID.test(value.quizId || '')) return invalid();
   if (expectedQuizId && value.quizId !== expectedQuizId) return invalid();
+  if (value.mode !== undefined && !['quiz', 'deck'].includes(value.mode)) return invalid();
   if (!object(value.metadata) || !string(value.metadata.title, 180, true) || !string(value.metadata.description, 1200)) return invalid();
   if (!['draft', 'published'].includes(value.metadata.status) || !Array.isArray(value.metadata.tags) || value.metadata.tags.length > 20) return invalid();
   if (value.metadata.tags.some((tag) => !string(tag, 60, true)) || !validImage(value.metadata.cover)) return invalid();
+  if (value.mode === 'deck') {
+    if (typeof value.metadata.active !== 'boolean' || !string(value.metadata.courseId, 128)) return invalid();
+    if (value.metadata.status === 'published' && !SAFE_STABLE_ID.test(value.metadata.courseId)) return invalid();
+  }
   if (!object(value.settings)) return invalid();
   if (!Number.isInteger(value.settings.passingScore) || value.settings.passingScore < 0 || value.settings.passingScore > 100) return invalid();
   if (typeof value.settings.shuffleQuestions !== 'boolean' || typeof value.settings.showFeedback !== 'boolean' || typeof value.settings.allowRetry !== 'boolean') return invalid();
@@ -40,16 +46,34 @@ function validateDefinition(value, expectedQuizId = '') {
   for (const question of value.questions) {
     if (!object(question) || !SAFE_STABLE_ID.test(question.questionId || '') || ids.has(question.questionId)) return invalid();
     ids.add(question.questionId);
-    if (!QUESTION_TYPES.has(question.type) || !string(question.prompt, 3000, true)) return invalid();
+    if (!QUESTION_TYPES.has(question.type) || !string(question.prompt, 3000, question.type !== 'flashcard')) return invalid();
+    if (value.mode === 'deck' && !practice.DECK_TYPES.includes(question.type)) return invalid();
     if (!Number.isFinite(question.points) || question.points < 0 || question.points > 10_000 || typeof question.required !== 'boolean') return invalid();
     if (!validImage(question.image) || !string(question.explanation, 3000)) return invalid();
     if (!Array.isArray(question.options) || question.options.length > 12 || !Array.isArray(question.acceptedAnswers) || question.acceptedAnswers.length > 20) return invalid();
     if (question.acceptedAnswers.some((answer) => !string(answer, 500, true))) return invalid();
+    if (value.mode === 'deck' && question.options.length > 6) return invalid();
+    if (question.textCompare !== undefined) {
+      const config = question.textCompare;
+      if (question.type !== 'text' || !object(config)) return invalid();
+      if (['ignoreCase', 'collapseWhitespace', 'ignoreFinalPeriod'].some((key) => typeof config[key] !== 'boolean')) return invalid();
+      if (!Number.isInteger(config.maxTypos) || config.maxTypos < 0 || config.maxTypos > 2) return invalid();
+    }
+    if (question.type === 'flashcard') {
+      if (question.points !== 0 || question.required !== false || question.options.length || question.acceptedAnswers.length) return invalid();
+      for (const side of ['front', 'back']) {
+        const face = question[side];
+        if (!object(face) || !string(face.text, 10000) || !Array.isArray(face.images) || face.images.length > 8) return invalid();
+        if (face.images.some((image) => !validImage(image) || !image.ref)) return invalid();
+        if (value.metadata.status === 'published' && !face.text.trim() && !face.images.length) return invalid();
+      }
+    }
 
     for (const option of question.options) {
       if (!object(option) || !SAFE_STABLE_ID.test(option.optionId || '') || ids.has(option.optionId)) return invalid();
       ids.add(option.optionId);
       if (!string(option.text, 500, true) || typeof option.correct !== 'boolean') return invalid();
+      if (option.image !== undefined && !validImage(option.image)) return invalid();
     }
     const correctCount = question.options.filter((option) => option.correct).length;
     if (question.type === 'single' && (question.options.length < 2 || correctCount !== 1)) return invalid();
@@ -67,20 +91,8 @@ function validateDefinition(value, expectedQuizId = '') {
   return { valid: true, errors: [] };
 }
 
-function normalizedAnswer(value) {
-  return String(value || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('pl');
-}
-
 function objectiveGrade(question, answer) {
-  let correct = false;
-  if (question.type === 'text') {
-    const candidate = normalizedAnswer(answer);
-    correct = Boolean(candidate) && question.acceptedAnswers.some((value) => normalizedAnswer(value) === candidate);
-  } else {
-    const selected = new Set(Array.isArray(answer) ? answer : answer ? [answer] : []);
-    const expected = new Set(question.options.filter((option) => option.correct).map((option) => option.optionId));
-    correct = selected.size === expected.size && [...selected].every((optionId) => expected.has(optionId));
-  }
+  const { correct } = practice.evaluate(question, answer);
   return {
     questionId: question.questionId,
     answer: answer ?? null,
@@ -96,6 +108,7 @@ function objectiveGrade(question, answer) {
 function gradeQuiz(definition, answers = {}, gradingOptions = {}) {
   const results = definition.questions.map((question) => {
     const answer = answers && Object.hasOwn(answers, question.questionId) ? answers[question.questionId] : null;
+    if (question.type === 'flashcard') return { questionId: question.questionId, answer: null, correct: null, points: 0, maxPoints: 0, gradingMode: 'ungraded', reviewStatus: 'not_scored', feedback: '' };
     if (question.type !== 'open') return objectiveGrade(question, answer);
     return {
       answer,

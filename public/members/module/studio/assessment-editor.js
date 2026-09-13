@@ -75,7 +75,7 @@
     return box;
   }
 
-  function formulaBuilder(onInsert) {
+  function formulaBuilder(onInsert, options = {}) {
     const box = element('details', 'assessment-formula-builder');
     const summary = element('summary');
     const summaryCopy = element('span');
@@ -85,7 +85,7 @@
     summary.append(icon, summaryCopy, expand);
     box.append(summary);
     const content = element('div', 'assessment-formula-content');
-    let mode = 'chemistry';
+    let mode = options.mode || 'chemistry';
     const modes = element('div', 'assessment-formula-modes');
     modes.setAttribute('role', 'group'); modes.setAttribute('aria-label', 'Rodzaj równania');
     const chemistryButton = action('Chemia', 'Równanie chemiczne', () => changeMode('chemistry'));
@@ -125,8 +125,8 @@
     const math = element('div', 'assessment-math-fields'); math.hidden = true;
     const expression = element('textarea'); expression.rows = 3; expression.maxLength = 3000; expression.value = 'x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}';
     expression.setAttribute('aria-label', 'Wzór matematyczny');
-    const presets = select({ quadratic: 'Równanie kwadratowe', fraction: 'Ułamek', root: 'Pierwiastek', power: 'Potęga', sum: 'Suma' }, 'quadratic');
-    const snippets = { quadratic: expression.value, fraction: '\\frac{a}{b}', root: '\\sqrt{x}', power: 'x^{2}', sum: '\\sum_{i=1}^{n} x_i' };
+    const presets = select({ quadratic: 'Równanie kwadratowe', fraction: 'Ułamek', root: 'Pierwiastek', power: 'Potęga', sum: 'Suma', integral: 'Całka', water: 'H₂O — woda', carbon: 'CO₂', sodium: 'Na⁺', calcium: 'Ca²⁺' }, 'quadratic');
+    const snippets = { quadratic: expression.value, fraction: '\\frac{a}{b}', root: '\\sqrt{x}', power: 'x^{2}', sum: '\\sum_{i=1}^{n} x_i', integral: '\\int_{a}^{b} f(x)\\,dx', water: '\\ce{H2O}', carbon: '\\ce{CO2}', sodium: '\\ce{Na+}', calcium: '\\ce{Ca^{2+}}' };
     const mathExamples = element('div', 'assessment-formula-examples');
     mathExamples.append(field('Zacznij od przykładu', presets), action('Użyj przykładu', 'Wstaw wybrany wzór do kreatora', () => { expression.value = snippets[presets.value]; refresh(); }));
     math.append(element('p', 'assessment-formula-help', 'Wybierz przykład lub wpisz własny wzór. Przyciski poniżej pomogą dodać indeksy, potęgi i ułamki.'), field('Zapis wzoru', expression), mathExamples);
@@ -151,6 +151,9 @@
     for (const [label, title, before, after, placeholder] of [['a/b', 'Wstaw ułamek', '\\frac{', '}{b}', 'a'], ['√x', 'Wstaw pierwiastek', '\\sqrt{', '}', 'x'], ['±', 'Plus minus', ' \\pm '], ['×', 'Mnożenie', ' \\times '], ['·', 'Iloczyn', ' \\cdot '], ['π', 'Liczba pi', '\\pi '], ['≤', 'Mniejsze lub równe', ' \\leq ']]) {
       mathTools.append(action(label, title, () => insertAtCursor(before, after, placeholder)));
     }
+    for (const [label, title, value] of [['α', 'Alfa', '\\alpha '], ['β', 'Beta', '\\beta '], ['γ', 'Gamma', '\\gamma '], ['→', 'Strzałka reakcji', ' \\rightarrow '], ['⇌', 'Równowaga', ' \\rightleftharpoons '], ['Σ', 'Suma', '\\sum_{i=1}^{n} '], ['∫', 'Całka', '\\int_{a}^{b} '], ['H₂O', 'Woda', '\\ce{H2O}'], ['CO₂', 'Dwutlenek węgla', '\\ce{CO2}'], ['Na⁺', 'Jon sodu', '\\ce{Na+}'], ['Ca²⁺', 'Jon wapnia', '\\ce{Ca^{2+}}']]) {
+      mathTools.append(action(label, title, () => insertAtCursor(value)));
+    }
     tools.append(toolLabel, commonTools, chemTools, mathTools);
     const canvas = element('section', 'assessment-formula-canvas');
     const previewHeading = element('div', 'assessment-formula-preview-heading');
@@ -158,10 +161,10 @@
     const preview = element('div'); preview.setAttribute('aria-label', 'Podgląd równania');
     canvas.append(previewHeading, preview);
     const note = element('p', 'assessment-formula-note'); note.setAttribute('role', 'status');
-    const button = action('Wstaw równanie do pytania', 'Wstaw równanie do pytania', () => {
+    const button = action(options.insertLabel || 'Wstaw równanie do pytania', options.insertLabel || 'Wstaw równanie do pytania', () => {
       const problem = validation();
       if (problem) { note.textContent = problem; return; }
-      if (onInsert(formula()) === false) { note.textContent = 'Treść pytania jest za długa. Skróć ją przed dodaniem równania.'; return; }
+      if (onInsert(formula()) === false) { note.textContent = options.insertLabel ? 'Nie można wstawić wzoru. Pole jest za długie lub nie jest już dostępne.' : 'Treść pytania jest za długa. Skróć ją przed dodaniem równania.'; return; }
       note.textContent = 'Równanie dodane. Zobacz podgląd pytania poniżej.';
     });
     button.className = 'button assessment-formula-insert';
@@ -224,5 +227,42 @@
     return box;
   }
 
-  root.ChemAssessmentEditor = Object.freeze({ create });
+  let activeDialog = null;
+  function openFor(input) {
+    if (!input?.isConnected || input.disabled || input.readOnly) return;
+    activeDialog?.remove();
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? start;
+    const dialog = element('dialog', 'assessment-equation-dialog');
+    activeDialog = dialog;
+    dialog.setAttribute('aria-label', 'Dodaj równanie do wybranego pola');
+    const close = () => {
+      rich.clear?.(dialog);
+      root.MathJax?.typesetClear?.([dialog]);
+      dialog.remove();
+      if (activeDialog === dialog) activeDialog = null;
+      if (input.isConnected) input.focus({ preventScroll: true });
+    };
+    const cancel = element('button', 'button button-soft', 'Zamknij kreator'); cancel.type = 'button';
+    cancel.addEventListener('click', close);
+    dialog.addEventListener('cancel', (event) => { event.preventDefault(); close(); });
+    const builder = formulaBuilder((formula) => {
+      if (!input.isConnected || input.disabled || input.readOnly) return false;
+      input.setSelectionRange(start, end);
+      if (!insert(input, `\\(${formula}\\)`)) return false;
+      close(); return true;
+    }, { mode: 'math', insertLabel: 'Wstaw do wybranego pola' });
+    builder.open = true;
+    dialog.append(cancel, builder); document.body.append(dialog);
+    if (typeof dialog.showModal === 'function') dialog.showModal(); else dialog.setAttribute('open', '');
+    builder.dispatchEvent(new Event('toggle'));
+  }
+  function equationButton(input) {
+    const button = element('button', 'mini-button quiz-player-button is-secondary assessment-equation-trigger', 'fx · Dodaj równanie');
+    button.type = 'button'; button.setAttribute('aria-label', 'Dodaj równanie');
+    button.addEventListener('mousedown', (event) => event.preventDefault());
+    button.addEventListener('click', (event) => { event.preventDefault(); openFor(input); });
+    return button;
+  }
+  root.ChemAssessmentEditor = Object.freeze({ create, openFor, equationButton });
 })(window);

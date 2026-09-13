@@ -16,6 +16,10 @@
     id: byId('quiz-id'),
     title: byId('quiz-title'),
     description: byId('quiz-description'),
+    mode: byId('quiz-mode'), course: byId('quiz-course'), active: byId('quiz-active'),
+    courseField: byId('quiz-course-field'), activeField: byId('quiz-active-field'),
+    courseStatus: byId('quiz-course-status'), deckLink: byId('quiz-deck-link'),
+    newDeckButton: byId('quiz-new-deck-button'),
     passingScore: byId('quiz-passing-score'),
     tags: byId('quiz-tags'),
     shuffle: byId('quiz-shuffle'),
@@ -57,10 +61,12 @@
     previewImageObserver: null,
     report: null,
     attemptReport: null,
-    reportLoading: false
+    reportLoading: false,
+    courses: null, coursesLoading: false, coursesFailed: false, previewUrls: new Map(), previewGeneration: 0, deckImageCache: null
   };
   let draftTimer = null;
   let feedbackTimer = null;
+  let openSequence = 0;
 
   const create = (tag, className, text) => {
     const node = root.document.createElement(tag);
@@ -114,6 +120,7 @@
   }
 
   function questionLabel(count) {
+    if (state.quiz?.mode === 'deck') return `${count} ${count === 1 ? 'karta' : 'kart'}`;
     if (count === 1) return '1 pytanie';
     if (count % 10 >= 2 && count % 10 <= 4 && (count % 100 < 12 || count % 100 > 14)) return `${count} pytania`;
     return `${count} pytań`;
@@ -121,6 +128,27 @@
 
   function renderSettings() {
     const { quiz } = state;
+    const deck = quiz.mode === 'deck';
+    elements.mode.value = deck ? 'deck' : 'quiz';
+    elements.courseField.hidden = !deck; elements.activeField.hidden = !deck;
+    elements.active.checked = quiz.metadata.active !== false;
+    renderCourses();
+    elements.passingScore.closest('label').hidden = deck;
+    elements.showFeedback.closest('label').hidden = deck;
+    elements.allowRetry.closest('label').hidden = deck;
+    elements.reportPanel.hidden = deck;
+    root.document.querySelectorAll('[data-quiz-add]').forEach((button) => { button.hidden = deck && !root.ChemQuizPractice.DECK_TYPES.includes(button.dataset.quizAdd); });
+    elements.deckLink.hidden = !deck;
+    if (deck) {
+      elements.deckLink.replaceChildren(create('small', '', 'Dodaj w Dashboard Builderze kafelek Quiz i wybierz tę pulę. '));
+      if (state.remoteSha && state.remoteId === quiz.quizId) {
+        const link = create('a', '', 'Otwórz podgląd ucznia ↗');
+        const params = new URLSearchParams({ repo: state.repositoryId, quiz: quiz.quizId, preview: '1' });
+        link.href = `/members/module/quiz/?${params}`; link.target = '_blank'; link.rel = 'noopener noreferrer';
+        elements.deckLink.append(link);
+      }
+      void loadCourses();
+    }
     elements.id.value = quiz.quizId;
     elements.title.value = quiz.metadata.title;
     elements.description.value = quiz.metadata.description;
@@ -134,14 +162,48 @@
     elements.deleteButton.disabled = !state.remoteSha || state.remoteId !== quiz.quizId || state.busy;
     elements.saveButton.disabled = state.busy;
     elements.publishButton.disabled = state.busy;
+    elements.newButton.disabled = state.busy; elements.newDeckButton.disabled = state.busy;
     elements.badge.textContent = state.remoteSha && state.remoteId === quiz.quizId
       ? quiz.metadata.status === 'published' ? 'Opublikowany' : 'Zapisany szkic'
       : 'Szkic na tym urządzeniu';
   }
 
+  async function loadCourses() {
+    if (state.courses || state.coursesLoading || state.coursesFailed) return;
+    state.coursesLoading = true;
+    try {
+      const token = await root.ChemAuth.getAccessToken();
+      const response = await root.fetch('/.netlify/functions/admin-progress?view=config', {
+        credentials: 'same-origin', headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }
+      });
+      if (!response.ok) throw new Error('COURSES_UNAVAILABLE');
+      const payload = await response.json();
+      state.courses = (payload.catalog?.nodes || []).filter((node) => node.type === 'course');
+      if (!state.courses.length) state.courses = [{ id: 'course', title: 'Główny kurs platformy' }];
+      renderCourses();
+      elements.courseStatus.textContent = 'Kursy z dashboardu. Dostęp ucznia jest kontrolowany przez obecne uprawnienia platformy.';
+    } catch (_) {
+      state.coursesFailed = true;
+      const retry = create('button', 'mini-button', 'Wczytaj kursy ponownie'); retry.type = 'button';
+      retry.addEventListener('click', () => { state.coursesFailed = false; void loadCourses(); });
+      elements.courseStatus.replaceChildren(create('span', '', 'Nie udało się wczytać kursów. '), retry);
+    } finally { state.coursesLoading = false; }
+  }
+
+  function renderCourses() {
+    const options = [{ id: '', title: 'Wybierz kurs…' }, ...(state.courses || [])];
+    const selected = state.quiz.metadata.courseId || '';
+    if (selected && !options.some((entry) => entry.id === selected)) options.push({ id: selected, title: `${selected} (wcześniejsze przypisanie)` });
+    elements.course.replaceChildren(...options.map((entry) => {
+      const option = create('option', '', entry.title); option.value = entry.id; return option;
+    }));
+    elements.course.value = selected;
+  }
+
   function fieldLabel(label, control, className = '') {
     const wrapper = create('label', className);
     wrapper.append(create('span', '', label), control);
+    if (control.tagName === 'TEXTAREA' && root.ChemAssessmentEditor) wrapper.append(root.ChemAssessmentEditor.equationButton(control));
     return wrapper;
   }
 
@@ -153,7 +215,7 @@
       ['multiple', 'Wiele odpowiedzi'],
       ['true_false', 'Prawda / fałsz'],
       ['text', 'Odpowiedź tekstowa'],
-      ['open', 'Pytanie otwarte']
+      ['open', 'Pytanie otwarte'], ['flashcard', 'Fiszka']
     ].forEach(([value, label]) => {
       const option = create('option', '', label);
       option.value = value;
@@ -204,7 +266,23 @@
       section.append(root.ChemAnswerFields.textList(question.acceptedAnswers, (values) => {
         question.acceptedAnswers = values;
         markChanged(); renderPreview();
-      }));
+      }, { maxLength: 500, maximum: 20, multiline: true, equations: true }));
+      const settings = root.ChemQuizPractice.settings(question.textCompare);
+      const tolerances = create('fieldset', 'quiz-text-tolerances');
+      tolerances.append(create('legend', '', 'Porównywanie tekstu — bez AI'));
+      for (const [key, label] of [['ignoreCase', 'Ignoruj wielkość liter'], ['collapseWhitespace', 'Ignoruj nadmiarowe spacje'], ['ignoreFinalPeriod', 'Ignoruj końcową kropkę']]) {
+        const check = create('input'); check.type = 'checkbox'; check.checked = settings[key];
+        check.addEventListener('change', () => { settings[key] = check.checked; question.textCompare = { ...settings }; markChanged(); scheduleFeedback(); });
+        tolerances.append(fieldLabel(label, check, 'quiz-inline-check'));
+      }
+      const typos = create('select');
+      for (const [value, label] of [[0, 'Bez literówek'], [1, 'Do 1 literówki'], [2, 'Do 2 literówek']]) {
+        const option = create('option', '', label); option.value = String(value); typos.append(option);
+      }
+      typos.value = String(settings.maxTypos);
+      typos.addEventListener('change', () => { settings.maxTypos = Number(typos.value); question.textCompare = { ...settings }; markChanged(); scheduleFeedback(); });
+      tolerances.append(fieldLabel('Tolerancja literówek', typos), create('small', '', 'Literówki są akceptowane tylko przy podobieństwie co najmniej 80%. Przy symbolach chemicznych rozważ wyłączenie ignorowania wielkości liter. Porównujemy zapis, nie znaczenie ani równoważność wzorów.'));
+      section.append(tolerances);
       return section;
     }
     section.append(create('small', 'quiz-options-hint', question.type === 'multiple'
@@ -219,8 +297,7 @@
       correct.dataset.quizCorrect = '1';
       correct.dataset.optionId = option.optionId;
       correct.setAttribute('aria-label', `Poprawna odpowiedź ${optionIndex + 1} w pytaniu ${index + 1}`);
-      const copy = create('input');
-      copy.type = 'text';
+      const copy = create('textarea'); copy.rows = 2;
       copy.maxLength = 500;
       copy.value = option.text;
       copy.placeholder = `Wpisz odpowiedź ${String.fromCharCode(65 + optionIndex)}`;
@@ -234,10 +311,24 @@
       remove.dataset.quizAction = 'delete-option';
       remove.dataset.optionId = option.optionId;
       remove.disabled = question.type === 'true_false' || question.options.length <= 2;
-      row.append(correct, copy, remove);
+      const content = create('div', 'quiz-option-content');
+      content.append(fieldLabel(`Odpowiedź ${String.fromCharCode(65 + optionIndex)}`, copy));
+      const media = create('div', 'quiz-option-media');
+      const choose = create('button', 'mini-button', option.image?.ref ? 'Podmień obraz' : 'Dodaj obraz'); choose.type = 'button';
+      choose.dataset.quizAction = 'option-media'; choose.dataset.optionId = option.optionId;
+      media.append(choose);
+      if (option.image?.ref) {
+        media.append(root.ChemQuizFlashcards.image(option.image, previewImageUrl));
+        const alt = create('input'); alt.value = option.image.alt; alt.maxLength = 300;
+        alt.dataset.quizField = 'optionAlt'; alt.dataset.optionId = option.optionId;
+        media.append(fieldLabel('Opis obrazu', alt));
+        const removeImage = create('button', 'mini-button', 'Usuń obraz'); removeImage.type = 'button';
+        removeImage.dataset.quizAction = 'remove-option-media'; removeImage.dataset.optionId = option.optionId; media.append(removeImage);
+      }
+      content.append(media); row.append(correct, content, remove);
       section.append(row);
     });
-    if (question.type !== 'true_false' && question.options.length < 12) {
+    if (question.type !== 'true_false' && question.options.length < 6) {
       const add = create('button', 'mini-button quiz-add-option', '＋ Dodaj odpowiedź');
       add.type = 'button';
       add.dataset.quizAction = 'add-option';
@@ -247,7 +338,7 @@
   }
 
   function renderQuestions() {
-    if (root.NextMedUI?.render('studio-quiz', elements.questions, { questions: state.quiz.questions, renderOptions })) {
+    if (root.NextMedUI?.render('studio-quiz', elements.questions, { questions: state.quiz.questions, renderOptions, renderFlashcard, deck: state.quiz.mode === 'deck' })) {
       elements.questionCount.textContent = questionLabel(state.quiz.questions.length);
       return;
     }
@@ -257,7 +348,7 @@
       card.dataset.questionId = question.questionId;
       const heading = create('header', 'quiz-question-card-heading');
       const title = create('div');
-      title.append(create('small', '', `Pytanie ${index + 1}`), create('strong', '', `${question.points} ${question.points === 1 ? 'punkt' : 'pkt'}`));
+      title.append(create('small', '', `${question.type === 'flashcard' ? 'Fiszka' : 'Pytanie'} ${index + 1}`), create('strong', '', question.type === 'flashcard' || state.quiz.mode === 'deck' ? 'Nauka bez punktów' : `${question.points} ${question.points === 1 ? 'punkt' : 'pkt'}`));
       const actions = create('div', 'quiz-question-actions');
       const up = create('button', 'mini-button', '↑'); up.type = 'button'; up.title = 'Przenieś wyżej'; up.dataset.quizAction = 'up'; up.disabled = index === 0;
       const down = create('button', 'mini-button', '↓'); down.type = 'button'; down.title = 'Przenieś niżej'; down.dataset.quizAction = 'down'; down.disabled = index === state.quiz.questions.length - 1;
@@ -265,6 +356,9 @@
       const remove = create('button', 'mini-button is-danger', 'Usuń'); remove.type = 'button'; remove.dataset.quizAction = 'delete'; remove.disabled = state.quiz.questions.length === 1;
       actions.append(up, down, duplicate, remove);
       heading.append(title, actions);
+      if (question.type === 'flashcard') {
+        card.append(heading, renderFlashcard(question)); fragment.append(card); return;
+      }
 
       const controls = create('div', 'quiz-question-controls');
       const points = create('input'); points.type = 'number'; points.min = '0'; points.max = '10000'; points.step = '0.1'; points.value = String(question.points); points.dataset.quizField = 'points';
@@ -274,6 +368,7 @@
         fieldLabel('Punkty', points),
         fieldLabel('Wymagane', required, 'quiz-inline-check')
       );
+      if (state.quiz.mode === 'deck') { points.closest('label').hidden = true; required.closest('label').hidden = true; }
 
       const prompt = create('textarea');
       prompt.rows = 3; prompt.maxLength = 3000; prompt.value = question.prompt; prompt.dataset.quizField = 'prompt';
@@ -301,26 +396,88 @@
     elements.questionCount.textContent = questionLabel(state.quiz.questions.length);
   }
 
+  function renderFlashcard(question) {
+    const editor = create('div', 'quiz-flashcard-editor');
+    editor.append(create('p', '', 'Fiszka bez punktów. Obsługuje Markdown i wzory: \\(x^2\\), \\(\\ce{H2O}\\). Obrazy dodaj poniżej — pliki, przeciąganie i wklejanie są dostępne w bibliotece obrazów.'));
+    for (const [side, label] of [['front', 'Przód — pytanie'], ['back', 'Tył — odpowiedź']]) {
+      const section = create('fieldset'); section.append(create('legend', '', label));
+      const input = create('textarea'); input.rows = 5; input.maxLength = 10000;
+      input.value = question[side].text; input.dataset.quizField = `${side}Text`;
+      section.append(fieldLabel('Treść (Markdown / LaTeX)', input));
+      question[side].images.forEach((entry, index) => {
+        const row = create('div', 'quiz-question-media'); row.append(create('code', '', entry.ref));
+        const alt = create('input'); alt.value = entry.alt; alt.maxLength = 300;
+        alt.dataset.quizField = 'flashcardAlt'; alt.dataset.side = side; alt.dataset.imageIndex = String(index);
+        row.append(fieldLabel('Opis obrazu', alt));
+        for (const [action, title] of [['replace-flashcard-media', 'Podmień obraz'], ['remove-flashcard-media', 'Usuń obraz']]) {
+          const button = create('button', 'mini-button', title); button.type = 'button';
+          button.dataset.quizAction = action; button.dataset.side = side; button.dataset.imageIndex = String(index); row.append(button);
+        }
+        section.append(row);
+      });
+      const add = create('button', 'mini-button', `Dodaj obraz — ${side === 'front' ? 'przód' : 'tył'}`);
+      add.type = 'button'; add.dataset.quizAction = 'add-flashcard-media'; add.dataset.side = side;
+      add.disabled = question[side].images.length >= 8;
+      section.append(add); editor.append(section);
+    }
+    const explanation = create('textarea'); explanation.rows = 3; explanation.maxLength = 3000;
+    explanation.value = question.explanation; explanation.dataset.quizField = 'explanation';
+    editor.append(fieldLabel('Wyjaśnienie (opcjonalnie)', explanation));
+    const preview = create('details'); preview.append(create('summary', '', 'Podgląd tej fiszki i obrazów'));
+    preview.addEventListener('toggle', () => {
+      if (preview.open) {
+        preview.querySelector('[data-flashcard-id]')?.remove();
+        preview.append(root.ChemQuizFlashcards.card(question, previewImageUrl));
+      }
+    });
+    editor.append(preview);
+    return editor;
+  }
+
+  function previewImageUrl(ref) {
+    if (state.quiz.mode === 'deck') {
+      if (!state.deckImageCache) {
+        const repositoryId = state.repositoryId, materialId = state.quiz.quizId;
+        state.deckImageCache = root.ChemQuizFlashcards.imageCache((reference) => library.readMediaBlob({
+          reference, repositoryId, scope: reference.startsWith('assets/shared/') ? 'shared' : 'local',
+          materialKind: reference.startsWith('assets/shared/') ? '' : 'quiz',
+          materialId: reference.startsWith('assets/shared/') ? '' : materialId
+        }));
+      }
+      return state.deckImageCache.get(ref);
+    }
+    const key = `${state.repositoryId}:${state.quiz.quizId}:${ref}`;
+    if (!state.previewUrls.has(key)) {
+      const generation = state.previewGeneration;
+      state.previewUrls.set(key, library.readMediaBlob({
+        scope: ref.startsWith('assets/shared/') ? 'shared' : 'local',
+        materialKind: ref.startsWith('assets/shared/') ? '' : 'quiz',
+        materialId: ref.startsWith('assets/shared/') ? '' : state.quiz.quizId,
+        reference: ref, repositoryId: state.repositoryId
+      }).then((blob) => {
+        if (generation !== state.previewGeneration) throw new Error('PREVIEW_CHANGED');
+        const url = root.URL.createObjectURL(blob); state.objectUrls.add(url); return url;
+      })
+        .catch((error) => { state.previewUrls.delete(key); throw error; }));
+    }
+    return state.previewUrls.get(key);
+  }
+
   function revokeObjectUrls() {
+    state.previewGeneration += 1;
     state.previewImageObserver?.disconnect();
     state.previewImageObserver = null;
     state.objectUrls.forEach((url) => root.URL.revokeObjectURL(url));
     state.objectUrls.clear();
+    state.previewUrls.clear();
+    state.deckImageCache?.clear(); state.deckImageCache = null;
   }
 
   async function hydratePreviewImage(image, priority = false) {
     const ref = image.dataset.quizPreviewImage;
     try {
-      const blob = await library.readMediaBlob({
-        scope: ref.startsWith('assets/shared/') ? 'shared' : 'local',
-        materialKind: ref.startsWith('assets/shared/') ? '' : 'quiz',
-        materialId: ref.startsWith('assets/shared/') ? '' : state.quiz.quizId,
-        reference: ref,
-        repositoryId: state.repositoryId
-      });
+      const url = await previewImageUrl(ref);
       if (!image.isConnected) return;
-      const url = root.URL.createObjectURL(blob);
-      state.objectUrls.add(url);
       image.loading = priority ? 'eager' : 'lazy';
       image.decoding = 'async';
       image.fetchPriority = priority ? 'high' : 'auto';
@@ -356,10 +513,11 @@
   }
 
   function previewQuestion(question, index) {
+    if (question.type === 'flashcard') return root.ChemQuizFlashcards.card(question, previewImageUrl);
     const fieldset = create('fieldset', 'quiz-preview-question');
     fieldset.dataset.previewQuestion = question.questionId;
     const legend = create('legend');
-    legend.append(create('span', '', `${index + 1}. ${question.prompt}`), create('small', '', `${question.points} ${question.points === 1 ? 'pkt' : 'pkt'}`));
+    legend.append(create('span', '', `${index + 1}.`), root.ChemQuizFlashcards.text(question.prompt, previewImageUrl), create('small', '', `${question.points} pkt`));
     fieldset.append(legend);
     if (question.image.ref) {
       const image = create('img', 'quiz-preview-image');
@@ -374,8 +532,8 @@
       input.placeholder = 'Twoja odpowiedź'; input.dataset.previewText = '1';
       fieldset.append(input);
     } else if (question.type === 'text') {
-      const input = create('input');
-      input.type = 'text'; input.placeholder = 'Twoja odpowiedź'; input.dataset.previewText = '1';
+      const input = create('textarea'); input.rows = 2; input.maxLength = 500;
+      input.placeholder = 'Twoja odpowiedź'; input.dataset.previewText = '1';
       fieldset.append(input);
     } else {
       question.options.forEach((option) => {
@@ -384,7 +542,8 @@
         input.type = question.type === 'multiple' ? 'checkbox' : 'radio';
         input.name = `quiz-preview-${question.questionId}`;
         input.value = option.optionId;
-        label.append(input, create('span', '', option.text));
+        label.append(input, root.ChemQuizFlashcards.text(option.text, previewImageUrl));
+        if (option.image?.ref) label.append(root.ChemQuizFlashcards.image(option.image, previewImageUrl));
         fieldset.append(label);
       });
     }
@@ -395,8 +554,15 @@
   }
 
   function renderPreview() {
-    revokeObjectUrls();
+    // Keep cached managed images while typing; only release on material change.
+    state.previewImageObserver?.disconnect();
     const quiz = state.quiz;
+    root.NextMedUI?.releaseWithin?.(elements.preview);
+    if (quiz.mode === 'deck' && root.ChemQuizFlashcards) {
+      const props = { questions: quiz.questions, getUrl: previewImageUrl, preview: true };
+      if (!root.NextMedUI?.render('quiz-deck', elements.preview, props)) elements.preview.replaceChildren(root.ChemQuizFlashcards.study(props));
+      return;
+    }
     const shell = create('form', 'quiz-preview-form');
     shell.addEventListener('submit', (event) => event.preventDefault());
     if (quiz.metadata.cover.ref) {
@@ -441,7 +607,9 @@
         ? 'Odpowiedź będzie oceniona przez AI lub sprawdzającego po wysłaniu.'
         : ungraded
           ? 'Odpowiedź zostanie zapisana, ale nie wpływa na wynik.'
-          : `${entry.correct ? 'Poprawnie' : 'Niepoprawnie'} · ${entry.points}/${entry.maximum} pkt${state.quiz.settings.showFeedback && question?.explanation ? ` — ${question.explanation}` : ''}`;
+          : `${entry.correct ? 'Poprawnie' : 'Niepoprawnie'} · ${entry.points}/${entry.maximum} pkt`;
+      fieldset.querySelector('.quiz-practice-feedback')?.remove();
+      if (!pending && !ungraded && question.type !== 'open') fieldset.append(root.ChemQuizFlashcards.feedback(question, root.ChemQuizPractice.evaluate(question, answers[question.questionId]), previewImageUrl, state.quiz.settings.showFeedback));
     });
     resultNode.hidden = false;
     resultNode.className = `quiz-preview-result ${scored.passed == null ? '' : scored.passed ? 'is-passed' : 'is-failed'}`;
@@ -456,7 +624,8 @@
     elements.validation.replaceChildren();
     if (validation.valid) {
       const ok = create('div', 'quiz-validation-ok');
-      ok.append(create('strong', '', '✓ Quiz jest gotowy do zapisu'), create('span', '', `${state.quiz.questions.length} pytań · próg ${state.quiz.settings.passingScore}%`));
+      const deck = state.quiz.mode === 'deck';
+      ok.append(create('strong', '', deck ? '✓ Pula jest gotowa do zapisu' : '✓ Quiz jest gotowy do zapisu'), create('span', '', deck ? `${questionLabel(state.quiz.questions.length)} · nauka bez punktów` : `${state.quiz.questions.length} pytań · próg ${state.quiz.settings.passingScore}%`));
       elements.validation.append(ok);
       return;
     }
@@ -677,9 +846,14 @@
   }
 
   function updateMetadata() {
+    if (state.quiz.quizId !== elements.id.value.trim().toLowerCase()) revokeObjectUrls();
     state.quiz.quizId = elements.id.value.trim().toLowerCase();
     state.quiz.metadata.title = elements.title.value;
     state.quiz.metadata.description = elements.description.value;
+    if (state.quiz.mode === 'deck') {
+      state.quiz.metadata.courseId = elements.course.value;
+      state.quiz.metadata.active = elements.active.checked;
+    }
     state.quiz.metadata.tags = elements.tags.value.split(',').map((tag) => tag.trim()).filter(Boolean).slice(0, 20);
     state.quiz.settings.passingScore = Math.max(0, Math.min(100, Math.round(Number(elements.passingScore.value) || 0)));
     state.quiz.settings.shuffleQuestions = elements.shuffle.checked;
@@ -699,9 +873,17 @@
     const question = questionFor(control);
     if (!question) return;
     const field = control.dataset.quizField;
+    if (!field && !control.dataset.quizCorrect) return;
     if (field === 'type') {
+      if (state.quiz.mode === 'deck' && !root.ChemQuizPractice.DECK_TYPES.includes(control.value)) { control.value = question.type; return; }
       const replacement = modelApi.createQuestion({ ...clone(question), type: control.value, questionId: question.questionId });
       state.quiz.questions.splice(state.quiz.questions.indexOf(question), 1, replacement);
+    } else if (['frontText', 'backText'].includes(field) && question.type === 'flashcard') {
+      question[field === 'frontText' ? 'front' : 'back'].text = control.value.slice(0, 10000);
+      question.prompt = question.front.text.slice(0, 3000);
+    } else if (field === 'flashcardAlt' && question.type === 'flashcard') {
+      const image = question[control.dataset.side]?.images?.[Number(control.dataset.imageIndex)];
+      if (image) image.alt = control.value.slice(0, 300);
     } else if (field === 'prompt') question.prompt = control.value;
     else if (field === 'points') question.points = Math.round(Math.max(0, Math.min(10000, Number(control.value) || 0)) * 100) / 100;
     else if (field === 'required') question.required = control.checked;
@@ -714,6 +896,9 @@
     else if (field === 'optionText') {
       const option = question.options.find((entry) => entry.optionId === control.dataset.optionId);
       if (option) option.text = control.value;
+    } else if (field === 'optionAlt') {
+      const option = question.options.find((entry) => entry.optionId === control.dataset.optionId);
+      if (option?.image) option.image.alt = control.value.slice(0, 300);
     } else if (control.dataset.quizCorrect) {
       if (question.type !== 'multiple') question.options.forEach((option) => { option.correct = false; });
       const option = question.options.find((entry) => entry.optionId === control.dataset.optionId);
@@ -736,19 +921,34 @@
     const action = button.dataset.quizAction;
     const question = questionFor(button);
     if (!question) return;
+    if (action.endsWith('flashcard-media') && question.type === 'flashcard') {
+      const side = button.dataset.side;
+      if (!['front', 'back'].includes(side)) return;
+      const index = Number(button.dataset.imageIndex);
+      if (action === 'remove-flashcard-media') question[side].images.splice(index, 1);
+      else { openMediaManager(question, side, action === 'replace-flashcard-media' ? index : -1); return; }
+      markChanged(); render(); return;
+    }
     if (action === 'up') moveQuestion(question, -1);
     else if (action === 'down') moveQuestion(question, 1);
     else if (action === 'duplicate') {
+      if (state.quiz.questions.length >= 200) return;
       const index = state.quiz.questions.indexOf(question);
       state.quiz.questions.splice(index + 1, 0, modelApi.duplicateQuestion(question));
     } else if (action === 'delete' && state.quiz.questions.length > 1) {
       if (!root.confirm('Usunąć to pytanie?')) return;
       state.quiz.questions = state.quiz.questions.filter((entry) => entry !== question);
     } else if (action === 'add-option') {
+      if (question.options.length >= 6) return;
       question.options.push(modelApi.createOption({ text: `Odpowiedź ${question.options.length + 1}` }, question.options.length));
     } else if (action === 'delete-option' && question.options.length > 2) {
       question.options = question.options.filter((entry) => entry.optionId !== button.dataset.optionId);
       if (!question.options.some((option) => option.correct)) question.options[0].correct = true;
+    } else if (action === 'option-media') {
+      openMediaManager(question, 'option', button.dataset.optionId); return;
+    } else if (action === 'remove-option-media') {
+      const option = question.options.find((entry) => entry.optionId === button.dataset.optionId);
+      if (option) delete option.image;
     } else if (action === 'select-media') {
       openMediaManager(question);
       return;
@@ -760,29 +960,39 @@
   }
 
   function addQuestion(type) {
+    if (state.quiz.questions.length >= 200 || (state.quiz.mode === 'deck' && !root.ChemQuizPractice.DECK_TYPES.includes(type))) return;
     state.quiz.questions.push(modelApi.createQuestion({ type, prompt: `Nowe pytanie ${state.quiz.questions.length + 1}` }));
     markChanged('Pytanie dodano do szkicu na tym urządzeniu.');
     render();
     elements.questions.lastElementChild?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   }
 
-  function openMediaManager(question = null) {
+  function openMediaManager(question = null, side = '', index = -1) {
     if (!root.ChemMediaManager?.open) {
       setStatus('Media Manager jest chwilowo niedostępny.', true);
       return;
     }
     const canUseLocal = Boolean(state.remoteSha && state.remoteId === state.quiz.quizId);
+    const owner = state.quiz;
     void root.ChemMediaManager.open({
       scope: canUseLocal ? 'local' : 'shared',
       materialKind: canUseLocal ? 'quiz' : '',
       materialId: canUseLocal ? state.quiz.quizId : '',
       repositoryId: state.repositoryId,
       onSelect(asset) {
+        if (state.quiz !== owner || (question && !state.quiz.questions.includes(question))) return;
         const selected = {
           ref: asset.reference,
           alt: String(asset.filename || 'Ilustracja').replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').slice(0, 300)
         };
-        if (question) question.image = selected;
+        if (question?.type === 'flashcard' && ['front', 'back'].includes(side)) {
+          if (index >= 0 && question[side].images[index]) question[side].images[index] = selected;
+          else if (question[side].images.length < 8) question[side].images.push(selected);
+        } else if (question && side === 'option') {
+          const option = question.options.find((entry) => entry.optionId === index);
+          if (!option) return;
+          option.image = selected;
+        } else if (question) question.image = selected;
         else state.quiz.metadata.cover = selected;
         markChanged('Obraz dodano z Media Managera.');
         render();
@@ -790,14 +1000,17 @@
     });
   }
 
-  function newQuiz() {
+  function newQuiz(deck = false) {
     if (!root.confirm('Utworzyć nowy quiz? Bieżący szkic na tym urządzeniu zostanie zastąpiony. Zapisz go najpierw, jeśli chcesz zachować zmiany.')) return;
-    state.quiz = modelApi.createQuiz();
+    openSequence++;
+    revokeObjectUrls();
+    state.quiz = modelApi.createQuiz(deck ? { mode: 'deck', quizId: `fiszki-${Date.now().toString(36)}`, metadata: { title: 'Nowa pula fiszek' } } : {});
+    renderCourses();
     state.remoteId = '';
     state.remoteSha = '';
     saveLocal();
     render();
-    setStatus('Nowy quiz jest gotowy.');
+    setStatus(deck ? 'Nowa pula fiszek jest gotowa. Wybierz kurs i uzupełnij obie strony kart.' : 'Nowy quiz jest gotowy.');
     elements.id.focus();
     elements.id.select();
   }
@@ -869,9 +1082,20 @@
   }
 
   async function openAsset(asset) {
+    const sequence = ++openSequence;
     setStatus(`Wczytywanie ${asset.title || asset.filename}…`);
-    const result = await library.readQuiz(asset.filename, { repositoryId: asset.repositoryId });
-    state.quiz = modelApi.parse(result.content, asset.filename);
+    let result, quiz;
+    try {
+      result = await library.readQuiz(asset.filename, { repositoryId: asset.repositoryId });
+      quiz = modelApi.parse(result.content, asset.filename);
+    } catch (error) {
+      if (sequence === openSequence) setStatus(error.message || 'Nie udało się otworzyć materiału.', true);
+      return;
+    }
+    if (sequence !== openSequence) return;
+    revokeObjectUrls();
+    state.quiz = quiz;
+    renderCourses();
     state.repositoryId = asset.repositoryId || result.repositoryId || state.repositoryId;
     state.remoteId = asset.filename;
     state.remoteSha = asset.sha || result.sha;
@@ -895,7 +1119,7 @@
     [elements.id, elements.title, elements.description, elements.passingScore, elements.tags].forEach((input) => {
       input.addEventListener('input', updateMetadata);
     });
-    [elements.shuffle, elements.showFeedback, elements.allowRetry].forEach((input) => {
+    [elements.shuffle, elements.showFeedback, elements.allowRetry, elements.active, elements.course].forEach((input) => {
       input.addEventListener('change', updateMetadata);
     });
     elements.coverSelect.addEventListener('click', () => openMediaManager());
@@ -919,6 +1143,8 @@
       button.addEventListener('click', () => addQuestion(button.dataset.quizAdd));
     });
     elements.repository.addEventListener('change', async () => {
+      openSequence++;
+      revokeObjectUrls();
       state.repositoryId = elements.repository.value;
       state.assets = [];
       state.remoteId = '';
@@ -931,7 +1157,17 @@
       pagedListApi.reset(state.libraryPaging);
       renderLibrary();
     });
-    elements.newButton.addEventListener('click', newQuiz);
+    elements.newButton.addEventListener('click', () => newQuiz());
+    elements.newDeckButton.addEventListener('click', () => newQuiz(true));
+    elements.mode.addEventListener('change', () => {
+      if (elements.mode.value === 'deck' && state.quiz.questions.some((q) => !root.ChemQuizPractice.DECK_TYPES.includes(q.type) || q.options.length > 6)) {
+        elements.mode.value = 'quiz'; setStatus('Utwórz nową pulę przyciskiem „Nowa pula fiszek”. Obecne pytania pozostają w quizie.', true); return;
+      }
+      state.quiz.mode = elements.mode.value;
+      revokeObjectUrls();
+      if (state.quiz.mode === 'deck') { state.quiz.metadata.active = true; state.quiz.metadata.courseId ||= ''; }
+      markChanged(); render();
+    });
     elements.saveButton.addEventListener('click', () => void save(false));
     elements.publishButton.addEventListener('click', () => void save(true));
     elements.deleteButton.addEventListener('click', () => void removeCurrent());
@@ -958,5 +1194,6 @@
 
   bind();
   root.addEventListener('pagehide', flush);
+  root.addEventListener('pagehide', (event) => { if (!event.persisted) revokeObjectUrls(); });
   root.ChemQuizBuilder = Object.freeze({ activate, assetDeleted, flush, openAsset });
 })(typeof globalThis !== 'undefined' ? globalThis : window);

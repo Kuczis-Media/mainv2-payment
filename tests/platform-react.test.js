@@ -26,6 +26,9 @@ function setup(t, file, query = '') {
   w.confirm = () => true;
   w.ChemAuth = { ready: Promise.resolve({ authenticated: true, session: { ok: true } }), getUser: () => ({ id: 'admin', app_metadata: { roles: ['admin'] } }), getAccessToken: async () => 'test-token' };
   w.ChemAssessmentText = { render(node, text) { node.textContent = text || ''; } };
+  if (file === 'members/module/quiz/index.html') {
+    ['members/module/lesson/lesson-parser.js', 'assets/js/assessment-text.js', 'assets/js/quiz-practice.js', 'assets/js/quiz-flashcards.js'].forEach((name) => w.eval(read(name)));
+  }
   w.eval(bundle);
   t.after(() => { w.NextMedUI.releaseWithin(w.document.body); w.close(); assert.deepEqual(errors, []); });
   return { w, d: w.document, evalFile: (name) => w.eval(read(name)), render: (name, props, host = w.document.getElementById('view')) => w.NextMedUI.render(name, host, props) };
@@ -110,14 +113,14 @@ test('quiz batches long lists, reveals unmounted required questions and retains 
   const props = { questions, answers: {}, results: {}, locked: false, getUrl: async () => '', onAnswer(id, value) { props.answers[id] = value; } };
   h.render('quiz-questions', props);
   assert.equal(h.d.querySelectorAll('fieldset').length, 24);
-  await input(h.w, h.d.querySelector('input'), 'zapamiętaj');
+  await input(h.w, h.d.querySelector('[data-answer-text]'), 'zapamiętaj');
   h.d.querySelector('.react-list-more button').click(); await tick();
   assert.equal(h.d.querySelectorAll('fieldset').length, 48);
   h.render('quiz-questions', { ...props, revealId: 'q70' });
   assert.equal(h.d.querySelectorAll('fieldset').length, 72);
-  assert.equal(h.d.querySelector('input').value, 'zapamiętaj');
+  assert.equal(h.d.querySelector('[data-answer-text]').value, 'zapamiętaj');
   h.render('quiz-questions', { ...props, locked: true, results: { q0: { reviewStatus: 'pending' } } });
-  assert.equal(h.d.querySelector('input').disabled, true);
+  assert.equal(h.d.querySelector('[data-answer-text]').disabled, true);
   assert.match(h.d.querySelector('.quiz-player-feedback').textContent, /oczekuje na ocenę/);
   assert.equal(h.d.querySelector('fieldset').classList.contains('is-wrong'), false);
 });
@@ -175,12 +178,13 @@ for (const react of [true, false]) test(`closed quiz is checked locally with its
   field('multiple').querySelector('input[value="m-a"]').click();
   field('multiple').querySelector('input[value="m-b"]').click();
   field('boolean').querySelector('input').click();
-  await input(h.w, field('text').querySelector('input'), 'azot');
+  await input(h.w, field('text').querySelector('[data-answer-text]'), 'azot');
   h.d.getElementById('quiz-player-check').click(); await tick();
   assert.equal(h.d.querySelector('#quiz-player-result > strong').textContent, '50%');
-  assert.equal(field('single').querySelector('[data-local-answer-key] li').textContent, 'Poprawna');
-  assert.match(field('text').querySelector('[data-local-answer-key]').textContent, /tlen.*O/);
-  assert.match(field('text').querySelector('.quiz-player-feedback').textContent, /To symbol pierwiastka/);
+  assert.match(field('single').querySelector('[data-option-status="missed"]').textContent, /Poprawna/);
+  assert.match(field('text').querySelector('[data-local-answer-key]').textContent, /tlen/);
+  assert.match(field('text').querySelector('[data-local-answer-key]').textContent, /O/);
+  assert.match(field('text').querySelector('.quiz-practice-feedback').textContent, /To symbol pierwiastka/);
   assert.equal(requests.length, 1);
   assert.equal(progress.length, 2);
   assert.equal(progress[1].details.attempts, 1);
@@ -188,11 +192,11 @@ for (const react of [true, false]) test(`closed quiz is checked locally with its
   assert.equal(progress[1].details.completed, true);
   h.d.getElementById('quiz-player-retry').click(); await tick();
   assert.equal(h.d.querySelector('[data-local-answer-key]'), null);
-  assert.equal(field('text').querySelector('input').value, '');
+  assert.equal(field('text').querySelector('[data-answer-text]').value, '');
   field('single').querySelector('input[value="s-b"]').click();
   field('multiple').querySelector('input[value="m-a"]').click();
   field('boolean').querySelector('input').click();
-  await input(h.w, field('text').querySelector('input'), 'azot');
+  await input(h.w, field('text').querySelector('[data-answer-text]'), 'azot');
   h.d.getElementById('quiz-player-check').click(); await tick();
   const expected = common.gradeQuiz(quiz, { single: ['s-b'], multiple: ['m-a'], boolean: [quiz.questions[2].options[0].optionId], text: 'azot' });
   assert.equal(h.d.querySelector('#quiz-player-result > strong').textContent, `${expected.percent}%`);
@@ -292,7 +296,7 @@ async function studio(t, libraryOverrides = {}) {
     list: async () => [], search: (items, query) => items.filter((item) => `${item.title} ${item.filename}`.includes(query)),
     readQuestionBank: async () => ({ bank: { questions: [] }, sha: '' }), ...libraryOverrides
   };
-  const files = ['assets/js/google-media.js', 'members/dashboard-parser.js', 'members/module/lesson/lesson-parser.js', 'assets/js/assessment-text.js',
+  const files = ['assets/js/google-media.js', 'members/dashboard-parser.js', 'members/module/lesson/lesson-parser.js', 'assets/js/assessment-text.js', 'assets/js/quiz-practice.js', 'assets/js/quiz-flashcards.js',
     ...['paged-list', 'dashboard-model', 'lesson-model', 'answer-fields', 'prompt-model', 'exam-model', 'assessment-editor', 'presentation-model', 'quiz-model', 'exam-builder', 'presentation-builder', 'quiz-builder', 'script', 'tool-picker'].map((file) => `members/module/studio/${file}.js`)];
   files.forEach(h.evalFile);
   h.d.dispatchEvent(new h.w.Event('DOMContentLoaded')); await tick();
@@ -333,6 +337,113 @@ test('actual quiz builder React controls save edits, duplicate once and preserve
   assert.equal(quiz.questions[0].points, 3.5);
   assert.equal(quiz.questions[0].options[0].text, 'Poprawiona odpowiedź');
   assert.notEqual(quiz.questions[0].questionId, quiz.questions[1].questionId);
+});
+
+test('Studio creates a deck, edits both faces, replaces/removes images and publishes with the current course', async (t) => {
+  const saved = [], images = [];
+  const h = await studio(t, {
+    save: async (kind, value) => { saved.push({ kind, ...plain(value) }); return { sha: 'a'.repeat(40) }; },
+    readMediaBlob: async (value) => { images.push(value); return new Blob(['fixture']); }
+  });
+  h.w.URL.createObjectURL = () => 'blob:https://course.example/image'; h.w.URL.revokeObjectURL = () => {};
+  h.w.fetch = async () => new Response(JSON.stringify({ catalog: { nodes: [{ id: 'course', type: 'course', title: 'Kurs chemii' }] } }));
+  let selection;
+  h.w.ChemMediaManager = { open: async (options) => { selection = options; } };
+  await input(h.w, h.d.getElementById('studio-tool-select'), 'quiz');
+  h.d.getElementById('quiz-new-deck-button').click(); await tick();
+  assert.equal(h.d.getElementById('quiz-mode').value, 'deck');
+  await input(h.w, h.d.getElementById('quiz-course'), 'course');
+  await input(h.w, h.d.getElementById('quiz-id'), 'fiszki-biologia');
+  await input(h.w, h.d.getElementById('quiz-title'), 'Białka — fiszki');
+  await input(h.w, h.d.querySelector('[data-quiz-field="frontText"]'), '**Co buduje białko?**\nPodaj nazwę.');
+  await input(h.w, h.d.querySelector('[data-quiz-field="backText"]'), 'Aminokwasy.');
+  for (const side of ['front', 'back']) {
+    h.d.querySelector(`[data-quiz-action="add-flashcard-media"][data-side="${side}"]`).click(); await tick();
+    assert.equal(selection.scope, 'shared', 'Unsaved decks use the existing shared library');
+    selection.onSelect({ reference: `assets/shared/${side}.png`, filename: `${side}.png` }); await tick();
+  }
+  h.d.querySelector('[data-quiz-action="replace-flashcard-media"][data-side="front"]').click(); await tick();
+  selection.onSelect({ reference: 'assets/shared/replaced.webp', filename: 'replaced.webp' }); await tick();
+  h.d.querySelector('[data-quiz-action="remove-flashcard-media"][data-side="back"]').click(); await tick();
+  h.d.querySelector('[data-quiz-action="duplicate"]').click(); await tick();
+  const before = h.d.querySelector('.quiz-question-card').dataset.questionId;
+  h.d.querySelector('[data-quiz-action="down"]').click(); await tick();
+  assert.notEqual(h.d.querySelector('.quiz-question-card').dataset.questionId, before);
+  h.d.getElementById('quiz-active').click(); await tick();
+  h.d.getElementById('quiz-publish-button').click(); await tick();
+  assert.equal(saved.length, 1, h.d.getElementById('quiz-builder-status').textContent);
+  assert.equal(saved[0].kind, 'quiz');
+  const deck = JSON.parse(saved[0].content);
+  assert.equal(deck.mode, 'deck'); assert.equal(deck.metadata.courseId, 'course');
+  assert.equal(deck.metadata.active, false); assert.equal(deck.metadata.status, 'published');
+  assert.equal(deck.questions[0].front.images[0].ref, 'assets/shared/replaced.webp');
+  assert.deepEqual(deck.questions[0].back.images, []);
+  assert.equal(deck.questions[0].back.text, 'Aminokwasy.');
+  assert.ok(images.some((image) => image.reference === 'assets/shared/replaced.webp'));
+  assert.ok(h.d.querySelector('#quiz-deck-link a[href*="preview=1"]'));
+});
+
+test('Studio fx targets every quiz educational field and publishes a mixed deck with choice images and text tolerances', async (t) => {
+  const saved = [];
+  const h = await studio(t, { save: async (kind, value) => { saved.push({ kind, ...plain(value) }); return { sha: 'c'.repeat(40) }; }, readMediaBlob: async () => new Blob(['fixture']) });
+  h.w.MathJax = { typesetClear() {}, typesetPromise: async () => {} };
+  h.w.URL.createObjectURL = () => 'blob:https://course.example/practice'; h.w.URL.revokeObjectURL = () => {};
+  h.w.fetch = async () => new Response(JSON.stringify({ catalog: { nodes: [{ id: 'course', type: 'course', title: 'Biologia' }] } }));
+  let media;
+  h.w.ChemMediaManager = { open: async (options) => { media = options; } };
+  await input(h.w, h.d.getElementById('studio-tool-select'), 'quiz');
+  h.d.getElementById('quiz-new-deck-button').click(); await tick();
+  await input(h.w, h.d.getElementById('quiz-course'), 'course');
+  const formula = '\\ce{H2O} + \\alpha';
+  async function insertEquation(control) {
+    assert.ok(control); control.focus(); control.setSelectionRange(0, 0);
+    const field = control.closest('label');
+    const button = field.querySelector('.assessment-equation-trigger') || field.parentElement.querySelector('.assessment-equation-trigger');
+    assert.ok(button, 'Every educational field has fx'); button.click(); await tick();
+    const dialog = h.d.querySelector('.assessment-equation-dialog'); assert.ok(dialog);
+    await input(h.w, dialog.querySelector('textarea[aria-label="Wzór matematyczny"]'), formula);
+    assert.ok(dialog.querySelector('[aria-label="Podgląd równania"] [data-assessment-math]'));
+    dialog.querySelector('[aria-label="Wstaw do wybranego pola"]').click(); await tick();
+    assert.equal(h.d.querySelector('.assessment-equation-dialog'), null); assert.ok(control.value.startsWith(`\\(${formula}\\)`));
+  }
+  for (const name of ['frontText', 'backText', 'explanation']) await insertEquation(h.d.querySelector(`[data-quiz-field="${name}"]`));
+  for (const type of ['single', 'multiple', 'text']) {
+    const add = h.d.querySelector(`[data-quiz-add="${type}"]`); assert.equal(add.hidden, false); add.click(); await tick();
+    const card = () => h.d.querySelector('.quiz-question-card:last-child');
+    if (!card().querySelector('[data-quiz-field="prompt"]')) { card().querySelector('.quiz-question-actions > button').click(); await tick(); }
+    await insertEquation(card().querySelector('[data-quiz-field="prompt"]'));
+    await insertEquation(card().querySelector('[data-quiz-field="explanation"]'));
+    if (type === 'text') {
+      await insertEquation(card().querySelector('.answer-configurator textarea'));
+      await input(h.w, card().querySelector('.quiz-text-tolerances select'), '2');
+    } else {
+      await insertEquation(card().querySelector('[data-quiz-field="optionText"]'));
+      card().querySelector('[data-quiz-action="option-media"]').click(); await tick();
+      assert.equal(media.scope, 'shared'); media.onSelect({ reference: 'assets/shared/option.png', filename: 'Opcja.png' }); await tick();
+      assert.ok(card().querySelector('.quiz-option-media img'));
+      card().querySelector('[data-quiz-action="option-media"]').click(); await tick();
+      media.onSelect({ reference: 'assets/shared/replaced-option.webp', filename: 'Zmieniona.webp' }); await tick();
+      if (type === 'single') {
+        for (let i = 0; i < 2; i++) { card().querySelector('[data-quiz-action="add-option"]').click(); await tick(); }
+        assert.equal(card().querySelector('[data-quiz-action="add-option"]'), null);
+        assert.equal(card().querySelectorAll('.quiz-option-row').length, 6);
+      } else { card().querySelectorAll('[data-quiz-correct]')[1].click(); await tick(); }
+    }
+  }
+  h.d.getElementById('quiz-publish-button').click(); await tick();
+  assert.equal(saved.length, 1, h.d.getElementById('quiz-builder-status').textContent);
+  const value = JSON.parse(saved[0].content);
+  assert.deepEqual(value.questions.map((q) => q.type), ['flashcard', 'single', 'multiple', 'text']);
+  for (const question of value.questions) {
+    assert.ok(question.prompt.startsWith(`\\(${formula}\\)`));
+    assert.ok(question.explanation.startsWith(`\\(${formula}\\)`));
+  }
+  assert.equal(value.questions[2].options.filter((option) => option.correct).length, 2);
+  assert.equal(value.questions[1].options[0].image.ref, 'assets/shared/replaced-option.webp');
+  assert.ok(value.questions[1].options[0].text.startsWith(`\\(${formula}\\)`));
+  assert.ok(value.questions[3].acceptedAnswers[0].startsWith(`\\(${formula}\\)`));
+  assert.equal(value.questions[3].textCompare.maxTypos, 2);
+  assert.equal(require('../netlify/quiz-common').validateDefinition(value).valid, true);
 });
 
 test('React library paginates without fetching and only loads media after opening material', async (t) => {
@@ -578,11 +689,11 @@ test('Studio adds and edits Google cards in both builders and preserves the stud
   await input(h.w, h.d.querySelector('[data-lesson-field="url"]'), url);
   await input(h.w, h.d.querySelector('[data-lesson-field="title"]'), 'Nagranie do lekcji');
   await input(h.w, h.d.querySelector('[data-lesson-field="width"]'), '80');
-  await input(h.w, h.d.querySelector('[data-lesson-field="height"]'), '200');
+  await input(h.w, h.d.querySelector('[data-lesson-field="heightPercent"]'), '25');
   h.d.querySelector('[data-lesson-panel="preview"]').click(); await tick();
   const preview = h.d.querySelector('.lesson-preview-body [data-google-media]');
   assert.ok(preview);
-  assert.equal(preview.style.getPropertyValue('--google-media-height'), '200px');
+  assert.equal(preview.style.getPropertyValue('--google-media-height'), '25vh');
   assert.equal(preview.querySelector('iframe'), null);
   preview.querySelector('[data-google-load]').click();
   assert.equal(preview.querySelector('iframe').src, url.replace('/view', '/preview'));
@@ -590,12 +701,12 @@ test('Studio adds and edits Google cards in both builders and preserves the stud
   h.d.querySelector('[data-dashboard-add="google"]').click(); await tick();
   await input(h.w, h.d.querySelector('[data-dashboard-field="id"]'), url);
   await input(h.w, h.d.querySelector('[data-dashboard-field="embedWidth"]'), '75');
-  await input(h.w, h.d.querySelector('[data-dashboard-field="embedHeight"]'), '240');
+  await input(h.w, h.d.querySelector('[data-dashboard-field="embedHeightPercent"]'), '30');
   h.w.dispatchEvent(new h.w.Event('pagehide'));
   const stored = JSON.parse(h.w.localStorage.getItem('chemdisk.studio.dashboard.v1'));
   const source = h.w.ChemDashboardStudioModel.serialize(stored);
   assert.match(source, /\/members\/module\/google\/\?id=/);
-  assert.match(source, /width=75&height=240/);
+  assert.match(source, /width=75&heightPercent=30/);
   assert.equal(h.w.ChemDashboardStudioModel.validate(stored).valid, true);
 });
 

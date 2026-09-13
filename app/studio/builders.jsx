@@ -14,29 +14,33 @@ register('studio-exam-list', ({ questions, selected, labels, bank = false, refer
   </article>;
 })}</>);
 
-function Field({ label, children, className }) { return <label className={className}><span>{label}</span>{children}</label>; }
-function QuizCard({ question, index, count, renderOptions }) {
+function Field({ label, children, className, math = false, hidden = false }) {
+  const field = <label className={className} hidden={hidden}><span>{label}</span>{children}</label>;
+  return math ? <div className="quiz-math-field">{field}<button type="button" className="mini-button assessment-equation-trigger" aria-label={`Dodaj równanie: ${label}`}
+    onMouseDown={(e) => e.preventDefault()} onClick={(e) => window.ChemAssessmentEditor?.openFor(e.currentTarget.parentElement.querySelector('textarea,input'))}>fx · Dodaj równanie</button></div> : field;
+}
+function QuizCard({ question, index, count, renderOptions, renderFlashcard, deck }) {
   const [open, setOpen] = useState(index < 3);
   return <article className="quiz-question-card" data-question-id={question.questionId}>
-    <header className="quiz-question-card-heading"><div><small>Pytanie {index + 1}</small><strong>{question.points} {question.points === 1 ? 'punkt' : 'pkt'}</strong></div>
+    <header className="quiz-question-card-heading"><div><small>{question.type === 'flashcard' ? 'Fiszka' : 'Pytanie'} {index + 1}</small><strong>{question.type === 'flashcard' || deck ? 'Nauka bez punktów' : `${question.points} ${question.points === 1 ? 'punkt' : 'pkt'}`}</strong></div>
       <div className="quiz-question-actions"><button type="button" className="mini-button" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Zwiń' : 'Edytuj'}</button>
         {[['up', '↑', 'Przenieś wyżej', index === 0], ['down', '↓', 'Przenieś niżej', index === count - 1], ['duplicate', 'Duplikuj', 'Duplikuj', false], ['delete', 'Usuń', 'Usuń', count === 1]].map(([action, text, label, disabled]) =>
           <button type="button" key={action} className={`mini-button${action === 'delete' ? ' is-danger' : ''}`} data-quiz-action={action} aria-label={label} disabled={disabled}>{text}</button>)}
       </div></header>
-    {!open ? <p>{question.prompt || 'Nowe pytanie'}</p> : <>
+    {!open ? <p>{question.prompt || 'Nowe pytanie'}</p> : question.type === 'flashcard' ? <Widget factory={() => renderFlashcard(question)} revision={JSON.stringify(question)} /> : <>
       <div className="quiz-question-controls"><Field label="Rodzaj"><ModelInput as="select" className="quiz-question-type" data-quiz-field="type" value={question.type}>
-        {[['single', 'Jedna odpowiedź'], ['multiple', 'Wiele odpowiedzi'], ['true_false', 'Prawda / fałsz'], ['text', 'Odpowiedź tekstowa'], ['open', 'Pytanie otwarte']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-      </ModelInput></Field><Field label="Punkty"><ModelInput type="number" min="0" max="10000" step="0.1" value={question.points} data-quiz-field="points" /></Field>
-        <Field label="Wymagane" className="quiz-inline-check"><input type="checkbox" defaultChecked={question.required} key={String(question.required)} data-quiz-field="required" /></Field></div>
-      <Field label="Treść pytania"><ModelInput as="textarea" rows="3" maxLength="3000" value={question.prompt} data-quiz-field="prompt" /></Field>
+        {[['single', 'Jedna odpowiedź'], ['multiple', 'Wiele odpowiedzi'], ['true_false', 'Prawda / fałsz'], ['text', 'Odpowiedź tekstowa'], ['open', 'Pytanie otwarte'], ['flashcard', 'Fiszka']].filter(([value]) => !deck || window.ChemQuizPractice.DECK_TYPES.includes(value)).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+      </ModelInput></Field><Field label="Punkty" hidden={deck}><ModelInput type="number" min="0" max="10000" step="0.1" value={question.points} data-quiz-field="points" /></Field>
+        <Field label="Wymagane" className="quiz-inline-check" hidden={deck}><input type="checkbox" defaultChecked={question.required} key={String(question.required)} data-quiz-field="required" /></Field></div>
+      <Field label="Treść pytania" math><ModelInput as="textarea" rows="3" maxLength="3000" value={question.prompt} data-quiz-field="prompt" /></Field>
       <div className="quiz-question-media"><div><small>Obraz do pytania</small><code>{question.image.ref || 'Brak obrazu'}</code></div>
         <button className="mini-button" type="button" data-quiz-action="select-media">Wybierz obraz</button><button className="mini-button is-danger" type="button" data-quiz-action="remove-media" disabled={!question.image.ref}>Usuń obraz z pytania</button></div>
-      <Widget factory={() => renderOptions(question, index)} revision={JSON.stringify(question.options)} />
-      <Field label="Informacja zwrotna / wyjaśnienie"><ModelInput as="textarea" rows="2" maxLength="3000" value={question.explanation} data-quiz-field="explanation" placeholder="Opcjonalne wyjaśnienie po sprawdzeniu" /></Field>
+      <Widget factory={() => renderOptions(question, index)} revision={JSON.stringify(question)} />
+      <Field label="Informacja zwrotna / wyjaśnienie" math><ModelInput as="textarea" rows="2" maxLength="3000" value={question.explanation} data-quiz-field="explanation" placeholder="Opcjonalne wyjaśnienie po sprawdzeniu" /></Field>
     </>}
   </article>;
 }
-register('studio-quiz', ({ questions, renderOptions }) => <>{questions.map((question, index) => <QuizCard key={question.questionId} question={question} index={index} count={questions.length} renderOptions={renderOptions} />)}</>);
+register('studio-quiz', ({ questions, renderOptions, renderFlashcard, deck }) => <>{questions.map((question, index) => <QuizCard key={question.questionId} question={question} index={index} count={questions.length} renderOptions={renderOptions} renderFlashcard={renderFlashcard} deck={deck} />)}</>);
 
 register('studio-presentation-slides', ({ slides, selected, onAction, onMove }) => <>{slides.map((slide, index) => <article key={slide.slideId} className={`presentation-slide-row${selected === slide.slideId ? ' is-selected' : ''}`}
   data-slide-id={slide.slideId} data-slide-index={index} draggable onDragStart={(event) => event.dataTransfer.setData('text/presentation-slide', slide.slideId)} onDragOver={(event) => event.preventDefault()}

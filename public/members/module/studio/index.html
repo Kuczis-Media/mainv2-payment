@@ -42,7 +42,10 @@
   <link rel="stylesheet" href="/assets/css/assessment-text.css">
   <script src="assessment-editor.js"></script>
   <script src="presentation-model.js"></script>
+  <script src="/assets/js/quiz-practice.js"></script>
   <script src="quiz-model.js"></script>
+  <script src="/assets/js/quiz-flashcards.js"></script>
+  <link rel="stylesheet" href="/assets/css/quiz-flashcards.css">
   <script defer src="/assets/build/dashboard-react.js"></script>
   <script src="exam-builder.js" defer></script>
   <script src="presentation-builder.js" defer></script>
@@ -872,10 +875,11 @@
         <div class="workspace-toolbar">
           <div>
             <span class="eyebrow">Edytor quizów</span>
-            <h1>Quizy i szybkie sprawdziany</h1>
+            <h1>Quizy i pule fiszek</h1>
           </div>
           <div class="toolbar-actions">
             <button class="button button-soft" id="quiz-new-button" type="button">＋ Nowy</button>
+            <button class="button button-soft" id="quiz-new-deck-button" type="button">＋ Nowa pula fiszek</button>
             <button class="button button-danger" id="quiz-delete-button" type="button" disabled>Usuń</button>
             <button class="button button-soft" id="quiz-save-draft-button" type="button">Zapisz szkic</button>
             <button class="button button-primary" id="quiz-publish-button" type="button">Opublikuj</button>
@@ -886,7 +890,7 @@
           <aside class="quiz-library-panel">
             <details class="repository-library studio-builder-repository-library" open>
               <summary>
-                <span><strong>Zapisane quizy</strong><small>Otwórz do edycji</small></span>
+                <span><strong>Quizy i pule fiszek</strong><small>Otwórz do edycji</small></span>
                 <span aria-hidden="true">⌄</span>
               </summary>
               <div class="repository-library-body">
@@ -894,7 +898,7 @@
                   <span>Biblioteka</span>
                   <select id="quiz-repository-select" aria-label="Repozytorium quizów"></select>
                 </label>
-                <input id="quiz-library-search" type="search" placeholder="Szukaj quizu…" autocomplete="off" aria-label="Szukaj quizu">
+                <input id="quiz-library-search" type="search" placeholder="Szukaj quizu lub puli fiszek…" autocomplete="off" aria-label="Szukaj quizu lub puli fiszek">
                 <p id="quiz-library-status" role="status" aria-live="polite">Wczytywanie biblioteki…</p>
                 <div class="repository-asset-list quiz-library" id="quiz-library" aria-label="Zapisane quizy"></div>
               </div>
@@ -906,6 +910,7 @@
               <button type="button" data-quiz-add="true_false"><b>✓</b><span>Prawda / fałsz</span></button>
               <button type="button" data-quiz-add="text"><b>T</b><span>Odpowiedź tekstowa</span></button>
               <button type="button" data-quiz-add="open"><b>Aa</b><span>Pytanie otwarte</span></button>
+              <button type="button" data-quiz-add="flashcard"><b>↔</b><span>Fiszka — przód i tył</span></button>
             </div>
           </aside>
 
@@ -916,6 +921,9 @@
                 <span class="quiz-status-badge" id="quiz-status-badge">Szkic na tym urządzeniu</span>
               </div>
               <div class="quiz-settings-grid">
+                <label><span>Rodzaj materiału</span><select id="quiz-mode"><option value="quiz">Quiz</option><option value="deck">Pula fiszek</option></select></label>
+                <label id="quiz-course-field" hidden><span>Kurs puli fiszek</span><select id="quiz-course"><option value="">Wybierz kurs…</option></select><small id="quiz-course-status">Lista kursów pochodzi z ustawień postępów dashboardu.</small></label>
+                <label id="quiz-active-field" class="quiz-check" hidden><input id="quiz-active" type="checkbox"><span>Pula aktywna — dostępna po opublikowaniu</span></label>
                 <label><span>ID quizu</span><input id="quiz-id" type="text" maxlength="80" pattern="[a-z0-9][a-z0-9-]{0,79}" placeholder="np. stechiometria-1"></label>
                 <label><span>Tytuł</span><input id="quiz-title" type="text" maxlength="180" placeholder="Tytuł quizu"></label>
                 <label class="quiz-wide-field"><span>Opis</span><textarea id="quiz-description" rows="3" maxlength="1200" placeholder="Krótka informacja dla ucznia"></textarea></label>
@@ -930,6 +938,7 @@
                   <button class="mini-button is-danger" id="quiz-cover-remove" type="button">Usuń referencję</button>
                 </div>
               </div>
+              <p id="quiz-deck-link" hidden></p>
             </section>
 
             <div class="quiz-question-heading">

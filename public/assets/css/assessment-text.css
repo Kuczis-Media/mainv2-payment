@@ -71,3 +71,13 @@
 }
 @media (prefers-reduced-motion: reduce) { .assessment-formula-builder button, .assessment-formula-expand { transition: none; } }
 @media (max-width: 700px) { .assessment-answer-grid { grid-template-columns: 1fr; } }
+.assessment-equation-dialog { box-sizing: border-box; width: min(900px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); padding: clamp(12px, 3vw, 28px); color: var(--chem-text, #172033); background: var(--chem-surface, #fff); border: 1px solid var(--chem-border, #d5deea); border-radius: 20px; overflow: auto; }
+.assessment-equation-dialog::backdrop { background: rgb(10 20 30 / .6); }
+.assessment-equation-dialog > button { margin-bottom: .75rem; }
+.assessment-equation-dialog .assessment-formula-builder { margin: 0; }
+.assessment-equation-dialog [hidden] { display: none !important; }
+.assessment-equation-dialog input, .assessment-equation-dialog select, .assessment-equation-dialog textarea { box-sizing: border-box; max-width: 100%; width: 100%; padding: .65rem; color: inherit; background: var(--chem-bg, #f5f7fa); border: 1px solid var(--chem-border, #d5deea); border-radius: 8px; }
+.assessment-equation-dialog .exam-field { display: grid; gap: .4rem; min-width: 0; }
+.assessment-equation-dialog button { cursor: pointer; }
+.assessment-equation-dialog .assessment-toolbar { flex-wrap: wrap; }
+@media (max-width: 600px) { .assessment-equation-dialog .assessment-reaction-fields, .assessment-equation-dialog .assessment-formula-examples { grid-template-columns: minmax(0, 1fr); } }

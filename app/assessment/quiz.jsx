@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { register, LazyImage, LimitedList } from '../shared/runtime.jsx';
+import { register, LazyImage, LimitedList, Widget } from '../shared/runtime.jsx';
 
-function QuizQuestion({ question: q, index, answers, results, locked, onAnswer, getUrl }) {
+function EducationalText({ value, getUrl }) {
+  return window.ChemQuizFlashcards ? <Widget factory={() => window.ChemQuizFlashcards.text(value, getUrl)} revision={value} /> : <span>{value}</span>;
+}
+function QuizQuestion({ question: q, index, answers, results, locked, onAnswer, getUrl, showExplanation = true }) {
   const incoming = answers[q.questionId] ?? (['open', 'text'].includes(q.type) ? '' : []);
   const [value, setValue] = useState(incoming);
   const signature = JSON.stringify(incoming);
@@ -11,21 +14,24 @@ function QuizQuestion({ question: q, index, answers, results, locked, onAnswer, 
   const tone = result && !pending && !ungraded ? result.correct ? 'is-correct' : 'is-wrong' : '';
   function change(next) { if (locked) return; setValue(next); onAnswer(q.questionId, next); }
   const text = ['open', 'text'].includes(q.type);
-  const Tag = q.type === 'open' && q.multiline !== false ? 'textarea' : 'input';
+  const Tag = q.type === 'text' || (q.type === 'open' && q.multiline !== false) ? 'textarea' : 'input';
+  if (q.type === 'flashcard') return <Widget factory={() => window.ChemQuizFlashcards.card(q, getUrl)} revision={q.questionId} />;
   return <fieldset className={`quiz-player-question ${tone}`} data-question-id={q.questionId}>
     <div className="quiz-player-question-heading"><span>Pytanie {index + 1}</span><span>{q.type === 'open' && q.gradingMode === 'ungraded' ? 'bez punktów' : `${q.points} pkt`}</span></div>
-    <legend>{q.prompt}</legend>
+    <legend><EducationalText value={q.prompt} getUrl={getUrl} /></legend>
     {q.image?.ref && <LazyImage image={q.image} getUrl={getUrl} />}
     {text ? <Tag className={`quiz-player-text${q.type === 'open' ? ' quiz-player-open-answer' : ''}`} type={Tag === 'input' ? 'text' : undefined}
-      rows={Tag === 'textarea' ? 7 : undefined} value={value} maxLength={q.type === 'open' ? 8000 : undefined} disabled={locked}
+      rows={Tag === 'textarea' ? q.type === 'open' ? 7 : 2 : undefined} value={value} maxLength={q.type === 'open' ? 8000 : 500} disabled={locked}
       autoComplete="off" data-answer-text="1" aria-label={`Odpowiedź: ${q.prompt}`} placeholder="Wpisz odpowiedź…" onChange={(e) => change(e.target.value)} />
       : q.options.map((option) => <label className="quiz-player-option" key={option.optionId}>
         <input type={q.type === 'multiple' ? 'checkbox' : 'radio'} name={`quiz-answer-${q.questionId}`} value={option.optionId} disabled={locked}
           checked={Array.isArray(value) && value.includes(option.optionId)} onChange={(e) => change(q.type === 'multiple' ? e.target.checked ? [...value, option.optionId] : value.filter((id) => id !== option.optionId) : [option.optionId])} />
-        <span>{option.text}</span></label>)}
+        <EducationalText value={option.text} getUrl={getUrl} />{option.image?.ref && <LazyImage image={option.image} getUrl={getUrl} />}</label>)}
+    {text && window.ChemAssessmentEditor && <button type="button" disabled={locked} className="quiz-player-button is-secondary assessment-equation-trigger"
+      onMouseDown={(e) => e.preventDefault()} onClick={(e) => window.ChemAssessmentEditor.openFor(e.currentTarget.closest('fieldset').querySelector('[data-answer-text]'))}>fx · Dodaj równanie</button>}
     <p className={`quiz-player-feedback ${tone}`} hidden={!result}>{result && (pending ? 'Odpowiedź zapisana — oczekuje na ocenę.' : ungraded ? 'Odpowiedź zapisana — to pytanie nie wpływa na wynik.'
       : result.message || `${result.correct ? 'Poprawnie' : 'Ocena częściowa lub niepoprawna'} · ${result.points}/${result.maximum} pkt${result.feedback ? ` — ${result.feedback}` : result.explanation ? ` — ${result.explanation}` : ''}`)}</p>
-    {result?.correctAnswers?.length > 0 && <div className="quiz-player-answer-key" data-local-answer-key="1">
+    {result && q.type !== 'open' && window.ChemQuizFlashcards && window.ChemQuizPractice ? <Widget factory={() => window.ChemQuizFlashcards.feedback(q, result.practice || (result.comparison || result.optionStates ? result : window.ChemQuizPractice.evaluate(q, value)), getUrl, showExplanation)} revision={JSON.stringify([result, value])} /> : result?.correctAnswers?.length > 0 && <div className="quiz-player-answer-key" data-local-answer-key="1">
       <strong>{q.type === 'text' ? 'Akceptowane odpowiedzi' : 'Poprawne odpowiedzi'}</strong>
       <ul>{result.correctAnswers.map((answer, index) => <li key={index}>{answer}</li>)}</ul>
     </div>}
@@ -38,3 +44,4 @@ register('quiz-questions', ({ questions, revealId, ...props }) => {
 register('quiz-result', ({ score, title, message, onRefresh }) => <><strong>{score}</strong><div><h2>{title}</h2><p>{message}</p>
   {onRefresh && <button type="button" className="quiz-player-button is-secondary" onClick={(event) => onRefresh(event.currentTarget)}>Odśwież wynik</button>}
 </div></>);
+register('quiz-deck', (props) => <Widget factory={() => window.ChemQuizFlashcards.study(props)} revision={props.questions} />);

@@ -27,9 +27,11 @@ test('Google links become preview URLs without losing resource keys or accepting
   for (const bad of ['javascript:alert(1)', 'http://drive.google.com/file/d/1ExampleFile12345/view', '//drive.google.com/x', '<iframe src="x"></iframe>', 'https://drive.google.com.evil.example/file/d/1ExampleFile12345/view', 'https://evil.example/', 'https://user@drive.google.com/file/d/1ExampleFile12345/view', 'https://drive.google.com:444/file/d/1ExampleFile12345/view', 'https://drive.google.com/redirect?id=1ExampleFile12345', 'https://docs.google.com/file/d/123/view', `${drive}/bad`, `${notebook}/bad`]) {
     assert.equal(media.resolve(bad), null, bad);
   }
-  assert.deepEqual(media.dimensions({ width: 200, height: -1 }), { width: 100, height: 160 });
-  assert.deepEqual(media.dimensions({ width: null, height: undefined }), { width: 100, height: 480 });
-  assert.equal(media.dimensions({ height: '600px;display:none' }).height, 480);
+  assert.deepEqual(media.dimensions({ width: 200, height: -1 }), { width: 100, heightPercent: 20 });
+  assert.deepEqual(media.dimensions({ width: null, height: undefined }), { width: 100, heightPercent: 60 });
+  assert.equal(media.dimensions({ height: '600px;display:none' }).heightPercent, 60);
+  assert.equal(media.dimensions({ height: 720 }).heightPercent, 90, 'Old pixel settings remain readable');
+  assert.equal(media.dimensions({ heightPercent: 250 }).heightPercent, 150);
 });
 
 test('Notebook links are safe external cards, never blocked iframes or endless loading states', () => {
@@ -50,9 +52,9 @@ test('Google cards serialize in lessons and dashboards with shared preview and s
   const md = lesson.serializeLesson(model);
   const parsed = lesson.parseEditableLesson(md, model.filename);
   const block = parsed.slides[0].blocks.find((entry) => entry.type === 'google');
-  assert.equal(block.width, 80); assert.equal(block.height, 200); assert.equal(block.url, drive);
+  assert.equal(block.width, 80); assert.equal(block.heightPercent, 25); assert.equal(block.url, drive);
   const rendered = player.parseLesson(md, model.filename).slides[0].html;
-  assert.match(rendered, /--google-media-width:80%;--google-media-height:200px/);
+  assert.match(rendered, /--google-media-width:80%;--google-media-height:25vh/);
   assert.match(rendered, /data-google-load/); assert.doesNotMatch(rendered, /<iframe/);
   const invalid = lesson.createLesson({ filename: 'bad.md', slides: [{ blocks: [{ type: 'google', url: 'https://evil.example' }] }] });
   assert.equal(lesson.validateLesson(invalid).valid, false);
@@ -62,7 +64,8 @@ test('Google cards serialize in lessons and dashboards with shared preview and s
   assert.equal(dashboard.validate(dash).valid, true);
   const source = dashboard.serialize(dash);
   const reimported = dashboard.parseMarkdown(source).sections[0].blocks[0];
-  assert.equal(reimported.module, 'google'); assert.equal(reimported.embedWidth, 75); assert.equal(reimported.embedHeight, 220);
+  assert.equal(reimported.module, 'google'); assert.equal(reimported.embedWidth, 75); assert.equal(reimported.embedHeightPercent, 28);
+  assert.equal(reimported.embedHeightLegacy, 220);
   assert.equal(reimported.id, drive);
   const card = dashboardParser.parse(source).sections[0].items[0];
   assert.equal(card.type, 'embed');
@@ -70,6 +73,21 @@ test('Google cards serialize in lessons and dashboards with shared preview and s
   const params = new URL(card.href, 'https://course.example').searchParams;
   assert.equal(params.get('id'), drive); assert.equal(params.get('title'), 'Mój plik');
   assert.equal(params.get('height'), '220');
+});
+
+test('unchanged legacy Google links retain progress IDs; editing size publishes percentages', () => {
+  const original = dashboard.createModel({ sections: [{ title: 'Materiały', blocks: [dashboard.createModule({ module: 'google', title: 'Plik', id: drive, embedWidth: 75, embedHeight: 720 })] }] });
+  const source = dashboard.serialize(original);
+  const parsed = dashboard.parseMarkdown(source);
+  const before = dashboardParser.parse(source).sections[0].items[0];
+  const unchanged = dashboardParser.parse(dashboard.serialize(parsed)).sections[0].items[0];
+  assert.equal(unchanged.href, before.href);
+  assert.equal(unchanged.id, before.id, 'Saving without editing must not reset the progress identity');
+  parsed.sections[0].blocks[0].embedHeightPercent = 50;
+  const changed = dashboardParser.parse(dashboard.serialize(parsed)).sections[0].items[0];
+  const url = new URL(changed.href, 'https://course.example');
+  assert.equal(url.searchParams.get('heightPercent'), '50');
+  assert.equal(url.searchParams.has('height'), false);
 });
 
 test('media iframe is created only on click, can resize/close, and markup is escaped', (t) => {
@@ -82,10 +100,10 @@ test('media iframe is created only on click, can resize/close, and markup is esc
   let frame = host.querySelector('iframe');
   assert.equal(frame.src, drive.replace('/view', '/preview'));
   assert.equal(frame.title, '<img src=x onerror=alert(1)>');
-  assert.equal(frame.loading, 'lazy');
-  assert.equal(frame.getAttribute('sandbox').includes('allow-top-navigation'), false);
-  host.querySelector('[data-google-size="120"]').click();
-  assert.equal(host.querySelector('.google-media-viewport').style.height, '320px');
+  assert.equal(frame.loading, 'eager');
+  assert.equal(frame.getAttribute('sandbox'), null, 'Use the standard allowlisted Google player without extra sandbox restrictions');
+  host.querySelector('[data-google-size="10"]').click();
+  assert.equal(host.querySelector('.google-media-viewport').style.height, '35vh');
   open.click(); assert.equal(host.querySelector('iframe'), null, 'Closing stops media and releases the frame');
   assert.equal(open.getAttribute('aria-expanded'), 'false');
   open.click(); assert.equal(host.querySelectorAll('iframe').length, 1);
@@ -109,7 +127,7 @@ for (const scenario of ['allowed', 'locked', 'anonymous']) test(`Google viewer u
   assert.equal(progressCalls, scenario === 'anonymous' ? 0 : 1);
   const button = w.document.querySelector('[data-google-load]');
   assert.equal(Boolean(button), scenario === 'allowed');
-  assert.equal(w.document.querySelector('iframe'), null);
-  if (button) { button.click(); assert.ok(w.document.querySelector('iframe')); assert.equal(progressCalls, 1); }
+  assert.equal(Boolean(w.document.querySelector('iframe')), scenario === 'allowed', 'Dashboard opens preview only after authorization');
+  if (button) { button.click(); assert.equal(w.document.querySelector('iframe'), null); button.click(); assert.ok(w.document.querySelector('iframe')); assert.equal(progressCalls, 1); }
   if (scenario === 'locked') assert.match(w.document.getElementById('google-viewer-status').textContent, /poprzedni krok/);
 });

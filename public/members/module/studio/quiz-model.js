@@ -1,14 +1,17 @@
 (function exposeQuizModel(root, factory) {
-  const api = factory();
+  const api = factory(typeof module === 'object' && module.exports ? require('../../../assets/js/quiz-practice.js') : root.ChemQuizPractice);
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.ChemQuizStudioModel = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function createQuizModel() {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function createQuizModel(practice) {
   'use strict';
 
   const SAFE_ID = /^[a-z0-9][a-z0-9-]{0,79}$/;
   const SAFE_STABLE_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
   const SAFE_MEDIA_REF = /^(?:photos\/|assets\/shared\/)[A-Za-z0-9][A-Za-z0-9_.-]{0,99}\.(?:png|jpe?g|webp|gif|svg)$/i;
-  const QUESTION_TYPES = Object.freeze(['single', 'multiple', 'true_false', 'text', 'open']);
+  const QUESTION_TYPES = Object.freeze(['single', 'multiple', 'true_false', 'text', 'open', 'flashcard']);
+  // Persist the established lower-case quiz types. Future types can extend this
+  // discriminator without a second question store or changing existing IDs.
+  const CARD_TYPES = Object.freeze({ FLASHCARD: 'flashcard', SINGLE_CHOICE: 'single', MULTIPLE_CHOICE: 'multiple', TEXT_COMPARE: 'text' });
   let sequence = 0;
 
   function id(prefix) {
@@ -51,8 +54,9 @@
   function createOption(seed = {}, index = 0) {
     return {
       optionId: stable(seed.optionId, 'option'),
-      text: line(seed.text, 500) || `Odpowiedź ${index + 1}`,
-      correct: seed.correct === true
+      text: text(seed.text, 500) || `Odpowiedź ${index + 1}`,
+      correct: seed.correct === true,
+      ...(seed.image ? { image: image(seed.image) } : {})
     };
   }
 
@@ -67,6 +71,18 @@
 
   function createQuestion(seed = {}) {
     const type = QUESTION_TYPES.includes(seed.type) ? seed.type : 'single';
+    if (type === 'flashcard') {
+      const face = (value = {}) => ({
+        text: text(value?.text, 10000),
+        images: (Array.isArray(value?.images) ? value.images : []).slice(0, 8).map(image).filter((entry) => entry.ref)
+      });
+      const front = face(seed.front || { text: seed.prompt, images: seed.image?.ref ? [seed.image] : [] });
+      return {
+        questionId: stable(seed.questionId, 'question'), type, prompt: front.text.slice(0, 3000),
+        points: 0, required: false, image: image(), options: [], acceptedAnswers: [],
+        front, back: face(seed.back), explanation: text(seed.explanation, 3000)
+      };
+    }
     let options = (Array.isArray(seed.options) ? seed.options : defaultOptions())
       .slice(0, 12)
       .map(createOption);
@@ -87,7 +103,7 @@
       options = [];
     }
     const acceptedAnswers = (Array.isArray(seed.acceptedAnswers) ? seed.acceptedAnswers : [])
-      .map((answer) => line(answer, 500))
+      .map((answer) => text(answer, 500))
       .filter(Boolean)
       .slice(0, 20);
     const gradingMode = ['ai', 'manual', 'ungraded'].includes(seed.gradingMode) ? seed.gradingMode : 'manual';
@@ -100,6 +116,7 @@
       image: image(seed.image),
       options,
       acceptedAnswers: type === 'text' ? (acceptedAnswers.length ? acceptedAnswers : ['Poprawna odpowiedź']) : [],
+      ...(type === 'text' && seed.textCompare ? { textCompare: practice.settings(seed.textCompare) } : {}),
       ...(type === 'open' ? {
         gradingMode,
         answerKey: text(seed.answerKey || seed.modelAnswer, 10_000),
@@ -115,14 +132,19 @@
     const settings = seed.settings && typeof seed.settings === 'object' ? seed.settings : {};
     const questions = Array.isArray(seed.questions) && seed.questions.length
       ? seed.questions.slice(0, 200).map(createQuestion)
-      : [createQuestion()];
+      : [createQuestion(seed.mode === 'deck' ? { type: 'flashcard' } : {})];
     return {
       version: 1,
+      ...(seed.mode === 'deck' ? { mode: 'deck' } : {}),
       quizId: line(seed.quizId || 'nowy-quiz', 80).toLowerCase(),
       metadata: {
         title: line(metadata.title, 180) || 'Nowy quiz',
         description: text(metadata.description, 1200),
         status: metadata.status === 'published' ? 'published' : 'draft',
+        ...(seed.mode === 'deck' ? {
+          active: metadata.active !== false,
+          courseId: line(metadata.courseId, 128)
+        } : {}),
         tags: (Array.isArray(metadata.tags) ? metadata.tags : [])
           .map((tag) => line(tag, 60))
           .filter(Boolean)
@@ -142,6 +164,16 @@
   function validate(value) {
     const quiz = createQuiz(value);
     const errors = [];
+    if (value?.mode && !['quiz', 'deck'].includes(value.mode)) errors.push({ code: 'QUIZ_MODE_INVALID', message: 'Nieobsługiwany tryb quizu.' });
+    if (Array.isArray(value?.questions) && value.questions.some((question) => !QUESTION_TYPES.includes(question.type))) {
+      errors.push({ code: 'QUIZ_TYPE_INVALID', message: 'Nieobsługiwany rodzaj pytania. Nie zapisano zmian.' });
+    }
+    if (quiz.mode === 'deck' && quiz.metadata.status === 'published' && !SAFE_STABLE_ID.test(quiz.metadata.courseId)) {
+      errors.push({ code: 'QUIZ_COURSE_REQUIRED', message: 'Wybierz kurs dla puli fiszek.' });
+    }
+    if (quiz.mode === 'deck' && quiz.questions.some((question) => !practice.DECK_TYPES.includes(question.type))) {
+      errors.push({ code: 'QUIZ_DECK_TYPE_INVALID', message: 'Pula nauki obsługuje fiszki, pojedynczy i wielokrotny wybór oraz porównywanie tekstu.' });
+    }
     if (!SAFE_ID.test(quiz.quizId)) {
       errors.push({ code: 'QUIZ_ID_INVALID', message: 'ID quizu może zawierać tylko małe litery, cyfry i myślniki.' });
     }
@@ -152,6 +184,14 @@
       const label = `Pytanie ${index + 1}`;
       if (ids.has(question.questionId)) errors.push({ code: 'QUIZ_QUESTION_ID_DUPLICATE', message: `${label} ma powtórzony identyfikator.` });
       ids.add(question.questionId);
+      if (question.type === 'flashcard') {
+        if (quiz.metadata.status === 'published') {
+          for (const [side, name] of [['front', 'przód'], ['back', 'tył']]) {
+            if (!question[side].text && !question[side].images.length) errors.push({ code: 'QUIZ_FLASHCARD_EMPTY', message: `${label}: uzupełnij ${name} fiszki tekstem lub obrazem.` });
+          }
+        }
+        return;
+      }
       if (!question.prompt || question.prompt === 'Wpisz treść pytania.') {
         errors.push({ code: 'QUIZ_QUESTION_PROMPT_REQUIRED', message: `${label}: wpisz właściwą treść pytania.` });
       }
@@ -159,6 +199,7 @@
         if (ids.has(option.optionId)) errors.push({ code: 'QUIZ_OPTION_ID_DUPLICATE', message: `${label} ma powtórzony identyfikator odpowiedzi.` });
         ids.add(option.optionId);
       });
+      if (quiz.mode === 'deck' && question.options.length > 6) errors.push({ code: 'QUIZ_OPTIONS_LIMIT', message: `${label}: w puli nauki użyj od 2 do 6 odpowiedzi.` });
       if (question.type === 'single' && question.options.filter((option) => option.correct).length !== 1) {
         errors.push({ code: 'QUIZ_SINGLE_ANSWER_INVALID', message: `${label}: wybierz dokładnie jedną poprawną odpowiedź.` });
       }
@@ -187,6 +228,7 @@
       throw new Error('Nieobsługiwany format quizu.');
     }
     const quiz = createQuiz(parsed);
+    if (parsed.questions?.some((question) => !QUESTION_TYPES.includes(question.type))) throw new Error('Nieobsługiwany rodzaj pytania. Zaktualizuj aplikację przed edycją.');
     if (quizId && quiz.quizId !== quizId) throw new Error('ID quizu nie pasuje do folderu.');
     return quiz;
   }
@@ -195,7 +237,7 @@
     const copy = createQuestion(JSON.parse(JSON.stringify(question)));
     copy.questionId = id('question');
     copy.options.forEach((option) => { option.optionId = id('option'); });
-    copy.prompt = `${question.prompt} — kopia`;
+    if (copy.type !== 'flashcard') copy.prompt = `${question.prompt} — kopia`;
     return copy;
   }
 
@@ -211,21 +253,14 @@
     ), 0);
     const results = quiz.questions.map((question) => {
       const raw = rawAnswers[question.questionId];
+      if (question.type === 'flashcard') return { questionId: question.questionId, correct: null, points: 0, maximum: 0, reviewStatus: 'not_scored' };
       if (question.type === 'open') {
         if (question.gradingMode === 'ungraded') {
           return { questionId: question.questionId, correct: null, points: 0, maximum: 0, reviewStatus: 'not_scored' };
         }
         return { questionId: question.questionId, correct: null, points: null, maximum: question.points, reviewStatus: 'pending' };
       }
-      let correct = false;
-      if (question.type === 'text') {
-        const answer = normalizeAnswer(raw);
-        correct = Boolean(answer) && question.acceptedAnswers.some((candidate) => normalizeAnswer(candidate) === answer);
-      } else {
-        const selected = new Set(Array.isArray(raw) ? raw : raw ? [raw] : []);
-        const expected = new Set(question.options.filter((option) => option.correct).map((option) => option.optionId));
-        correct = selected.size === expected.size && [...selected].every((optionId) => expected.has(optionId));
-      }
+      const { correct } = practice.evaluate(question, raw);
       if (correct) earned += question.points;
       return { questionId: question.questionId, correct, points: correct ? question.points : 0, maximum: question.points, reviewStatus: 'graded' };
     });
@@ -243,6 +278,7 @@
 
   return Object.freeze({
     QUESTION_TYPES,
+    CARD_TYPES,
     SAFE_ID,
     SAFE_MEDIA_REF,
     createOption,

@@ -6,6 +6,7 @@ const openAnswerGrader = require('../open-answer-grader.js');
 const quizStorage = require('../quiz-storage.js');
 const { updateQuizProgress } = require('../quiz-progress.js');
 const { gradeQuiz, publicDefinition, validateDefinition } = require('../quiz-common.js');
+const practice = require('../../public/assets/js/quiz-practice.js');
 const {
   json,
   mutationGuard,
@@ -60,6 +61,7 @@ exports.handler = async function quizHandler(event = {}, context = {}) {
     if (query.action && query.action !== 'definition') return json({ error: 'INVALID_QUIZ_ACTION' }, 400);
     const { asset, definition } = await readQuiz(repositoryId, quizId);
     if (definition.metadata.status !== 'published' && !preview) return json({ error: 'QUIZ_NOT_PUBLISHED' }, 404);
+    if (definition.mode === 'deck' && definition.metadata.active === false && !preview) return json({ error: 'QUIZ_NOT_ACTIVE' }, 404);
     let latestAttempt = null;
     if (!preview && definition.questions.some((question) => question.type === 'open')) {
       try {
@@ -130,6 +132,7 @@ async function handleSubmit(event, auth) {
   try {
     const { definition } = await readQuiz(repositoryId, quizId);
     if (definition.metadata.status !== 'published' && !preview) return json({ error: 'QUIZ_NOT_PUBLISHED' }, 404);
+    if (definition.mode === 'deck' && definition.metadata.active === false && !preview) return json({ error: 'QUIZ_NOT_ACTIVE' }, 404);
     const answers = sanitizeAnswers(definition, body.answers);
     if (!answers.ok) return json({ error: answers.error }, 400);
     const missing = definition.questions.filter((question) => question.required
@@ -350,6 +353,9 @@ function studentResult(result, definition, options = {}) {
       const question = definition.questions.find((item) => item.questionId === entry.questionId);
       return {
         questionId: entry.questionId,
+        ...(['single', 'multiple', 'true_false', 'text'].includes(question?.type) ? {
+          answer: entry.answer, practice: practice.evaluate(question, entry.answer)
+        } : {}),
         correct: entry.correct,
         points: entry.points,
         maximum: entry.maxPoints,

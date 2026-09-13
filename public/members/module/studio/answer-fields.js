@@ -40,7 +40,7 @@
     const list = make('div', 'answer-row-list');
     const add = button('＋ Dodaj wariant odpowiedzi', () => {
       values.push(''); onChange([...values]); render();
-      list.lastElementChild?.querySelector('input')?.focus();
+      list.lastElementChild?.querySelector('input,textarea')?.focus();
     });
     function render() {
       list.replaceChildren();
@@ -48,7 +48,10 @@
         const row = make('div', 'answer-list-row');
         row.append(textField(`Wariant ${index + 1}`, value, (next) => {
           values[index] = next; onChange([...values]);
-        }, false, options.maxLength || 240));
+        }, options.multiline === true, options.maxLength || 240));
+        if (options.equations && root.ChemAssessmentEditor) {
+          row.firstElementChild.append(root.ChemAssessmentEditor.equationButton(row.querySelector('input,textarea')));
+        }
         const remove = button('Usuń', () => { values.splice(index, 1); onChange([...values]); render(); }, values.length <= 1);
         remove.setAttribute('aria-label', `Usuń wariant ${index + 1}`);
         row.append(remove); list.append(row);

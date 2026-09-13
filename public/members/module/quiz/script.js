@@ -31,7 +31,7 @@
   const state = {
     quiz: null, questions: [], materialId: '', attempts: 0, savedRecord: null,
     urls: new Set(), lockedAfterAttempt: false, imageObserver: null, latestAttempt: null,
-    answers: {}, questionResults: {}, controlsLocked: false, mediaUrls: new Map()
+    answers: {}, questionResults: {}, controlsLocked: false, mediaUrls: new Map(), deckImageCache: null
   };
 
   const create = (tag, className, text) => {
@@ -64,6 +64,7 @@
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
+      if (payload.error === 'QUIZ_NOT_ACTIVE') throw new Error('Ta pula fiszek jest obecnie wyłączona przez autora.');
       if (payload.error === 'QUIZ_NOT_PUBLISHED') throw new Error('Quiz nie został jeszcze opublikowany.');
       if (payload.error === 'ADMIN_REQUIRED') throw new Error('Podgląd draftu jest dostępny tylko dla administratora.');
       throw new Error(payload.error || 'Nie udało się pobrać quizu.');
@@ -175,13 +176,14 @@
   }
 
   function renderQuestion(question, index) {
+    if (question.type === 'flashcard') return window.ChemQuizFlashcards.card(question, reactImageUrl);
     const fieldset = create('fieldset', 'quiz-player-question');
     fieldset.dataset.questionId = question.questionId;
     const heading = create('div', 'quiz-player-question-heading');
     const pointLabel = question.type === 'open' && question.gradingMode === 'ungraded'
       ? 'bez punktów' : `${question.points} pkt`;
     heading.append(create('span', '', `Pytanie ${index + 1}`), create('span', '', pointLabel));
-    const legend = create('legend', '', question.prompt);
+    const legend = create('legend'); legend.append(window.ChemQuizFlashcards.text(question.prompt, reactImageUrl));
     fieldset.append(heading, legend);
     if (question.image.ref) {
       const image = create('img');
@@ -197,9 +199,10 @@
       input.placeholder = 'Wpisz własną odpowiedź…'; input.dataset.answerText = '1';
       fieldset.append(input);
     } else if (question.type === 'text') {
-      const input = create('input', 'quiz-player-text');
-      input.type = 'text'; input.autocomplete = 'off'; input.placeholder = 'Wpisz odpowiedź'; input.dataset.answerText = '1';
+      const input = create('textarea', 'quiz-player-text'); input.rows = 2; input.maxLength = 500;
+      input.autocomplete = 'off'; input.placeholder = 'Wpisz odpowiedź'; input.dataset.answerText = '1';
       fieldset.append(input);
+      if (window.ChemAssessmentEditor) fieldset.append(window.ChemAssessmentEditor.equationButton(input));
     } else {
       question.options.forEach((option) => {
         const label = create('label', 'quiz-player-option');
@@ -207,7 +210,8 @@
         input.type = question.type === 'multiple' ? 'checkbox' : 'radio';
         input.name = `quiz-answer-${question.questionId}`;
         input.value = option.optionId;
-        label.append(input, create('span', '', option.text));
+        label.append(input, window.ChemQuizFlashcards.text(option.text, reactImageUrl));
+        if (option.image?.ref) label.append(window.ChemQuizFlashcards.image(option.image, reactImageUrl));
         fieldset.append(label);
       });
     }
@@ -257,6 +261,23 @@
     ), 0));
     if (quiz.metadata.cover.ref) void loadImage(elements.cover, quiz.metadata.cover.ref, true);
     state.questions = quiz.settings.shuffleQuestions ? shuffle(quiz.questions) : quiz.questions.slice();
+    if (quiz.mode === 'deck') {
+      state.deckImageCache = window.ChemQuizFlashcards.imageCache(mediaBlob);
+      elements.check.hidden = true; elements.retry.hidden = true;
+      elements.threshold.parentElement.hidden = true; elements.points.parentElement.hidden = true;
+      document.querySelector('.quiz-player-eyebrow').textContent = 'Pula nauki';
+      elements.questionCount.previousElementSibling.textContent = 'Karty';
+      elements.checkingMode.textContent = 'Odpowiadaj na pytania i odsłaniaj fiszki. Sprawdzanie działa na Twoim urządzeniu — bez AI i bez punktacji. Po ukończeniu zapisujemy postęp.';
+      const props = {
+        questions: state.questions, getUrl: state.deckImageCache.get, preview,
+        onComplete: async () => {
+          state.attempts += 1;
+          await saveResult({ percent: null, passed: null, gradingStatus: 'not_scored' });
+        }
+      };
+      if (!window.NextMedUI?.render('quiz-deck', elements.form, props)) elements.form.replaceChildren(window.ChemQuizFlashcards.study(props));
+      return;
+    }
     if (!renderReactQuestions()) elements.form.replaceChildren(...state.questions.map(renderQuestion));
     elements.check.textContent = checkButtonLabel();
     if (!elements.form.dataset.reactView) queueQuestionImages();
@@ -273,6 +294,7 @@
     return window.NextMedUI?.render('quiz-questions', elements.form, {
       questions: state.questions, answers: state.answers, results: state.questionResults,
       locked: state.controlsLocked, revealId, getUrl: reactImageUrl,
+      showExplanation: state.quiz.settings.showFeedback,
       onAnswer: (id, value) => { if (!state.controlsLocked) state.answers[id] = value; }
     });
   }
@@ -284,6 +306,7 @@
   }
 
   function answerFor(question) {
+    if (question.type === 'flashcard') return [];
     if (elements.form.dataset.reactView) return state.answers[question.questionId] ?? (['text', 'open'].includes(question.type) ? '' : []);
     const fieldset = elements.form.querySelector(`[data-question-id="${question.questionId}"]`);
     if (!fieldset) return [];
@@ -295,16 +318,6 @@
     return ['text', 'open'].includes(question.type) ? Boolean(normalized(answer)) : Array.isArray(answer) && answer.length > 0;
   }
 
-  function correct(question, answer) {
-    if (question.type === 'text') {
-      const candidate = normalized(answer);
-      return Boolean(candidate) && question.acceptedAnswers.some((value) => normalized(value) === candidate);
-    }
-    const selected = new Set(Array.isArray(answer) ? answer : []);
-    const expected = new Set(question.options.filter((option) => option.correct).map((option) => option.optionId));
-    return selected.size === expected.size && [...selected].every((optionId) => expected.has(optionId));
-  }
-
   function lockControls(locked) {
     state.controlsLocked = locked;
     if (elements.form.dataset.reactView) {
@@ -313,6 +326,7 @@
       return;
     }
     elements.form.querySelectorAll('input, textarea').forEach((input) => { input.disabled = locked; });
+    elements.form.querySelectorAll('.assessment-equation-trigger').forEach((button) => { button.disabled = locked; });
     elements.check.disabled = locked;
   }
 
@@ -420,6 +434,7 @@
   }
 
   function renderQuestionResults(result) {
+    (result.results || []).forEach((entry) => { if (entry.answer != null) state.answers[entry.questionId] = entry.answer; });
     if (elements.form.dataset.reactView) {
       state.questionResults = Object.fromEntries((result.results || []).map((entry) => [entry.questionId, entry]));
       renderReactQuestions();
@@ -443,6 +458,9 @@
             ? 'Odpowiedź zapisana — to pytanie nie wpływa na wynik.'
             : `${entry.correct ? 'Poprawnie' : 'Ocena częściowa lub niepoprawna'} · ${entry.points}/${entry.maximum} pkt${entry.feedback ? ` — ${entry.feedback}` : entry.explanation ? ` — ${entry.explanation}` : ''}`;
       }
+      const question = state.quiz.questions.find((item) => item.questionId === entry.questionId);
+      fieldset?.querySelector('.quiz-practice-feedback')?.remove();
+      if (fieldset && question && entry.practice) fieldset.append(window.ChemQuizFlashcards.feedback(question, entry.practice, reactImageUrl, state.quiz.settings.showFeedback));
     });
   }
 
@@ -461,6 +479,7 @@
   }
 
   async function checkAnswers() {
+    if (state.quiz.mode === 'deck') return;
     if (state.lockedAfterAttempt || state.controlsLocked) return;
     const answers = Object.fromEntries(state.quiz.questions.map((question) => [question.questionId, answerFor(question)]));
     const unanswered = state.quiz.questions.filter((question) => question.required && !isAnswered(question, answers[question.questionId]));
@@ -494,17 +513,21 @@
       return;
     }
     let earned = 0;
+    lockControls(true);
+    elements.check.textContent = 'Sprawdzanie na Twoim urządzeniu…';
     const maximum = state.quiz.questions.reduce((sum, question) => sum + question.points, 0);
-    state.quiz.questions.forEach((question) => {
-      const ok = correct(question, answers[question.questionId]);
+    for (let index = 0; index < state.quiz.questions.length; index++) {
+      // Keep long text quizzes responsive without making grading requests.
+      if (index && index % 8 === 0) await new Promise((resolve) => window.setTimeout(resolve, 0));
+      const question = state.quiz.questions[index];
+      if (question.type === 'flashcard') continue;
+      const evaluated = window.ChemQuizPractice.evaluate(question, answers[question.questionId]);
+      const ok = evaluated.correct;
       if (ok) earned += question.points;
-      const correctAnswers = ok ? [] : question.type === 'text'
-        ? question.acceptedAnswers.slice()
-        : question.options.filter((option) => option.correct).map((option) => option.text);
-      const message = `${ok ? 'Poprawnie' : 'Niepoprawnie'} · ${ok ? question.points : 0}/${question.points} pkt${state.quiz.settings.showFeedback && question.explanation ? ` — ${question.explanation}` : ''}`;
+      const message = `${ok ? 'Poprawnie' : 'Niepoprawnie'} · ${ok ? question.points : 0}/${question.points} pkt`;
       if (elements.form.dataset.reactView) {
-        state.questionResults[question.questionId] = { correct: ok, correctAnswers, message };
-        return;
+        state.questionResults[question.questionId] = { ...evaluated, message };
+        continue;
       }
       const fieldset = elements.form.querySelector(`[data-question-id="${question.questionId}"]`);
       const feedback = fieldset?.querySelector('.quiz-player-feedback');
@@ -515,15 +538,10 @@
         feedback.className = `quiz-player-feedback ${ok ? 'is-correct' : 'is-wrong'}`;
         feedback.textContent = message;
       }
-      if (correctAnswers.length && fieldset) {
-        const key = create('div', 'quiz-player-answer-key');
-        key.dataset.localAnswerKey = '1';
-        key.append(create('strong', '', question.type === 'text' ? 'Akceptowane odpowiedzi' : 'Poprawne odpowiedzi'));
-        const list = create('ul');
-        correctAnswers.forEach((answer) => list.append(create('li', '', answer)));
-        key.append(list); fieldset.append(key);
-      }
-    });
+      fieldset?.querySelector('.quiz-practice-feedback')?.remove();
+      if (fieldset) fieldset.append(window.ChemQuizFlashcards.feedback(question, evaluated, reactImageUrl, state.quiz.settings.showFeedback));
+    }
+    elements.check.textContent = checkButtonLabel();
     const percent = maximum ? Math.round((earned / maximum) * 10_000) / 100 : null;
     const passed = percent == null ? null : percent >= state.quiz.settings.passingScore;
     const gradingStatus = maximum > 0 ? 'graded' : 'not_scored';
@@ -550,7 +568,8 @@
     });
     elements.form.querySelectorAll('.quiz-player-question').forEach((question) => question.classList.remove('is-correct', 'is-wrong'));
     elements.form.querySelectorAll('.quiz-player-feedback').forEach((feedback) => { feedback.hidden = true; });
-    elements.form.querySelectorAll('[data-local-answer-key]').forEach((key) => key.remove());
+    elements.form.querySelectorAll('.assessment-equation-trigger').forEach((button) => { button.disabled = false; });
+    elements.form.querySelectorAll('.quiz-practice-feedback, [data-local-answer-key]').forEach((key) => key.remove());
     }
     elements.result.hidden = true;
     elements.retry.hidden = true;
@@ -569,7 +588,7 @@
     renderQuiz();
     elements.loading.hidden = true;
     elements.player.hidden = false;
-    if (!preview && state.attempts > 0) {
+    if (!preview && state.attempts > 0 && state.quiz.mode !== 'deck') {
       const attemptId = state.latestAttempt?.status === 'submitted'
         ? state.latestAttempt.attemptId : state.savedRecord?.status === 'completed' ? state.savedRecord?.details?.attemptId : '';
       if (attemptId && state.quiz.questions.some((question) => question.type === 'open')) {
@@ -608,5 +627,6 @@
     state.urls.forEach((url) => URL.revokeObjectURL(url));
     state.urls.clear();
     state.mediaUrls.clear();
+    state.deckImageCache?.clear();
   });
 })();

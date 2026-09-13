@@ -337,7 +337,11 @@
       title: singleLine(source.title) || definition.label,
       description: singleLine(source.description),
       id: singleLine(source.id || source.resourceId),
-      ...(canonical.module === 'google' ? { embedWidth: googleMedia.dimensions({ width: source.embedWidth }).width, embedHeightPercent: googleMedia.dimensions({ height: source.embedHeight, heightPercent: source.embedHeightPercent }).heightPercent } : {}),
+      ...(canonical.module === 'google' ? {
+        embedWidth: googleMedia.dimensions({ width: source.embedWidth }).width,
+        embedHeightPercent: googleMedia.dimensions({ height: source.embedHeightLegacy || source.embedHeight, heightPercent: source.embedHeightPercent }).heightPercent,
+        ...(Number(source.embedHeightLegacy || source.embedHeight) > 0 ? { embedHeightLegacy: Math.min(1200, Math.max(160, Number(source.embedHeightLegacy || source.embedHeight))) } : {})
+      } : {}),
       protection,
       source: sourceMode,
       prompt,
@@ -602,7 +606,12 @@
       add('id', card.id);
     }
     if (card.module === 'google') {
-      add('id', card.id); add('width', card.embedWidth); add('heightPercent', card.embedHeightPercent); add('title', card.title);
+      add('id', card.id); add('width', card.embedWidth);
+      // Keep an unchanged legacy URL stable: old dashboards derive progress IDs
+      // from it. Editing the size writes the new percentage parameter instead.
+      if (card.embedHeightLegacy && card.embedHeightPercent === googleMedia.dimensions({ height: card.embedHeightLegacy }).heightPercent) add('height', card.embedHeightLegacy);
+      else add('heightPercent', card.embedHeightPercent);
+      add('title', card.title);
     }
     if (PROTECTION_OPTIONS[card.module]) add('type', card.protection);
     if (card.module === 'chat') {
