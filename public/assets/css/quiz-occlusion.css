@@ -27,6 +27,12 @@
 .io-mask-detail { display: grid; gap: 1rem; border-top: 1px solid var(--chem-line, #d5deea); padding-top: 1rem; }
 .io-position-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
 .io-help { font-size: .85rem; line-height: 1.6; color: var(--chem-muted, #53647a); }
+.io-image-drop { padding: 1rem; border: 2px dashed var(--chem-line, #d5deea); border-radius: 12px; background: var(--chem-surface, #fff); }
+.io-image-drop:focus-visible, .io-image-drop.is-dragging { outline: 2px solid var(--chem-primary, #116b63); outline-offset: 3px; }
+.io-image-drop p { margin: 0 0 .65rem; font-size: .85rem; line-height: 1.6; }
+.io-image-drop small { display: block; margin-top: .65rem; color: var(--chem-muted, #53647a); }
+.io-image-drop .io-upload-status:empty { display: none; }
+.io-editor[inert] { opacity: .7; }
 .io-answers { display: grid; gap: 1rem; margin-top: 1rem; }
 .io-answer { padding: 1rem; border: 1px solid var(--chem-line, #d5deea); border-radius: 12px; background: var(--chem-surface, #fff); }
 .io-reveal-list { margin: 1rem 0; }

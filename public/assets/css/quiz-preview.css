@@ -42,3 +42,22 @@
 .quiz-option-row { padding: .75rem; border: 1px solid var(--chem-line); border-radius: 12px; }
 .quiz-workspace .quiz-builder-status { position: static; }
 @container (min-width: 620px) { .quiz-face-editors { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* One bounded workspace on desktop, one document scroll on smaller screens.
+   Reports belong to the editor instead of overflowing below the fixed shell. */
+.quiz-report-disclosure { margin: 1rem 0; border: 1px solid var(--chem-line); border-radius: 14px; background: var(--chem-surface); }
+.quiz-report-disclosure > summary { padding: 1rem; cursor: pointer; font-weight: 750; }
+.quiz-report-disclosure .quiz-report-panel { margin: 0; box-shadow: none; border: 0; padding: 1rem; }
+.quiz-workspace :is(.quiz-question-card, .quiz-deck-study, .quiz-preview-question) { scroll-margin-top: calc(var(--studio-header-height) + 16px); }
+@media (min-width: 1181px) {
+  .quiz-workspace { display: grid; grid-template-rows: auto minmax(0, 1fr); height: calc(100dvh - var(--quiz-header-height, var(--studio-header-height))); min-height: 0; overflow: clip; }
+  .quiz-workspace .workspace-toolbar { height: auto; overflow: visible; }
+  .quiz-workspace .quiz-builder-shell { height: 100%; min-height: 0; overflow: clip; }
+  .quiz-workspace :is(.quiz-library-panel, .quiz-editor-panel, .quiz-preview-panel) { height: 100%; min-height: 0; max-height: none; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; overflow-anchor: none; }
+}
+@media (max-width: 1180px) {
+  .quiz-workspace { height: auto; min-height: 0; overflow: visible; }
+  .quiz-workspace .workspace-toolbar { height: auto; overflow: visible; flex-wrap: wrap; }
+  .quiz-workspace .quiz-builder-shell { height: auto; min-height: 0; }
+  .quiz-workspace :is(.quiz-library-panel, .quiz-editor-panel, .quiz-preview-panel) { height: auto; min-height: 0; max-height: none; overflow: visible; }
+}

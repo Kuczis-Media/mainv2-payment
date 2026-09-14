@@ -91,7 +91,7 @@
     }));
     drop.addEventListener('drop', (event) => void uploadFiles(event.dataTransfer?.files));
     dialog.addEventListener('paste', (event) => {
-      const files = Array.from(event.clipboardData?.files || []).filter((file) => file.type.startsWith('image/'));
+      const files = imageFiles(event.clipboardData);
       if (!files.length) return;
       event.preventDefault();
       void uploadFiles(files);
@@ -325,6 +325,29 @@
     });
   }
 
+  function imageFiles(data) {
+    const files = Array.from(data?.files || []).filter((file) => file.type.startsWith('image/'));
+    return files.length ? files : Array.from(data?.items || [])
+      .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+      .map((item) => item.getAsFile()).filter(Boolean);
+  }
+
+  // The inline editors and the modal share validation, naming and storage.
+  async function uploadImage(file, options = {}) {
+    if (!file || !ACCEPTED.has(file.type) || file.size <= 0 || file.size > MAX_BYTES) {
+      throw new Error('Wybierz obraz PNG, JPG, WebP, GIF lub SVG o rozmiarze do 4 MB.');
+    }
+    const filename = safeFilename(file);
+    const scope = options.scope === 'local' && options.materialKind && options.materialId ? 'local' : 'shared';
+    const asset = await root.ChemContentLibrary.uploadMedia({
+      scope, materialKind: scope === 'local' ? options.materialKind : '',
+      materialId: scope === 'local' ? options.materialId : '',
+      filename, contentBase64: await fileBase64(file), mimeType: file.type,
+      repositoryId: options.repositoryId || ''
+    });
+    return { ...asset, filename: asset.filename || filename, reference: asset.reference || asset.ref || `${scope === 'local' ? 'photos' : 'assets/shared'}/${filename}` };
+  }
+
   async function uploadFiles(rawFiles) {
     const files = Array.from(rawFiles || []);
     if (!files.length || state.loading) return;
@@ -339,13 +362,7 @@
       for (let index = 0; index < files.length; index += 1) {
         const file = files[index];
         setStatus(`Wysyłanie ${index + 1}/${files.length}: ${file.name}…`);
-        await root.ChemContentLibrary.uploadMedia({
-          ...owner(),
-          filename: safeFilename(file),
-          contentBase64: await fileBase64(file),
-          mimeType: file.type,
-          repositoryId: state.options?.repositoryId || ''
-        });
+        await uploadImage(file, { ...owner(), repositoryId: state.options?.repositoryId || '' });
       }
       state.loading = false;
       await loadAssets(true);
@@ -369,5 +386,5 @@
     await loadAssets(false);
   }
 
-  root.ChemMediaManager = Object.freeze({ open });
+  root.ChemMediaManager = Object.freeze({ open, uploadImage, imageFiles });
 })(typeof globalThis !== 'undefined' ? globalThis : window);

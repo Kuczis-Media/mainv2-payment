@@ -39,6 +39,7 @@
     saveButton: byId('quiz-save-draft-button'),
     publishButton: byId('quiz-publish-button'),
     reportPanel: byId('quiz-report-panel'),
+    reportDisclosure: byId('quiz-report-disclosure'),
     reportRefresh: byId('quiz-report-refresh'),
     reportStatus: byId('quiz-report-status'),
     reportBody: byId('quiz-report-body')
@@ -138,6 +139,7 @@
     elements.showFeedback.closest('label').hidden = deck;
     elements.allowRetry.closest('label').hidden = deck;
     elements.reportPanel.hidden = deck;
+    if (elements.reportDisclosure) elements.reportDisclosure.hidden = deck;
     root.document.querySelectorAll('[data-quiz-add]').forEach((button) => { button.hidden = deck && !root.ChemQuizPractice.DECK_TYPES.includes(button.dataset.quizAdd); });
     elements.deckLink.hidden = !deck;
     if (deck) {
@@ -406,8 +408,45 @@
   function renderOcclusion(question) {
     return root.ChemQuizOcclusion.editor(question, {
       getUrl: previewImageUrl, onImage: () => openMediaManager(question),
+      onImageFile: (file) => uploadOcclusionImage(question, file),
       onChange: () => { markChanged(); scheduleFeedback(); }
     });
+  }
+
+  async function uploadOcclusionImage(question, file) {
+    if (!root.ChemMediaManager?.uploadImage) throw new Error('Przesyłanie obrazów jest chwilowo niedostępne. Odśwież Studio.');
+    const owner = state.quiz, repositoryId = state.repositoryId, quizId = owner.quizId;
+    const previousRef = question.image.ref;
+    if (question.occlusion.masks.length && !root.confirm('Podmiana obrazu usunie jego maski. Kontynuować?')) return false;
+    const local = Boolean(state.remoteSha && state.remoteId === quizId);
+    const asset = await root.ChemMediaManager.uploadImage(file, {
+      repositoryId, scope: local ? 'local' : 'shared', materialKind: local ? 'quiz' : '', materialId: local ? quizId : ''
+    });
+    if (state.quiz !== owner || state.repositoryId !== repositoryId || owner.quizId !== quizId || !owner.questions.includes(question)) return false;
+    if (question.image.ref !== previousRef) throw new Error('Obraz źródłowy został już zmieniony. Wysłany plik znajdziesz w bibliotece obrazów.');
+    question.image = { ref: asset.reference, alt: String(file.name || 'Ilustracja').replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').slice(0, 300) };
+    question.occlusion.masks = [];
+    markChanged('Obraz dodano. Możesz teraz rysować maski.');
+    render();
+    Array.from(elements.questions.children).find((node) => node.dataset.questionId === question.questionId)?.querySelector('.io-image-drop')?.focus({ preventScroll: true });
+    return true;
+  }
+
+  function scrollQuizTarget(target) {
+    if (!target) return;
+    const panel = target.closest('.quiz-editor-panel, .quiz-preview-panel');
+    if (panel && root.matchMedia?.('(min-width: 1181px)').matches) {
+      // Do not scroll all ancestors: overflow-hidden workspaces can otherwise
+      // be scrolled programmatically, moving the toolbar offscreen.
+      const top = panel.scrollTop + target.getBoundingClientRect().top - panel.getBoundingClientRect().top - 16;
+      panel.scrollTo?.({ top: Math.max(0, top), behavior: 'smooth' });
+    } else target.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+  }
+
+  function resetQuizScroll() {
+    elements.workspace.scrollTop = 0;
+    elements.workspace.querySelectorAll('.quiz-editor-panel, .quiz-preview-panel').forEach((panel) => { panel.scrollTop = 0; });
+    if (elements.reportDisclosure) elements.reportDisclosure.open = false;
   }
 
   function renderFlashcard(question) {
@@ -957,7 +996,7 @@
       renderPreview();
       const target = state.quiz.mode === 'deck' ? elements.preview.querySelector('.quiz-deck-study')
         : Array.from(elements.preview.querySelectorAll('[data-preview-question], [data-flashcard-id], [data-occlusion-id]')).find((node) => Object.values(node.dataset).includes(question.questionId));
-      (target || elements.preview).scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      scrollQuizTarget(target || elements.preview);
       return;
     }
     if (action.endsWith('flashcard-media') && question.type === 'flashcard') {
@@ -1009,7 +1048,7 @@
     state.quiz.questions.push(question);
     markChanged('Pytanie dodano do szkicu na tym urządzeniu.');
     render();
-    elements.questions.lastElementChild?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    scrollQuizTarget(elements.questions.lastElementChild);
     elements.questions.lastElementChild?.querySelector('textarea')?.focus({ preventScroll: true });
   }
 
@@ -1061,7 +1100,8 @@
     saveLocal();
     render();
     setStatus(deck ? 'Nowa pula fiszek jest gotowa. Wybierz kurs i uzupełnij obie strony kart.' : 'Nowy quiz jest gotowy.');
-    elements.id.focus();
+    resetQuizScroll();
+    elements.id.focus({ preventScroll: true });
     elements.id.select();
   }
 
@@ -1155,8 +1195,10 @@
     state.remoteSha = asset.sha || result.sha;
     state.report = null;
     state.attemptReport = null;
+    state.focusQuestionId = '';
     saveLocal();
     render();
+    resetQuizScroll();
     setStatus('Quiz otwarto do edycji.');
   }
 
@@ -1170,6 +1212,11 @@
   }
 
   function bind() {
+    const header = root.document.querySelector('.studio-header');
+    if (header && root.ResizeObserver) {
+      const resize = new root.ResizeObserver(() => elements.workspace.style.setProperty('--quiz-header-height', `${header.getBoundingClientRect().height}px`));
+      resize.observe(header);
+    }
     [elements.id, elements.title, elements.description, elements.passingScore, elements.tags].forEach((input) => {
       input.addEventListener('input', updateMetadata);
     });

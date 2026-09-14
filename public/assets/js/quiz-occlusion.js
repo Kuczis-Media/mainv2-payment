@@ -94,7 +94,7 @@
     }
     render(); return host;
   }
-  function editor(question, { getUrl, onChange, onImage }) {
+  function editor(question, { getUrl, onChange, onImage, onImageFile }) {
     const host = node('section', 'io-editor'), settings = question.occlusion;
     let selected = settings.masks[0]?.maskId || '', drawing = false, gesture = null;
     const changed = () => onChange();
@@ -113,6 +113,46 @@
     media.append(button(question.image.ref ? 'Podmień obraz źródłowy' : 'Wybierz obraz źródłowy', onImage));
     const removeImage = button('Usuń obraz', () => {}); removeImage.dataset.quizAction = 'remove-media'; removeImage.disabled = !question.image.ref;
     media.append(removeImage); host.append(media, field('Opis obrazu', question.image.alt, (v) => { question.image.alt = v; }));
+    if (onImageFile && root.ChemMediaManager?.imageFiles) {
+      const drop = node('div', 'io-image-drop'); drop.tabIndex = 0;
+      drop.setAttribute('role', 'group'); drop.setAttribute('aria-label', 'Wklej lub przeciągnij obraz źródłowy');
+      const help = node('p', '', 'Kliknij tutaj i wklej obraz Ctrl+V / ⌘V lub przeciągnij plik.');
+      const status = node('p', 'io-upload-status'); status.setAttribute('role', 'status');
+      const input = node('input'); input.type = 'file'; input.hidden = true;
+      input.accept = 'image/png,image/jpeg,image/webp,image/gif,image/svg+xml';
+      const pick = button('Dodaj plik z urządzenia', () => input.click());
+      drop.append(help, pick, input, node('small', '', 'Jeden obraz źródłowy · do 4 MB'), status);
+      host.append(drop);
+      let uploading = false;
+      async function upload(files) {
+        if (uploading || !files.length) return;
+        if (files.length > 1) { status.textContent = 'Wklej jeden obraz źródłowy naraz.'; return; }
+        uploading = true; host.inert = true; status.textContent = 'Zapisywanie obrazu…';
+        try {
+          const saved = await onImageFile(files[0]);
+          if (host.isConnected) status.textContent = saved ? 'Obraz dodany. Możesz rysować maski.' : 'Nie zmieniono obrazu.';
+        } catch (error) { if (host.isConnected) status.textContent = error.message || 'Nie udało się zapisać obrazu. Spróbuj ponownie.'; }
+        finally { uploading = false; host.inert = false; }
+      }
+      input.addEventListener('change', () => { void upload(Array.from(input.files || [])); input.value = ''; });
+      host.addEventListener('paste', (event) => {
+        const files = root.ChemMediaManager.imageFiles(event.clipboardData);
+        if (!files.length) return; // Normal text paste into answers is untouched.
+        event.preventDefault(); event.stopPropagation(); void upload(files);
+      });
+      host.addEventListener('pointerdown', (event) => {
+        if (!event.target.closest('input, textarea, select, button, [role="button"], [contenteditable]')) drop.focus({ preventScroll: true });
+      });
+      ['dragenter', 'dragover'].forEach((name) => host.addEventListener(name, (event) => {
+        if (!Array.from(event.dataTransfer?.types || []).includes('Files')) return;
+        event.preventDefault(); drop.classList.add('is-dragging');
+      }));
+      host.addEventListener('dragleave', (event) => { if (!host.contains(event.relatedTarget)) drop.classList.remove('is-dragging'); });
+      host.addEventListener('drop', (event) => {
+        const files = Array.from(event.dataTransfer?.files || []); if (!files.length) return;
+        event.preventDefault(); event.stopPropagation(); drop.classList.remove('is-dragging'); void upload(files);
+      });
+    }
     const modeLabel = node('label'), mode = node('select');
     for (const [value, label] of Object.entries(model.MODES)) { const option = node('option', '', label); option.value = value; mode.append(option); }
     mode.value = settings.mode; mode.dataset.occlusionMode = '1'; mode.setAttribute('aria-label', 'Tryb masek');
