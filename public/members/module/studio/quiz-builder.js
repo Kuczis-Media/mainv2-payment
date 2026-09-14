@@ -38,6 +38,20 @@
     deleteButton: byId('quiz-delete-button'),
     saveButton: byId('quiz-save-draft-button'),
     publishButton: byId('quiz-publish-button'),
+    importCsvButton: byId('quiz-import-csv-button'),
+    addCsvButton: byId('quiz-add-csv-button'),
+    csvFileInput: byId('quiz-csv-file-input'),
+    csvDialog: byId('quiz-csv-import-dialog'),
+    csvPickButton: byId('quiz-csv-pick-button'),
+    csvFilename: byId('quiz-csv-filename'),
+    csvPasteInput: byId('quiz-csv-paste-input'),
+    csvModeAppend: byId('quiz-csv-mode-append'),
+    csvPreview: byId('quiz-csv-preview'),
+    csvPreviewCount: byId('quiz-csv-preview-count'),
+    csvPreviewTable: byId('quiz-csv-preview-table'),
+    csvStatus: byId('quiz-csv-dialog-status'),
+    csvConfirmButton: byId('quiz-csv-confirm-button'),
+    csvCancelButton: byId('quiz-csv-cancel-button'),
     reportPanel: byId('quiz-report-panel'),
     reportDisclosure: byId('quiz-report-disclosure'),
     reportRefresh: byId('quiz-report-refresh'),
@@ -444,8 +458,8 @@
   }
 
   function resetQuizScroll() {
-    elements.workspace.scrollTop = 0;
-    elements.workspace.querySelectorAll('.quiz-editor-panel, .quiz-preview-panel').forEach((panel) => { panel.scrollTop = 0; });
+    if (elements.workspace) elements.workspace.scrollTop = 0;
+    root.document.querySelectorAll('#quiz-workspace, .quiz-editor-panel, .quiz-preview-panel').forEach((panel) => { panel.scrollTop = 0; });
     if (elements.reportDisclosure) elements.reportDisclosure.open = false;
   }
 
@@ -1177,11 +1191,12 @@
 
   async function openAsset(asset) {
     const sequence = ++openSequence;
-    setStatus(`Wczytywanie ${asset.title || asset.filename}…`);
+    const targetId = asset.filename || asset.quizId;
+    setStatus(`Wczytywanie ${asset.title || targetId}…`);
     let result, quiz;
     try {
-      result = await library.readQuiz(asset.filename, { repositoryId: asset.repositoryId });
-      quiz = modelApi.parse(result.content, asset.filename);
+      result = await library.readQuiz(targetId, { repositoryId: asset.repositoryId });
+      quiz = result?.quiz ? modelApi.createQuiz(result.quiz) : modelApi.parse(result.content, targetId);
     } catch (error) {
       if (sequence === openSequence) setStatus(error.message || 'Nie udało się otworzyć materiału.', true);
       return;
@@ -1191,7 +1206,7 @@
     state.quiz = quiz;
     renderCourses();
     state.repositoryId = asset.repositoryId || result.repositoryId || state.repositoryId;
-    state.remoteId = asset.filename;
+    state.remoteId = targetId;
     state.remoteSha = asset.sha || result.sha;
     state.report = null;
     state.attemptReport = null;
@@ -1200,6 +1215,73 @@
     render();
     resetQuizScroll();
     setStatus('Quiz otwarto do edycji.');
+  }
+
+  function importCsv(content, options = {}) {
+    const result = modelApi.importCardsFromCsv(state.quiz, content, options);
+    if (!result.count) {
+      setStatus('Nie znaleziono poprawnych fiszek w podanym tekście CSV.', true);
+      return false;
+    }
+    state.quiz = result.quiz;
+    if (state.quiz.mode === 'deck') {
+      state.quiz.metadata.active = true;
+      state.quiz.metadata.courseId ||= '';
+    }
+    revokeObjectUrls();
+    saveLocal();
+    markChanged(`Zaimportowano ${result.count} ${result.count === 1 ? 'fiszkę' : (result.count < 5 ? 'fiszki' : 'fiszek')} z CSV.`);
+    render();
+    resetQuizScroll();
+    return true;
+  }
+
+  function openCsvDialog() {
+    if (!elements.csvDialog) {
+      elements.csvFileInput?.click();
+      return;
+    }
+    if (elements.csvPasteInput) elements.csvPasteInput.value = '';
+    if (elements.csvFilename) elements.csvFilename.textContent = '';
+    if (elements.csvFileInput) elements.csvFileInput.value = '';
+    if (elements.csvStatus) elements.csvStatus.textContent = '';
+    if (elements.csvPreview) elements.csvPreview.hidden = true;
+    if (elements.csvConfirmButton) elements.csvConfirmButton.disabled = true;
+    if (typeof elements.csvDialog.showModal === 'function') elements.csvDialog.showModal();
+    else elements.csvDialog.setAttribute('open', '');
+  }
+
+  function previewCsv(content) {
+    if (!elements.csvPreview) return;
+    const parsed = modelApi.parseCsv(content);
+    if (!parsed.cards.length) {
+      elements.csvPreview.hidden = true;
+      if (elements.csvConfirmButton) elements.csvConfirmButton.disabled = true;
+      if (elements.csvStatus) elements.csvStatus.textContent = content.trim() ? 'Brak poprawnych kart do zaimportowania.' : '';
+      return;
+    }
+    elements.csvPreview.hidden = false;
+    if (elements.csvConfirmButton) elements.csvConfirmButton.disabled = false;
+    if (elements.csvPreviewCount) {
+      elements.csvPreviewCount.textContent = `Wykryto ${parsed.count} ${parsed.count === 1 ? 'fiszkę' : (parsed.count < 5 ? 'fiszki' : 'fiszek')}${parsed.delimiter ? ` (separator: ${parsed.delimiter === '\t' ? 'tab' : parsed.delimiter})` : ''}:`;
+    }
+    if (elements.csvPreviewTable) {
+      elements.csvPreviewTable.replaceChildren();
+      const table = create('table', 'quiz-csv-preview-table');
+      const thead = create('thead');
+      const trH = create('tr');
+      trH.append(create('th', '', '#'), create('th', '', 'Przód (pytanie)'), create('th', '', 'Tył (odpowiedź)'));
+      thead.append(trH);
+      const tbody = create('tbody');
+      parsed.cards.slice(0, 5).forEach((card, idx) => {
+        const tr = create('tr');
+        tr.append(create('td', '', String(idx + 1)), create('td', '', card.front), create('td', '', card.back));
+        tbody.append(tr);
+      });
+      table.append(thead, tbody);
+      elements.csvPreviewTable.append(table);
+    }
+    if (elements.csvStatus) elements.csvStatus.textContent = `Gotowe do zaimportowania ${parsed.count} fiszek.`;
   }
 
   function assetDeleted(asset) {
@@ -1272,6 +1354,38 @@
     elements.saveButton.addEventListener('click', () => void save(false));
     elements.publishButton.addEventListener('click', () => void save(true));
     elements.deleteButton.addEventListener('click', () => void removeCurrent());
+    elements.importCsvButton?.addEventListener('click', () => openCsvDialog());
+    elements.addCsvButton?.addEventListener('click', () => openCsvDialog());
+    elements.csvPickButton?.addEventListener('click', () => elements.csvFileInput?.click());
+    elements.csvFileInput?.addEventListener('change', () => {
+      const file = elements.csvFileInput.files?.[0];
+      if (!file) return;
+      if (elements.csvFilename) elements.csvFilename.textContent = file.name;
+      if (typeof root.FileReader === 'function') {
+        const reader = new root.FileReader();
+        reader.onload = () => {
+          const text = String(reader.result || '');
+          if (elements.csvPasteInput) elements.csvPasteInput.value = text;
+          previewCsv(text);
+        };
+        reader.readAsText(file, 'utf-8');
+      }
+    });
+    elements.csvPasteInput?.addEventListener('input', () => {
+      previewCsv(elements.csvPasteInput.value);
+    });
+    elements.csvConfirmButton?.addEventListener('click', () => {
+      const text = elements.csvPasteInput?.value || '';
+      const append = elements.csvModeAppend ? elements.csvModeAppend.checked : true;
+      if (importCsv(text, { append })) {
+        if (typeof elements.csvDialog?.close === 'function') elements.csvDialog.close();
+        else elements.csvDialog?.removeAttribute('open');
+      }
+    });
+    elements.csvCancelButton?.addEventListener('click', () => {
+      if (typeof elements.csvDialog?.close === 'function') elements.csvDialog.close();
+      else elements.csvDialog?.removeAttribute('open');
+    });
     elements.reportRefresh?.addEventListener('click', () => void loadReport());
     elements.reportBody?.addEventListener('click', (event) => {
       const button = event.target.closest('[data-quiz-report-action]');
@@ -1296,5 +1410,5 @@
   bind();
   root.addEventListener('pagehide', flush);
   root.addEventListener('pagehide', (event) => { if (!event.persisted) revokeObjectUrls(); });
-  root.ChemQuizBuilder = Object.freeze({ activate, assetDeleted, flush, openAsset });
+  root.ChemQuizBuilder = Object.freeze({ activate, assetDeleted, flush, openAsset, importCsv });
 })(typeof globalThis !== 'undefined' ? globalThis : window);

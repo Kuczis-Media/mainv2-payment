@@ -41,12 +41,10 @@
           : root.ChemQuizFlashcards.practiceCard(current, getUrl, { onAnswer: (v) => { answer = v; }, onCheck: (v, result) => { answer = v; correct = result.correct; checked = true; ratings.hidden = false; } });
       card.addEventListener('flashcard-reveal', (e) => { checked = e.detail; ratings.hidden = !checked; });
       ['Nie pamiętam', 'Trudne', 'Dobre', 'Łatwe'].forEach((label, i) => {
-        const rate = button(label, () => {
+        const rate = button(`${i + 1}. ${label}`, () => {
           if (!checked) return;
           try {
             client.rate(current, i + 1, answer, correct); reviewed++; queue.shift();
-            // Again cards return as soon as their short interval has elapsed,
-            // after the remaining cards rather than recursively after every click.
             const waiting = new Set(queue.map((q) => q.studyKey));
             for (const q of all) if (client.records[q.studyKey]?.lastGrade === 1 && scheduler.matches(client.records[q.studyKey], 'due', now()) && !waiting.has(q.studyKey)) { queue.push(q); waiting.add(q.studyKey); }
             render(); stage.querySelector('button, textarea, input')?.focus({ preventScroll: true });
@@ -54,8 +52,27 @@
         }); rate.dataset.studyGrade = String(i + 1); ratings.append(rate);
       });
       const skip = button('Pomiń na teraz', () => { queue.shift(); render(); });
-      stage.append(el('p', `Pozostało: ${queue.length} · oceniono: ${reviewed}`, 'quiz-deck-position'), card, ratings, skip);
+      const hint = el('div', null, 'quiz-flashcard-hint');
+      hint.innerHTML = '<small>Skróty: <kbd>Spacja</kbd> odwróć • <kbd>1</kbd>-<kbd>4</kbd> oceń</small>';
+      stage.append(el('p', `Pozostało: ${queue.length} · oceniono: ${reviewed}`, 'quiz-deck-position'), card, ratings, skip, hint);
     }
+    function onKeydown(event) {
+      if (!host.isConnected) return;
+      if (event.target && event.target.matches('input, textarea, select')) return;
+      if (event.altKey || event.ctrlKey || event.metaKey) return;
+      const revealBtn = host.querySelector('[data-flashcard-reveal]');
+      if ((event.code === 'Space' || event.key === ' ' || event.key === 'Enter') && revealBtn && !checked) {
+        event.preventDefault();
+        revealBtn.click();
+        return;
+      }
+      if (checked && ['1', '2', '3', '4'].includes(event.key)) {
+        event.preventDefault();
+        host.querySelector(`[data-study-grade="${event.key}"]`)?.click();
+        return;
+      }
+    }
+    root.document?.addEventListener?.('keydown', onKeydown);
     queue = scheduler.select(all, client.records, mode, now()); render(); return host;
   }
   root.ChemStudyView = Object.freeze({ study });

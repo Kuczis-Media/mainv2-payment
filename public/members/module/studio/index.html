@@ -887,6 +887,7 @@
           <div class="toolbar-actions">
             <button class="button button-soft" id="quiz-new-button" type="button">＋ Nowy</button>
             <button class="button button-soft" id="quiz-new-deck-button" type="button">＋ Nowa pula fiszek</button>
+            <button class="button button-soft" id="quiz-import-csv-button" type="button">📥 Importuj z CSV</button>
             <button class="button button-danger" id="quiz-delete-button" type="button" disabled>Usuń</button>
             <button class="button button-soft" id="quiz-save-draft-button" type="button">Zapisz szkic</button>
             <button class="button button-primary" id="quiz-publish-button" type="button">Opublikuj</button>
@@ -919,6 +920,7 @@
               <button type="button" data-quiz-add="open"><b>Aa</b><span>Pytanie otwarte</span></button>
               <button type="button" data-quiz-add="flashcard"><b>↔</b><span>Fiszka — przód i tył</span></button>
               <button type="button" data-quiz-add="image_occlusion"><b>▧</b><span>Obraz z maskami</span></button>
+              <button type="button" id="quiz-add-csv-button" class="quiz-add-csv"><b>📥</b><span>Importuj z CSV</span></button>
             </div>
           </aside>
 
@@ -1134,6 +1136,41 @@
         <span class="dialog-status" id="source-dialog-status" role="status" aria-live="polite"></span>
         <button class="button button-soft" id="source-copy-button" type="button">Kopiuj</button>
         <button class="button button-primary" id="source-apply-button" type="button">Zastosuj w edytorze</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <input type="file" id="quiz-csv-file-input" accept=".csv,.txt,text/csv,text/plain" hidden>
+  <dialog class="source-dialog quiz-csv-dialog" id="quiz-csv-import-dialog">
+    <form method="dialog" class="dialog-shell">
+      <header>
+        <div>
+          <span class="eyebrow">Fiszki</span>
+          <h2>Importuj fiszki z pliku CSV</h2>
+        </div>
+        <button class="icon-button" value="cancel" aria-label="Zamknij" title="Zamknij" type="submit">×</button>
+      </header>
+      <p id="quiz-csv-dialog-help">Plik CSV powinien zawierać kolumny z pytaniem (przód) i odpowiedzią (tył). Obsługiwane są przecinki, średniki, cudzysłowy oraz wzory matematyczne LaTeX.</p>
+      <div class="quiz-csv-file-row">
+        <button type="button" class="button button-soft" id="quiz-csv-pick-button">Wybierz plik .csv z dysku</button>
+        <span id="quiz-csv-filename" class="quiz-csv-filename"></span>
+      </div>
+      <label class="quiz-wide-field">
+        <span>Albo wklej zawartość CSV bezpośrednio:</span>
+        <textarea id="quiz-csv-paste-input" rows="6" spellcheck="false" placeholder="Pytanie 1,Odpowiedź 1&#10;&quot;Pytanie z przecinkiem, np. wzór $H_2O$&quot;,Odpowiedź 2"></textarea>
+      </label>
+      <div class="quiz-csv-options">
+        <label><input type="radio" name="quiz-csv-mode" id="quiz-csv-mode-append" value="append" checked> <span>Dodaj do obecnych pytań</span></label>
+        <label><input type="radio" name="quiz-csv-mode" id="quiz-csv-mode-replace" value="replace"> <span>Zastąp obecne pytania</span></label>
+      </div>
+      <div id="quiz-csv-preview" class="quiz-csv-preview" hidden>
+        <strong id="quiz-csv-preview-count"></strong>
+        <div id="quiz-csv-preview-table" class="quiz-csv-preview-table"></div>
+      </div>
+      <footer>
+        <span class="dialog-status" id="quiz-csv-dialog-status" role="status" aria-live="polite"></span>
+        <button class="button button-soft" id="quiz-csv-cancel-button" value="cancel" type="submit">Anuluj</button>
+        <button class="button button-primary" id="quiz-csv-confirm-button" type="button" disabled>Importuj fiszki</button>
       </footer>
     </form>
   </dialog>

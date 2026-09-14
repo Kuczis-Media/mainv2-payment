@@ -290,6 +290,142 @@
     };
   }
 
+  function parseCsv(csvContent, options = {}) {
+    if (typeof csvContent !== 'string') return { cards: [], count: 0, errors: [] };
+    const convertMath = options.convertMath !== false;
+    const raw = csvContent.replace(/^\uFEFF/, '');
+    let delimiter = options.delimiter;
+    if (!delimiter) {
+      const sample = raw.slice(0, 4000);
+      const commas = (sample.match(/,/g) || []).length;
+      const semicolons = (sample.match(/;/g) || []).length;
+      const tabs = (sample.match(/\t/g) || []).length;
+      if (tabs > commas && tabs > semicolons) delimiter = '\t';
+      else if (semicolons > commas) delimiter = ';';
+      else delimiter = ',';
+    }
+
+    const rows = [];
+    let currentRow = [];
+    let currentCell = '';
+    let inQuotes = false;
+    let i = 0;
+    const len = raw.length;
+
+    while (i < len) {
+      const char = raw[i];
+      if (inQuotes) {
+        if (char === '"') {
+          if (i + 1 < len && raw[i + 1] === '"') {
+            currentCell += '"';
+            i += 2;
+          } else {
+            inQuotes = false;
+            i++;
+          }
+        } else {
+          currentCell += char;
+          i++;
+        }
+      } else {
+        if (char === '"') {
+          inQuotes = true;
+          i++;
+        } else if (char === delimiter) {
+          currentRow.push(currentCell.trim());
+          currentCell = '';
+          i++;
+        } else if (char === '\r') {
+          if (i + 1 < len && raw[i + 1] === '\n') i++;
+          currentRow.push(currentCell.trim());
+          rows.push(currentRow);
+          currentRow = [];
+          currentCell = '';
+          i++;
+        } else if (char === '\n') {
+          currentRow.push(currentCell.trim());
+          rows.push(currentRow);
+          currentRow = [];
+          currentCell = '';
+          i++;
+        } else {
+          currentCell += char;
+          i++;
+        }
+      }
+    }
+    if (inQuotes || currentCell || currentRow.length) {
+      currentRow.push(currentCell.trim());
+      rows.push(currentRow);
+    }
+
+    const nonEmptyRows = rows.filter((r) => r.some((c) => c && c.length > 0));
+    if (!nonEmptyRows.length) return { cards: [], count: 0, errors: [] };
+
+    let startIndex = 0;
+    const headerRegex = /^(front|back|pytanie|odpowiedź|odpowiedz|question|answer|przód|przod|tył|tyl|q|a|fiszka|karta|term|definition|pojęcie|definicja)$/i;
+    const firstRowCol0 = nonEmptyRows[0][0]?.toLowerCase().trim();
+    const firstRowCol1 = nonEmptyRows[0][1]?.toLowerCase().trim();
+    if (options.hasHeader === true || (options.hasHeader !== false && headerRegex.test(firstRowCol0) && (!nonEmptyRows[0][1] || headerRegex.test(firstRowCol1)))) {
+      startIndex = 1;
+    }
+
+    function formatText(val) {
+      let t = String(val ?? '').trim();
+      if (convertMath) {
+        t = t.replace(/(^|[^\\])\$([^\$\n]+?)\$/g, '$1\\($2\\)');
+      }
+      return t;
+    }
+
+    const cards = [];
+    const errors = [];
+    for (let r = startIndex; r < nonEmptyRows.length; r++) {
+      const row = nonEmptyRows[r];
+      const front = formatText(row[0] || '');
+      const back = formatText(row[1] || '');
+      const explanation = formatText(row[2] || '');
+      if (!front && !back) continue;
+      if (!front) {
+        errors.push({ row: r + 1, message: 'Brak treści przodu fiszki.' });
+        continue;
+      }
+      cards.push({ front, back, explanation });
+    }
+
+    return { cards, count: cards.length, errors, delimiter };
+  }
+
+  function importCardsFromCsv(quiz, csvContent, options = {}) {
+    const parsed = parseCsv(csvContent, options);
+    if (!parsed.cards.length) return { quiz, count: 0, errors: parsed.errors };
+    const append = options.append !== false;
+    const newQuestions = parsed.cards.map((card) => createQuestion({
+      type: 'flashcard',
+      prompt: card.front.slice(0, 3000),
+      front: { text: card.front, images: [] },
+      back: { text: card.back, images: [] },
+      explanation: card.explanation || ''
+    }));
+
+    const updated = structuredClone(quiz);
+    updated.mode = 'deck';
+    if (!updated.metadata) updated.metadata = {};
+    if (typeof updated.metadata.active !== 'boolean') updated.metadata.active = true;
+    if (typeof updated.metadata.courseId !== 'string') updated.metadata.courseId = '';
+
+    if (append) {
+      if (Array.isArray(updated.questions) && updated.questions.length === 1 && !updated.questions[0].prompt && !updated.questions[0].front?.text) {
+        updated.questions = newQuestions;
+      } else {
+        updated.questions = [...(Array.isArray(updated.questions) ? updated.questions : []), ...newQuestions];
+      }
+    } else {
+      updated.questions = newQuestions;
+    }
+    return { quiz: updated, count: newQuestions.length, errors: parsed.errors };
+  }
+
   return Object.freeze({
     QUESTION_TYPES,
     CARD_TYPES,
@@ -299,7 +435,9 @@
     createQuestion,
     createQuiz,
     duplicateQuestion,
+    importCardsFromCsv,
     parse,
+    parseCsv,
     score,
     serialize,
     validate

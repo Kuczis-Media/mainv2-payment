@@ -302,9 +302,18 @@
       Object.assign(shape.style, { background: element.fill, borderColor: element.border, borderWidth: `${element.borderWidth}px`, opacity: String(element.opacity) });
       node.append(shape);
     } else if (element.type === 'formula') {
-      const formula = create('div', 'presentation-formula', element.expression || 'H2O');
+      const formula = create('div', 'presentation-formula');
       formula.style.color = element.color;
       formula.style.fontSize = `${element.fontSize}px`;
+      if (window.ChemAssessmentText) {
+        let expr = String(element.expression || 'H2O').trim();
+        if (!expr.startsWith('\\(') && !expr.startsWith('\\[') && !expr.startsWith('$$')) {
+          expr = element.mode === 'chemistry' && !expr.startsWith('\\ce{') ? `\\[\\ce{${expr}}\\]` : `\\[${expr}\\]`;
+        }
+        window.ChemAssessmentText.render(formula, expr);
+      } else {
+        formula.textContent = element.expression || 'H2O';
+      }
       node.append(formula);
     } else if (element.type === 'image') {
       node.classList.toggle('is-cropping', element.cropMode === true);
@@ -350,6 +359,7 @@
       left: `${element.x}%`, top: `${element.y}%`, width: `${element.width}%`, height: `${element.height}%`,
       transform: `rotate(${element.rotation}deg)`, zIndex: String(element.z)
     });
+    if (element.fontSize) node.style.setProperty('--elem-fs', String(element.fontSize));
   }
 
   function fontStack(font) {

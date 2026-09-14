@@ -69,9 +69,13 @@
     const formulas = [];
     // Protect TeX from Markdown's superscript syntax, then use the same safe
     // equation renderer as the exam and Lesson Builder (including mhchem).
-    const source = String(value || '').replace(/\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$/g, (formula) => {
-      formulas.push(formula); return `NEXTMEDFLASHMATH${formulas.length - 1}TOKEN`;
-    });
+    const source = String(value || '')
+      .replace(/\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$/g, (formula) => {
+        formulas.push(formula); return `NEXTMEDFLASHMATH${formulas.length - 1}TOKEN`;
+      })
+      .replace(/(^|[^\\])\$([^\$\n]+?)\$/g, (_, prefix, formula) => {
+        formulas.push(`\\(${formula}\\)`); return `${prefix}NEXTMEDFLASHMATH${formulas.length - 1}TOKEN`;
+      });
     if (root.ChemLesson?.renderMarkdown) {
       const template = root.document.createElement('template');
       template.innerHTML = root.ChemLesson.renderMarkdown(source);
@@ -251,7 +255,7 @@
         onCheck: (answer) => { answers.set(question.questionId, { answer, checked: true }); actions.hidden = false; }
       });
       if (flashcard) ['Nie pamiętam', 'Trudne', 'Dobre', 'Łatwe'].forEach((label, rating) => {
-        const rate = button(label, () => advance(rating + 1));
+        const rate = button(`${rating + 1}. ${label}`, () => advance(rating + 1));
         rate.dataset.flashcardRating = String(rating + 1); actions.append(rate);
       });
       current.addEventListener('flashcard-reveal', (event) => { actions.hidden = !event.detail; });
@@ -265,7 +269,9 @@
         control.disabled = index + step < 0 || index + step >= questions.length;
         navigation.append(control);
       });
-      node.replaceChildren(heading, current, actions, navigation, create('small', '', 'Samoocena dotyczy tylko tej sesji. Nie zmienia punktów i nie planuje powtórek.'));
+      const hint = create('div', 'quiz-flashcard-hint');
+      hint.innerHTML = '<small>Skróty: <kbd>Spacja</kbd> odwróć • <kbd>1</kbd>-<kbd>4</kbd> oceń • <kbd>←</kbd> <kbd>→</kbd> przełącz</small>';
+      node.replaceChildren(heading, current, actions, navigation, hint, create('small', '', 'Samoocena dotyczy tylko tej sesji. Nie zmienia punktów i nie planuje powtórek.'));
     }
     async function finish() {
       if (finished) return;
@@ -276,6 +282,36 @@
       const restart = button('Ucz się ponownie', () => { ratings.clear(); answers.clear(); questions = root.ChemQuizOcclusionModel ? root.ChemQuizOcclusionModel.expand(sourceQuestions) : sourceQuestions; index = 0; finished = false; render(); });
       node.append(restart);
     }
+    function onKeydown(event) {
+      if (!node.isConnected || finished) return;
+      if (event.target && event.target.matches('input, textarea, select')) return;
+      if (event.altKey || event.ctrlKey || event.metaKey) return;
+      const revealBtn = node.querySelector('[data-flashcard-reveal]');
+      const isRevealed = revealBtn?.getAttribute('aria-expanded') === 'true';
+      if ((event.code === 'Space' || event.key === ' ' || event.key === 'Enter') && revealBtn && !isRevealed) {
+        event.preventDefault();
+        revealBtn.click();
+        return;
+      }
+      if (isRevealed && ['1', '2', '3', '4'].includes(event.key)) {
+        event.preventDefault();
+        node.querySelector(`[data-flashcard-rating="${event.key}"]`)?.click();
+        return;
+      }
+      if (event.key === 'ArrowLeft' && index > 0) {
+        event.preventDefault();
+        index -= 1;
+        render();
+        return;
+      }
+      if (event.key === 'ArrowRight' && index < questions.length - 1) {
+        event.preventDefault();
+        index += 1;
+        render();
+        return;
+      }
+    }
+    root.document?.addEventListener?.('keydown', onKeydown);
     if (questions.length) render();
     else node.append(create('p', '', 'Ta pula nie zawiera jeszcze fiszek.'));
     return node;

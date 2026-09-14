@@ -40,7 +40,8 @@
     mutationQueue: Promise.resolve(),
     imageCache: new Map(),
     imageCacheGeneration: 0,
-    imageObserver: null
+    imageObserver: null,
+    submitting: false
   };
 
   const ERROR_MESSAGES = {
@@ -138,6 +139,7 @@
     document.addEventListener('copy', () => logSignal('copy'));
     document.addEventListener('paste', () => logSignal('paste'));
     document.addEventListener('contextmenu', () => logSignal('context_menu'));
+    document.addEventListener('keydown', handleKeyNavigation);
     window.addEventListener('beforeunload', (event) => {
       if (state.attempt?.status !== 'active') return;
       const policy = state.attempt.exam.security.leavePolicy;
@@ -146,6 +148,22 @@
         event.returnValue = '';
       }
     });
+  }
+
+  function handleKeyNavigation(event) {
+    if (!state.attempt || state.attempt.status !== 'active') return;
+    const isInput = event.target.matches('input, textarea, select, [contenteditable="true"]');
+    const isAltNav = event.altKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight');
+    const isPlainNav = !isInput && (event.key === 'ArrowLeft' || event.key === 'ArrowRight');
+    if (isAltNav || isPlainNav) {
+      if (event.key === 'ArrowLeft' && !elements.previous.disabled && !elements.previous.hidden) {
+        event.preventDefault();
+        void navigatePage(-1);
+      } else if (event.key === 'ArrowRight' && !elements.next.disabled && !elements.next.hidden) {
+        event.preventDefault();
+        void navigatePage(1);
+      }
+    }
   }
 
   function renderStart() {
@@ -811,11 +829,13 @@
   }
 
   async function submitAttempt() {
+    if (state.submitting) return;
     if (state.navigationTask) await state.navigationTask;
     if (state.attempt?.status !== 'active') return;
     const answered = Object.values(state.attempt.answers || {}).filter(answerPresent).length;
     const unanswered = state.attempt.totalQuestions - answered;
     if (unanswered > 0 && !window.confirm(`Pozostało ${unanswered} pytań bez odpowiedzi. Zakończyć próbę?`)) return;
+    state.submitting = true;
     window.clearTimeout(state.saveTimer);
     state.saveTimer = 0;
     const pending = capturePendingAnswers();
@@ -831,8 +851,10 @@
     } catch (error) {
       scheduleAnswerSave();
       setMessage(elements.attemptMessage, errorMessage(error));
+    } finally {
+      state.submitting = false;
+      if (state.attempt?.status === 'active') elements.submit.disabled = false;
     }
-    finally { elements.submit.disabled = false; }
   }
 
   function mutate(action, body) {
