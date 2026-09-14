@@ -781,6 +781,51 @@ test('Studio adds and edits Google cards in both builders and preserves the stud
   assert.equal(h.w.ChemDashboardStudioModel.validate(stored).valid, true);
 });
 
+test('Lesson Builder selects only an active published learning pool and preserves the link in preview', async (t) => {
+  const model = require('../public/members/module/studio/quiz-model');
+  const h = await studio(t, {
+    list: async (kind) => kind === 'quiz' ? [{ filename: 'pula', repositoryId: 'glowne', title: 'Pula biologii' }, { filename: 'zwykly', repositoryId: 'glowne', title: 'Zwykły quiz' }] : [],
+    readQuiz: async (id) => ({ content: JSON.stringify(model.createQuiz({ mode: id === 'pula' ? 'deck' : 'quiz', quizId: id, metadata: { status: 'published', courseId: 'course' } })) })
+  });
+  await input(h.w, h.d.getElementById('studio-tool-select'), 'lesson');
+  h.d.querySelector('[data-lesson-add="study"]').click(); await tick();
+  const choose = async (id) => {
+    h.d.querySelector('#lesson-inspector .studio-material-picker-toggle').click(); await tick();
+    h.d.querySelector(`#lesson-inspector [data-picker-value="${id}"]`).click(); await tick();
+  };
+  await choose('zwykly');
+  assert.match(h.d.getElementById('lesson-inspector').textContent, /Wybrana pula: brak/);
+  await choose('pula');
+  assert.match(h.d.getElementById('lesson-inspector').textContent, /Wybrana pula: pula/);
+  h.d.querySelector('[data-lesson-panel="preview"]').click(); await tick();
+  const link = h.d.querySelector('.lesson-preview-body .lesson-study-card a');
+  assert.ok(link); assert.equal(link.target, '_blank'); assert.match(link.href, /quiz=pula/);
+  h.w.dispatchEvent(new h.w.Event('pagehide'));
+  const lesson = JSON.parse(h.w.localStorage.getItem('chemdisk.studio.lesson.v1'));
+  assert.ok(lesson.slides.some((slide) => slide.blocks.some((block) => block.type === 'study' && block.quizId === 'pula')));
+});
+
+test('new flashcards open for editing even after the first three and have a live individual preview', async (t) => {
+  const h = await studio(t);
+  h.w.MathJax = { typesetClear() {}, typesetPromise: async () => {} };
+  h.w.fetch = async () => new Response(JSON.stringify({ catalog: { nodes: [{ id: 'course', type: 'course', title: 'Biologia' }] } }));
+  await input(h.w, h.d.getElementById('studio-tool-select'), 'quiz');
+  h.d.getElementById('quiz-new-deck-button').click(); await tick();
+  for (let i = 0; i < 3; i++) { h.d.querySelector('[data-quiz-add="flashcard"]').click(); await tick(); }
+  const card = h.d.querySelector('.quiz-question-card:last-child');
+  const front = card.querySelector('[data-quiz-field="frontText"]'); assert.ok(front);
+  assert.equal(h.d.activeElement, front);
+  await input(h.w, front, 'Co tworzy białka?');
+  await input(h.w, card.querySelector('[data-quiz-field="backText"]'), 'Aminokwasy');
+  const preview = card.querySelector('.quiz-editor-details'); preview.open = true; await tick();
+  assert.match(preview.textContent, /Co tworzy białka/);
+  await input(h.w, front, 'Zaktualizowane pytanie'); await new Promise((resolve) => setTimeout(resolve, 250));
+  assert.match(preview.textContent, /Zaktualizowane pytanie/);
+  card.querySelector('[data-quiz-action="preview-question"]').click(); await tick();
+  assert.match(h.d.getElementById('quiz-preview').textContent, /Karta 4/);
+  assert.match(h.d.getElementById('quiz-preview').textContent, /Zaktualizowane pytanie/);
+});
+
 test('actual lesson builder uses multiline options and the same line breaks in saved Markdown and preview', async (t) => {
   const h = await studio(t);
   await input(h.w, h.d.getElementById('studio-tool-select'), 'lesson');

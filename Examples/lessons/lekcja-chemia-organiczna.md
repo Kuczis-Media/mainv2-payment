@@ -397,6 +397,15 @@ description: Otwiera `quiz-chemia-organiczna/quiz.json`, zawierający wszystkie 
 button: Rozpocznij quiz
 :::
 
+:::quiz
+repository: repo-testowe
+quiz: pula-chemia
+study: true
+title: Powtórka / Fiszki — grupy funkcyjne
+description: Otwórz pulę nauki w nowej karcie. Wybierz nowe karty lub powtórki na dziś; ta lekcja pozostanie na bieżącym kroku.
+button: Rozpocznij powtórkę
+:::
+
 ---
 
 <!-- chemdisk-step:{"id":"example-pdfs","includeInLesson":"INHERIT","requiredToAdvance":true,"condition":{"type":"material_completed","materialId":"pdf:1qKkDarVM8qn1GHkNalt9f8n7IXNUawZF","minimumScore":0}} -->

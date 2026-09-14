@@ -408,6 +408,7 @@
   });
 
   root.ChemProgress = Object.freeze({
+    studyRequest: (method, body, params, keepalive) => request(method, body, `?${new URLSearchParams(params)}`, keepalive),
     flush,
     load,
     materialFromLocation,

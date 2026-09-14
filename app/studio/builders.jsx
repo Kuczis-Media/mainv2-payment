@@ -19,12 +19,12 @@ function Field({ label, children, className, math = false, hidden = false }) {
   return math ? <div className="quiz-math-field">{field}<button type="button" className="mini-button assessment-equation-trigger" aria-label={`Dodaj równanie: ${label}`}
     onMouseDown={(e) => e.preventDefault()} onClick={(e) => window.ChemAssessmentEditor?.openFor(e.currentTarget.parentElement.querySelector('textarea,input'))}>fx · Dodaj równanie</button></div> : field;
 }
-function QuizCard({ question, index, count, renderOptions, renderFlashcard, renderOcclusion, deck }) {
-  const [open, setOpen] = useState(index < 3);
+function QuizCard({ question, index, count, renderOptions, renderFlashcard, renderOcclusion, deck, focusQuestionId }) {
+  const [open, setOpen] = useState(index < 3 || question.questionId === focusQuestionId);
   return <article className="quiz-question-card" data-question-id={question.questionId}>
     <header className="quiz-question-card-heading"><div><small>{question.type === 'flashcard' ? 'Fiszka' : 'Pytanie'} {index + 1}</small><strong>{['flashcard', 'image_occlusion'].includes(question.type) || deck ? 'Nauka bez punktów' : `${question.points} ${question.points === 1 ? 'punkt' : 'pkt'}`}</strong></div>
       <div className="quiz-question-actions"><button type="button" className="mini-button" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Zwiń' : 'Edytuj'}</button>
-        {[['up', '↑', 'Przenieś wyżej', index === 0], ['down', '↓', 'Przenieś niżej', index === count - 1], ['duplicate', 'Duplikuj', 'Duplikuj', false], ['delete', 'Usuń', 'Usuń', count === 1]].map(([action, text, label, disabled]) =>
+        {[['preview-question', 'Podgląd', 'Podgląd tej karty', false], ['up', '↑', 'Przenieś wyżej', index === 0], ['down', '↓', 'Przenieś niżej', index === count - 1], ['duplicate', 'Duplikuj', 'Duplikuj', false], ['delete', 'Usuń', 'Usuń', count === 1]].map(([action, text, label, disabled]) =>
           <button type="button" key={action} className={`mini-button${action === 'delete' ? ' is-danger' : ''}`} data-quiz-action={action} aria-label={label} disabled={disabled}>{text}</button>)}
       </div></header>
     {!open ? <p>{question.prompt || 'Nowe pytanie'}</p> : question.type === 'image_occlusion' ? <Widget factory={() => renderOcclusion(question)} revision={JSON.stringify(question)} /> : question.type === 'flashcard' ? <Widget factory={() => renderFlashcard(question)} revision={JSON.stringify(question)} /> : <>
@@ -40,7 +40,7 @@ function QuizCard({ question, index, count, renderOptions, renderFlashcard, rend
     </>}
   </article>;
 }
-register('studio-quiz', ({ questions, renderOptions, renderFlashcard, renderOcclusion, deck }) => <>{questions.map((question, index) => <QuizCard key={question.questionId} question={question} index={index} count={questions.length} renderOptions={renderOptions} renderFlashcard={renderFlashcard} renderOcclusion={renderOcclusion} deck={deck} />)}</>);
+register('studio-quiz', ({ questions, renderOptions, renderFlashcard, renderOcclusion, deck, focusQuestionId }) => <>{questions.map((question, index) => <QuizCard key={question.questionId} question={question} index={index} count={questions.length} renderOptions={renderOptions} renderFlashcard={renderFlashcard} renderOcclusion={renderOcclusion} deck={deck} focusQuestionId={focusQuestionId} />)}</>);
 
 register('studio-presentation-slides', ({ slides, selected, onAction, onMove }) => <>{slides.map((slide, index) => <article key={slide.slideId} className={`presentation-slide-row${selected === slide.slideId ? ' is-selected' : ''}`}
   data-slide-id={slide.slideId} data-slide-index={index} draggable onDragStart={(event) => event.dataTransfer.setData('text/presentation-slide', slide.slideId)} onDragOver={(event) => event.preventDefault()}

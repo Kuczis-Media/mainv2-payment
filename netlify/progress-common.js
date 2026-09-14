@@ -124,6 +124,7 @@ function normalizeNode(input, index = 0) {
       videoCompletionThreshold: clamp(settings.videoCompletionThreshold == null ? 90 : settings.videoCompletionThreshold, 1, 100),
       contentFile: oneLine(settings.contentFile, 120),
       repositoryId: oneLine(settings.repositoryId, 40).toLowerCase(),
+      ...(settings.quizId ? { quizId: oneLine(settings.quizId, 80).toLowerCase() } : {}),
       examId: oneLine(settings.examId, 80).toLowerCase(),
       steps
     }
@@ -962,6 +963,20 @@ function globalReport(users, catalog) {
   };
 }
 
+// A pool can appear under a dashboard tile ID as well as its canonical quiz ID.
+// Reset the shared learning state together; legacy quizzes are unaffected.
+function studyResetIds(catalog, ids, records) {
+  const result = new Set(ids), canonical = (node) => node?.type === 'quiz' && node.settings?.quizId
+    ? `quiz:${node.settings.repositoryId || 'default'}:${node.settings.quizId}` : null;
+  for (const id of ids) {
+    const key = records[id]?.details?.studyGeneration ? id : canonical(catalog.nodes.find((node) => node.id === id));
+    if (!key || !records[key]?.details?.studyGeneration) continue;
+    result.add(key);
+    catalog.nodes.forEach((node) => { if (canonical(node) === key) result.add(node.id); });
+  }
+  return [...result];
+}
+
 module.exports = {
   MATERIAL_TYPES,
   MAX_RECORDS,
@@ -982,8 +997,10 @@ module.exports = {
   normalizeCatalog,
   normalizePreferences,
   normalizeRanges,
+  normalizeRecord,
   normalizeUserDocument,
   plainObject,
   sequenceAccessMap,
+  studyResetIds,
   validMaterialId
 };

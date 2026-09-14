@@ -68,6 +68,7 @@
     'google',
     'presentation',
     'quiz',
+    'study',
     'pdf',
     'atonom',
     'formula',
@@ -460,10 +461,10 @@
         presentationId: oneLine(source.presentationId || source.presentation).toLowerCase()
       };
     }
-    if (type === 'quiz') {
+    if (type === 'quiz' || type === 'study') {
       return {
         ...base,
-        title: oneLine(source.title) || 'Quiz',
+        title: oneLine(source.title) || (type === 'study' ? 'Powtórka / Fiszki' : 'Quiz'),
         description: oneLine(source.description) || 'Rozwiąż quiz przygotowany do tej lekcji.',
         button: oneLine(source.button) || 'Otwórz quiz',
         repositoryId: oneLine(source.repositoryId || source.repository).toLowerCase(),
@@ -922,7 +923,7 @@
     )) {
       errors.push({ code: 'INVALID_PRESENTATION_REFERENCE', path, message: 'Wybierz prawidłowe repozytorium i prezentację z biblioteki.' });
     }
-    if (block.type === 'quiz' && (
+    if (['quiz', 'study'].includes(block.type) && (
       !SAFE_REPOSITORY_ID.test(block.repositoryId || '')
       || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(block.quizId || '')
     )) {
@@ -1274,9 +1275,10 @@
         ':::'
       ].join('\n');
     }
-    if (block.type === 'quiz') {
+    if (block.type === 'quiz' || block.type === 'study') {
       return [
         ':::quiz',
+        ...(block.type === 'study' ? ['study: true'] : []),
         `repository: ${cleanDirectiveValue(block.repositoryId)}`,
         `quiz: ${cleanDirectiveValue(block.quizId)}`,
         `title: ${cleanDirectiveValue(block.title)}`,
@@ -1805,7 +1807,7 @@
           } else if (type === 'quiz') {
             const values = parseDirectiveFields(bodyLines);
             blocks.push(createBlock({
-              type: 'quiz',
+              type: values.study === 'true' ? 'study' : 'quiz',
               repositoryId: values.repository,
               quizId: values.quiz,
               title: values.title,

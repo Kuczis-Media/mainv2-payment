@@ -1192,7 +1192,12 @@
         const badge = create('em', '', options.type || 'Materiał');
         button.append(icon, copy, badge);
         button.addEventListener('pointerdown', (event) => event.preventDefault());
-        button.addEventListener('click', () => {
+        button.addEventListener('click', async () => {
+          if (options.onPick) {
+            button.disabled = true;
+            try { if (!await options.onPick(asset)) return; }
+            finally { button.disabled = false; }
+          }
           input.value = asset.pickerValue;
           input.dispatchEvent(new Event('input', { bubbles: true }));
           input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -2328,14 +2333,14 @@
         presentationId: firstPresentation?.filename || ''
       });
     }
-    if (type === 'quiz') {
+    if (type === 'quiz' || type === 'study') {
       const firstQuiz = state.contentLibrary.quizzes[0];
-      return lessonModelApi.createBlock('quiz', {
-        title: firstQuiz?.title || 'Quiz',
-        description: 'Rozwiąż quiz przygotowany do tej lekcji.',
-        button: 'Otwórz quiz',
+      return lessonModelApi.createBlock(type, {
+        title: type === 'study' ? 'Powtórka / Fiszki' : firstQuiz?.title || 'Quiz',
+        description: type === 'study' ? 'Utrwal materiał w puli nauki.' : 'Rozwiąż quiz przygotowany do tej lekcji.',
+        button: type === 'study' ? 'Rozpocznij powtórkę' : 'Otwórz quiz',
         repositoryId: state.contentLibrary.selectedRepositoryId,
-        quizId: firstQuiz?.filename || ''
+        quizId: type === 'study' ? '' : firstQuiz?.filename || ''
       });
     }
     if (type === 'pdf') {
@@ -2761,7 +2766,7 @@
     if (block.type === 'slides') return block.title || 'Prezentacja Google Slides';
     if (block.type === 'google') return block.title || 'Materiał Google';
     if (block.type === 'presentation') return block.title || 'Prezentacja';
-    if (block.type === 'quiz') return block.title || 'Quiz';
+    if (['quiz', 'study'].includes(block.type)) return block.title || 'Quiz';
     if (block.type === 'pdf') return block.title || 'Dokument PDF';
     if (block.type === 'exam') return block.title || 'Egzamin';
     if (block.type === 'atonom') return block.title || `ATONOM: ${block.formula}`;
@@ -2788,7 +2793,7 @@
     if (block.type === 'slides') return block.presentation || 'Uzupełnij link lub ID prezentacji';
     if (block.type === 'google') return `${block.url || 'Wklej link do pliku Google'} · ${block.width}% / ${block.heightPercent}%`;
     if (block.type === 'presentation') return block.presentationId || 'Wybierz prezentację';
-    if (block.type === 'quiz') return block.quizId || 'Wybierz quiz';
+    if (['quiz', 'study'].includes(block.type)) return block.quizId || 'Wybierz quiz lub pulę';
     if (block.type === 'pdf') return `${block.pdfId || 'Uzupełnij ID lub adres PDF'} · tryb ${block.protection}`;
     if (block.type === 'exam') {
       const requirements = {
@@ -4135,10 +4140,13 @@
         field('Opis dla ucznia', lessonTextarea(block.description, 'description', { rows: 4, maxLength: 500 })),
         field('Tekst przycisku', lessonInput(block.button, 'button', { maxLength: 80 }))
       );
-    } else if (block.type === 'quiz') {
+    } else if (block.type === 'quiz' || block.type === 'study') {
       syncInspectorRepository(block.repositoryId);
       const quizzes = (state.contentLibrary.quizzes || [])
         .filter((asset) => !block.repositoryId || asset.repositoryId === block.repositoryId);
+      const pickerInput = lessonInput(block.quizId, 'quizId', { placeholder: block.type === 'study' ? 'Wyszukaj pulę…' : 'Wyszukaj quiz…' });
+      // Searching does not overwrite the reference: commit only a verified pool.
+      if (block.type === 'study') delete pickerInput.dataset.lessonField;
       form.append(
         field(
           'Repozytorium quizu',
@@ -4146,13 +4154,22 @@
           'Lekcja wskazuje opublikowaną definicję quizu z biblioteki i nie kopiuje pytań.'
         ),
         field(
-          'Quiz z biblioteki',
-          materialPicker(lessonInput(block.quizId, 'quizId', { placeholder: 'Wyszukaj quiz…' }), quizzes, {
+          block.type === 'study' ? 'Pula nauki z biblioteki' : 'Quiz z biblioteki',
+          materialPicker(pickerInput, quizzes, {
             type: 'Quiz',
             icon: 'Q',
             empty: 'Brak quizów w tej bibliotece.',
-            allowCustom: false
-          })
+            allowCustom: false,
+            ...(block.type === 'study' ? { onPick: async (asset) => {
+              const repo = block.repositoryId || asset.repositoryId || state.contentLibrary.selectedRepositoryId;
+              try {
+                await requireStudyPool(asset.filename, repo);
+                commitMutation('lesson', () => { block.quizId = asset.filename; block.repositoryId = repo; });
+                return true;
+              } catch (error) { toast('Nie wybrano puli', error.message, 'error'); return false; }
+            } } : {})
+          }),
+          block.type === 'study' ? `Lista obejmuje quizy i pule. Przy wyborze sprawdzamy, czy materiał jest aktywną pulą nauki. Wybrana pula: ${block.quizId || 'brak'}.` : ''
         ),
         field('Tytuł kafelka', lessonInput(block.title, 'title', { maxLength: 180 })),
         field('Opis dla ucznia', lessonTextarea(block.description, 'description', { rows: 4, maxLength: 500 })),
@@ -6842,6 +6859,14 @@
     }
   }
 
+  async function requireStudyPool(quizId, repositoryId) {
+    const asset = await window.ChemContentLibrary.readQuiz(quizId, { repositoryId });
+    const definition = JSON.parse(asset.content);
+    if (definition.mode !== 'deck' || definition.metadata?.status !== 'published' || definition.metadata?.active === false) {
+      throw new Error('Wybierz opublikowaną, aktywną pulę nauki. Zwykły quiz dodasz elementem „Quiz”.');
+    }
+  }
+
   async function saveLessonToRepository() {
     const validation = lessonModelApi.validateLesson(state.lesson.model);
     if (!validation.valid) {
@@ -6891,6 +6916,13 @@
     try {
       let result;
       try {
+        const pools = new Map();
+        const visit = (blocks) => (blocks || []).forEach((block) => {
+          if (block.type === 'study') pools.set(`${block.repositoryId}:${block.quizId}`, block);
+          visit(block.blocks); visit(block.answerKeyBlocks);
+        });
+        validation.lesson.slides.forEach((slide) => visit(slide.blocks));
+        for (const block of pools.values()) await requireStudyPool(block.quizId, block.repositoryId || repositoryId);
         result = await window.ChemContentLibrary.save('lesson', {
           filename,
           content: serializedLesson,

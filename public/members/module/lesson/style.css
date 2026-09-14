@@ -1380,6 +1380,7 @@ fieldset:focus-within {
 .lesson-contact-card { --lesson-support-color: #b7791f; }
 .lesson-presentation-card { --lesson-support-color: #2563eb; }
 .lesson-quiz-card { --lesson-support-color: #0f766e; }
+.lesson-study-card > small { grid-column: 1 / -1; }
 .lesson-pdf-card { --lesson-support-color: #b91c1c; }
 .lesson-exam-card { --lesson-support-color: #6d28d9; }
 .lesson-exam-card[data-gate="locked"] {

@@ -9,6 +9,7 @@ const {
   normalizeCatalog,
   normalizePreferences,
   plainObject,
+  studyResetIds,
   validMaterialId
 } = require('../progress-common.js');
 const {
@@ -309,7 +310,8 @@ async function handleReset(event, store, auth) {
   let previous = null;
   const outcome = await updateUser(store, target.value, {}, (document) => {
     previous = {};
-    ids.forEach((id) => {
+    const requested = scope === 'course' ? [...ids, ...Object.keys(document.records).filter((id) => document.records[id]?.details?.studyGeneration)] : ids;
+    studyResetIds(catalog, requested, document.records).forEach((id) => {
       if (document.records[id]) previous[id] = document.records[id];
       delete document.records[id];
     });

@@ -1,0 +1,12 @@
+.study-session { min-width: 0; }
+.study-modes { display: flex; flex-wrap: wrap; align-items: center; gap: .7rem; margin: 1rem 0; }
+.study-modes select { flex: 1 1 220px; min-width: 0; max-width: 100%; padding: .8rem; border: 1px solid var(--chem-line, #d5deea); border-radius: 12px; color: var(--chem-text, #172033); background: var(--chem-surface, #fff); font: inherit; }
+.study-summary { font-size: .92rem; line-height: 1.7; overflow-wrap: anywhere; }
+.study-dashboard { padding: clamp(16px, 3vw, 28px); margin: 1.5rem 0; border: 1px solid var(--chem-line, #d5deea); border-radius: 20px; background: var(--chem-surface, #fff); color: var(--chem-text, #172033); }
+.study-dashboard h2 { margin: 0 0 .7rem; }
+.study-dashboard-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 1rem; }
+.study-dashboard-card { min-width: 0; padding: 1rem; border: 1px solid var(--chem-line, #d5deea); border-radius: 14px; }
+.study-dashboard-card h3 { font-size: 1rem; overflow-wrap: anywhere; }
+.study-dashboard-card p { line-height: 1.6; }
+.study-dashboard a { display: inline-block; padding: .6rem; color: var(--chem-primary, #116b63); font-weight: 700; }
+.study-dashboard button { padding: .75rem 1rem; margin: .6rem .6rem 0 0; border: 1px solid var(--chem-line, #d5deea); border-radius: 12px; background: var(--chem-surface, #fff); color: inherit; font: inherit; cursor: pointer; }

@@ -7,6 +7,7 @@ const {
   mergeProgressEvent,
   plainObject,
   sequenceAccessMap,
+  studyResetIds,
   validMaterialId
 } = require('../progress-common.js');
 const {
@@ -51,6 +52,7 @@ exports.handler = async (event = {}, context = {}) => {
   }
 
   try {
+    if (['study', 'study-summary'].includes(event.queryStringParameters?.view)) return await require('../study-progress').handle(event, store, auth);
     if (method === 'GET') return await handleGet(event, store, auth);
     if (method === 'POST') return await handleEvent(event, store, auth);
     return await handleReset(event, store, auth);
@@ -172,9 +174,11 @@ async function handleReset(event, store, auth) {
   }
   if (Object.keys(body).some((key) => key !== 'materialId')) return json({ error: 'UNEXPECTED_FIELDS' }, 400);
   if (!validMaterialId(body.materialId)) return json({ error: 'INVALID_MATERIAL_ID' }, 400);
+  const catalog = await readCatalog(store);
   const outcome = await updateUser(store, auth.userId, profileFrom(auth.user), (document) => {
-    const existed = Boolean(document.records[body.materialId]);
-    delete document.records[body.materialId];
+    const ids = studyResetIds(catalog, [body.materialId], document.records);
+    const existed = ids.some((id) => Boolean(document.records[id]));
+    ids.forEach((id) => { delete document.records[id]; });
     return existed ? { document, result: { existed } } : { abort: true, result: { existed } };
   });
   return json({ reset: true, existed: Boolean(outcome.result?.existed) });

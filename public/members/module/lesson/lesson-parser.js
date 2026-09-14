@@ -1132,6 +1132,10 @@
         return '<p class="lesson-interactive-error">Nieprawidłowe odwołanie do quizu.</p>';
       }
       const materialId = `quiz:${repository}:${quizId}`.slice(0, 128);
+      if (values.study === 'true') {
+        const href = `/members/module/quiz/?repo=${encodeURIComponent(repository)}&amp;quiz=${encodeURIComponent(quizId)}&amp;material=${encodeURIComponent(materialId)}&amp;study=due`;
+        return `<section class="lesson-support-card lesson-study-card"><span class="lesson-support-icon" aria-hidden="true">↻</span><span class="lesson-support-copy"><small>Powtórka / Fiszki</small><strong>${escapeHtml(title)}</strong><span>${escapeHtml(description)}</span></span><a class="lesson-support-action" href="${href}" target="_blank" rel="noopener noreferrer">${escapeHtml(button)} ↗</a><small>Lekcja pozostaje na tym kroku. Nauka otworzy się w nowej karcie, z postępem na Twoim koncie.</small></section>`;
+      }
       const href = `/members/module/quiz/?repo=${encodeURIComponent(repository)}&amp;quiz=${encodeURIComponent(quizId)}&amp;material=${encodeURIComponent(materialId)}`;
       return `<section class="lesson-support-card lesson-quiz-card" data-quiz-repository="${escapeHtml(repository)}" data-quiz-id="${escapeHtml(quizId)}" data-quiz-material="${escapeHtml(materialId)}"><span class="lesson-support-icon" aria-hidden="true">Q</span><span class="lesson-support-copy"><small>Quiz</small><strong>${escapeHtml(title)}</strong><span>${escapeHtml(description)}</span></span><a class="lesson-support-action" href="${href}">${escapeHtml(button)} <b aria-hidden="true">→</b></a></section>`;
     }

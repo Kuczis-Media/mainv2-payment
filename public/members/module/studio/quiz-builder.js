@@ -56,6 +56,7 @@
     loaded: false,
     active: false,
     busy: false,
+    focusQuestionId: '',
     libraryPaging: pagedListApi.createState(),
     objectUrls: new Set(),
     previewImageObserver: null,
@@ -140,7 +141,7 @@
     root.document.querySelectorAll('[data-quiz-add]').forEach((button) => { button.hidden = deck && !root.ChemQuizPractice.DECK_TYPES.includes(button.dataset.quizAdd); });
     elements.deckLink.hidden = !deck;
     if (deck) {
-      elements.deckLink.replaceChildren(create('small', '', 'Dodaj w Dashboard Builderze kafelek Quiz i wybierz tę pulę. '));
+      elements.deckLink.replaceChildren(create('small', '', 'Udostępnij pulę w kafelku Quiz na dashboardzie lub jako „Powtórka / Fiszki” w lekcji. '));
       if (state.remoteSha && state.remoteId === quiz.quizId) {
         const link = create('a', '', 'Otwórz podgląd ucznia ↗');
         const params = new URLSearchParams({ repo: state.repositoryId, quiz: quiz.quizId, preview: '1' });
@@ -282,7 +283,9 @@
       typos.value = String(settings.maxTypos);
       typos.addEventListener('change', () => { settings.maxTypos = Number(typos.value); question.textCompare = { ...settings }; markChanged(); scheduleFeedback(); });
       tolerances.append(fieldLabel('Tolerancja literówek', typos), create('small', '', 'Literówki są akceptowane tylko przy podobieństwie co najmniej 80%. Przy symbolach chemicznych rozważ wyłączenie ignorowania wielkości liter. Porównujemy zapis, nie znaczenie ani równoważność wzorów.'));
-      section.append(tolerances);
+      const advanced = create('details', 'quiz-editor-details');
+      advanced.append(create('summary', '', 'Dostosuj sprawdzanie tekstu'), tolerances);
+      section.append(advanced);
       return section;
     }
     section.append(create('small', 'quiz-options-hint', question.type === 'multiple'
@@ -312,6 +315,7 @@
       remove.dataset.optionId = option.optionId;
       remove.disabled = question.type === 'true_false' || question.options.length <= 2;
       const content = create('div', 'quiz-option-content');
+      content.append(create('small', 'quiz-correct-badge', '✓ Poprawna odpowiedź'));
       content.append(fieldLabel(`Odpowiedź ${String.fromCharCode(65 + optionIndex)}`, copy));
       const media = create('div', 'quiz-option-media');
       const choose = create('button', 'mini-button', option.image?.ref ? 'Podmień obraz' : 'Dodaj obraz'); choose.type = 'button';
@@ -338,7 +342,7 @@
   }
 
   function renderQuestions() {
-    if (root.NextMedUI?.render('studio-quiz', elements.questions, { questions: state.quiz.questions, renderOptions, renderFlashcard, renderOcclusion, deck: state.quiz.mode === 'deck' })) {
+    if (root.NextMedUI?.render('studio-quiz', elements.questions, { questions: state.quiz.questions, renderOptions, renderFlashcard, renderOcclusion, deck: state.quiz.mode === 'deck', focusQuestionId: state.focusQuestionId })) {
       elements.questionCount.textContent = questionLabel(state.quiz.questions.length);
       return;
     }
@@ -408,17 +412,20 @@
 
   function renderFlashcard(question) {
     const editor = create('div', 'quiz-flashcard-editor');
-    editor.append(create('p', '', 'Fiszka bez punktów. Obsługuje Markdown i wzory: \\(x^2\\), \\(\\ce{H2O}\\). Obrazy dodaj poniżej — pliki, przeciąganie i wklejanie są dostępne w bibliotece obrazów.'));
+    editor.append(create('p', 'quiz-editor-hint', '1. Wpisz pytanie z przodu. 2. Dodaj odpowiedź z tyłu. 3. Sprawdź podgląd. Równania wstawisz przyciskiem fx, a obrazy — przyciskiem pod tekstem.'));
+    const faces = create('div', 'quiz-face-editors');
     for (const [side, label] of [['front', 'Przód — pytanie'], ['back', 'Tył — odpowiedź']]) {
-      const section = create('fieldset'); section.append(create('legend', '', label));
+      const section = create('fieldset', `quiz-face-editor is-${side}`); section.append(create('legend', '', label));
       const input = create('textarea'); input.rows = 5; input.maxLength = 10000;
       input.value = question[side].text; input.dataset.quizField = `${side}Text`;
-      section.append(fieldLabel('Treść (Markdown / LaTeX)', input));
+      input.placeholder = side === 'front' ? 'Np. Jaką funkcję pełnią mitochondria?' : 'Np. Wytwarzają ATP w procesie oddychania komórkowego.';
+      section.append(fieldLabel(side === 'front' ? 'Co ma sobie przypomnieć uczeń?' : 'Jaka jest odpowiedź?', input));
       question[side].images.forEach((entry, index) => {
-        const row = create('div', 'quiz-question-media'); row.append(create('code', '', entry.ref));
+        const row = create('div', 'quiz-question-media quiz-face-image');
+        row.append(root.ChemQuizFlashcards.image(entry, previewImageUrl));
         const alt = create('input'); alt.value = entry.alt; alt.maxLength = 300;
         alt.dataset.quizField = 'flashcardAlt'; alt.dataset.side = side; alt.dataset.imageIndex = String(index);
-        row.append(fieldLabel('Opis obrazu', alt));
+        row.append(fieldLabel('Opis obrazka (opcjonalnie)', alt));
         for (const [action, title] of [['replace-flashcard-media', 'Podmień obraz'], ['remove-flashcard-media', 'Usuń obraz']]) {
           const button = create('button', 'mini-button', title); button.type = 'button';
           button.dataset.quizAction = action; button.dataset.side = side; button.dataset.imageIndex = String(index); row.append(button);
@@ -428,17 +435,29 @@
       const add = create('button', 'mini-button', `Dodaj obraz — ${side === 'front' ? 'przód' : 'tył'}`);
       add.type = 'button'; add.dataset.quizAction = 'add-flashcard-media'; add.dataset.side = side;
       add.disabled = question[side].images.length >= 8;
-      section.append(add); editor.append(section);
+      section.append(add); faces.append(section);
     }
+    editor.append(faces);
     const explanation = create('textarea'); explanation.rows = 3; explanation.maxLength = 3000;
     explanation.value = question.explanation; explanation.dataset.quizField = 'explanation';
     editor.append(fieldLabel('Wyjaśnienie (opcjonalnie)', explanation));
     const preview = create('details'); preview.append(create('summary', '', 'Podgląd tej fiszki i obrazów'));
-    preview.addEventListener('toggle', () => {
-      if (preview.open) {
-        preview.querySelector('[data-flashcard-id]')?.remove();
-        preview.append(root.ChemQuizFlashcards.card(question, previewImageUrl));
+    preview.className = 'quiz-editor-details';
+    const refreshPreview = () => {
+      if (preview.open && editor.isConnected) {
+        const old = preview.querySelector('[data-flashcard-id]');
+        const revealed = old?.querySelector('[data-flashcard-reveal]')?.getAttribute('aria-expanded') === 'true';
+        if (old) { root.MathJax?.typesetClear?.([old]); old.remove(); }
+        const next = root.ChemQuizFlashcards.card(question, previewImageUrl);
+        preview.append(next);
+        if (revealed) next.querySelector('[data-flashcard-reveal]')?.click();
       }
+    };
+    preview.addEventListener('toggle', refreshPreview);
+    let timer;
+    editor.addEventListener('input', () => {
+      root.clearTimeout(timer);
+      if (preview.open) timer = root.setTimeout(refreshPreview, 200);
     });
     editor.append(preview);
     return editor;
@@ -527,9 +546,10 @@
     if (question.type === 'flashcard') return root.ChemQuizFlashcards.card(question, previewImageUrl);
     const fieldset = create('fieldset', 'quiz-preview-question');
     fieldset.dataset.previewQuestion = question.questionId;
-    const legend = create('legend');
-    legend.append(create('span', '', `${index + 1}.`), root.ChemQuizFlashcards.text(question.prompt, previewImageUrl), create('small', '', `${question.points} pkt`));
-    fieldset.append(legend);
+    const legend = create('legend', 'quiz-preview-sr-label', `Pytanie ${index + 1}`);
+    const heading = create('div', 'quiz-preview-heading');
+    heading.append(create('span', '', `${index + 1}.`), root.ChemQuizFlashcards.text(question.prompt, previewImageUrl), create('small', '', `${question.points} pkt`));
+    fieldset.append(legend, heading);
     if (question.image.ref) {
       const image = create('img', 'quiz-preview-image');
       image.alt = question.image.alt || '';
@@ -570,7 +590,7 @@
     const quiz = state.quiz;
     root.NextMedUI?.releaseWithin?.(elements.preview);
     if (quiz.mode === 'deck' && root.ChemQuizFlashcards) {
-      const props = { questions: quiz.questions, getUrl: previewImageUrl, preview: true };
+      const props = { questions: quiz.questions, getUrl: previewImageUrl, preview: true, initialQuestionId: state.focusQuestionId };
       if (!root.NextMedUI?.render('quiz-deck', elements.preview, props)) elements.preview.replaceChildren(root.ChemQuizFlashcards.study(props));
       return;
     }
@@ -932,6 +952,14 @@
     const action = button.dataset.quizAction;
     const question = questionFor(button);
     if (!question) return;
+    if (action === 'preview-question') {
+      state.focusQuestionId = question.questionId;
+      renderPreview();
+      const target = state.quiz.mode === 'deck' ? elements.preview.querySelector('.quiz-deck-study')
+        : Array.from(elements.preview.querySelectorAll('[data-preview-question], [data-flashcard-id], [data-occlusion-id]')).find((node) => Object.values(node.dataset).includes(question.questionId));
+      (target || elements.preview).scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      return;
+    }
     if (action.endsWith('flashcard-media') && question.type === 'flashcard') {
       const side = button.dataset.side;
       if (!['front', 'back'].includes(side)) return;
@@ -976,10 +1004,13 @@
 
   function addQuestion(type) {
     if (state.quiz.questions.length >= 200 || (state.quiz.mode === 'deck' && !root.ChemQuizPractice.DECK_TYPES.includes(type))) return;
-    state.quiz.questions.push(modelApi.createQuestion({ type, prompt: `Nowe pytanie ${state.quiz.questions.length + 1}` }));
+    const question = modelApi.createQuestion({ type, prompt: `Nowe pytanie ${state.quiz.questions.length + 1}` });
+    state.focusQuestionId = question.questionId;
+    state.quiz.questions.push(question);
     markChanged('Pytanie dodano do szkicu na tym urządzeniu.');
     render();
     elements.questions.lastElementChild?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    elements.questions.lastElementChild?.querySelector('textarea')?.focus({ preventScroll: true });
   }
 
   function openMediaManager(question = null, side = '', index = -1) {

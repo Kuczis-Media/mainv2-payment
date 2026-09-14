@@ -223,11 +223,12 @@
     if (checked) showResult();
     return node;
   }
-  function study({ questions, getUrl, onComplete, preview = false }) {
+  function study({ questions, getUrl, onComplete, preview = false, review, mode, initialQuestionId }) {
+    if (review && !preview && root.ChemStudyView) return root.ChemStudyView.study({ questions, getUrl, onComplete, review, mode });
     const sourceQuestions = questions;
     questions = root.ChemQuizOcclusionModel ? root.ChemQuizOcclusionModel.expand(sourceQuestions) : questions;
     const node = create('section', 'quiz-deck-study');
-    let index = 0, finished = false;
+    let index = preview ? Math.max(0, questions.findIndex((q) => q.questionId === initialQuestionId)) : 0, finished = false;
     const ratings = new Map(); // Session-only; at most 200 questions × 50 masks, no image duplication.
     const answers = new Map();
     function advance(rating) {

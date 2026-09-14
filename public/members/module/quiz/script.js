@@ -269,9 +269,12 @@
       document.querySelector('.quiz-player-eyebrow').textContent = 'Pula nauki';
       elements.questionCount.previousElementSibling.textContent = 'Karty';
       elements.questionCount.textContent = String(quiz.questions.reduce((count, q) => count + (q.type === 'image_occlusion' && q.occlusion.mode === 'one_per_mask' ? Math.max(1, q.occlusion.masks.length) : 1), 0));
-      elements.checkingMode.textContent = 'Odpowiadaj na pytania i odsłaniaj fiszki. Sprawdzanie działa na Twoim urządzeniu — bez AI i bez punktacji. Po ukończeniu zapisujemy postęp.';
+      elements.checkingMode.textContent = state.studyClient
+        ? 'Odsłoń odpowiedź lub rozwiąż pytanie, a potem oceń trudność. Oceny zapisujemy na Twoim koncie i planujemy kolejne powtórki — bez AI i bez punktacji.'
+        : 'To podgląd nauki: odsłaniaj fiszki i sprawdzaj odpowiedzi. Oceny nie planują tu powtórek.';
+      if (state.studyClient) elements.questionCount.textContent = String(window.ChemStudyScheduler.cards(quiz.questions).length);
       const props = {
-        questions: state.questions, getUrl: state.deckImageCache.get, preview,
+        questions: state.questions, getUrl: state.deckImageCache.get, preview, review: state.studyClient, mode: params.get('study'),
         onComplete: async () => {
           state.attempts += 1;
           await saveResult({ percent: null, passed: null, gradingStatus: 'not_scored' });
@@ -585,6 +588,9 @@
     await beginProgress();
     const quizPayload = await requestQuiz();
     state.quiz = quizPayload.quiz;
+    if (state.quiz.mode === 'deck' && !preview && window.ChemStudyClient && progressApi?.studyRequest) {
+      state.studyClient = await window.ChemStudyClient.connect(repositoryId, quizId).load();
+    }
     state.latestAttempt = quizPayload.latestAttempt || null;
     state.attempts = Math.max(state.attempts, Number(state.latestAttempt?.number) || 0);
     renderQuiz();
