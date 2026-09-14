@@ -494,6 +494,114 @@ test('Studio publishes occlusion through the existing image picker, previews mas
   assert.equal(draft.questions[1].image.ref, 'assets/shared/new.webp'); assert.deepEqual(draft.questions[1].occlusion.masks, []);
 });
 
+function pasteImage(h, target, file, itemsOnly = false) {
+  const event = new h.w.Event('paste', { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'clipboardData', { value: { files: itemsOnly ? [] : [file], items: [{ kind: 'file', type: file.type, getAsFile: () => file }] } });
+  target.dispatchEvent(event);
+  return event;
+}
+
+async function occlusionUploadStudio(t, overrides = {}) {
+  const uploads = [];
+  const h = await studio(t, {
+    uploadMedia: async (value) => { uploads.push(plain(value)); return { reference: `${value.scope === 'local' ? 'photos' : 'assets/shared'}/${value.filename}` }; },
+    readMediaBlob: async () => new Blob(['fixture']), ...overrides
+  });
+  h.w.URL.createObjectURL = () => 'blob:https://course.example/fixture'; h.w.URL.revokeObjectURL = () => {};
+  h.evalFile('assets/js/media-manager.js');
+  await input(h.w, h.d.getElementById('studio-tool-select'), 'quiz');
+  h.d.querySelector('[data-quiz-add="image_occlusion"]').click(); await tick();
+  const draft = () => { h.w.ChemQuizBuilder.flush(); return JSON.parse(h.w.localStorage.getItem('chemdisk.studio.quiz.v1')); };
+  return { ...h, uploads, draft, source: () => h.d.querySelector('.io-image-drop'), card: () => draft().questions.find((q) => q.type === 'image_occlusion') };
+}
+
+test('mask editor pastes files and clipboard items via existing storage without affecting normal text paste', async (t) => {
+  const h = await occlusionUploadStudio(t);
+  const file = new h.w.File(['pasted-image'], 'clipboard.png', { type: 'image/png' });
+  assert.equal(pasteImage(h, h.source(), file).defaultPrevented, true);
+  await tick(); await tick();
+  assert.equal(h.uploads.length, 1);
+  assert.equal(h.uploads[0].scope, 'shared');
+  assert.equal(h.uploads[0].repositoryId, 'glowne');
+  assert.equal(h.uploads[0].contentBase64, Buffer.from('pasted-image').toString('base64'));
+  assert.match(h.card().image.ref, /^assets\/shared\/clipboard-.*\.png$/);
+  assert.equal(h.d.activeElement, h.source(), 'Paste target keeps keyboard focus after rerender');
+  const text = new h.w.Event('paste', { bubbles: true, cancelable: true });
+  Object.defineProperty(text, 'clipboardData', { value: { files: [], items: [{ kind: 'string', type: 'text/plain' }] } });
+  h.d.querySelector('.io-editor textarea').dispatchEvent(text);
+  assert.equal(text.defaultPrevented, false);
+  assert.equal(pasteImage(h, h.d.querySelector('.io-editor textarea'), file, true).defaultPrevented, true);
+  await tick(); await tick();
+  assert.equal(h.uploads.length, 2, 'Item-only clipboard is supported too');
+});
+
+test('mask image replacement preserves masks on cancellation or upload failure, clears them only on success', async (t) => {
+  let fail = false, calls = 0;
+  const h = await occlusionUploadStudio(t, { uploadMedia: async () => { calls++; if (fail) throw Error('Brak połączenia'); return { reference: `assets/shared/image-${calls}.png` }; } });
+  const file = new h.w.File(['image'], 'image.png', { type: 'image/png' });
+  pasteImage(h, h.source(), file); await tick(); await tick();
+  h.d.querySelector('[data-io-add]').click(); await tick();
+  const original = h.card(); assert.equal(original.occlusion.masks.length, 1);
+  h.w.confirm = () => false;
+  pasteImage(h, h.source(), file); await tick();
+  assert.equal(calls, 1); assert.deepEqual(h.card(), original);
+  h.w.confirm = () => true; fail = true;
+  pasteImage(h, h.source(), file); await tick(); await tick();
+  assert.match(h.d.querySelector('.io-upload-status').textContent, /Brak połączenia/);
+  assert.equal(h.d.querySelector('.io-editor').inert, false);
+  assert.deepEqual(h.card(), original);
+  fail = false;
+  pasteImage(h, h.source(), file); await tick(); await tick();
+  assert.equal(h.card().image.ref, 'assets/shared/image-3.png');
+  assert.deepEqual(h.card().occlusion.masks, []);
+});
+
+test('mask editor supports drop and file selection, rejecting oversized or unsupported images before requests', async (t) => {
+  const h = await occlusionUploadStudio(t);
+  for (const file of [new h.w.File(['pdf'], 'file.pdf', { type: 'application/pdf' }), new h.w.File([new Uint8Array(4 * 1024 * 1024 + 1)], 'huge.png', { type: 'image/png' })]) {
+    const event = new h.w.Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'dataTransfer', { value: { files: [file] } }); h.source().dispatchEvent(event);
+    await tick();
+    assert.equal(event.defaultPrevented, true); assert.equal(h.uploads.length, 0);
+    assert.match(h.d.querySelector('.io-upload-status').textContent, /4 MB/);
+  }
+  const file = new h.w.File(['image'], 'image.webp', { type: 'image/webp' });
+  const drop = new h.w.Event('drop', { bubbles: true, cancelable: true });
+  Object.defineProperty(drop, 'dataTransfer', { value: { files: [file] } }); h.source().dispatchEvent(drop);
+  await tick(); await tick(); assert.equal(h.uploads.length, 1);
+  const control = h.source().querySelector('input[type="file"]');
+  Object.defineProperty(control, 'files', { value: [file] }); control.dispatchEvent(new h.w.Event('change', { bubbles: true }));
+  await tick(); await tick(); assert.equal(h.uploads.length, 2);
+  assert.equal(h.uploads[1].mimeType, 'image/webp');
+});
+
+test('published quiz paste uses its own repository and local photos and resets scrolling when loaded', async (t) => {
+  const model = require('../public/members/module/studio/quiz-model');
+  const saved = model.createQuiz({ quizId: 'saved-masks', questions: [{ type: 'image_occlusion' }] });
+  const h = await occlusionUploadStudio(t, { readQuiz: async () => ({ quiz: saved, sha: 'a'.repeat(40) }) });
+  const panels = [...h.d.querySelectorAll('#quiz-workspace, .quiz-editor-panel, .quiz-preview-panel')];
+  const report = h.d.getElementById('quiz-report-disclosure');
+  assert.ok(h.d.querySelector('.quiz-editor-panel').contains(report));
+  report.open = true; panels.forEach((node) => { node.scrollTop = 600; });
+  await h.w.ChemQuizBuilder.openAsset({ quizId: saved.quizId, repositoryId: 'other-repo', sha: 'a'.repeat(40) }); await tick();
+  assert.ok(panels.every((node) => node.scrollTop === 0)); assert.equal(report.open, false);
+  pasteImage(h, h.source(), new h.w.File(['image'], 'image.png', { type: 'image/png' })); await tick(); await tick();
+  assert.equal(h.uploads.length, 1);
+  assert.equal(h.uploads[0].scope, 'local'); assert.equal(h.uploads[0].materialKind, 'quiz');
+  assert.equal(h.uploads[0].materialId, saved.quizId); assert.equal(h.uploads[0].repositoryId, 'other-repo');
+  assert.match(h.card().image.ref, /^photos\//);
+});
+
+test('late image upload never attaches to another quiz opened during the upload', async (t) => {
+  let complete;
+  const h = await occlusionUploadStudio(t, { uploadMedia: () => new Promise((resolve) => { complete = resolve; }) });
+  pasteImage(h, h.source(), new h.w.File(['image'], 'image.png', { type: 'image/png' })); await tick(); await tick();
+  assert.equal(typeof complete, 'function');
+  h.d.getElementById('quiz-new-button').click(); await tick();
+  const next = h.draft(); complete({ reference: 'assets/shared/late.png' }); await tick();
+  assert.deepEqual(h.draft(), next);
+});
+
 test('React keeps the random mask and revealed answer when the surrounding quiz updates or expands', async (t) => {
   const h = setup(t, 'members/module/quiz/index.html');
   h.w.MathJax = { typesetPromise: async () => {}, typesetClear() {} };
